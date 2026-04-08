@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { PARADIGMAS } from "@/types";
 import type { AssignmentFormState } from "@/lib/assignment-schema";
@@ -41,6 +42,102 @@ function SubmitButton({ label }: { label: string }) {
     >
       {pending ? "Guardando…" : label}
     </button>
+  );
+}
+
+function TemplateRepoCombobox({
+  templates,
+  defaultValue,
+  hasError,
+}: {
+  templates: Template[];
+  defaultValue?: string;
+  hasError: boolean;
+}) {
+  const [query, setQuery] = useState(defaultValue ?? "");
+  const [selected, setSelected] = useState(defaultValue ?? "");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const filtered = query
+    ? templates.filter((t) =>
+        t.name.toLowerCase().includes(query.toLowerCase()) ||
+        t.description.toLowerCase().includes(query.toLowerCase())
+      )
+    : templates;
+
+  // Cerrar al hacer click fuera
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        // Si el query no coincide con ningún template, restaurar el seleccionado
+        if (!templates.find((t) => t.name === query)) {
+          setQuery(selected);
+        }
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [query, selected, templates]);
+
+  function handleSelect(name: string) {
+    setSelected(name);
+    setQuery(name);
+    setOpen(false);
+  }
+
+  const borderClass = hasError
+    ? "border-red-400 focus:ring-red-400 focus:border-red-400"
+    : "border-gray-300 focus:ring-pdep-500 focus:border-pdep-500";
+
+  return (
+    <div ref={containerRef} className="relative">
+      {/* Hidden input que va al FormData */}
+      <input type="hidden" name="templateRepo" value={selected} />
+
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setSelected("");
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder="Buscá por nombre o descripción…"
+        autoComplete="off"
+        className={`w-full border rounded-lg px-3 py-2 text-sm font-mono outline-none focus:ring-2 ${borderClass}`}
+      />
+
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-10 mt-1 w-full max-h-56 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg text-sm">
+          {filtered.map((t) => (
+            <li
+              key={t.name}
+              onMouseDown={(e) => {
+                e.preventDefault(); // evitar que el blur cierre antes
+                handleSelect(t.name);
+              }}
+              className={`cursor-pointer px-3 py-2 hover:bg-pdep-50 ${
+                selected === t.name ? "bg-pdep-50 font-medium" : ""
+              }`}
+            >
+              <span className="font-mono">{t.name}</span>
+              {t.description && (
+                <span className="text-gray-400 ml-2">— {t.description}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {open && query.length > 0 && filtered.length === 0 && (
+        <div className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg px-3 py-2 text-sm text-gray-400">
+          Sin resultados
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -113,20 +210,11 @@ export function AssignmentForm({
           Template Repo
         </label>
         {templates.length > 0 ? (
-          <select
-            name="templateRepo"
-            required
+          <TemplateRepoCombobox
+            templates={templates}
             defaultValue={defaultValues.templateRepo}
-            className={errors.templateRepo ? INPUT_ERROR_CLASS : INPUT_CLASS}
-          >
-            <option value="">Elegí un template…</option>
-            {templates.map((t) => (
-              <option key={t.name} value={t.name}>
-                {t.name}
-                {t.description ? ` — ${t.description}` : ""}
-              </option>
-            ))}
-          </select>
+            hasError={!!errors.templateRepo}
+          />
         ) : (
           <input
             name="templateRepo"
