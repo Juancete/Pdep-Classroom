@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Assignment } from "@/types";
+import React from "react";
 
 // ── Mocks ────────────────────────────────────────────────────
 
 const mockRequireAdmin = vi.fn();
 const mockGetAssignment = vi.fn();
-const mockUpdateAssignment = vi.fn();
 const mockListarTemplates = vi.fn();
 const mockRedirect = vi.fn();
 
@@ -16,7 +16,6 @@ vi.mock("@/lib/session", () => ({
 
 vi.mock("@/lib/store", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
-  updateAssignment: (...args: unknown[]) => mockUpdateAssignment(...args),
 }));
 
 vi.mock("@/lib/github", () => ({
@@ -25,6 +24,33 @@ vi.mock("@/lib/github", () => ({
 
 vi.mock("next/navigation", () => ({
   redirect: (path: string) => mockRedirect(path),
+}));
+
+vi.mock("../../actions", () => ({
+  actualizarAssignment: vi.fn(),
+}));
+
+vi.mock("../../assignment-form", () => ({
+  AssignmentForm: ({
+    templates,
+    submitLabel,
+    defaultValues,
+  }: {
+    templates: { name: string }[];
+    submitLabel: string;
+    defaultValues?: Record<string, string>;
+  }) =>
+    React.createElement("div", {
+      "data-testid": "assignment-form",
+      "data-submit-label": submitLabel,
+      "data-template-count": templates.length,
+      "data-default-titulo": defaultValues?.titulo,
+      "data-default-slug": defaultValues?.slug,
+      "data-default-template-repo": defaultValues?.templateRepo,
+      "data-default-paradigma": defaultValues?.paradigma,
+      "data-default-tipo": defaultValues?.tipo,
+      "data-default-deadline": defaultValues?.deadline,
+    }),
 }));
 
 import EditAssignmentPage from "./page";
@@ -74,134 +100,60 @@ describe("Edit Assignment page", () => {
     expect(html).toContain("Editar Assignment");
   });
 
-  describe("campos pre-populados", () => {
-    it("pre-popula el campo de título con el valor actual", async () => {
+  it("renderiza el formulario con submitLabel 'Guardar cambios'", async () => {
+    mockGetAssignment.mockResolvedValue(makeAssignment());
+    const element = await EditAssignmentPage({ params: { id: "a1" } });
+    const html = renderToStaticMarkup(element as React.ReactElement);
+    expect(html).toContain("data-submit-label=\"Guardar cambios\"");
+  });
+
+  describe("defaultValues pre-populados", () => {
+    it("pasa el título del assignment como defaultValue", async () => {
       mockGetAssignment.mockResolvedValue(makeAssignment({ titulo: "TP Lógico" }));
       const element = await EditAssignmentPage({ params: { id: "a1" } });
       const html = renderToStaticMarkup(element as React.ReactElement);
       expect(html).toContain("TP Lógico");
     });
 
-    it("pre-popula el campo de slug con el valor actual", async () => {
+    it("pasa el slug del assignment como defaultValue", async () => {
       mockGetAssignment.mockResolvedValue(makeAssignment({ slug: "tp-logico" }));
       const element = await EditAssignmentPage({ params: { id: "a1" } });
       const html = renderToStaticMarkup(element as React.ReactElement);
       expect(html).toContain("tp-logico");
     });
 
-    it("pre-popula la descripción con el valor actual", async () => {
-      mockGetAssignment.mockResolvedValue(
-        makeAssignment({ descripcion: "Descripción de prueba" })
-      );
+    it("pasa el templateRepo del assignment como defaultValue", async () => {
+      mockGetAssignment.mockResolvedValue(makeAssignment({ templateRepo: "mi-template" }));
       const element = await EditAssignmentPage({ params: { id: "a1" } });
       const html = renderToStaticMarkup(element as React.ReactElement);
-      expect(html).toContain("Descripción de prueba");
+      expect(html).toContain("mi-template");
     });
 
-    it("pre-popula el templateRepo con el valor actual", async () => {
-      mockGetAssignment.mockResolvedValue(
-        makeAssignment({ templateRepo: "mi-template-especial" })
-      );
-      const element = await EditAssignmentPage({ params: { id: "a1" } });
-      const html = renderToStaticMarkup(element as React.ReactElement);
-      expect(html).toContain("mi-template-especial");
-    });
-
-    it("pre-popula el deadline con el valor actual", async () => {
-      mockGetAssignment.mockResolvedValue(
-        makeAssignment({ deadline: "2026-12-31" })
-      );
+    it("pasa el deadline del assignment como defaultValue", async () => {
+      mockGetAssignment.mockResolvedValue(makeAssignment({ deadline: "2026-12-31" }));
       const element = await EditAssignmentPage({ params: { id: "a1" } });
       const html = renderToStaticMarkup(element as React.ReactElement);
       expect(html).toContain("2026-12-31");
     });
   });
 
-  describe("campos del formulario", () => {
-    beforeEach(() => {
-      mockGetAssignment.mockResolvedValue(makeAssignment());
-    });
-
-    it("muestra el campo de título", async () => {
-      const element = await EditAssignmentPage({ params: { id: "a1" } });
-      const html = renderToStaticMarkup(element as React.ReactElement);
-      expect(html).toContain('name="titulo"');
-    });
-
-    it("muestra el campo de slug", async () => {
-      const element = await EditAssignmentPage({ params: { id: "a1" } });
-      const html = renderToStaticMarkup(element as React.ReactElement);
-      expect(html).toContain('name="slug"');
-    });
-
-    it("muestra el campo de descripción", async () => {
-      const element = await EditAssignmentPage({ params: { id: "a1" } });
-      const html = renderToStaticMarkup(element as React.ReactElement);
-      expect(html).toContain('name="descripcion"');
-    });
-
-    it("muestra el campo de deadline", async () => {
-      const element = await EditAssignmentPage({ params: { id: "a1" } });
-      const html = renderToStaticMarkup(element as React.ReactElement);
-      expect(html).toContain('name="deadline"');
-    });
-
-    it("muestra las opciones de paradigma", async () => {
-      const element = await EditAssignmentPage({ params: { id: "a1" } });
-      const html = renderToStaticMarkup(element as React.ReactElement);
-      expect(html).toContain('name="paradigma"');
-      expect(html).toContain("Funcional");
-      expect(html).toContain("Logico");
-      expect(html).toContain("Objetos");
-    });
-
-    it("muestra las opciones de tipo", async () => {
-      const element = await EditAssignmentPage({ params: { id: "a1" } });
-      const html = renderToStaticMarkup(element as React.ReactElement);
-      expect(html).toContain('name="tipo"');
-      expect(html).toContain("Individual");
-      expect(html).toContain("Grupal");
-    });
-
-    it("muestra el botón de guardar cambios", async () => {
-      const element = await EditAssignmentPage({ params: { id: "a1" } });
-      const html = renderToStaticMarkup(element as React.ReactElement);
-      expect(html).toContain("Guardar cambios");
-    });
-
-    it("muestra el link para cancelar apuntando al listado", async () => {
-      const element = await EditAssignmentPage({ params: { id: "a1" } });
-      const html = renderToStaticMarkup(element as React.ReactElement);
-      expect(html).toContain("Cancelar");
-      expect(html).toContain("/admin/assignments");
-    });
-  });
-
-  describe("campo de template repo", () => {
-    it("muestra un <select> cuando hay templates disponibles", async () => {
+  describe("templates", () => {
+    it("pasa los templates disponibles al formulario", async () => {
       mockGetAssignment.mockResolvedValue(makeAssignment());
       mockListarTemplates.mockResolvedValue([
         { name: "kata-template", fullName: "pdep-mn/kata-template", description: "" },
       ]);
       const element = await EditAssignmentPage({ params: { id: "a1" } });
       const html = renderToStaticMarkup(element as React.ReactElement);
-      expect(html).toContain("Elegí un template");
+      expect(html).toContain('data-template-count="1"');
     });
 
-    it("muestra un <input> cuando no hay templates", async () => {
-      mockGetAssignment.mockResolvedValue(makeAssignment());
-      mockListarTemplates.mockResolvedValue([]);
-      const element = await EditAssignmentPage({ params: { id: "a1" } });
-      const html = renderToStaticMarkup(element as React.ReactElement);
-      expect(html).not.toContain("Elegí un template");
-    });
-
-    it("muestra un <input> cuando falla la carga de templates", async () => {
+    it("pasa lista vacía cuando falla la carga de templates", async () => {
       mockGetAssignment.mockResolvedValue(makeAssignment());
       mockListarTemplates.mockRejectedValue(new Error("Sin credenciales"));
       const element = await EditAssignmentPage({ params: { id: "a1" } });
       const html = renderToStaticMarkup(element as React.ReactElement);
-      expect(html).not.toContain("Elegí un template");
+      expect(html).toContain('data-template-count="0"');
     });
   });
 });
