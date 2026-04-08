@@ -59,6 +59,8 @@ function TemplateRepoCombobox({
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  console.log("[TemplateRepoCombobox] templates:", templates);
+
   const filtered = query
     ? templates.filter((t) =>
         t.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -106,7 +108,7 @@ function TemplateRepoCombobox({
         }}
         onFocus={() => setOpen(true)}
         placeholder="Buscá por nombre o descripción…"
-        autoComplete="off"
+        autoComplete="new-password"
         className={`w-full border rounded-lg px-3 py-2 text-sm font-mono outline-none focus:ring-2 ${borderClass}`}
       />
 
@@ -220,7 +222,8 @@ export function AssignmentForm({
             name="templateRepo"
             required
             defaultValue={defaultValues.templateRepo}
-            placeholder="nombre-del-template (debe estar en pdep-mn y ser template)"
+            placeholder="nombre-del-template (debe estar en pdep-mn-utn y ser template)"
+            autoComplete="new-password"
             className={`${errors.templateRepo ? INPUT_ERROR_CLASS : INPUT_CLASS} font-mono`}
           />
         )}

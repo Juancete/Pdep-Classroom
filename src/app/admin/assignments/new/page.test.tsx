@@ -68,8 +68,8 @@ describe("New Assignment page", () => {
   describe("templates", () => {
     it("pasa los templates disponibles al formulario", async () => {
       mockListarTemplates.mockResolvedValue([
-        { name: "kata-template", fullName: "pdep-mn/kata-template", description: "" },
-        { name: "tp-logico", fullName: "pdep-mn/tp-logico", description: "" },
+        { name: "kata-template", fullName: "pdep-mn-utn/kata-template", description: "" },
+        { name: "tp-logico", fullName: "pdep-mn-utn/tp-logico", description: "" },
       ]);
       const element = await NewAssignmentPage();
       const html = renderToStaticMarkup(element);

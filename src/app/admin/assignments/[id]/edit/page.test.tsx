@@ -141,7 +141,7 @@ describe("Edit Assignment page", () => {
     it("pasa los templates disponibles al formulario", async () => {
       mockGetAssignment.mockResolvedValue(makeAssignment());
       mockListarTemplates.mockResolvedValue([
-        { name: "kata-template", fullName: "pdep-mn/kata-template", description: "" },
+        { name: "kata-template", fullName: "pdep-mn-utn/kata-template", description: "" },
       ]);
       const element = await EditAssignmentPage({ params: { id: "a1" } });
       const html = renderToStaticMarkup(element as React.ReactElement);

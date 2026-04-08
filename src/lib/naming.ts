@@ -35,7 +35,7 @@ export function slugify(title: string): string {
 
 /**
  * Extrae el nombre del template sin la org.
- * "pdep-mn/kata-template" → "kata-template"
+ * "pdep-mn-utn/kata-template" → "kata-template"
  * "kata-template" → "kata-template"
  */
 export function extractTemplateName(templateRepo: string): string {

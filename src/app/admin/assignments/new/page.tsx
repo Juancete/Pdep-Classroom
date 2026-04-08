@@ -9,8 +9,9 @@ export default async function NewAssignmentPage() {
   let templates: { name: string; fullName: string; description: string }[] = [];
   try {
     templates = await listarTemplates();
-  } catch {
-    // Sin credenciales: permite ingresar manualmente
+    console.log("templates" + templates);
+  } catch (e) {
+    console.error("[NewAssignmentPage] Error al cargar templates:", e);
   }
 
   return (

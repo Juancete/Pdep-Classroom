@@ -82,7 +82,7 @@ export async function POST(
     // Verificar que no exista ya (por si otro miembro del grupo aceptó)
     if (await repoExists(candidateRepoName)) {
       // El repo existe pero no tenemos entrega registrada — registrarla
-      const org = process.env.GITHUB_ORG ?? "pdep-mn";
+      const org = process.env.GITHUB_ORG ?? "pdep-mn-utn";
       const entrega = await createEntrega({
         assignmentId: assignment.id,
         repoName: candidateRepoName,

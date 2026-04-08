@@ -72,7 +72,7 @@ function makeEntrega(overrides?: Partial<Entrega>): Entrega {
     id: "e1",
     assignmentId: "a1",
     repoName: "kata-funcional-testuser",
-    repoUrl: "https://github.com/pdep-mn/kata-funcional-testuser",
+    repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-testuser",
     githubUsernames: ["testuser"],
     createdAt: new Date().toISOString(),
     ...overrides,
@@ -240,13 +240,13 @@ describe("Dashboard page", () => {
 
     it("muestra el link al repo cuando ya hay entrega", async () => {
       mockGetEntregaDeUsuario.mockResolvedValue(
-        makeEntrega({ repoUrl: "https://github.com/pdep-mn/kata-testuser" })
+        makeEntrega({ repoUrl: "https://github.com/pdep-mn-utn/kata-testuser" })
       );
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
       expect(html).toContain("Ir al repo");
-      expect(html).toContain("https://github.com/pdep-mn/kata-testuser");
+      expect(html).toContain("https://github.com/pdep-mn-utn/kata-testuser");
       expect(html).not.toContain("data-testid=\"accept-button\"");
     });
 

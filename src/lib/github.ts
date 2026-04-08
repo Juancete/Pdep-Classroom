@@ -2,7 +2,7 @@ import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
 import { buildRepoName, extractTemplateName } from "./naming";
 
-const ORG = process.env.GITHUB_ORG ?? "pdep-mn";
+const ORG = process.env.GITHUB_ORG ?? "pdep-mn-utn";
 
 // ── Octokit autenticado como GitHub App ─────────────────────
 // Usa la GitHub App instalada en la org para tener permisos de
@@ -14,7 +14,7 @@ function getOctokit(): Octokit {
   if (_octokit) return _octokit;
 
   // Si hay GitHub App configurada, usamos eso (recomendado)
-  if (process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY) {
+  if (process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY && process.env.GITHUB_APP_INSTALLATION_ID) {
     const privateKey = Buffer.from(
       process.env.GITHUB_APP_PRIVATE_KEY,
       "base64"

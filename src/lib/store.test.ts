@@ -201,7 +201,7 @@ describe("entregas CRUD", () => {
     const entrega = await createEntrega({
       assignmentId: "a1",
       repoName: "kata-funcional-juangarcia",
-      repoUrl: "https://github.com/pdep-mn/kata-funcional-juangarcia",
+      repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
       githubUsernames: ["juangarcia"],
     });
 

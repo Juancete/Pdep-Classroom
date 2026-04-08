@@ -76,7 +76,7 @@ describe("slugify", () => {
 
 describe("extractTemplateName", () => {
   it("extrae nombre sin org", () => {
-    expect(extractTemplateName("pdep-mn/kata-template")).toBe("kata-template");
+    expect(extractTemplateName("pdep-mn-utn/kata-template")).toBe("kata-template");
   });
 
   it("devuelve tal cual si no tiene org", () => {

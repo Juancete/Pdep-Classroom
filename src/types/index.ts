@@ -32,7 +32,7 @@ export interface Assignment {
   id: string;
   titulo: string;
   descripcion: string;
-  templateRepo: string; // "pdep-mn/kata-funcional-template"
+  templateRepo: string; // "pdep-mn-utn/kata-funcional-template"
   tipo: TipoAssignment;
   paradigma: Paradigma;
   deadline: string; // ISO date

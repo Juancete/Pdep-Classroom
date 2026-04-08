@@ -71,7 +71,7 @@ function makeEntrega(overrides?: Partial<Entrega>): Entrega {
     id: "e1",
     assignmentId: "a1",
     repoName: "kata-funcional-juangarcia",
-    repoUrl: "https://github.com/pdep-mn/kata-funcional-juangarcia",
+    repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
     githubUsernames: ["juangarcia"],
     createdAt: new Date().toISOString(),
     ...overrides,
@@ -96,7 +96,7 @@ describe("POST /api/assignments/[id]/accept", () => {
     mockRepoExists.mockResolvedValue(false);
     mockCrearEntrega.mockResolvedValue({
       repoName: "kata-funcional-juangarcia",
-      repoUrl: "https://github.com/pdep-mn/kata-funcional-juangarcia",
+      repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
     });
     mockCreateEntrega.mockResolvedValue(makeEntrega());
   });

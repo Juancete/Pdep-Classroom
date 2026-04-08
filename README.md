@@ -2,7 +2,7 @@
 
 Reemplazo liviano de GitHub Classroom para la cátedra de Paradigmas de Programación (UTN FRBA).
 
-Crea repos desde templates en la org `pdep-mn` y da acceso a los alumnos, sin depender de GitHub Classroom.
+Crea repos desde templates en la org `pdep-mn-utn` y da acceso a los alumnos, sin depender de GitHub Classroom.
 
 ## Stack
 
@@ -35,9 +35,9 @@ Ir a https://github.com/settings/applications/new
 
 Copiar Client ID y Client Secret a `.env.local`.
 
-### 3. Crear GitHub App en la org pdep-mn
+### 3. Crear GitHub App en la org pdep-mn-utn
 
-Ir a https://github.com/organizations/pdep-mn/settings/apps/new
+Ir a https://github.com/organizations/pdep-mn-utn/settings/apps/new
 
 Completar el formulario con estos valores:
 
@@ -71,16 +71,43 @@ Todo lo demás (Account permissions, Subscribe to events) dejarlo sin selecciona
 ---
 
 Después de crear la app:
-1. Generar private key → descargar el `.pem`
-2. Instalar la app en la org pdep-mn
-3. Anotar el App ID y el Installation ID
+
+**1. Anotar el App ID**
+
+En la página de configuración de la app (donde estás ahora), en la sección "About", figura el **App ID** — un número entero. Copiarlo en `GITHUB_APP_ID`.
+
+**2. Generar y convertir la private key**
+
+Bajar en la misma página hasta "Private keys" → click en **Generate a private key** → se descarga un `.pem`.
 
 ```bash
-# Convertir el .pem a base64 para el env
-cat tu-app.pem | base64 -w 0
+# Convertir el .pem a base64 para el env (una sola línea, sin saltos)
+cat tu-app.pem | base64 -w 0          # Linux
+cat tu-app.pem | base64 | tr -d '\n'  # Mac
 ```
 
-Pegar en `GITHUB_APP_PRIVATE_KEY`.
+Pegar el resultado en `GITHUB_APP_PRIVATE_KEY`. Es importante que sea **una sola línea sin saltos** — si el valor queda partido en varias líneas el JWT falla con error 401.
+
+**3. Instalar la app en la org y obtener el Installation ID**
+
+> Para instalar una app en una org necesitás ser **Owner** de esa org. Si en el paso de instalación solo aparece tu usuario personal y no la org, es porque aún no tenés ese rol — pedíselo a quien administre la org.
+
+Si sos Owner, hay dos formas de instalarla:
+
+- **Opción A:** En la página de la app → **Install App** (barra lateral izquierda) → seleccionar `pdep-mn-utn` → **Install**
+- **Opción B (más directa):** Ir a `https://github.com/organizations/pdep-mn-utn/settings/apps` → buscar la app → **Install**
+
+En ambos casos, elegir **All repositories** o los repos necesarios → confirmar.
+
+Una vez instalada, ir a:
+```
+https://github.com/organizations/pdep-mn-utn/settings/installations
+```
+Click en **Configure** de la app recién instalada. La URL del navegador cambia a algo como:
+```
+https://github.com/organizations/pdep-mn-utn/settings/installations/12345678
+```
+Ese número al final (`12345678`) es el **Installation ID**. Copiarlo en `GITHUB_APP_INSTALLATION_ID`.
 
 **Alternativa rápida para dev:** en vez de una GitHub App, podés usar un Personal Access Token (classic) con scope `repo` y `admin:org`. Poné el token en `GITHUB_PAT` en el `.env.local`.
 
@@ -211,7 +238,7 @@ Actualizar las URLs de callback en la GitHub OAuth App.
 ### Para alumnos
 
 1. Entrar con GitHub → ver dashboard con TPs pendientes
-2. Clickear **Aceptar** → se crea el repo en `pdep-mn` con su usuario como collaborator
+2. Clickear **Aceptar** → se crea el repo en `pdep-mn-utn` con su usuario como collaborator
 3. Para TPs grupales, se agregan todos los miembros del grupo automáticamente
 
 ### Repos creados
