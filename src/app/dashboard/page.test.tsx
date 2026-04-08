@@ -1,0 +1,296 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { Assignment, Entrega, PdepUser } from "@/types";
+
+// ── Mocks ────────────────────────────────────────────────────
+
+const mockRequireUser = vi.fn();
+const mockGetAlumnoByGithub = vi.fn();
+const mockGetAssignments = vi.fn();
+const mockGetEntregaDeUsuario = vi.fn();
+const mockRedirect = vi.fn().mockImplementation((url: string) => {
+  throw new Error(`REDIRECT:${url}`);
+});
+
+vi.mock("@/lib/session", () => ({
+  requireUser: () => mockRequireUser(),
+}));
+
+vi.mock("@/lib/sheets", () => ({
+  getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
+}));
+
+vi.mock("@/lib/store", () => ({
+  getAssignments: () => mockGetAssignments(),
+  getEntregaDeUsuario: (assignmentId: string, username: string) =>
+    mockGetEntregaDeUsuario(assignmentId, username),
+}));
+
+vi.mock("next/navigation", () => ({
+  redirect: (url: string) => mockRedirect(url),
+}));
+
+vi.mock("./accept-button", () => ({
+  AcceptButton: ({ assignmentId }: { assignmentId: string }) => (
+    <button data-testid="accept-button" data-assignment={assignmentId}>
+      Aceptar TP
+    </button>
+  ),
+}));
+
+import DashboardPage from "./page";
+
+// ── Helpers ──────────────────────────────────────────────────
+
+function makeUser(overrides?: Partial<PdepUser>): PdepUser {
+  return {
+    githubUsername: "testuser",
+    name: "Test User",
+    image: "",
+    isAdmin: false,
+    ...overrides,
+  };
+}
+
+function makeAssignment(overrides?: Partial<Assignment>): Assignment {
+  return {
+    id: "a1",
+    titulo: "Kata Funcional",
+    descripcion: "",
+    templateRepo: "kata-template",
+    tipo: "individual",
+    paradigma: "funcional",
+    deadline: "",
+    createdAt: new Date().toISOString(),
+    slug: "kata-funcional",
+    ...overrides,
+  };
+}
+
+function makeEntrega(overrides?: Partial<Entrega>): Entrega {
+  return {
+    id: "e1",
+    assignmentId: "a1",
+    repoName: "kata-funcional-testuser",
+    repoUrl: "https://github.com/pdep-mn/kata-funcional-testuser",
+    githubUsernames: ["testuser"],
+    createdAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+// ── Tests ────────────────────────────────────────────────────
+
+describe("Dashboard page", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRedirect.mockImplementation((url: string) => {
+      throw new Error(`REDIRECT:${url}`);
+    });
+    mockGetAssignments.mockResolvedValue([]);
+    mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+  });
+
+  describe("redirecciones", () => {
+    it("redirige a /registro si el alumno no está registrado y no es admin", async () => {
+      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
+      mockGetAlumnoByGithub.mockResolvedValue(null);
+
+      await expect(DashboardPage()).rejects.toThrow("REDIRECT:/registro");
+      expect(mockRedirect).toHaveBeenCalledWith("/registro");
+    });
+
+    it("no redirige a /registro si el alumno está registrado", async () => {
+      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
+      mockGetAlumnoByGithub.mockResolvedValue({
+        legajo: "12345",
+        nombre: "Test",
+        apellido: "User",
+        githubUsername: "testuser",
+        email: "test@example.com",
+        comision: "miércoles noche",
+      });
+
+      const element = await DashboardPage();
+      expect(element).toBeDefined();
+      expect(mockRedirect).not.toHaveBeenCalled();
+    });
+
+    it("no redirige a /registro aunque no esté registrado si es admin", async () => {
+      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: true }));
+
+      const element = await DashboardPage();
+      expect(element).toBeDefined();
+      expect(mockRedirect).not.toHaveBeenCalled();
+      expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("estado vacío", () => {
+    beforeEach(() => {
+      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: true }));
+      mockGetAssignments.mockResolvedValue([]);
+    });
+
+    it("muestra mensaje cuando no hay assignments", async () => {
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("No hay assignments publicados todavía");
+    });
+  });
+
+  describe("con assignments", () => {
+    beforeEach(() => {
+      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: true }));
+    });
+
+    it("muestra el título del assignment", async () => {
+      mockGetAssignments.mockResolvedValue([
+        makeAssignment({ titulo: "TP Funcional" }),
+      ]);
+      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("TP Funcional");
+    });
+
+    it("muestra el paradigma del assignment", async () => {
+      mockGetAssignments.mockResolvedValue([
+        makeAssignment({ paradigma: "logico" }),
+      ]);
+      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("logico");
+    });
+
+    it("muestra el tipo del assignment", async () => {
+      mockGetAssignments.mockResolvedValue([
+        makeAssignment({ tipo: "grupal" }),
+      ]);
+      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("grupal");
+    });
+
+    it("muestra la descripción si está presente", async () => {
+      mockGetAssignments.mockResolvedValue([
+        makeAssignment({ descripcion: "Una kata introductoria" }),
+      ]);
+      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("Una kata introductoria");
+    });
+
+    it("no muestra la descripción si está vacía", async () => {
+      mockGetAssignments.mockResolvedValue([
+        makeAssignment({ descripcion: "" }),
+      ]);
+      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      // La clase del párrafo de descripción no debe estar
+      expect(html).not.toContain("text-sm text-gray-500");
+    });
+
+    it("muestra el deadline formateado si está presente", async () => {
+      mockGetAssignments.mockResolvedValue([
+        makeAssignment({ deadline: "2026-06-15" }),
+      ]);
+      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("Entrega:");
+    });
+
+    it("no muestra la sección de deadline si no está presente", async () => {
+      mockGetAssignments.mockResolvedValue([
+        makeAssignment({ deadline: "" }),
+      ]);
+      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).not.toContain("Entrega:");
+    });
+  });
+
+  describe("render condicional según entrega", () => {
+    beforeEach(() => {
+      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: true }));
+      mockGetAssignments.mockResolvedValue([makeAssignment()]);
+    });
+
+    it("muestra AcceptButton cuando no hay entrega", async () => {
+      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("data-testid=\"accept-button\"");
+      expect(html).not.toContain("Ir al repo");
+    });
+
+    it("muestra el link al repo cuando ya hay entrega", async () => {
+      mockGetEntregaDeUsuario.mockResolvedValue(
+        makeEntrega({ repoUrl: "https://github.com/pdep-mn/kata-testuser" })
+      );
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("Ir al repo");
+      expect(html).toContain("https://github.com/pdep-mn/kata-testuser");
+      expect(html).not.toContain("data-testid=\"accept-button\"");
+    });
+
+    it("pasa el assignmentId correcto al AcceptButton", async () => {
+      mockGetAssignments.mockResolvedValue([
+        makeAssignment({ id: "assignment-123" }),
+      ]);
+      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain('data-assignment="assignment-123"');
+    });
+
+    it("consulta la entrega usando el username del usuario actual", async () => {
+      mockRequireUser.mockResolvedValue(
+        makeUser({ githubUsername: "miusuario" })
+      );
+      mockGetAssignments.mockResolvedValue([makeAssignment({ id: "tp-1" })]);
+      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+
+      await DashboardPage();
+      expect(mockGetEntregaDeUsuario).toHaveBeenCalledWith("tp-1", "miusuario");
+    });
+  });
+
+  describe("header", () => {
+    beforeEach(() => {
+      mockRequireUser.mockResolvedValue(
+        makeUser({ githubUsername: "miusuario", isAdmin: true })
+      );
+      mockGetAssignments.mockResolvedValue([]);
+    });
+
+    it("muestra el username en el saludo", async () => {
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("miusuario");
+    });
+
+    it("muestra el título principal", async () => {
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("Mis Trabajos Prácticos");
+    });
+  });
+});
