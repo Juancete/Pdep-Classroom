@@ -148,12 +148,10 @@ describe("Edit Assignment page", () => {
       expect(html).toContain('data-template-count="1"');
     });
 
-    it("pasa lista vacía cuando falla la carga de templates", async () => {
+    it("propaga el error cuando falla la carga de templates", async () => {
       mockGetAssignment.mockResolvedValue(makeAssignment());
       mockListarTemplates.mockRejectedValue(new Error("Sin credenciales"));
-      const element = await EditAssignmentPage({ params: { id: "a1" } });
-      const html = renderToStaticMarkup(element as React.ReactElement);
-      expect(html).toContain('data-template-count="0"');
+      await expect(EditAssignmentPage({ params: { id: "a1" } })).rejects.toThrow("Sin credenciales");
     });
   });
 });

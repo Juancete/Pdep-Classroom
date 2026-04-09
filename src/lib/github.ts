@@ -1,6 +1,7 @@
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
 import { buildRepoName, extractTemplateName } from "./naming";
+import { handleOctokitError } from "./github-errors";
 
 const ORG = process.env.GITHUB_ORG ?? "pdep-mn-utn";
 
@@ -13,27 +14,30 @@ let _octokit: Octokit | null = null;
 function getOctokit(): Octokit {
   if (_octokit) return _octokit;
 
-  // Si hay GitHub App configurada, usamos eso (recomendado)
-  if (process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY && process.env.GITHUB_APP_INSTALLATION_ID) {
-    const privateKey = Buffer.from(
-      process.env.GITHUB_APP_PRIVATE_KEY,
-      "base64"
-    ).toString("utf-8");
+  try {
+    if (process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY && process.env.GITHUB_APP_INSTALLATION_ID) {
+      const privateKey = Buffer.from(
+        process.env.GITHUB_APP_PRIVATE_KEY,
+        "base64"
+      ).toString("utf-8");
 
-    _octokit = new Octokit({
-      authStrategy: createAppAuth,
-      auth: {
-        appId: process.env.GITHUB_APP_ID,
-        privateKey,
-        installationId: process.env.GITHUB_APP_INSTALLATION_ID,
-      },
-    });
-  } else {
-    // Fallback: PAT clásico (para desarrollo rápido)
-    _octokit = new Octokit({ auth: process.env.GITHUB_PAT });
+      _octokit = new Octokit({
+        authStrategy: createAppAuth,
+        auth: {
+          appId: process.env.GITHUB_APP_ID,
+          privateKey,
+          installationId: process.env.GITHUB_APP_INSTALLATION_ID,
+        },
+      });
+    } else {
+      // Fallback: PAT clásico (para desarrollo rápido)
+      _octokit = new Octokit({ auth: process.env.GITHUB_PAT });
+    }
+  } catch (e) {
+    handleOctokitError(e);
   }
 
-  return _octokit;
+  return _octokit!;
 }
 
 // ── Crear repo desde template ───────────────────────────────
@@ -50,20 +54,24 @@ export async function createRepoFromTemplate(
 ): Promise<{ repoUrl: string; repoFullName: string }> {
   const octokit = getOctokit();
 
-  const { data } = await octokit.repos.createUsingTemplate({
-    template_owner: ORG,
-    template_repo: opts.templateRepo,
-    owner: ORG,
-    name: opts.newRepoName,
-    description: opts.description ?? "",
-    private: opts.isPrivate ?? true,
-    include_all_branches: false,
-  });
+  try {
+    const { data } = await octokit.repos.createUsingTemplate({
+      template_owner: ORG,
+      template_repo: opts.templateRepo,
+      owner: ORG,
+      name: opts.newRepoName,
+      description: opts.description ?? "",
+      private: opts.isPrivate ?? true,
+      include_all_branches: false,
+    });
 
-  return {
-    repoUrl: data.html_url,
-    repoFullName: data.full_name,
-  };
+    return {
+      repoUrl: data.html_url,
+      repoFullName: data.full_name,
+    };
+  } catch (e) {
+    handleOctokitError(e);
+  }
 }
 
 // ── Agregar collaborator(s) a un repo ───────────────────────
@@ -75,16 +83,20 @@ export async function addCollaborators(
 ): Promise<void> {
   const octokit = getOctokit();
 
-  await Promise.all(
-    usernames.map((username) =>
-      octokit.repos.addCollaborator({
-        owner: ORG,
-        repo: repoName,
-        username,
-        permission,
-      })
-    )
-  );
+  try {
+    await Promise.all(
+      usernames.map((username) =>
+        octokit.repos.addCollaborator({
+          owner: ORG,
+          repo: repoName,
+          username,
+          permission,
+        })
+      )
+    );
+  } catch (e) {
+    handleOctokitError(e);
+  }
 }
 
 // ── Crear repo + dar acceso en una sola operación ───────────
@@ -127,20 +139,24 @@ export async function listarReposDeAssignment(
 ): Promise<{ name: string; url: string; updatedAt: string }[]> {
   const octokit = getOctokit();
 
-  const { data } = await octokit.repos.listForOrg({
-    org: ORG,
-    type: "all",
-    per_page: 100,
-    sort: "updated",
-  });
+  try {
+    const { data } = await octokit.repos.listForOrg({
+      org: ORG,
+      type: "all",
+      per_page: 100,
+      sort: "updated",
+    });
 
-  return data
-    .filter((r) => r.name.startsWith(`${slug}-`))
-    .map((r) => ({
-      name: r.name,
-      url: r.html_url,
-      updatedAt: r.updated_at ?? "",
-    }));
+    return data
+      .filter((r) => r.name.startsWith(`${slug}-`))
+      .map((r) => ({
+        name: r.name,
+        url: r.html_url,
+        updatedAt: r.updated_at ?? "",
+      }));
+  } catch (e) {
+    handleOctokitError(e);
+  }
 }
 
 // ── Verificar si un repo ya existe ──────────────────────────
@@ -162,17 +178,21 @@ export async function listarTemplates(): Promise<
 > {
   const octokit = getOctokit();
 
-  const { data } = await octokit.repos.listForOrg({
-    org: ORG,
-    type: "all",
-    per_page: 100,
-  });
+  try {
+    const { data } = await octokit.repos.listForOrg({
+      org: ORG,
+      type: "all",
+      per_page: 100,
+    });
 
-  return data
-    .filter((r) => r.is_template)
-    .map((r) => ({
-      name: r.name,
-      fullName: r.full_name,
-      description: r.description ?? "",
-    }));
+    return data
+      .filter((r) => r.is_template)
+      .map((r) => ({
+        name: r.name,
+        fullName: r.full_name,
+        description: r.description ?? "",
+      }));
+  } catch (e) {
+    handleOctokitError(e);
+  }
 }

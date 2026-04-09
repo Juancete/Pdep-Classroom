@@ -18,12 +18,7 @@ export default async function EditAssignmentPage({
     return null;
   }
 
-  let templates: { name: string; fullName: string; description: string }[] = [];
-  try {
-    templates = await listarTemplates();
-  } catch {
-    // Sin credenciales: permite ingresar manualmente
-  }
+  const templates = await listarTemplates();
 
   const boundAction = actualizarAssignment.bind(null, params.id);
 

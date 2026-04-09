@@ -159,7 +159,7 @@ export function AssignmentForm({
   const errors = state?.errors ?? {};
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} className="space-y-5" data-template-count={templates.length}>
       {/* Título */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -236,32 +236,46 @@ export function AssignmentForm({
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Paradigma
           </label>
-          <select
-            name="paradigma"
-            required
-            defaultValue={defaultValues.paradigma ?? "funcional"}
-            className={INPUT_CLASS}
-          >
-            {PARADIGMAS.map((p) => (
-              <option key={p} value={p}>
-                {p.charAt(0).toUpperCase() + p.slice(1)}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              name="paradigma"
+              required
+              defaultValue={defaultValues.paradigma ?? "funcional"}
+              className={`${INPUT_CLASS} appearance-none pr-8`}
+            >
+              {PARADIGMAS.map((p) => (
+                <option key={p} value={p}>
+                  {p.charAt(0).toUpperCase() + p.slice(1)}
+                </option>
+              ))}
+            </select>
+            <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-gray-400">
+              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </span>
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Tipo
           </label>
-          <select
-            name="tipo"
-            required
-            defaultValue={defaultValues.tipo ?? "individual"}
-            className={INPUT_CLASS}
-          >
-            <option value="individual">Individual</option>
-            <option value="grupal">Grupal</option>
-          </select>
+          <div className="relative">
+            <select
+              name="tipo"
+              required
+              defaultValue={defaultValues.tipo ?? "individual"}
+              className={`${INPUT_CLASS} appearance-none pr-8`}
+            >
+              <option value="individual">Individual</option>
+              <option value="grupal">Grupal</option>
+            </select>
+            <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-gray-400">
+              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </span>
+          </div>
         </div>
       </div>
 

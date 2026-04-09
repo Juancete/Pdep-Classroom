@@ -6,13 +6,7 @@ import { crearAssignment } from "../actions";
 export default async function NewAssignmentPage() {
   await requireAdmin();
 
-  let templates: { name: string; fullName: string; description: string }[] = [];
-  try {
-    templates = await listarTemplates();
-    console.log("templates" + templates);
-  } catch (e) {
-    console.error("[NewAssignmentPage] Error al cargar templates:", e);
-  }
+  const templates = await listarTemplates();
 
   return (
     <div className="max-w-xl">

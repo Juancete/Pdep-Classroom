@@ -85,11 +85,9 @@ describe("New Assignment page", () => {
       expect(html).toContain('data-template-count="0"');
     });
 
-    it("pasa lista vacía cuando falla la carga de templates", async () => {
+    it("propaga el error cuando falla la carga de templates", async () => {
       mockListarTemplates.mockRejectedValue(new Error("Sin credenciales"));
-      const element = await NewAssignmentPage();
-      const html = renderToStaticMarkup(element);
-      expect(html).toContain('data-template-count="0"');
+      await expect(NewAssignmentPage()).rejects.toThrow("Sin credenciales");
     });
   });
 });
