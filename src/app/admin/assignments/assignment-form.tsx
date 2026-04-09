@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { PARADIGMAS } from "@/types";
 import type { AssignmentFormState } from "@/lib/assignment-schema";
+import { slugify } from "@/lib/naming";
 
 type Template = { name: string; fullName: string; description: string };
 
@@ -158,12 +159,26 @@ export function AssignmentForm({
   const [state, formAction] = useFormState(action, null);
   const errors = state?.errors ?? {};
 
+  const [slug, setSlug] = useState(defaultValues.slug ?? "");
+  const [slugEdited, setSlugEdited] = useState(!!defaultValues.slug);
+
+  function handleTituloChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!slugEdited) {
+      setSlug(slugify(e.target.value));
+    }
+  }
+
+  function handleSlugChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setSlug(e.target.value);
+    setSlugEdited(e.target.value !== "");
+  }
+
   return (
     <form action={formAction} className="space-y-5" data-template-count={templates.length}>
       {/* Título */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Título
+          Título *
         </label>
         <input
           name="titulo"
@@ -171,6 +186,7 @@ export function AssignmentForm({
           defaultValue={defaultValues.titulo}
           placeholder="Kata funcional — Rompecabezas"
           className={errors.titulo ? INPUT_ERROR_CLASS : INPUT_CLASS}
+          onChange={handleTituloChange}
         />
         <FieldError message={errors.titulo?.[0]} />
       </div>
@@ -178,16 +194,17 @@ export function AssignmentForm({
       {/* Slug */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Slug{" "}
+          Slug *{" "}
           <span className="font-normal text-gray-400">
             (nombre base del repo, se auto-genera si lo dejás vacío)
           </span>
         </label>
         <input
           name="slug"
-          defaultValue={defaultValues.slug}
+          value={slug}
           placeholder="kata-funcional-rompecabezas"
           className={`${errors.slug ? INPUT_ERROR_CLASS : INPUT_CLASS} font-mono`}
+          onChange={handleSlugChange}
         />
         <FieldError message={errors.slug?.[0]} />
       </div>
@@ -209,7 +226,7 @@ export function AssignmentForm({
       {/* Template repo */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Template Repo
+          Template Repo *
         </label>
         {templates.length > 0 ? (
           <TemplateRepoCombobox
@@ -234,7 +251,7 @@ export function AssignmentForm({
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Paradigma
+            Paradigma *
           </label>
           <div className="relative">
             <select
@@ -258,7 +275,7 @@ export function AssignmentForm({
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Tipo
+            Tipo *
           </label>
           <div className="relative">
             <select
@@ -282,7 +299,7 @@ export function AssignmentForm({
       {/* Deadline */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Deadline
+          Deadline *
         </label>
         <input
           name="deadline"
