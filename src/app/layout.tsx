@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   description: "Gestión de TPs - Paradigmas de Programación - UTN FRBA",
 };
 
-async function Nav() {
+export async function Nav() {
   const user = await getCurrentUser();
 
   return (
