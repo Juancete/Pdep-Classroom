@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
-import { getAssignments } from "@/lib/store";
+import { getAssignments } from "@/lib/repositories";
 
 export async function GET() {
   try {

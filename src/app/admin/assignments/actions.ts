@@ -1,8 +1,7 @@
 "use server";
 
 import { requireAdmin } from "@/lib/session";
-import { createAssignment, updateAssignment } from "@/lib/store";
-import { slugify } from "@/lib/naming";
+import { createAssignment, updateAssignment } from "@/lib/repositories";
 import { redirect } from "next/navigation";
 import { AssignmentSchema, AssignmentFormState } from "@/lib/assignment-schema";
 
@@ -15,6 +14,7 @@ function parseFormData(formData: FormData) {
     tipo: formData.get("tipo") as string,
     paradigma: formData.get("paradigma") as string,
     deadline: (formData.get("deadline") as string) || "",
+    maxIntegrantes: formData.get("maxIntegrantes") as string | null,
   };
 }
 
@@ -31,9 +31,7 @@ export async function crearAssignment(
     return { ok: false, errors: result.error.flatten().fieldErrors };
   }
 
-  const { titulo, slug, ...rest } = result.data;
-  await createAssignment({ titulo, slug: slug || slugify(titulo), ...rest });
-
+  await createAssignment(result.data);
   redirect("/admin/assignments");
 }
 
@@ -51,8 +49,6 @@ export async function actualizarAssignment(
     return { ok: false, errors: result.error.flatten().fieldErrors };
   }
 
-  const { titulo, slug, ...rest } = result.data;
-  await updateAssignment(id, { titulo, slug: slug || slugify(titulo), ...rest });
-
+  await updateAssignment(id, result.data);
   redirect("/admin/assignments");
 }

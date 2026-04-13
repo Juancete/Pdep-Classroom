@@ -4,7 +4,9 @@ export type Paradigma = "funcional" | "logico" | "objetos";
 
 export const PARADIGMAS: Paradigma[] = ["funcional", "logico", "objetos"];
 
-// ── Alumno (viene de Google Sheets) ─────────────────────────
+// ── Alumno ───────────────────────────────────────────────────
+// Este tipo representa los datos del alumno tanto cuando vienen
+// de Google Sheets como cuando se mapean a/desde la entidad de dominio.
 
 export interface Alumno {
   legajo: string;
@@ -12,7 +14,7 @@ export interface Alumno {
   apellido: string;
   githubUsername: string;
   email: string;
-  comision: string; // "miércoles noche", etc.
+  comision?: string; // "miércoles noche", etc. — presente en Sheets, opcional en DB
 }
 
 // ── Grupo ───────────────────────────────────────────────────

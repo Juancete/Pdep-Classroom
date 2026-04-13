@@ -12,7 +12,7 @@ vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
-vi.mock("@/lib/store", () => ({
+vi.mock("@/lib/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
   deleteAssignment: (id: string) => mockDeleteAssignment(id),
   updateAssignment: (id: string, data: unknown) => mockUpdateAssignment(id, data),

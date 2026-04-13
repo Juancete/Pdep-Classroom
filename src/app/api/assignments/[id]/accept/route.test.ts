@@ -20,21 +20,18 @@ vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: (key: string) => mockCheckRateLimit(key),
 }));
 
-vi.mock("@/lib/store", () => ({
+vi.mock("@/lib/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
   getEntregaDeUsuario: (assignmentId: string, username: string) =>
     mockGetEntregaDeUsuario(assignmentId, username),
   createEntrega: (data: unknown) => mockCreateEntrega(data),
+  getGrupoDeAlumnoEnAssignment: (assignmentId: string, username: string) =>
+    mockGetGrupoDeAlumno(assignmentId, username),
 }));
 
 vi.mock("@/lib/github", () => ({
   crearEntrega: (opts: unknown) => mockCrearEntrega(opts),
   repoExists: (name: string) => mockRepoExists(name),
-}));
-
-vi.mock("@/lib/sheets", () => ({
-  getGrupoDeAlumno: (username: string, paradigma: string) =>
-    mockGetGrupoDeAlumno(username, paradigma),
 }));
 
 import { POST } from "./route";
@@ -168,6 +165,65 @@ describe("POST /api/assignments/[id]/accept", () => {
           usernames: ["juangarcia"],
         })
       );
+    });
+  });
+
+  describe("creación exitosa (grupal)", () => {
+    function makeGrupo(githubUsernames: string[], id = "los-lambdas") {
+      return {
+        id,
+        nombre: "Los Lambdas",
+        alumnos: { getItems: () => githubUsernames.map((u) => ({ githubUsername: u })) },
+      };
+    }
+
+    it("devuelve 200 con la entrega creada para el grupo", async () => {
+      mockGetAssignment.mockResolvedValue(makeAssignment({ tipo: "grupal" }));
+      mockGetGrupoDeAlumno.mockResolvedValue(
+        makeGrupo(["juangarcia", "mariaperez"])
+      );
+      mockCrearEntrega.mockResolvedValue({
+        repoName: "kata-funcional-los-lambdas",
+        repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-los-lambdas",
+      });
+      mockCreateEntrega.mockResolvedValue(
+        makeEntrega({ repoName: "kata-funcional-los-lambdas" })
+      );
+      const res = await POST(makeRequest(), { params: { id: "a1" } });
+      expect(res.status).toBe(200);
+    });
+
+    it("llama a crearEntrega con los usernames del grupo", async () => {
+      mockGetAssignment.mockResolvedValue(makeAssignment({ tipo: "grupal" }));
+      mockGetGrupoDeAlumno.mockResolvedValue(
+        makeGrupo(["juangarcia", "mariaperez"])
+      );
+      mockCrearEntrega.mockResolvedValue({
+        repoName: "kata-funcional-los-lambdas",
+        repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-los-lambdas",
+      });
+      mockCreateEntrega.mockResolvedValue(makeEntrega());
+      await POST(makeRequest(), { params: { id: "a1" } });
+      expect(mockCrearEntrega).toHaveBeenCalledWith(
+        expect.objectContaining({
+          usernames: ["juangarcia", "mariaperez"],
+          grupoId: "los-lambdas",
+        })
+      );
+    });
+
+    it("busca el grupo por assignmentId, no por paradigma", async () => {
+      mockGetAssignment.mockResolvedValue(
+        makeAssignment({ id: "a1", tipo: "grupal" })
+      );
+      mockGetGrupoDeAlumno.mockResolvedValue(makeGrupo(["juangarcia"], "g1"));
+      mockCrearEntrega.mockResolvedValue({
+        repoName: "kata-funcional-grupo-x",
+        repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-grupo-x",
+      });
+      mockCreateEntrega.mockResolvedValue(makeEntrega());
+      await POST(makeRequest(), { params: { id: "a1" } });
+      expect(mockGetGrupoDeAlumno).toHaveBeenCalledWith("a1", "juangarcia");
     });
   });
 

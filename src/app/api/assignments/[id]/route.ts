@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/session";
-import { getAssignment, deleteAssignment, updateAssignment } from "@/lib/store";
-import type { Assignment } from "@/types";
+import { getAssignment, deleteAssignment, updateAssignment } from "@/lib/repositories";
 
 export async function DELETE(
   _req: Request,
@@ -15,10 +14,7 @@ export async function DELETE(
 
   const existing = await getAssignment(params.id);
   if (!existing) {
-    return NextResponse.json(
-      { error: "Assignment no encontrado" },
-      { status: 404 }
-    );
+    return NextResponse.json({ error: "Assignment no encontrado" }, { status: 404 });
   }
 
   await deleteAssignment(params.id);
@@ -37,13 +33,10 @@ export async function PATCH(
 
   const existing = await getAssignment(params.id);
   if (!existing) {
-    return NextResponse.json(
-      { error: "Assignment no encontrado" },
-      { status: 404 }
-    );
+    return NextResponse.json({ error: "Assignment no encontrado" }, { status: 404 });
   }
 
-  const body = (await req.json()) as Partial<Omit<Assignment, "id" | "createdAt">>;
+  const body = await req.json();
   const updated = await updateAssignment(params.id, body);
   return NextResponse.json(updated);
 }

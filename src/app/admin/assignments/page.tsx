@@ -1,18 +1,16 @@
 import { requireAdmin } from "@/lib/session";
-import { getAssignments, getEntregas } from "@/lib/store";
+import { getAssignments, getEntregaCountsByAssignment } from "@/lib/repositories";
 import Link from "next/link";
 import { DeleteAssignmentButton } from "./delete-button";
 
 export default async function AdminAssignmentsPage() {
   await requireAdmin();
-  const assignments = await getAssignments();
 
-  // Contar entregas por assignment
-  const entregasCounts = new Map<string, number>();
-  for (const a of assignments) {
-    const entregas = await getEntregas(a.id);
-    entregasCounts.set(a.id, entregas.length);
-  }
+  // Una query para assignments, una para conteos — en paralelo
+  const [assignments, entregasCounts] = await Promise.all([
+    getAssignments(),
+    getEntregaCountsByAssignment(),
+  ]);
 
   return (
     <div>

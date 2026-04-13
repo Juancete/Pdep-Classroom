@@ -16,14 +16,17 @@ vi.mock("@/lib/session", () => ({
   requireUser: () => mockRequireUser(),
 }));
 
+vi.mock("next/cache", () => ({
+  unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
+}));
+
 vi.mock("@/lib/sheets", () => ({
   getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
 }));
 
-vi.mock("@/lib/store", () => ({
+vi.mock("@/lib/repositories", () => ({
   getAssignments: () => mockGetAssignments(),
-  getEntregaDeUsuario: (assignmentId: string, username: string) =>
-    mockGetEntregaDeUsuario(assignmentId, username),
+  getEntregasDeUsuario: (username: string) => mockGetEntregaDeUsuario(username),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -88,7 +91,7 @@ describe("Dashboard page", () => {
       throw new Error(`REDIRECT:${url}`);
     });
     mockGetAssignments.mockResolvedValue([]);
-    mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+    mockGetEntregaDeUsuario.mockResolvedValue(new Map());
   });
 
   describe("redirecciones", () => {
@@ -148,7 +151,7 @@ describe("Dashboard page", () => {
       mockGetAssignments.mockResolvedValue([
         makeAssignment({ titulo: "TP Funcional" }),
       ]);
-      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -159,7 +162,7 @@ describe("Dashboard page", () => {
       mockGetAssignments.mockResolvedValue([
         makeAssignment({ paradigma: "logico" }),
       ]);
-      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -170,7 +173,7 @@ describe("Dashboard page", () => {
       mockGetAssignments.mockResolvedValue([
         makeAssignment({ tipo: "grupal" }),
       ]);
-      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -181,7 +184,7 @@ describe("Dashboard page", () => {
       mockGetAssignments.mockResolvedValue([
         makeAssignment({ descripcion: "Una kata introductoria" }),
       ]);
-      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -192,7 +195,7 @@ describe("Dashboard page", () => {
       mockGetAssignments.mockResolvedValue([
         makeAssignment({ descripcion: "" }),
       ]);
-      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -204,7 +207,7 @@ describe("Dashboard page", () => {
       mockGetAssignments.mockResolvedValue([
         makeAssignment({ deadline: "2026-06-15" }),
       ]);
-      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -215,7 +218,7 @@ describe("Dashboard page", () => {
       mockGetAssignments.mockResolvedValue([
         makeAssignment({ deadline: "" }),
       ]);
-      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -230,7 +233,7 @@ describe("Dashboard page", () => {
     });
 
     it("muestra AcceptButton cuando no hay entrega", async () => {
-      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -239,9 +242,8 @@ describe("Dashboard page", () => {
     });
 
     it("muestra el link al repo cuando ya hay entrega", async () => {
-      mockGetEntregaDeUsuario.mockResolvedValue(
-        makeEntrega({ repoUrl: "https://github.com/pdep-mn-utn/kata-testuser" })
-      );
+      const entrega = makeEntrega({ repoUrl: "https://github.com/pdep-mn-utn/kata-testuser" });
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map([["a1", entrega]]));
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -254,22 +256,22 @@ describe("Dashboard page", () => {
       mockGetAssignments.mockResolvedValue([
         makeAssignment({ id: "assignment-123" }),
       ]);
-      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
       expect(html).toContain('data-assignment="assignment-123"');
     });
 
-    it("consulta la entrega usando el username del usuario actual", async () => {
+    it("consulta las entregas usando el username del usuario actual", async () => {
       mockRequireUser.mockResolvedValue(
         makeUser({ githubUsername: "miusuario" })
       );
       mockGetAssignments.mockResolvedValue([makeAssignment({ id: "tp-1" })]);
-      mockGetEntregaDeUsuario.mockResolvedValue(undefined);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       await DashboardPage();
-      expect(mockGetEntregaDeUsuario).toHaveBeenCalledWith("tp-1", "miusuario");
+      expect(mockGetEntregaDeUsuario).toHaveBeenCalledWith("miusuario");
     });
   });
 

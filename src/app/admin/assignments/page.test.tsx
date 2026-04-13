@@ -1,20 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { Assignment, Entrega } from "@/types";
+import type { Assignment } from "@/types";
 
 // ── Mocks ────────────────────────────────────────────────────
 
 const mockRequireAdmin = vi.fn();
 const mockGetAssignments = vi.fn();
-const mockGetEntregas = vi.fn();
+const mockGetEntregaCountsByAssignment = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
-vi.mock("@/lib/store", () => ({
+vi.mock("@/lib/repositories", () => ({
   getAssignments: () => mockGetAssignments(),
-  getEntregas: (assignmentId: string) => mockGetEntregas(assignmentId),
+  getEntregaCountsByAssignment: () => mockGetEntregaCountsByAssignment(),
 }));
 
 vi.mock("next/link", () => ({
@@ -56,7 +56,7 @@ describe("Admin Assignments page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireAdmin.mockResolvedValue(undefined);
-    mockGetEntregas.mockResolvedValue([]);
+    mockGetEntregaCountsByAssignment.mockResolvedValue(new Map());
   });
 
   it("siempre llama a requireAdmin", async () => {
@@ -167,7 +167,7 @@ describe("Admin Assignments page", () => {
   describe("conteo de entregas", () => {
     it("muestra 0 entregas cuando no hay ninguna", async () => {
       mockGetAssignments.mockResolvedValue([makeAssignment({ id: "tp-1" })]);
-      mockGetEntregas.mockResolvedValue([]);
+      mockGetEntregaCountsByAssignment.mockResolvedValue(new Map());
 
       const element = await AdminAssignmentsPage();
       const html = renderToStaticMarkup(element);
@@ -176,22 +176,11 @@ describe("Admin Assignments page", () => {
 
     it("muestra la cantidad correcta de entregas", async () => {
       mockGetAssignments.mockResolvedValue([makeAssignment({ id: "tp-1" })]);
-      const entregas: Partial<Entrega>[] = [
-        { id: "e1", assignmentId: "tp-1" },
-        { id: "e2", assignmentId: "tp-1" },
-        { id: "e3", assignmentId: "tp-1" },
-      ];
-      mockGetEntregas.mockResolvedValue(entregas);
+      mockGetEntregaCountsByAssignment.mockResolvedValue(new Map([["tp-1", 3]]));
 
       const element = await AdminAssignmentsPage();
       const html = renderToStaticMarkup(element);
       expect(html).toContain(">3<");
-    });
-
-    it("consulta las entregas por assignmentId", async () => {
-      mockGetAssignments.mockResolvedValue([makeAssignment({ id: "mi-tp" })]);
-      await AdminAssignmentsPage();
-      expect(mockGetEntregas).toHaveBeenCalledWith("mi-tp");
     });
   });
 

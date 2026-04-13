@@ -20,6 +20,9 @@ function getSheetsClient(readonly = true) {
 }
 
 // ── Parsear filas → Alumno[] (pura, testeable) ──────────────
+// Los campos devueltos coinciden 1:1 con los del tipo Alumno (src/types)
+// y con los campos de la entidad de dominio Alumno (src/domain/entities/Alumno.ts).
+// Esto permite pasar el resultado directo a AlumnoRepository.createAlumno().
 
 export function parseAlumnosRows(rows: unknown[][]): Alumno[] {
   return rows
@@ -30,7 +33,7 @@ export function parseAlumnosRows(rows: unknown[][]): Alumno[] {
       nombre: norm(row[2]),
       githubUsername: norm(row[3]).replace("@", "").toLowerCase(),
       email: norm(row[4]),
-      comision: norm(row[5]) || "miércoles noche",
+      comision: norm(row[5]) || undefined,
     }));
 }
 

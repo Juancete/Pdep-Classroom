@@ -49,9 +49,9 @@ describe("parseAlumnosRows", () => {
     expect(parseAlumnosRows(rows)).toHaveLength(1);
   });
 
-  it("comisión default si está vacía", () => {
+  it("comisión queda undefined si está vacía en la planilla", () => {
     const rows = [["123", "A", "B", "user", "a@b.com", ""]];
-    expect(parseAlumnosRows(rows)[0].comision).toBe("miércoles noche");
+    expect(parseAlumnosRows(rows)[0].comision).toBeUndefined();
   });
 
   it("maneja filas con celdas faltantes (undefined)", () => {
@@ -60,7 +60,7 @@ describe("parseAlumnosRows", () => {
     const result = parseAlumnosRows(rows);
     expect(result).toHaveLength(1);
     expect(result[0].email).toBe("");
-    expect(result[0].comision).toBe("miércoles noche");
+    expect(result[0].comision).toBeUndefined();
   });
 
   it("devuelve vacío para filas vacías", () => {

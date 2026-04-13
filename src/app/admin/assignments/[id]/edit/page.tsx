@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/session";
-import { getAssignment } from "@/lib/store";
+import { getAssignment } from "@/lib/repositories";
 import { listarTemplates } from "@/lib/github";
 import { redirect } from "next/navigation";
 import { AssignmentForm } from "../../assignment-form";
@@ -35,7 +35,7 @@ export default async function EditAssignmentPage({
           templateRepo: assignment.templateRepo,
           tipo: assignment.tipo,
           paradigma: assignment.paradigma,
-          deadline: assignment.deadline,
+          deadline: assignment.deadline?.toISOString().slice(0, 10),
         }}
         submitLabel="Guardar cambios"
       />
