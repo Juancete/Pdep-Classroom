@@ -684,6 +684,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "uuid"
+        },
+        "repo_deleted": {
+          "name": "repo_deleted",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "false",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
         }
       },
       "name": "entrega",
@@ -726,7 +742,7 @@
             "id"
           ],
           "updateRule": "cascade",
-          "deleteRule": "no action"
+          "deleteRule": "cascade"
         },
         "entrega_grupo_id_foreign": {
           "columnNames": [
@@ -875,7 +891,7 @@
             "id"
           ],
           "updateRule": "cascade",
-          "deleteRule": "no action"
+          "deleteRule": "cascade"
         }
       },
       "nativeEnums": {},

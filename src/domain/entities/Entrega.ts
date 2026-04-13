@@ -14,7 +14,7 @@ export class Entrega {
   @PrimaryKey({ type: "uuid" })
   id: string = randomUUID();
 
-  @ManyToOne(() => Assignment)
+  @ManyToOne(() => Assignment, { deleteRule: "cascade" })
   assignment!: Assignment;
 
   // Individual: alumno que entrega
@@ -35,10 +35,13 @@ export class Entrega {
   @Property({ nullable: true })
   repoUrl?: string;
 
+  @Property({ default: false })
+  repoDeleted: boolean = false;
+
   @Property()
   createdAt: Date = new Date();
 
   hasRepo(): boolean {
-    return !!this.repoUrl;
+    return !!this.repoUrl && !this.repoDeleted;
   }
 }

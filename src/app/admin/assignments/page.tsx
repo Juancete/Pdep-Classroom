@@ -1,15 +1,17 @@
 import { requireAdmin } from "@/lib/session";
-import { getAssignments, getEntregaCountsByAssignment } from "@/lib/repositories";
+import { getAssignments, getEntregaCountsByAssignment, getActiveRepoCountsByAssignment } from "@/lib/repositories";
 import Link from "next/link";
 import { DeleteAssignmentButton } from "./delete-button";
+import { DeleteReposButton } from "./delete-repos-button";
 
 export default async function AdminAssignmentsPage() {
   await requireAdmin();
 
   // Una query para assignments, una para conteos — en paralelo
-  const [assignments, entregasCounts] = await Promise.all([
+  const [assignments, entregasCounts, activeRepoCounts] = await Promise.all([
     getAssignments(),
     getEntregaCountsByAssignment(),
+    getActiveRepoCountsByAssignment(),
   ]);
 
   return (
@@ -97,6 +99,10 @@ export default async function AdminAssignmentsPage() {
                         >
                           Editar
                         </Link>
+                        <DeleteReposButton
+                          assignmentId={a.id}
+                          activeRepoCount={activeRepoCounts.get(a.id) ?? 0}
+                        />
                         <DeleteAssignmentButton id={a.id} titulo={a.titulo} />
                       </div>
                     </td>

@@ -51,6 +51,31 @@ export async function getEntregaCountsByAssignment(): Promise<Map<string, number
   return map;
 }
 
+export async function getActiveRepoCountsByAssignment(): Promise<Map<string, number>> {
+  const em = await getEM();
+  const entregas = await em.find(
+    Entrega,
+    { repoDeleted: false },
+    { fields: ["assignment", "repoName"] }
+  );
+  const map = new Map<string, number>();
+  for (const e of entregas) {
+    if (!e.repoName) continue;
+    const id = e.assignment.id;
+    map.set(id, (map.get(id) ?? 0) + 1);
+  }
+  return map;
+}
+
+export async function clearReposDeAssignment(assignmentId: string): Promise<void> {
+  const em = await getEM();
+  const entregas = await em.find(Entrega, { assignment: { id: assignmentId } });
+  for (const e of entregas) {
+    e.repoDeleted = true;
+  }
+  await em.flush();
+}
+
 export async function createEntrega(data: {
   assignmentId: string;
   repoName: string;

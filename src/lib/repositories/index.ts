@@ -18,7 +18,9 @@ export {
   getEntregasDeUsuario,
   getEntregaDeUsuario,
   getEntregaCountsByAssignment,
+  getActiveRepoCountsByAssignment,
   createEntrega,
+  clearReposDeAssignment,
 } from "./EntregaRepository";
 
 export {

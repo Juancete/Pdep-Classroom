@@ -11,6 +11,7 @@ function makeRow(overrides?: Partial<EntregaRow>): EntregaRow {
     githubUsernames: ["usuario1"],
     repoName: "kata-funcional-usuario1",
     repoUrl: "https://github.com/org/kata-funcional-usuario1",
+    repoDeleted: false,
     createdAt: "2/1/2026",
     nombreCompleto: "García, Juan",
     ...overrides,

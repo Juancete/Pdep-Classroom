@@ -8,6 +8,7 @@ import {
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { EntregasTable } from "./entregas-table";
+import { DeleteReposButton } from "../delete-repos-button";
 import type { Alumno } from "@/domain/entities";
 
 export default async function AssignmentDetailPage({
@@ -42,6 +43,7 @@ export default async function AssignmentDetailPage({
     githubUsernames: e.githubUsernames,
     repoName: e.repoName,
     repoUrl: e.repoUrl,
+    repoDeleted: e.repoDeleted,
     createdAt: new Date(e.createdAt).toLocaleDateString("es-AR"),
     nombreCompleto: e.githubUsernames
       .map((u) => {
@@ -64,12 +66,18 @@ export default async function AssignmentDetailPage({
           </Link>
           <h1 className="text-2xl font-bold">{assignment.titulo}</h1>
         </div>
-        <Link
-          href={`/admin/assignments/${assignment.id}/edit`}
-          className="bg-pdep-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-pdep-700 transition-colors"
-        >
-          Editar
-        </Link>
+        <div className="flex items-center gap-3">
+          <DeleteReposButton
+            assignmentId={assignment.id}
+            activeRepoCount={entregas.filter((e) => e.repoName && !e.repoDeleted).length}
+          />
+          <Link
+            href={`/admin/assignments/${assignment.id}/edit`}
+            className="bg-pdep-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-pdep-700 transition-colors"
+          >
+            Editar
+          </Link>
+        </div>
       </div>
 
       {/* Metadata del assignment */}

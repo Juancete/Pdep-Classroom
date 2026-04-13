@@ -32,7 +32,7 @@ export class Grupo {
   @Property()
   creadoPor!: string;
 
-  @ManyToOne("GrupalAssignment")
+  @ManyToOne("GrupalAssignment", { deleteRule: "cascade" })
   assignment!: GrupalAssignment;
 
   isOpen(): boolean {

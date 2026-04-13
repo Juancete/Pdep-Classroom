@@ -54,6 +54,12 @@ vi.mock("./entregas-table", () => ({
   ),
 }));
 
+vi.mock("../delete-repos-button", () => ({
+  DeleteReposButton: ({ activeRepoCount }: { activeRepoCount: number }) => (
+    <button data-testid="delete-repos-button" data-count={activeRepoCount} />
+  ),
+}));
+
 import AssignmentDetailPage from "./page";
 
 // ── Helpers ──────────────────────────────────────────────────

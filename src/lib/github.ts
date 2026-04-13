@@ -159,6 +159,17 @@ export async function listarReposDeAssignment(
   }
 }
 
+// ── Eliminar un repo ─────────────────────────────────────────
+
+export async function deleteRepo(repoName: string): Promise<void> {
+  const octokit = getOctokit();
+  try {
+    await octokit.repos.delete({ owner: ORG, repo: repoName });
+  } catch (e) {
+    handleOctokitError(e);
+  }
+}
+
 // ── Verificar si un repo ya existe ──────────────────────────
 
 export async function repoExists(repoName: string): Promise<boolean> {

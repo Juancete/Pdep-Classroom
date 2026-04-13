@@ -7,6 +7,7 @@ import { IndividualAssignment } from "@/domain/entities";
 const mockRequireAdmin = vi.fn();
 const mockGetAssignments = vi.fn();
 const mockGetEntregaCountsByAssignment = vi.fn();
+const mockGetActiveRepoCountsByAssignment = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
@@ -15,6 +16,7 @@ vi.mock("@/lib/session", () => ({
 vi.mock("@/lib/repositories", () => ({
   getAssignments: () => mockGetAssignments(),
   getEntregaCountsByAssignment: () => mockGetEntregaCountsByAssignment(),
+  getActiveRepoCountsByAssignment: () => mockGetActiveRepoCountsByAssignment(),
 }));
 
 vi.mock("next/link", () => ({
@@ -28,6 +30,14 @@ vi.mock("next/link", () => ({
 vi.mock("./delete-button", () => ({
   DeleteAssignmentButton: ({ id, titulo }: { id: string; titulo: string }) => (
     <button data-id={id}>Eliminar {titulo}</button>
+  ),
+}));
+
+vi.mock("./delete-repos-button", () => ({
+  DeleteReposButton: ({ assignmentId, activeRepoCount }: { assignmentId: string; activeRepoCount: number }) => (
+    activeRepoCount > 0
+      ? <button data-testid="delete-repos-button" data-id={assignmentId}>Borrar repos ({activeRepoCount})</button>
+      : null
   ),
 }));
 
@@ -55,6 +65,7 @@ describe("Admin Assignments page", () => {
     vi.clearAllMocks();
     mockRequireAdmin.mockResolvedValue(undefined);
     mockGetEntregaCountsByAssignment.mockResolvedValue(new Map());
+    mockGetActiveRepoCountsByAssignment.mockResolvedValue(new Map());
   });
 
   it("siempre llama a requireAdmin", async () => {
@@ -179,6 +190,26 @@ describe("Admin Assignments page", () => {
       const element = await AdminAssignmentsPage();
       const html = renderToStaticMarkup(element);
       expect(html).toContain(">3<");
+    });
+  });
+
+  describe("botón de borrar repos", () => {
+    it("muestra el botón cuando hay repos activos", async () => {
+      mockGetAssignments.mockResolvedValue([makeAssignment({ id: "a1" })]);
+      mockGetActiveRepoCountsByAssignment.mockResolvedValue(new Map([["a1", 3]]));
+
+      const element = await AdminAssignmentsPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("Borrar repos (3)");
+    });
+
+    it("no muestra el botón cuando no hay repos activos", async () => {
+      mockGetAssignments.mockResolvedValue([makeAssignment({ id: "a1" })]);
+      mockGetActiveRepoCountsByAssignment.mockResolvedValue(new Map());
+
+      const element = await AdminAssignmentsPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).not.toContain("Borrar repos");
     });
   });
 

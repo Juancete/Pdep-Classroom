@@ -7,6 +7,7 @@ export type EntregaRow = {
   githubUsernames: string[];
   repoName?: string;
   repoUrl?: string;
+  repoDeleted: boolean;
   createdAt: string;
   nombreCompleto: string;
 };
@@ -75,7 +76,9 @@ export function EntregasTable({ entregas }: { entregas: EntregaRow[] }) {
                   {e.nombreCompleto}
                 </td>
                 <td className="px-4 py-3">
-                  {e.repoUrl ? (
+                  {e.repoDeleted ? (
+                    <span className="text-red-400 text-xs">Repositorio borrado</span>
+                  ) : e.repoUrl ? (
                     <a
                       href={e.repoUrl}
                       target="_blank"
