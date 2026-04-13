@@ -4,11 +4,25 @@ import path from "path";
 export default defineConfig({
   test: {
     globals: true,
-    environment: "node",
+    environment: "jsdom",
+    setupFiles: ["src/test-setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
+    environmentOptions: {
+      jsdom: {
+        url: "http://localhost:3000",
+      },
+    },
     coverage: {
       provider: "v8",
       include: ["src/**"],
+      exclude: [
+        // Infraestructura que depende de servicios externos
+        "src/lib/auth.ts",
+        "src/lib/db.ts",
+        "src/app/api/auth/**",
+        // Tipos
+        "src/types/**",
+      ],
       reporter: ["text", "lcov"],
     },
   },
