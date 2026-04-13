@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { Assignment } from "@/types";
 import React from "react";
 
 // ── Mocks ────────────────────────────────────────────────────

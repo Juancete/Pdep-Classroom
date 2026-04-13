@@ -14,7 +14,7 @@ function parseFormData(formData: FormData) {
     tipo: formData.get("tipo") as string,
     paradigma: formData.get("paradigma") as string,
     deadline: (formData.get("deadline") as string) || "",
-    maxIntegrantes: formData.get("maxIntegrantes") as string | null,
+    maxIntegrantes: formData.get("maxIntegrantes") ?? undefined,
   };
 }
 

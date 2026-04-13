@@ -10,6 +10,15 @@ declare global {
   var __mikro_orm_init__: Promise<MikroORM> | undefined;
 }
 
+// En desarrollo, cuando webpack re-evalúa este módulo por HMR, los prototipos de las
+// entidades cambian. El ORM cacheado tiene los prototipos viejos → "not discovered entity".
+// Reseteamos el singleton para que se re-inicialice con las clases actuales.
+if (process.env.NODE_ENV !== "production" && global.__mikro_orm__) {
+  void global.__mikro_orm__.close(true);
+  global.__mikro_orm__ = undefined;
+  global.__mikro_orm_init__ = undefined;
+}
+
 export async function getOrm(): Promise<MikroORM> {
   if (global.__mikro_orm__) {
     return global.__mikro_orm__;

@@ -40,6 +40,6 @@ export abstract class Assignment {
   @Property()
   createdAt: Date = new Date();
 
-  @ManyToOne(() => Comision)
-  comision!: Comision;
+  @ManyToOne(() => Comision, { nullable: true })
+  comision?: Comision;
 }

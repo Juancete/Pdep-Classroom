@@ -1,5 +1,5 @@
 import { google } from "googleapis";
-import type { Alumno, Grupo, Paradigma } from "@/types";
+import { Alumno } from "@/domain/entities";
 
 // ── Auth con service account ────────────────────────────────
 
@@ -27,14 +27,16 @@ function getSheetsClient(readonly = true) {
 export function parseAlumnosRows(rows: unknown[][]): Alumno[] {
   return rows
     .filter((row) => row[0] && row[3]) // legajo + github obligatorios
-    .map((row) => ({
-      legajo: norm(row[0]),
-      apellido: norm(row[1]),
-      nombre: norm(row[2]),
-      githubUsername: norm(row[3]).replace("@", "").toLowerCase(),
-      email: norm(row[4]),
-      comision: norm(row[5]) || undefined,
-    }));
+    .map((row) => {
+      const a = new Alumno();
+      a.legajo = norm(row[0]);
+      a.apellido = norm(row[1]);
+      a.nombre = norm(row[2]);
+      a.githubUsername = norm(row[3]).replace("@", "").toLowerCase();
+      a.email = norm(row[4]);
+      a.comision = norm(row[5]) || undefined;
+      return a;
+    });
 }
 
 // ── Leer alumnos ────────────────────────────────────────────
@@ -79,11 +81,10 @@ export interface RegistroInput {
   nombre: string;
   githubUsername: string;
   email: string;
-  comision: string;
 }
 
 export function validateRegistro(input: RegistroInput): string | null {
-  const { legajo, apellido, nombre, githubUsername, email, comision } = input;
+  const { legajo, apellido, nombre, githubUsername, email } = input;
 
   if (!legajo || !/^\d{4,8}$/.test(legajo.trim()))
     return "El legajo debe tener entre 4 y 8 dígitos";
@@ -93,7 +94,6 @@ export function validateRegistro(input: RegistroInput): string | null {
   if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(githubUsername.trim()))
     return "El usuario de GitHub no tiene un formato válido";
   if (!email.trim() || !email.includes("@")) return "El email no es válido";
-  if (!comision.trim()) return "La comisión es obligatoria";
   return null;
 }
 
@@ -137,61 +137,13 @@ export async function registrarAlumno(
           input.nombre.trim(),
           input.githubUsername.trim().toLowerCase(),
           input.email.trim().toLowerCase(),
-          input.comision.trim(),
+          "",
         ],
       ],
     },
   });
 
   return { ok: true };
-}
-
-// ── Grupos ──────────────────────────────────────────────────
-
-export function parseGruposRows(
-  rows: unknown[][],
-  paradigma?: Paradigma
-): Grupo[] {
-  const grupos: Grupo[] = rows
-    .filter((row) => row[0] && row[1])
-    .map((row) => ({
-      id: norm(row[0]).toLowerCase().replace(/\s+/g, "-"),
-      nombre: norm(row[0]),
-      paradigma: norm(row[1]).toLowerCase() as Paradigma,
-      miembros: row
-        .slice(2)
-        .map((m) => norm(m).replace("@", "").toLowerCase())
-        .filter(Boolean),
-    }));
-
-  if (paradigma) return grupos.filter((g) => g.paradigma === paradigma);
-  return grupos;
-}
-
-export async function getGrupos(paradigma?: Paradigma): Promise<Grupo[]> {
-  const id = process.env.GOOGLE_SHEET_ALUMNOS_ID;
-  if (!id) throw new Error("GOOGLE_SHEET_ALUMNOS_ID no está configurado.");
-
-  try {
-    const sheets = getSheetsClient();
-    const { data } = await sheets.spreadsheets.values.get({
-      spreadsheetId: id,
-      range: "Grupos!A2:H100",
-    });
-    return parseGruposRows(data.values ?? [], paradigma);
-  } catch (e) {
-    throw new Error(`No se pudo leer la planilla de grupos: ${(e as Error).message}`);
-  }
-}
-
-export async function getGrupoDeAlumno(
-  githubUsername: string,
-  paradigma: Paradigma
-): Promise<Grupo | undefined> {
-  const grupos = await getGrupos(paradigma);
-  return grupos.find((g) =>
-    g.miembros.some((m) => m.toLowerCase() === githubUsername.toLowerCase())
-  );
 }
 
 // ── Helpers ─────────────────────────────────────────────────

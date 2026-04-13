@@ -16,6 +16,7 @@ type DefaultValues = {
   tipo?: string;
   paradigma?: string;
   deadline?: string;
+  maxIntegrantes?: number;
 };
 
 type Props = {
@@ -157,6 +158,7 @@ export function AssignmentForm({
   const [state, formAction] = useFormState(action, null);
   const errors = state?.errors ?? {};
 
+  const [tipo, setTipo] = useState(defaultValues.tipo ?? "individual");
   const [slug, setSlug] = useState(defaultValues.slug ?? "");
   const [slugEdited, setSlugEdited] = useState(!!defaultValues.slug);
 
@@ -279,7 +281,8 @@ export function AssignmentForm({
             <select
               name="tipo"
               required
-              defaultValue={defaultValues.tipo ?? "individual"}
+              value={tipo}
+              onChange={(e) => setTipo(e.target.value)}
               className={`${INPUT_CLASS} appearance-none pr-8`}
             >
               <option value="individual">Individual</option>
@@ -294,6 +297,24 @@ export function AssignmentForm({
         </div>
       </div>
 
+      {/* Max integrantes (solo grupal) */}
+      {tipo === "grupal" && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Máximo de integrantes *
+          </label>
+          <input
+            name="maxIntegrantes"
+            type="number"
+            min={2}
+            defaultValue={defaultValues.maxIntegrantes}
+            placeholder="Ej: 3"
+            className={errors.maxIntegrantes ? INPUT_ERROR_CLASS : INPUT_CLASS}
+          />
+          <FieldError message={errors.maxIntegrantes?.[0]} />
+        </div>
+      )}
+
       {/* Deadline */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -304,6 +325,7 @@ export function AssignmentForm({
           type="date"
           defaultValue={defaultValues.deadline}
           className={INPUT_CLASS}
+          onChange={(e) => e.target.blur()}
         />
       </div>
 

@@ -2,22 +2,6 @@
 
 import { useState } from "react";
 
-const COMISIONES = [
-  "lunes mañana",
-  "martes mañana",
-  "miércoles mañana",
-  "jueves mañana",
-  "viernes mañana",
-  "sábado mañana",
-  "lunes tarde",
-  "miércoles tarde",
-  "lunes noche",
-  "martes noche",
-  "miércoles noche",
-  "jueves noche",
-  "viernes noche",
-];
-
 export function RegistroForm({
   githubUsername,
   email,
@@ -53,7 +37,6 @@ export function RegistroForm({
           nombre: form.get("nombre"),
           githubUsername,
           email: form.get("email"),
-          comision: form.get("comision"),
         }),
       });
 
@@ -151,25 +134,6 @@ export function RegistroForm({
           defaultValue={email}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pdep-500 focus:border-pdep-500 outline-none"
         />
-      </div>
-
-      {/* Comisión */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Comisión <span className="text-red-500">*</span>
-        </label>
-        <select
-          name="comision"
-          required
-          defaultValue="miércoles noche"
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pdep-500 focus:border-pdep-500 outline-none"
-        >
-          {COMISIONES.map((c) => (
-            <option key={c} value={c}>
-              {c.charAt(0).toUpperCase() + c.slice(1)}
-            </option>
-          ))}
-        </select>
       </div>
 
       {error && (

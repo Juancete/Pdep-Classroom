@@ -25,3 +25,12 @@ export {
   getGrupos,
   getGrupoDeAlumnoEnAssignment,
 } from "./GrupoRepository";
+
+export {
+  getComisiones,
+  getComision,
+  createComision,
+  updateComision,
+  deleteComision,
+} from "./ComisionRepository";
+export type { ComisionFormData } from "./ComisionRepository";

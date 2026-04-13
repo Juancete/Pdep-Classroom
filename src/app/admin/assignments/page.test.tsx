@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { Assignment } from "@/types";
+import { IndividualAssignment } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -35,19 +35,17 @@ import AdminAssignmentsPage from "./page";
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function makeAssignment(overrides?: Partial<Assignment>): Assignment {
-  return {
-    id: "a1",
-    titulo: "Kata Funcional",
-    descripcion: "Descripción de la kata",
-    templateRepo: "kata-template",
-    tipo: "individual",
-    paradigma: "funcional",
-    deadline: "",
-    createdAt: new Date("2026-01-01").toISOString(),
-    slug: "kata-funcional",
-    ...overrides,
-  };
+function makeAssignment(overrides?: Partial<IndividualAssignment>): IndividualAssignment {
+  const a = new IndividualAssignment();
+  a.id = "a1";
+  a.titulo = "Kata Funcional";
+  a.descripcion = "Descripción de la kata";
+  a.templateRepo = "kata-template";
+  a.tipo = "individual";
+  a.paradigma = "funcional";
+  a.slug = "kata-funcional";
+  a.createdAt = new Date("2026-01-01");
+  return Object.assign(a, overrides);
 }
 
 // ── Tests ────────────────────────────────────────────────────
@@ -187,7 +185,7 @@ describe("Admin Assignments page", () => {
   describe("formato de deadline", () => {
     it("muestra el deadline formateado cuando está presente", async () => {
       mockGetAssignments.mockResolvedValue([
-        makeAssignment({ deadline: "2026-06-30" }),
+        makeAssignment({ deadline: new Date("2026-06-30") }),
       ]);
       const element = await AdminAssignmentsPage();
       const html = renderToStaticMarkup(element);
@@ -198,7 +196,7 @@ describe("Admin Assignments page", () => {
 
     it('muestra "—" cuando no hay deadline', async () => {
       mockGetAssignments.mockResolvedValue([
-        makeAssignment({ deadline: "" }),
+        makeAssignment({ deadline: undefined }),
       ]);
       const element = await AdminAssignmentsPage();
       const html = renderToStaticMarkup(element);

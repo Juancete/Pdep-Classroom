@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAlumnosRows, parseGruposRows, validateRegistro } from "./sheets";
+import { parseAlumnosRows, validateRegistro } from "./sheets";
 
 // ── parseAlumnosRows ────────────────────────────────────────
 
@@ -13,7 +13,7 @@ describe("parseAlumnosRows", () => {
     const result = parseAlumnosRows(rows);
 
     expect(result).toHaveLength(2);
-    expect(result[0]).toEqual({
+    expect(result[0]).toMatchObject({
       legajo: "12345",
       apellido: "García",
       nombre: "Juan",
@@ -73,59 +73,6 @@ describe("parseAlumnosRows", () => {
   });
 });
 
-// ── parseGruposRows ─────────────────────────────────────────
-
-describe("parseGruposRows", () => {
-  const rows = [
-    ["Los Lambdas", "funcional", "juangarcia", "mariaperez", "", ""],
-    ["Los Hechos", "logico", "pedrolopez", "anaruiz", "carlitos", ""],
-    ["Los Objetos", "objetos", "luisito", "pepe", "", ""],
-  ];
-
-  it("parsea todos los grupos", () => {
-    const result = parseGruposRows(rows);
-    expect(result).toHaveLength(3);
-  });
-
-  it("filtra por paradigma", () => {
-    const funcionales = parseGruposRows(rows, "funcional");
-    expect(funcionales).toHaveLength(1);
-    expect(funcionales[0].nombre).toBe("Los Lambdas");
-  });
-
-  it("genera id desde el nombre (lowercase, guiones)", () => {
-    const result = parseGruposRows(rows);
-    expect(result[0].id).toBe("los-lambdas");
-  });
-
-  it("filtra miembros vacíos", () => {
-    const result = parseGruposRows(rows);
-    expect(result[0].miembros).toEqual(["juangarcia", "mariaperez"]);
-    expect(result[1].miembros).toEqual(["pedrolopez", "anaruiz", "carlitos"]);
-  });
-
-  it("normaliza miembros a lowercase y quita @", () => {
-    const rows = [["G1", "funcional", "@JuanGarcia", "MARIA"]];
-    const result = parseGruposRows(rows);
-    expect(result[0].miembros).toEqual(["juangarcia", "maria"]);
-  });
-
-  it("descarta filas sin nombre o paradigma", () => {
-    const rows = [
-      ["", "funcional", "user1"],
-      ["Grupo", "", "user2"],
-      ["OK", "logico", "user3"],
-    ];
-    expect(parseGruposRows(rows)).toHaveLength(1);
-  });
-
-  it("devuelve vacío si no hay match de paradigma", () => {
-    expect(parseGruposRows(rows, "objetos")).toHaveLength(1);
-    // No hay paradigma "cuantico"
-    expect(parseGruposRows(rows, "funcional")).toHaveLength(1);
-  });
-});
-
 // ── validateRegistro ────────────────────────────────────────
 
 describe("validateRegistro", () => {
@@ -135,7 +82,6 @@ describe("validateRegistro", () => {
     nombre: "Juan",
     githubUsername: "juangarcia",
     email: "juan@gmail.com",
-    comision: "miércoles noche",
   };
 
   it("acepta input válido", () => {
@@ -197,7 +143,4 @@ describe("validateRegistro", () => {
     expect(validateRegistro({ ...valid, email: "" })).toContain("email");
   });
 
-  it("rechaza comisión vacía", () => {
-    expect(validateRegistro({ ...valid, comision: "" })).toContain("comisión");
-  });
 });

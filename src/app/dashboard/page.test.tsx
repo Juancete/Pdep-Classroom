@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { Assignment, Entrega, PdepUser } from "@/types";
+import type { PdepUser } from "@/types";
+import { IndividualAssignment, Entrega } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -55,31 +56,27 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
   };
 }
 
-function makeAssignment(overrides?: Partial<Assignment>): Assignment {
-  return {
-    id: "a1",
-    titulo: "Kata Funcional",
-    descripcion: "",
-    templateRepo: "kata-template",
-    tipo: "individual",
-    paradigma: "funcional",
-    deadline: "",
-    createdAt: new Date().toISOString(),
-    slug: "kata-funcional",
-    ...overrides,
-  };
+function makeAssignment(overrides?: Partial<IndividualAssignment>): IndividualAssignment {
+  const a = new IndividualAssignment();
+  a.id = "a1";
+  a.titulo = "Kata Funcional";
+  a.descripcion = "";
+  a.templateRepo = "kata-template";
+  a.tipo = "individual";
+  a.paradigma = "funcional";
+  a.slug = "kata-funcional";
+  a.createdAt = new Date();
+  return Object.assign(a, overrides);
 }
 
 function makeEntrega(overrides?: Partial<Entrega>): Entrega {
-  return {
-    id: "e1",
-    assignmentId: "a1",
-    repoName: "kata-funcional-testuser",
-    repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-testuser",
-    githubUsernames: ["testuser"],
-    createdAt: new Date().toISOString(),
-    ...overrides,
-  };
+  const e = new Entrega();
+  e.id = "e1";
+  e.repoName = "kata-funcional-testuser";
+  e.repoUrl = "https://github.com/pdep-mn-utn/kata-funcional-testuser";
+  e.githubUsernames = ["testuser"];
+  e.createdAt = new Date();
+  return Object.assign(e, overrides);
 }
 
 // ── Tests ────────────────────────────────────────────────────
@@ -205,7 +202,7 @@ describe("Dashboard page", () => {
 
     it("muestra el deadline formateado si está presente", async () => {
       mockGetAssignments.mockResolvedValue([
-        makeAssignment({ deadline: "2026-06-15" }),
+        makeAssignment({ deadline: new Date("2026-06-15") }),
       ]);
       mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
@@ -216,7 +213,7 @@ describe("Dashboard page", () => {
 
     it("no muestra la sección de deadline si no está presente", async () => {
       mockGetAssignments.mockResolvedValue([
-        makeAssignment({ deadline: "" }),
+        makeAssignment({ deadline: undefined }),
       ]);
       mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
