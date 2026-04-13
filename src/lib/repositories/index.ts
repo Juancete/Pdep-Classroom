@@ -23,6 +23,7 @@ export {
 
 export {
   getGrupos,
+  getGruposDeAssignment,
   getGrupoDeAlumnoEnAssignment,
 } from "./GrupoRepository";
 

@@ -8,6 +8,15 @@ export async function getGrupos(paradigma?: Paradigma): Promise<Grupo[]> {
   return em.find(Grupo, where, { populate: ["assignment", "alumnos"] });
 }
 
+export async function getGruposDeAssignment(assignmentId: string): Promise<Grupo[]> {
+  const em = await getEM();
+  return em.find(
+    Grupo,
+    { assignment: { id: assignmentId } },
+    { populate: ["alumnos"] }
+  );
+}
+
 export async function getGrupoDeAlumnoEnAssignment(
   assignmentId: string,
   githubUsername: string

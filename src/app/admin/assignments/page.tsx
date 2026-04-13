@@ -86,6 +86,12 @@ export default async function AdminAssignmentsPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <Link
+                          href={`/admin/assignments/${a.id}`}
+                          className="text-gray-500 hover:text-gray-700 text-xs font-medium"
+                        >
+                          Ver
+                        </Link>
+                        <Link
                           href={`/admin/assignments/${a.id}/edit`}
                           className="text-pdep-600 hover:text-pdep-800 text-xs font-medium"
                         >
