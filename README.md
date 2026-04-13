@@ -1,4 +1,6 @@
 # PdeP Classroom
+[![CI](https://github.com/Juancete/Pdep-Classroom/actions/workflows/ci.yml/badge.svg)](https://github.com/Juancete/Pdep-Classroom/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/Juancete/Pdep-Classroom/graph/badge.svg)](https://codecov.io/gh/Juancete/Pdep-Classroom)
 
 Reemplazo liviano de GitHub Classroom para la cátedra de Paradigmas de Programación (UTN FRBA).
 
