@@ -3,12 +3,14 @@ const nextConfig = {
   // MikroORM usa ts-morph para leer metadata de entidades desde el filesystem.
   // Si corre dentro de webpack (RSC), los paths se transforman a webpack-internal://
   // y ts-morph no puede resolver los archivos. Externalizar hace que corra en Node.js puro.
-  serverExternalPackages: [
-    "@mikro-orm/core",
-    "@mikro-orm/postgresql",
-    "@mikro-orm/reflection",
-    "@mikro-orm/migrations",
-  ],
+  experimental: {
+    serverComponentsExternalPackages: [
+      "@mikro-orm/core",
+      "@mikro-orm/postgresql",
+      "@mikro-orm/reflection",
+      "@mikro-orm/migrations",
+    ],
+  },
 
   images: {
     remotePatterns: [
