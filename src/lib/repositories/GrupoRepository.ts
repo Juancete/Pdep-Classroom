@@ -22,17 +22,12 @@ export async function getGrupoDeAlumnoEnAssignment(
   githubUsername: string
 ): Promise<Grupo | null> {
   const em = await getEM();
-  const grupos = await em.find(
+  return em.findOne(
     Grupo,
-    { assignment: { id: assignmentId } },
+    {
+      assignment: { id: assignmentId },
+      alumnos: { githubUsername: { $ilike: githubUsername } },
+    },
     { populate: ["alumnos"] }
-  );
-  const normalized = githubUsername.toLowerCase();
-  return (
-    grupos.find((g) =>
-      g.alumnos
-        .getItems()
-        .some((a) => a.githubUsername.toLowerCase() === normalized)
-    ) ?? null
   );
 }
