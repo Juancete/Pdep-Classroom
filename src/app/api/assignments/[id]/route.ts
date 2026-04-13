@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { guardAdmin } from "@/lib/api-auth";
 import { getAssignment, deleteAssignment, updateAssignment } from "@/lib/repositories";
-import { AssignmentSchema } from "@/lib/assignment-schema";
+import { AssignmentBaseSchema } from "@/lib/assignment-schema";
 
 export async function DELETE(
   _req: Request,
@@ -32,7 +32,7 @@ export async function PATCH(
   }
 
   const body = await req.json();
-  const parsed = AssignmentSchema.partial().safeParse(body);
+  const parsed = AssignmentBaseSchema.partial().safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Datos inválidos", fields: parsed.error.flatten().fieldErrors },
