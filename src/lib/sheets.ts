@@ -20,8 +20,7 @@ function getSheetsClient(readonly = true) {
 }
 
 // ── Parsear filas → Alumno[] (pura, testeable) ──────────────
-// Los campos devueltos coinciden 1:1 con los del tipo Alumno (src/types)
-// y con los campos de la entidad de dominio Alumno (src/domain/entities/Alumno.ts).
+// Los campos devueltos coinciden 1:1 con los de la entidad de dominio Alumno (src/domain/entities/Alumno.ts).
 // Esto permite pasar el resultado directo a AlumnoRepository.createAlumno().
 
 export function parseAlumnosRows(rows: unknown[][]): Alumno[] {

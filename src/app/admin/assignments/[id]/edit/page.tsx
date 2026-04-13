@@ -4,6 +4,7 @@ import { listarTemplates } from "@/lib/github";
 import { redirect } from "next/navigation";
 import { AssignmentForm } from "../../assignment-form";
 import { actualizarAssignment } from "../../actions";
+import { GrupalAssignment } from "@/domain/entities";
 
 export default async function EditAssignmentPage({
   params,
@@ -32,6 +33,9 @@ export default async function EditAssignmentPage({
           tipo: assignment.tipo,
           paradigma: assignment.paradigma,
           deadline: assignment.deadline?.toISOString().slice(0, 10),
+          ...(assignment instanceof GrupalAssignment && {
+            maxIntegrantes: assignment.maxIntegrantes,
+          }),
         }}
         submitLabel="Guardar cambios"
       />
