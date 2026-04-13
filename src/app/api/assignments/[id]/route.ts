@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { guardAdmin } from "@/lib/api-auth";
 import { getAssignment, deleteAssignment, updateAssignment } from "@/lib/repositories";
+import { AssignmentSchema } from "@/lib/assignment-schema";
 
 export async function DELETE(
   _req: Request,
@@ -31,6 +32,14 @@ export async function PATCH(
   }
 
   const body = await req.json();
-  const updated = await updateAssignment(params.id, body);
+  const parsed = AssignmentSchema.partial().safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Datos inválidos", fields: parsed.error.flatten().fieldErrors },
+      { status: 400 }
+    );
+  }
+
+  const updated = await updateAssignment(params.id, parsed.data);
   return NextResponse.json(updated);
 }
