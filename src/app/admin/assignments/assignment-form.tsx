@@ -60,8 +60,6 @@ function TemplateRepoCombobox({
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  console.log("[TemplateRepoCombobox] templates:", templates);
-
   const filtered = query
     ? templates.filter((t) =>
         t.name.toLowerCase().includes(query.toLowerCase()) ||
