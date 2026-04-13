@@ -1,6 +1,6 @@
 type RequestError = Error & { status: number };
 
-function isRequestError(error: unknown): error is RequestError {
+export function isRequestError(error: unknown): error is RequestError {
   return error instanceof Error && "status" in error;
 }
 

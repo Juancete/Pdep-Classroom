@@ -1,22 +1,7 @@
 "use client";
 
 import { useState } from "react";
-
-const COMISIONES = [
-  "lunes mañana",
-  "martes mañana",
-  "miércoles mañana",
-  "jueves mañana",
-  "viernes mañana",
-  "sábado mañana",
-  "lunes tarde",
-  "miércoles tarde",
-  "lunes noche",
-  "martes noche",
-  "miércoles noche",
-  "jueves noche",
-  "viernes noche",
-];
+import { useApiCall } from "@/app/hooks/useApiCall";
 
 export function RegistroForm({
   githubUsername,
@@ -27,8 +12,7 @@ export function RegistroForm({
   email: string;
   nombre: string;
 }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { loading, error, call } = useApiCall();
   const [success, setSuccess] = useState(false);
 
   // Intentar splitear nombre de GitHub en nombre/apellido
@@ -38,12 +22,8 @@ export function RegistroForm({
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-
     const form = new FormData(e.currentTarget);
-
-    try {
+    await call(async () => {
       const res = await fetch("/api/registro", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -53,25 +33,15 @@ export function RegistroForm({
           nombre: form.get("nombre"),
           githubUsername,
           email: form.get("email"),
-          comision: form.get("comision"),
         }),
       });
-
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error ?? "Error al registrar");
-      }
-
+      if (!res.ok) throw new Error(data.error ?? "Error al registrar");
       setSuccess(true);
-      // Redirigir al dashboard después de un momento
       setTimeout(() => {
         window.location.href = "/dashboard";
       }, 1500);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
-      setLoading(false);
-    }
+    });
   }
 
   if (success) {
@@ -151,25 +121,6 @@ export function RegistroForm({
           defaultValue={email}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pdep-500 focus:border-pdep-500 outline-none"
         />
-      </div>
-
-      {/* Comisión */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Comisión <span className="text-red-500">*</span>
-        </label>
-        <select
-          name="comision"
-          required
-          defaultValue="miércoles noche"
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pdep-500 focus:border-pdep-500 outline-none"
-        >
-          {COMISIONES.map((c) => (
-            <option key={c} value={c}>
-              {c.charAt(0).toUpperCase() + c.slice(1)}
-            </option>
-          ))}
-        </select>
       </div>
 
       {error && (

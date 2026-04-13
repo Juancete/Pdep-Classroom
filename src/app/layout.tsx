@@ -43,6 +43,12 @@ async function Nav() {
                     Grupos
                   </Link>
                   <Link
+                    href="/admin/comisiones"
+                    className="hover:text-pdep-200 transition-colors"
+                  >
+                    Comisiones
+                  </Link>
+                  <Link
                     href="/admin/alumnos"
                     className="hover:text-pdep-200 transition-colors"
                   >

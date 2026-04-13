@@ -1,9 +1,10 @@
 import { requireAdmin } from "@/lib/session";
-import { getAssignment } from "@/lib/store";
+import { getAssignment } from "@/lib/repositories";
 import { listarTemplates } from "@/lib/github";
 import { redirect } from "next/navigation";
 import { AssignmentForm } from "../../assignment-form";
 import { actualizarAssignment } from "../../actions";
+import { GrupalAssignment } from "@/domain/entities";
 
 export default async function EditAssignmentPage({
   params,
@@ -13,29 +14,28 @@ export default async function EditAssignmentPage({
   await requireAdmin();
 
   const assignment = await getAssignment(params.id);
-  if (!assignment) {
-    redirect("/admin/assignments");
-    return null;
-  }
+  if (!assignment) redirect("/admin/assignments");
 
   const templates = await listarTemplates();
-
-  const boundAction = actualizarAssignment.bind(null, params.id);
 
   return (
     <div className="max-w-xl">
       <h1 className="text-2xl font-bold mb-6">Editar Assignment</h1>
       <AssignmentForm
-        action={boundAction}
+        action={actualizarAssignment}
         templates={templates}
         defaultValues={{
+          id: assignment.id,
           titulo: assignment.titulo,
           slug: assignment.slug,
           descripcion: assignment.descripcion,
           templateRepo: assignment.templateRepo,
           tipo: assignment.tipo,
           paradigma: assignment.paradigma,
-          deadline: assignment.deadline,
+          deadline: assignment.deadline?.toISOString().slice(0, 10),
+          ...(assignment instanceof GrupalAssignment && {
+            maxIntegrantes: assignment.maxIntegrantes,
+          }),
         }}
         submitLabel="Guardar cambios"
       />

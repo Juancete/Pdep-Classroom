@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/session";
-import { getGrupos } from "@/lib/sheets";
+import { getGrupos } from "@/lib/repositories";
 import { PARADIGMAS } from "@/types";
 import type { Paradigma } from "@/types";
 
@@ -22,8 +22,8 @@ export default async function AdminGruposPage({
     <div>
       <h1 className="text-2xl font-bold mb-1">Grupos</h1>
       <p className="text-gray-500 text-sm mb-6">
-        Se leen de la hoja &quot;Grupos&quot; de la planilla de alumnos. Columnas:
-        NombreGrupo | Paradigma | Miembro1 | Miembro2 | …
+        Grupos registrados por assignment. Cada grupo pertenece al TP para el
+        que fue formado.
       </p>
 
       {/* Filtro por paradigma */}
@@ -66,19 +66,22 @@ export default async function AdminGruposPage({
               key={grupo.id}
               className="bg-white border border-gray-200 rounded-lg p-4"
             >
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-1">
                 <h3 className="font-semibold">{grupo.nombre}</h3>
                 <span className="text-xs bg-pdep-100 text-pdep-700 px-2 py-0.5 rounded-full">
                   {grupo.paradigma}
                 </span>
               </div>
+              <p className="text-xs text-gray-400 mb-2">
+                {grupo.assignment.titulo}
+              </p>
               <div className="flex flex-wrap gap-1.5">
-                {grupo.miembros.map((m) => (
+                {grupo.alumnos.getItems().map((a) => (
                   <span
-                    key={m}
+                    key={a.githubUsername}
                     className="text-xs font-mono bg-gray-100 text-gray-700 px-2 py-1 rounded"
                   >
-                    {m}
+                    {a.githubUsername}
                   </span>
                 ))}
               </div>

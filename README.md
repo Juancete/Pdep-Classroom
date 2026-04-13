@@ -1,4 +1,6 @@
 # PdeP Classroom
+[![CI](https://github.com/Juancete/Pdep-Classroom/actions/workflows/ci.yml/badge.svg)](https://github.com/Juancete/Pdep-Classroom/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/Juancete/Pdep-Classroom/graph/badge.svg)](https://codecov.io/gh/Juancete/Pdep-Classroom)
 
 Reemplazo liviano de GitHub Classroom para la cátedra de Paradigmas de Programación (UTN FRBA).
 
@@ -9,8 +11,9 @@ Crea repos desde templates en la org `pdep-mn-utn` y da acceso a los alumnos, si
 - **Next.js 14** (App Router) + TypeScript
 - **NextAuth v5** con GitHub OAuth
 - **Octokit** para la API de GitHub
-- **Google Sheets API** para leer alumnos y grupos
-- **Vercel** para deploy
+- **Google Sheets API** para leer alumnos (padrón, notas, registro)
+- **MikroORM 6** + PostgreSQL para persistencia (assignments, grupos, entregas, comisiones)
+- **Vercel** + **Neon** para deploy
 
 ## Setup rápido
 
@@ -193,7 +196,96 @@ Pegarlo en `GOOGLE_SPREADSHEET_ID` en el `.env.local`.
 
 Los grupos pueden cambiar por paradigma — cada fila tiene su paradigma asociado.
 
-### 5. Configurar admins
+### 5. Configurar la base de datos
+
+La app usa PostgreSQL via MikroORM. El esquema se crea con migraciones.
+
+#### 5.1 Local (desarrollo)
+
+Necesitás PostgreSQL corriendo localmente. El proyecto incluye un `docker-compose.yml` que levanta PostgreSQL 16 y pgAdmin juntos:
+
+```bash
+docker compose up -d
+```
+
+Esto levanta:
+- **PostgreSQL** en `localhost:5432` (user: `postgres`, password: `postgres`, db: `pdep_classroom`)
+- **pgAdmin** en http://localhost:5050 (email: `admin@pdep.com`, password: `admin`)
+  — ya viene pre-configurado apuntando a la instancia de Postgres, no hay que configurar nada
+
+Para bajar todo:
+
+```bash
+docker compose down          # baja los containers, preserva los datos
+docker compose down -v       # baja todo y borra el volumen (reset total)
+```
+
+La `DATABASE_URL` en `.env.local` ya está configurada para esta instancia:
+
+```
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/pdep_classroom
+```
+
+Crear y aplicar las migraciones para generar el schema:
+
+```bash
+pnpm db:migration:create   # genera el SQL a partir de las entidades (solo si no hay migraciones ya)
+pnpm db:migration:up       # aplica las migraciones pendientes
+```
+
+> `migration:create` lee las entidades de dominio y genera un archivo `.ts` en `migrations/`.
+> `migration:up` aplica los archivos pendientes que aún no figuran en la tabla `mikro_orm_migrations`.
+> Si corrés `migration:up` sin haber generado migraciones primero, la DB queda sin tablas.
+
+#### 5.2 Producción (Neon + Vercel)
+
+**Neon** es el proveedor de PostgreSQL recomendado para Vercel. Tiene integración nativa, free tier generoso y maneja bien las conexiones serverless.
+
+**Crear la base en Neon:**
+
+1. Ir a https://neon.tech → **New Project**
+2. Completar:
+   | Campo | Valor |
+   |---|---|
+   | Project name | `pdep-classroom` |
+   | Database name | `pdep_classroom` |
+   | Region | elegir la más cercana (ej: `aws-us-east-1`) |
+3. Una vez creado, copiar la connection string desde **Dashboard → Connection Details**
+   - Seleccionar **Pooled connection** para producción (usa PgBouncer)
+   - Tiene la forma: `postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/pdep_classroom?sslmode=require`
+
+**Conectar con Vercel:**
+
+```bash
+vercel env add DATABASE_URL
+# Pegar la connection string de Neon cuando lo pida
+# Seleccionar los entornos: Production, Preview
+```
+
+O desde el dashboard de Vercel: **Settings → Environment Variables → Add**.
+
+**Aplicar migraciones en producción:**
+
+Las migraciones se corren una vez desde local apuntando a la DB de Neon:
+
+```bash
+DATABASE_URL="postgresql://user:pass@ep-xxx.neon.tech/pdep_classroom?sslmode=require" \
+  pnpm db:migration:up
+```
+
+> No incluir este comando en el build de Vercel — las migraciones se corren manualmente para tener control explícito.
+
+#### Scripts de DB disponibles
+
+```bash
+pnpm db:migration:create   # Crear nueva migración (tras cambiar entidades)
+pnpm db:migration:up       # Aplicar migraciones pendientes
+pnpm db:migration:down     # Revertir la última migración
+pnpm db:schema:fresh       # DROP y recrear todo el schema (solo dev)
+```
+
+### 6. Configurar admins
+
 
 En `ADMIN_GITHUB_USERNAMES` poné los usernames de GitHub de los docentes, separados por coma:
 
@@ -212,7 +304,7 @@ Copiar el valor generado a `NEXTAUTH_SECRET`.
 ### 7. Correr en local
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 Abrir http://localhost:3000.
@@ -220,12 +312,30 @@ Abrir http://localhost:3000.
 ### 8. Deploy a Vercel
 
 ```bash
-npm i -g vercel
+pnpm i -g vercel
 vercel
 ```
 
-Configurar las variables de entorno en el dashboard de Vercel.
-Actualizar las URLs de callback en la GitHub OAuth App.
+Variables de entorno a configurar en Vercel:
+
+| Variable | Dónde obtenerla |
+|---|---|
+| `DATABASE_URL` | Neon → Connection Details (pooled) |
+| `GITHUB_CLIENT_ID` | GitHub OAuth App |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth App |
+| `GITHUB_APP_ID` | GitHub App → About |
+| `GITHUB_APP_PRIVATE_KEY` | GitHub App → Private Keys (base64) |
+| `GITHUB_APP_INSTALLATION_ID` | URL de instalación de la app |
+| `GITHUB_ORG` | `pdep-mn-utn` |
+| `GOOGLE_SERVICE_ACCOUNT_KEY` | Google Cloud → Credentials (base64) |
+| `GOOGLE_SHEET_ALUMNOS_ID` | ID de la planilla en la URL |
+| `NEXTAUTH_URL` | URL del deploy (ej: `https://pdep.vercel.app`) |
+| `NEXTAUTH_SECRET` | `npx auth secret` |
+| `ADMIN_GITHUB_USERNAMES` | usernames separados por coma |
+
+Después del deploy, actualizar las URLs de callback en la GitHub OAuth App:
+- Homepage URL: `https://tu-dominio.vercel.app`
+- Callback URL: `https://tu-dominio.vercel.app/api/auth/callback/github`
 
 ## Cómo funciona
 
@@ -317,7 +427,7 @@ La planilla sigue siendo la fuente de verdad — la app solo escribe ahí.
 
 ## TODOs sugeridos
 
-- [ ] Migrar `store.ts` de JSON a Vercel Postgres/KV para producción
+- [x] Migrar persistencia de JSON a PostgreSQL + MikroORM
 - [x] Agregar delete/edit de assignments
 - [ ] Vista de entregas por assignment (quién entregó, quién no)
 - [ ] Notificaciones por mail cuando se publica un assignment

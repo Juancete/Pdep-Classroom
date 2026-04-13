@@ -2,9 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
-    branches: [main]
+    branches: [master, development]
 
 jobs:
   test:
@@ -33,3 +32,8 @@ jobs:
           name: coverage
           path: coverage/
           retention-days: 7
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}

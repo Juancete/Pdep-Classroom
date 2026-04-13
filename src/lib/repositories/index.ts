@@ -1,0 +1,39 @@
+export {
+  getAlumnos,
+  getAlumnoByGithub,
+  getAlumnoByLegajo,
+  createAlumno,
+} from "./AlumnoRepository";
+
+export {
+  getAssignments,
+  getAssignment,
+  createAssignment,
+  updateAssignment,
+  deleteAssignment,
+} from "./AssignmentRepository";
+
+export {
+  getEntregas,
+  getEntregasDeUsuario,
+  getEntregaDeUsuario,
+  getEntregaCountsByAssignment,
+  getActiveRepoCountsByAssignment,
+  createEntrega,
+  clearReposDeAssignment,
+} from "./EntregaRepository";
+
+export {
+  getGrupos,
+  getGruposDeAssignment,
+  getGrupoDeAlumnoEnAssignment,
+} from "./GrupoRepository";
+
+export {
+  getComisiones,
+  getComision,
+  createComision,
+  updateComision,
+  deleteComision,
+} from "./ComisionRepository";
+export type { ComisionFormData } from "./ComisionRepository";

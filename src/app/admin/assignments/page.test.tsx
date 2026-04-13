@@ -1,20 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { Assignment, Entrega } from "@/types";
+import { IndividualAssignment } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
 const mockRequireAdmin = vi.fn();
 const mockGetAssignments = vi.fn();
-const mockGetEntregas = vi.fn();
+const mockGetEntregaCountsByAssignment = vi.fn();
+const mockGetActiveRepoCountsByAssignment = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
-vi.mock("@/lib/store", () => ({
+vi.mock("@/lib/repositories", () => ({
   getAssignments: () => mockGetAssignments(),
-  getEntregas: (assignmentId: string) => mockGetEntregas(assignmentId),
+  getEntregaCountsByAssignment: () => mockGetEntregaCountsByAssignment(),
+  getActiveRepoCountsByAssignment: () => mockGetActiveRepoCountsByAssignment(),
 }));
 
 vi.mock("next/link", () => ({
@@ -31,23 +33,29 @@ vi.mock("./delete-button", () => ({
   ),
 }));
 
+vi.mock("./delete-repos-button", () => ({
+  DeleteReposButton: ({ assignmentId, activeRepoCount }: { assignmentId: string; activeRepoCount: number }) => (
+    activeRepoCount > 0
+      ? <button data-testid="delete-repos-button" data-id={assignmentId}>Borrar repos ({activeRepoCount})</button>
+      : null
+  ),
+}));
+
 import AdminAssignmentsPage from "./page";
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function makeAssignment(overrides?: Partial<Assignment>): Assignment {
-  return {
-    id: "a1",
-    titulo: "Kata Funcional",
-    descripcion: "Descripción de la kata",
-    templateRepo: "kata-template",
-    tipo: "individual",
-    paradigma: "funcional",
-    deadline: "",
-    createdAt: new Date("2026-01-01").toISOString(),
-    slug: "kata-funcional",
-    ...overrides,
-  };
+function makeAssignment(overrides?: Partial<IndividualAssignment>): IndividualAssignment {
+  const a = new IndividualAssignment();
+  a.id = "a1";
+  a.titulo = "Kata Funcional";
+  a.descripcion = "Descripción de la kata";
+  a.templateRepo = "kata-template";
+  a.tipo = "individual";
+  a.paradigma = "funcional";
+  a.slug = "kata-funcional";
+  a.createdAt = new Date("2026-01-01");
+  return Object.assign(a, overrides);
 }
 
 // ── Tests ────────────────────────────────────────────────────
@@ -56,7 +64,8 @@ describe("Admin Assignments page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireAdmin.mockResolvedValue(undefined);
-    mockGetEntregas.mockResolvedValue([]);
+    mockGetEntregaCountsByAssignment.mockResolvedValue(new Map());
+    mockGetActiveRepoCountsByAssignment.mockResolvedValue(new Map());
   });
 
   it("siempre llama a requireAdmin", async () => {
@@ -167,7 +176,7 @@ describe("Admin Assignments page", () => {
   describe("conteo de entregas", () => {
     it("muestra 0 entregas cuando no hay ninguna", async () => {
       mockGetAssignments.mockResolvedValue([makeAssignment({ id: "tp-1" })]);
-      mockGetEntregas.mockResolvedValue([]);
+      mockGetEntregaCountsByAssignment.mockResolvedValue(new Map());
 
       const element = await AdminAssignmentsPage();
       const html = renderToStaticMarkup(element);
@@ -176,29 +185,38 @@ describe("Admin Assignments page", () => {
 
     it("muestra la cantidad correcta de entregas", async () => {
       mockGetAssignments.mockResolvedValue([makeAssignment({ id: "tp-1" })]);
-      const entregas: Partial<Entrega>[] = [
-        { id: "e1", assignmentId: "tp-1" },
-        { id: "e2", assignmentId: "tp-1" },
-        { id: "e3", assignmentId: "tp-1" },
-      ];
-      mockGetEntregas.mockResolvedValue(entregas);
+      mockGetEntregaCountsByAssignment.mockResolvedValue(new Map([["tp-1", 3]]));
 
       const element = await AdminAssignmentsPage();
       const html = renderToStaticMarkup(element);
       expect(html).toContain(">3<");
     });
+  });
 
-    it("consulta las entregas por assignmentId", async () => {
-      mockGetAssignments.mockResolvedValue([makeAssignment({ id: "mi-tp" })]);
-      await AdminAssignmentsPage();
-      expect(mockGetEntregas).toHaveBeenCalledWith("mi-tp");
+  describe("botón de borrar repos", () => {
+    it("muestra el botón cuando hay repos activos", async () => {
+      mockGetAssignments.mockResolvedValue([makeAssignment({ id: "a1" })]);
+      mockGetActiveRepoCountsByAssignment.mockResolvedValue(new Map([["a1", 3]]));
+
+      const element = await AdminAssignmentsPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("Borrar repos (3)");
+    });
+
+    it("no muestra el botón cuando no hay repos activos", async () => {
+      mockGetAssignments.mockResolvedValue([makeAssignment({ id: "a1" })]);
+      mockGetActiveRepoCountsByAssignment.mockResolvedValue(new Map());
+
+      const element = await AdminAssignmentsPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).not.toContain("Borrar repos");
     });
   });
 
   describe("formato de deadline", () => {
     it("muestra el deadline formateado cuando está presente", async () => {
       mockGetAssignments.mockResolvedValue([
-        makeAssignment({ deadline: "2026-06-30" }),
+        makeAssignment({ deadline: new Date("2026-06-30") }),
       ]);
       const element = await AdminAssignmentsPage();
       const html = renderToStaticMarkup(element);
@@ -209,7 +227,7 @@ describe("Admin Assignments page", () => {
 
     it('muestra "—" cuando no hay deadline', async () => {
       mockGetAssignments.mockResolvedValue([
-        makeAssignment({ deadline: "" }),
+        makeAssignment({ deadline: undefined }),
       ]);
       const element = await AdminAssignmentsPage();
       const html = renderToStaticMarkup(element);

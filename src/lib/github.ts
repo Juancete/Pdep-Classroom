@@ -1,7 +1,7 @@
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
 import { buildRepoName, extractTemplateName } from "./naming";
-import { handleOctokitError } from "./github-errors";
+import { handleOctokitError, isRequestError } from "./github-errors";
 
 const ORG = process.env.GITHUB_ORG ?? "pdep-mn-utn";
 
@@ -155,6 +155,19 @@ export async function listarReposDeAssignment(
         updatedAt: r.updated_at ?? "",
       }));
   } catch (e) {
+    handleOctokitError(e);
+  }
+}
+
+// ── Eliminar un repo ─────────────────────────────────────────
+
+export async function deleteRepo(repoName: string): Promise<void> {
+  const octokit = getOctokit();
+  try {
+    await octokit.repos.delete({ owner: ORG, repo: repoName });
+  } catch (e) {
+    // 404 = el repo ya no existe → resultado idempotente, no es un error
+    if (isRequestError(e) && e.status === 404) return;
     handleOctokitError(e);
   }
 }

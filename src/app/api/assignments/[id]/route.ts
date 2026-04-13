@@ -1,24 +1,18 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/session";
-import { getAssignment, deleteAssignment, updateAssignment } from "@/lib/store";
-import type { Assignment } from "@/types";
+import { guardAdmin } from "@/lib/api-auth";
+import { getAssignment, deleteAssignment, updateAssignment } from "@/lib/repositories";
+import { AssignmentBaseSchema } from "@/lib/assignment-schema";
 
 export async function DELETE(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
-  try {
-    await requireAdmin();
-  } catch {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
+  const unauthorized = await guardAdmin();
+  if (unauthorized) return unauthorized;
 
   const existing = await getAssignment(params.id);
   if (!existing) {
-    return NextResponse.json(
-      { error: "Assignment no encontrado" },
-      { status: 404 }
-    );
+    return NextResponse.json({ error: "Assignment no encontrado" }, { status: 404 });
   }
 
   await deleteAssignment(params.id);
@@ -29,21 +23,23 @@ export async function PATCH(
   req: Request,
   { params }: { params: { id: string } }
 ) {
-  try {
-    await requireAdmin();
-  } catch {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
+  const unauthorized = await guardAdmin();
+  if (unauthorized) return unauthorized;
 
   const existing = await getAssignment(params.id);
   if (!existing) {
+    return NextResponse.json({ error: "Assignment no encontrado" }, { status: 404 });
+  }
+
+  const body = await req.json();
+  const parsed = AssignmentBaseSchema.partial().safeParse(body);
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "Assignment no encontrado" },
-      { status: 404 }
+      { error: "Datos inválidos", fields: parsed.error.flatten().fieldErrors },
+      { status: 400 }
     );
   }
 
-  const body = (await req.json()) as Partial<Omit<Assignment, "id" | "createdAt">>;
-  const updated = await updateAssignment(params.id, body);
+  const updated = await updateAssignment(params.id, parsed.data);
   return NextResponse.json(updated);
 }

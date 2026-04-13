@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { Assignment } from "@/types";
 import React from "react";
 
 // ── Mocks ────────────────────────────────────────────────────
@@ -14,7 +13,7 @@ vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
-vi.mock("@/lib/store", () => ({
+vi.mock("@/lib/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
 }));
 
@@ -23,7 +22,10 @@ vi.mock("@/lib/github", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  redirect: (path: string) => mockRedirect(path),
+  redirect: (path: string) => {
+    mockRedirect(path);
+    throw new Error("redirect");
+  },
 }));
 
 vi.mock("../../actions", () => ({
@@ -57,7 +59,7 @@ import EditAssignmentPage from "./page";
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function makeAssignment(overrides?: Partial<Assignment>): Assignment {
+function makeAssignment(overrides?: object) {
   return {
     id: "a1",
     titulo: "Kata Funcional",
@@ -65,8 +67,8 @@ function makeAssignment(overrides?: Partial<Assignment>): Assignment {
     templateRepo: "kata-template",
     tipo: "individual",
     paradigma: "funcional",
-    deadline: "2026-06-30",
-    createdAt: new Date("2026-01-01").toISOString(),
+    deadline: new Date("2026-06-30"),
+    createdAt: new Date("2026-01-01"),
     slug: "kata-funcional",
     ...overrides,
   };
@@ -89,7 +91,7 @@ describe("Edit Assignment page", () => {
 
   it("redirige a /admin/assignments si el assignment no existe", async () => {
     mockGetAssignment.mockResolvedValue(undefined);
-    await EditAssignmentPage({ params: { id: "no-existe" } });
+    await expect(EditAssignmentPage({ params: { id: "no-existe" } })).rejects.toThrow("redirect");
     expect(mockRedirect).toHaveBeenCalledWith("/admin/assignments");
   });
 
@@ -130,7 +132,7 @@ describe("Edit Assignment page", () => {
     });
 
     it("pasa el deadline del assignment como defaultValue", async () => {
-      mockGetAssignment.mockResolvedValue(makeAssignment({ deadline: "2026-12-31" }));
+      mockGetAssignment.mockResolvedValue(makeAssignment({ deadline: new Date("2026-12-31") }));
       const element = await EditAssignmentPage({ params: { id: "a1" } });
       const html = renderToStaticMarkup(element as React.ReactElement);
       expect(html).toContain("2026-12-31");

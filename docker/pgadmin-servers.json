@@ -1,0 +1,15 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "pdep-classroom (local)",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "pdep_classroom",
+      "Username": "postgres",
+      "Password": "postgres",
+      "SSLMode": "disable",
+      "SavePassword": true
+    }
+  }
+}

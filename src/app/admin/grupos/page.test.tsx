@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { Grupo } from "@/types";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -11,7 +10,7 @@ vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
-vi.mock("@/lib/sheets", () => ({
+vi.mock("@/lib/repositories", () => ({
   getGrupos: (paradigma?: string) => mockGetGrupos(paradigma),
 }));
 
@@ -19,14 +18,15 @@ import AdminGruposPage from "./page";
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function makeGrupo(overrides?: Partial<Grupo>): Grupo {
-  return {
+function makeGrupo(overrides?: object) {
+  const base = {
     id: "los-lambdas",
     nombre: "Los Lambdas",
     paradigma: "funcional",
-    miembros: ["juangarcia", "mariaperez"],
-    ...overrides,
+    alumnos: { getItems: () => [{ githubUsername: "juangarcia" }, { githubUsername: "mariaperez" }] },
+    assignment: { id: "a1", titulo: "Kata Funcional" },
   };
+  return { ...base, ...overrides };
 }
 
 type SearchParams = { paradigma?: string };
@@ -95,7 +95,6 @@ describe("Admin Grupos page", () => {
     it("marca como activo el filtro seleccionado", async () => {
       const element = await AdminGruposPage({ searchParams: { paradigma: "funcional" } });
       const html = renderToStaticMarkup(element);
-      // El link de funcional tiene la clase activa (bg-pdep-600) y los otros no
       expect(html).toContain("bg-pdep-600");
     });
 
@@ -137,9 +136,26 @@ describe("Admin Grupos page", () => {
       expect(html).toContain("objetos");
     });
 
+    it("muestra el título del assignment al que pertenece el grupo", async () => {
+      mockGetGrupos.mockResolvedValue([
+        makeGrupo({ assignment: { id: "a1", titulo: "TP Objetos" } }),
+      ]);
+      const element = await AdminGruposPage({ searchParams: {} });
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("TP Objetos");
+    });
+
     it("muestra los miembros del grupo", async () => {
       mockGetGrupos.mockResolvedValue([
-        makeGrupo({ miembros: ["user1", "user2", "user3"] }),
+        makeGrupo({
+          alumnos: {
+            getItems: () => [
+              { githubUsername: "user1" },
+              { githubUsername: "user2" },
+              { githubUsername: "user3" },
+            ],
+          },
+        }),
       ]);
       const element = await AdminGruposPage({ searchParams: {} });
       const html = renderToStaticMarkup(element);
