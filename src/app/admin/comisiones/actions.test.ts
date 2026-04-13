@@ -130,26 +130,25 @@ describe("actualizarComision", () => {
   });
 
   it("siempre llama a requireAdmin", async () => {
-    await actualizarComision("c1", null, makeFormData(BASE));
+    await actualizarComision(null, makeFormData({ ...BASE, id: "c1" }));
     expect(mockRequireAdmin).toHaveBeenCalledOnce();
   });
 
   it("actualiza la comisión y redirige a /admin/comisiones", async () => {
-    await actualizarComision("c1", null, makeFormData(BASE));
+    await actualizarComision(null, makeFormData({ ...BASE, id: "c1" }));
     expect(mockUpdateComision).toHaveBeenCalledWith("c1", expect.any(Object));
     expect(mockRedirect).toHaveBeenCalledWith("/admin/comisiones");
   });
 
   it("pasa el id correcto al repositorio", async () => {
-    await actualizarComision("c1", null, makeFormData(BASE));
+    await actualizarComision(null, makeFormData({ ...BASE, id: "c1" }));
     expect(mockUpdateComision).toHaveBeenCalledWith("c1", expect.any(Object));
   });
 
   it("retorna error si la validación falla", async () => {
     const result = await actualizarComision(
-      "c1",
       null,
-      makeFormData({ ...BASE, spreadsheetId: "" })
+      makeFormData({ ...BASE, id: "c1", spreadsheetId: "" })
     );
     expect(result).toMatchObject({ ok: false });
     expect(mockUpdateComision).not.toHaveBeenCalled();

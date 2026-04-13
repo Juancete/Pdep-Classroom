@@ -22,7 +22,10 @@ vi.mock("@/lib/github", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  redirect: (path: string) => mockRedirect(path),
+  redirect: (path: string) => {
+    mockRedirect(path);
+    throw new Error("redirect");
+  },
 }));
 
 vi.mock("../../actions", () => ({
@@ -88,7 +91,7 @@ describe("Edit Assignment page", () => {
 
   it("redirige a /admin/assignments si el assignment no existe", async () => {
     mockGetAssignment.mockResolvedValue(undefined);
-    await EditAssignmentPage({ params: { id: "no-existe" } });
+    await expect(EditAssignmentPage({ params: { id: "no-existe" } })).rejects.toThrow("redirect");
     expect(mockRedirect).toHaveBeenCalledWith("/admin/assignments");
   });
 

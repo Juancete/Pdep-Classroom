@@ -45,12 +45,12 @@ export async function crearComision(
 }
 
 export async function actualizarComision(
-  id: string,
   _prevState: ComisionFormState,
   formData: FormData
 ): Promise<ComisionFormState> {
   await requireAdmin();
 
+  const id = formData.get("id") as string;
   const raw = parseFormData(formData);
   const result = ComisionSchema.safeParse(raw);
 

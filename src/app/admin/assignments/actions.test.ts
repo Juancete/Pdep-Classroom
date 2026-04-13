@@ -169,21 +169,20 @@ describe("actualizarAssignment", () => {
   });
 
   it("siempre llama a requireAdmin", async () => {
-    await actualizarAssignment("a1", null, makeFormData(BASE_INDIVIDUAL));
+    await actualizarAssignment(null, makeFormData({ ...BASE_INDIVIDUAL, id: "a1" }));
     expect(mockRequireAdmin).toHaveBeenCalledOnce();
   });
 
   it("actualiza el assignment y redirige a /admin/assignments", async () => {
-    await actualizarAssignment("a1", null, makeFormData(BASE_INDIVIDUAL));
+    await actualizarAssignment(null, makeFormData({ ...BASE_INDIVIDUAL, id: "a1" }));
     expect(mockUpdateAssignment).toHaveBeenCalledWith("a1", expect.any(Object));
     expect(mockRedirect).toHaveBeenCalledWith("/admin/assignments");
   });
 
   it("retorna error si la validación falla", async () => {
     const result = await actualizarAssignment(
-      "a1",
       null,
-      makeFormData({ ...BASE_INDIVIDUAL, titulo: "" })
+      makeFormData({ ...BASE_INDIVIDUAL, id: "a1", titulo: "" })
     );
     expect(result).toMatchObject({ ok: false });
     expect(mockUpdateAssignment).not.toHaveBeenCalled();

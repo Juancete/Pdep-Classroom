@@ -1,16 +1,13 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/session";
+import { guardAdmin } from "@/lib/api-auth";
 import { getComision, deleteComision } from "@/lib/repositories";
 
 export async function DELETE(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
-  try {
-    await requireAdmin();
-  } catch {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
+  const unauthorized = await guardAdmin();
+  if (unauthorized) return unauthorized;
 
   const existing = await getComision(params.id);
   if (!existing) {

@@ -42,3 +42,16 @@ export async function getEM() {
   const orm = await getOrm();
   return orm.em.fork();
 }
+
+// Helper genérico para eliminar cualquier entidad por id
+export async function deleteEntity<T extends object>(
+  EntityClass: new (...args: never[]) => T,
+  id: string
+): Promise<void> {
+  const em = await getEM();
+  const entity = await em.findOne(EntityClass, { id } as never);
+  if (entity) {
+    em.remove(entity);
+    await em.flush();
+  }
+}

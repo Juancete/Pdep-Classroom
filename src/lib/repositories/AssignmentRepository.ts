@@ -1,4 +1,4 @@
-import { getEM } from "@/lib/db";
+import { getEM, deleteEntity } from "@/lib/db";
 import {
   Assignment,
   IndividualAssignment,
@@ -73,10 +73,5 @@ export async function updateAssignment(
 }
 
 export async function deleteAssignment(id: string): Promise<void> {
-  const em = await getEM();
-  const assignment = await em.findOne(Assignment, { id });
-  if (assignment) {
-    em.remove(assignment);
-    await em.flush();
-  }
+  await deleteEntity(Assignment, id);
 }

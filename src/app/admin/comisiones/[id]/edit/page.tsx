@@ -12,19 +12,15 @@ export default async function EditComisionPage({
   await requireAdmin();
 
   const comision = await getComision(params.id);
-  if (!comision) {
-    redirect("/admin/comisiones");
-    return null;
-  }
-
-  const action = actualizarComision.bind(null, params.id);
+  if (!comision) redirect("/admin/comisiones");
 
   return (
     <div className="max-w-xl">
       <h1 className="text-2xl font-bold mb-6">Editar Comisión {comision.anio}</h1>
       <ComisionForm
-        action={action}
+        action={actualizarComision}
         defaultValues={{
+          id: comision.id,
           anio: comision.anio,
           spreadsheetId: comision.spreadsheetId,
           activa: comision.activa,

@@ -13,22 +13,18 @@ export default async function EditAssignmentPage({
   await requireAdmin();
 
   const assignment = await getAssignment(params.id);
-  if (!assignment) {
-    redirect("/admin/assignments");
-    return null;
-  }
+  if (!assignment) redirect("/admin/assignments");
 
   const templates = await listarTemplates();
-
-  const boundAction = actualizarAssignment.bind(null, params.id);
 
   return (
     <div className="max-w-xl">
       <h1 className="text-2xl font-bold mb-6">Editar Assignment</h1>
       <AssignmentForm
-        action={boundAction}
+        action={actualizarAssignment}
         templates={templates}
         defaultValues={{
+          id: assignment.id,
           titulo: assignment.titulo,
           slug: assignment.slug,
           descripcion: assignment.descripcion,

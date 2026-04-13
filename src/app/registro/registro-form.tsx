@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useApiCall } from "@/app/hooks/useApiCall";
 
 export function RegistroForm({
   githubUsername,
@@ -11,8 +12,7 @@ export function RegistroForm({
   email: string;
   nombre: string;
 }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { loading, error, call } = useApiCall();
   const [success, setSuccess] = useState(false);
 
   // Intentar splitear nombre de GitHub en nombre/apellido
@@ -22,12 +22,8 @@ export function RegistroForm({
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-
     const form = new FormData(e.currentTarget);
-
-    try {
+    await call(async () => {
       const res = await fetch("/api/registro", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -39,22 +35,13 @@ export function RegistroForm({
           email: form.get("email"),
         }),
       });
-
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error ?? "Error al registrar");
-      }
-
+      if (!res.ok) throw new Error(data.error ?? "Error al registrar");
       setSuccess(true);
-      // Redirigir al dashboard después de un momento
       setTimeout(() => {
         window.location.href = "/dashboard";
       }, 1500);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
-      setLoading(false);
-    }
+    });
   }
 
   if (success) {

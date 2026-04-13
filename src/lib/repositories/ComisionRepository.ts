@@ -1,4 +1,4 @@
-import { getEM } from "@/lib/db";
+import { getEM, deleteEntity } from "@/lib/db";
 import { Comision } from "@/domain/entities";
 
 export interface ComisionFormData {
@@ -53,10 +53,5 @@ export async function updateComision(
 }
 
 export async function deleteComision(id: string): Promise<void> {
-  const em = await getEM();
-  const comision = await em.findOne(Comision, { id });
-  if (comision) {
-    em.remove(comision);
-    await em.flush();
-  }
+  await deleteEntity(Comision, id);
 }

@@ -1,31 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useApiCall } from "@/app/hooks/useApiCall";
 
 export function AcceptButton({ assignmentId }: { assignmentId: string }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { loading, error, call } = useApiCall();
 
   async function handleAccept() {
-    setLoading(true);
-    setError(null);
-
-    try {
+    await call(async () => {
       const res = await fetch(`/api/assignments/${assignmentId}/accept`, {
         method: "POST",
       });
-
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error ?? "Error al crear el repo");
       }
-
-      // Recargar para mostrar el link al repo
       window.location.reload();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Error desconocido");
-      setLoading(false);
-    }
+    });
   }
 
   return (

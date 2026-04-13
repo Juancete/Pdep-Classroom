@@ -36,12 +36,12 @@ export async function crearAssignment(
 }
 
 export async function actualizarAssignment(
-  id: string,
   _prevState: AssignmentFormState,
   formData: FormData
 ): Promise<AssignmentFormState> {
   await requireAdmin();
 
+  const id = formData.get("id") as string;
   const raw = parseFormData(formData);
   const result = AssignmentSchema.safeParse(raw);
 

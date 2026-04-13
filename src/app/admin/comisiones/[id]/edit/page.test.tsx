@@ -17,7 +17,10 @@ vi.mock("@/lib/repositories", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  redirect: (path: string) => mockRedirect(path),
+  redirect: (path: string) => {
+    mockRedirect(path);
+    throw new Error("redirect");
+  },
 }));
 
 vi.mock("../../actions", () => ({
@@ -71,7 +74,7 @@ describe("Edit Comision page", () => {
 
   it("redirige a /admin/comisiones si la comisión no existe", async () => {
     mockGetComision.mockResolvedValue(null);
-    await EditComisionPage({ params: { id: "no-existe" } });
+    await expect(EditComisionPage({ params: { id: "no-existe" } })).rejects.toThrow("redirect");
     expect(mockRedirect).toHaveBeenCalledWith("/admin/comisiones");
   });
 
