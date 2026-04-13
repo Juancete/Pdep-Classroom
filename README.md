@@ -363,53 +363,84 @@ Los repos se crean con la convención:
 src/
 ├── app/
 │   ├── api/
-│   │   ├── auth/[...nextauth]/route.ts   # OAuth flow
-│   │   ├── registro/route.ts             # POST registro → Sheets
-│   │   └── assignments/
-│   │       ├── route.ts                   # GET assignments
-│   │       └── [id]/accept/route.ts       # POST crear repo
+│   │   ├── auth/[...nextauth]/route.ts        # OAuth flow
+│   │   ├── registro/route.ts                  # POST registro → Sheets
+│   │   ├── assignments/
+│   │   │   ├── route.ts                       # GET assignments
+│   │   │   └── [id]/
+│   │   │       ├── route.ts                   # GET/DELETE assignment
+│   │   │       ├── accept/route.ts            # POST crear repo
+│   │   │       └── repos/route.ts             # GET repos del assignment
+│   │   └── comisiones/[id]/route.ts           # PATCH comisión
 │   ├── admin/
 │   │   ├── assignments/
-│   │   │   ├── page.tsx                   # Listar assignments
-│   │   │   └── new/page.tsx               # Crear assignment
-│   │   ├── grupos/page.tsx                # Ver grupos (de Sheets)
-│   │   └── alumnos/page.tsx               # Ver alumnos (de Sheets)
+│   │   │   ├── page.tsx                       # Listar assignments
+│   │   │   ├── new/page.tsx                   # Crear assignment
+│   │   │   ├── [id]/page.tsx                  # Detalle + entregas
+│   │   │   ├── [id]/edit/page.tsx             # Editar assignment
+│   │   │   └── actions.ts                     # Server actions CRUD
+│   │   ├── comisiones/
+│   │   │   ├── page.tsx                       # Listar comisiones
+│   │   │   ├── new/page.tsx                   # Crear comisión
+│   │   │   ├── [id]/edit/page.tsx             # Editar comisión
+│   │   │   └── actions.ts                     # Server actions CRUD
+│   │   ├── grupos/page.tsx                    # Ver grupos (de Sheets)
+│   │   └── alumnos/page.tsx                   # Ver alumnos (de Sheets)
 │   ├── dashboard/
-│   │   ├── page.tsx                       # Dashboard (redirige a /registro si no está)
-│   │   └── accept-button.tsx              # Botón de aceptar (client)
+│   │   ├── page.tsx                           # Dashboard (redirige a /registro si no está)
+│   │   └── accept-button.tsx                  # Botón de aceptar (client)
 │   ├── registro/
-│   │   ├── page.tsx                       # Registro de alumno
-│   │   └── registro-form.tsx              # Form client component
+│   │   ├── page.tsx                           # Registro de alumno
+│   │   └── registro-form.tsx                  # Form client component
 │   ├── login/page.tsx
-│   ├── layout.tsx                         # Layout con nav
-│   └── page.tsx                           # Landing
+│   ├── layout.tsx                             # Layout con nav
+│   └── page.tsx                               # Landing
+├── domain/
+│   └── entities/                             # Entidades MikroORM
+│       ├── Assignment.ts / GrupalAssignment.ts / IndividualAssignment.ts
+│       ├── Comision.ts
+│       ├── Entrega.ts
+│       ├── Alumno.ts
+│       └── Grupo.ts
 ├── lib/
-│   ├── auth.ts                            # NextAuth config
-│   ├── github.ts                          # Octokit: crear repos, permisos
-│   ├── naming.ts                          # Funciones puras: slugify, buildRepoName
-│   ├── naming.test.ts                     # Tests de naming
-│   ├── sheets.ts                          # Google Sheets: leer y escribir alumnos/grupos
-│   ├── sheets.test.ts                     # Tests de parsing y validación
-│   ├── store.ts                           # Persistencia assignments/entregas
-│   ├── store.test.ts                      # Tests de CRUD
-│   └── session.ts                         # Helpers getCurrentUser/requireAdmin
-├── types/index.ts                         # Tipos del dominio
-└── middleware.ts                          # Auth middleware
+│   ├── auth.ts                                # NextAuth config
+│   ├── github.ts                              # Octokit: crear repos, permisos
+│   ├── github-errors.ts                       # Manejo de errores de la API de GitHub
+│   ├── naming.ts                              # Funciones puras: slugify, buildRepoName
+│   ├── sheets.ts                              # Google Sheets: leer y escribir alumnos/grupos
+│   ├── session.ts                             # Helpers getCurrentUser/requireAdmin
+│   ├── api-auth.ts                            # Middleware de auth para API routes
+│   ├── assignment-schema.ts                   # Schemas Zod para assignments
+│   ├── rate-limit.ts                          # Rate limiting por IP
+│   ├── db.ts                                  # Conexión MikroORM
+│   └── repositories/                         # Repositorios MikroORM
+│       ├── AssignmentRepository.ts
+│       ├── ComisionRepository.ts
+│       ├── EntregaRepository.ts
+│       ├── AlumnoRepository.ts
+│       └── GrupoRepository.ts
+├── types/index.ts                             # Tipos del dominio
+└── middleware.ts                              # Auth middleware
 ```
 
 ## Tests
 
 ```bash
-npm test          # watch mode
-npm run test:run  # una sola corrida
-npm run test:coverage
+pnpm test          # watch mode
+pnpm test:run      # una sola corrida
+pnpm test:coverage
 ```
 
-Los tests cubren las 3 capas de lógica pura (sin mocks de APIs externas):
+Los tests cubren lógica pura y server actions (sin mocks de APIs externas):
 
-- **naming.test.ts** — `buildRepoName`, `slugify`, `extractTemplateName`
-- **sheets.test.ts** — `parseAlumnosRows`, `parseGruposRows`, `validateRegistro`
-- **store.test.ts** — CRUD de assignments y entregas
+- **lib/naming.test.ts** — `buildRepoName`, `slugify`, `extractTemplateName`
+- **lib/sheets.test.ts** — `parseAlumnosRows`, `parseGruposRows`, `validateRegistro`
+- **lib/github-errors.test.ts** — manejo y tipado de errores de GitHub
+- **lib/rate-limit.test.ts** — lógica de rate limiting
+- **admin/assignments/actions.test.ts** — server actions CRUD de assignments
+- **admin/comisiones/actions.test.ts** — server actions CRUD de comisiones
+- **api/assignments/[id]/\*.test.ts** — rutas de aceptación y consulta de repos
+- **app/\*\*/page.test.tsx** — rendering de páginas admin y dashboard
 
 ## Registro de alumnos
 
