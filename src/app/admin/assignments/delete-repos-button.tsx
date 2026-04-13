@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useApiCall } from "@/app/hooks/useApiCall";
 
 export function DeleteReposButton({
   assignmentId,
@@ -11,7 +11,7 @@ export function DeleteReposButton({
   activeRepoCount: number;
 }) {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const { loading, error, call } = useApiCall();
 
   async function handleDelete() {
     if (
@@ -21,24 +21,28 @@ export function DeleteReposButton({
     )
       return;
 
-    setLoading(true);
-    try {
-      await fetch(`/api/assignments/${assignmentId}/repos`, { method: "DELETE" });
+    await call(async () => {
+      const res = await fetch(`/api/assignments/${assignmentId}/repos`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Error ${res.status}`);
+      }
       router.refresh();
-    } finally {
-      setLoading(false);
-    }
+    });
   }
 
   if (activeRepoCount === 0) return null;
 
   return (
-    <button
-      onClick={handleDelete}
-      disabled={loading}
-      className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
-    >
-      {loading ? "Eliminando repos…" : `Borrar todos los repos (${activeRepoCount})`}
-    </button>
+    <span className="inline-flex flex-col items-start gap-1">
+      <button
+        onClick={handleDelete}
+        disabled={loading}
+        className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+      >
+        {loading ? "Eliminando repos…" : `Borrar todos los repos (${activeRepoCount})`}
+      </button>
+      {error && <span className="text-red-600 text-sm">{error}</span>}
+    </span>
   );
 }
