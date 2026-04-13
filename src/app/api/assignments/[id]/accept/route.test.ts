@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Assignment, Entrega, PdepUser } from "@/types";
+import type { PdepUser } from "@/types";
+import { IndividualAssignment, Entrega } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -20,21 +21,18 @@ vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: (key: string) => mockCheckRateLimit(key),
 }));
 
-vi.mock("@/lib/store", () => ({
+vi.mock("@/lib/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
   getEntregaDeUsuario: (assignmentId: string, username: string) =>
     mockGetEntregaDeUsuario(assignmentId, username),
   createEntrega: (data: unknown) => mockCreateEntrega(data),
+  getGrupoDeAlumnoEnAssignment: (assignmentId: string, username: string) =>
+    mockGetGrupoDeAlumno(assignmentId, username),
 }));
 
 vi.mock("@/lib/github", () => ({
   crearEntrega: (opts: unknown) => mockCrearEntrega(opts),
   repoExists: (name: string) => mockRepoExists(name),
-}));
-
-vi.mock("@/lib/sheets", () => ({
-  getGrupoDeAlumno: (username: string, paradigma: string) =>
-    mockGetGrupoDeAlumno(username, paradigma),
 }));
 
 import { POST } from "./route";
@@ -51,31 +49,27 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
   };
 }
 
-function makeAssignment(overrides?: Partial<Assignment>): Assignment {
-  return {
-    id: "a1",
-    titulo: "Kata Funcional",
-    descripcion: "",
-    templateRepo: "kata-template",
-    tipo: "individual",
-    paradigma: "funcional",
-    deadline: "",
-    createdAt: new Date("2026-01-01").toISOString(),
-    slug: "kata-funcional",
-    ...overrides,
-  };
+function makeAssignment(overrides?: Partial<IndividualAssignment>): IndividualAssignment {
+  const a = new IndividualAssignment();
+  a.id = "a1";
+  a.titulo = "Kata Funcional";
+  a.descripcion = "";
+  a.templateRepo = "kata-template";
+  a.tipo = "individual";
+  a.paradigma = "funcional";
+  a.slug = "kata-funcional";
+  a.createdAt = new Date("2026-01-01");
+  return Object.assign(a, overrides);
 }
 
 function makeEntrega(overrides?: Partial<Entrega>): Entrega {
-  return {
-    id: "e1",
-    assignmentId: "a1",
-    repoName: "kata-funcional-juangarcia",
-    repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
-    githubUsernames: ["juangarcia"],
-    createdAt: new Date().toISOString(),
-    ...overrides,
-  };
+  const e = new Entrega();
+  e.id = "e1";
+  e.repoName = "kata-funcional-juangarcia";
+  e.repoUrl = "https://github.com/pdep-mn-utn/kata-funcional-juangarcia";
+  e.githubUsernames = ["juangarcia"];
+  e.createdAt = new Date();
+  return Object.assign(e, overrides);
 }
 
 function makeRequest(): Request {
@@ -168,6 +162,65 @@ describe("POST /api/assignments/[id]/accept", () => {
           usernames: ["juangarcia"],
         })
       );
+    });
+  });
+
+  describe("creación exitosa (grupal)", () => {
+    function makeGrupo(githubUsernames: string[], id = "los-lambdas") {
+      return {
+        id,
+        nombre: "Los Lambdas",
+        alumnos: { getItems: () => githubUsernames.map((u) => ({ githubUsername: u })) },
+      };
+    }
+
+    it("devuelve 200 con la entrega creada para el grupo", async () => {
+      mockGetAssignment.mockResolvedValue(makeAssignment({ tipo: "grupal" }));
+      mockGetGrupoDeAlumno.mockResolvedValue(
+        makeGrupo(["juangarcia", "mariaperez"])
+      );
+      mockCrearEntrega.mockResolvedValue({
+        repoName: "kata-funcional-los-lambdas",
+        repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-los-lambdas",
+      });
+      mockCreateEntrega.mockResolvedValue(
+        makeEntrega({ repoName: "kata-funcional-los-lambdas" })
+      );
+      const res = await POST(makeRequest(), { params: { id: "a1" } });
+      expect(res.status).toBe(200);
+    });
+
+    it("llama a crearEntrega con los usernames del grupo", async () => {
+      mockGetAssignment.mockResolvedValue(makeAssignment({ tipo: "grupal" }));
+      mockGetGrupoDeAlumno.mockResolvedValue(
+        makeGrupo(["juangarcia", "mariaperez"])
+      );
+      mockCrearEntrega.mockResolvedValue({
+        repoName: "kata-funcional-los-lambdas",
+        repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-los-lambdas",
+      });
+      mockCreateEntrega.mockResolvedValue(makeEntrega());
+      await POST(makeRequest(), { params: { id: "a1" } });
+      expect(mockCrearEntrega).toHaveBeenCalledWith(
+        expect.objectContaining({
+          usernames: ["juangarcia", "mariaperez"],
+          grupoId: "los-lambdas",
+        })
+      );
+    });
+
+    it("busca el grupo por assignmentId, no por paradigma", async () => {
+      mockGetAssignment.mockResolvedValue(
+        makeAssignment({ id: "a1", tipo: "grupal" })
+      );
+      mockGetGrupoDeAlumno.mockResolvedValue(makeGrupo(["juangarcia"], "g1"));
+      mockCrearEntrega.mockResolvedValue({
+        repoName: "kata-funcional-grupo-x",
+        repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-grupo-x",
+      });
+      mockCreateEntrega.mockResolvedValue(makeEntrega());
+      await POST(makeRequest(), { params: { id: "a1" } });
+      expect(mockGetGrupoDeAlumno).toHaveBeenCalledWith("a1", "juangarcia");
     });
   });
 

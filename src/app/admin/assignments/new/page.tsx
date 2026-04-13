@@ -2,7 +2,6 @@ import { requireAdmin } from "@/lib/session";
 import { listarTemplates } from "@/lib/github";
 import { AssignmentForm } from "../assignment-form";
 import { crearAssignment } from "../actions";
-
 export default async function NewAssignmentPage() {
   await requireAdmin();
 

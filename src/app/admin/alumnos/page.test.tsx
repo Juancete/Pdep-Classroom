@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { Alumno } from "@/types";
+import { Alumno } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -20,15 +20,14 @@ import AdminAlumnosPage from "./page";
 // ── Helpers ──────────────────────────────────────────────────
 
 function makeAlumno(overrides?: Partial<Alumno>): Alumno {
-  return {
-    legajo: "12345",
-    nombre: "Juan",
-    apellido: "Garcia",
-    githubUsername: "juangarcia",
-    email: "juan@example.com",
-    comision: "miércoles noche",
-    ...overrides,
-  };
+  const a = new Alumno();
+  a.legajo = "12345";
+  a.nombre = "Juan";
+  a.apellido = "Garcia";
+  a.githubUsername = "juangarcia";
+  a.email = "juan@example.com";
+  a.comision = "miércoles noche";
+  return Object.assign(a, overrides);
 }
 
 // ── Tests ────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Assignment } from "@/types";
+import { IndividualAssignment } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -12,7 +12,7 @@ vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
-vi.mock("@/lib/store", () => ({
+vi.mock("@/lib/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
   deleteAssignment: (id: string) => mockDeleteAssignment(id),
   updateAssignment: (id: string, data: unknown) => mockUpdateAssignment(id, data),
@@ -22,19 +22,17 @@ import { DELETE, PATCH } from "./route";
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function makeAssignment(overrides?: Partial<Assignment>): Assignment {
-  return {
-    id: "a1",
-    titulo: "Kata Funcional",
-    descripcion: "",
-    templateRepo: "kata-template",
-    tipo: "individual",
-    paradigma: "funcional",
-    deadline: "",
-    createdAt: new Date("2026-01-01").toISOString(),
-    slug: "kata-funcional",
-    ...overrides,
-  };
+function makeAssignment(overrides?: Partial<IndividualAssignment>): IndividualAssignment {
+  const a = new IndividualAssignment();
+  a.id = "a1";
+  a.titulo = "Kata Funcional";
+  a.descripcion = "";
+  a.templateRepo = "kata-template";
+  a.tipo = "individual";
+  a.paradigma = "funcional";
+  a.slug = "kata-funcional";
+  a.createdAt = new Date("2026-01-01");
+  return Object.assign(a, overrides);
 }
 
 function makeRequest(method: string, body?: unknown): Request {

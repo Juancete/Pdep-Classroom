@@ -1,39 +1,38 @@
 import { requireUser } from "@/lib/session";
-import { getAssignments, getEntregaDeUsuario } from "@/lib/store";
+import { getAssignments, getEntregasDeUsuario } from "@/lib/repositories";
 import { getAlumnoByGithub } from "@/lib/sheets";
 import { AcceptButton } from "./accept-button";
 import { redirect } from "next/navigation";
-import type { Assignment, Entrega } from "@/types";
+import { unstable_cache } from "next/cache";
+
+// Cachea la verificación de alumno por 5 minutos — evita un round-trip a Sheets en cada render
+const getAlumnoCached = unstable_cache(
+  async (username: string) => getAlumnoByGithub(username),
+  ["alumno-by-github"],
+  { revalidate: 300 }
+);
 
 export default async function DashboardPage() {
   const user = await requireUser();
 
   // Si no es admin y no está registrado, mandar a registro
   if (!user.isAdmin) {
-    const alumno = await getAlumnoByGithub(user.githubUsername);
+    const alumno = await getAlumnoCached(user.githubUsername);
     if (!alumno) redirect("/registro");
   }
 
-  const assignments = await getAssignments();
+  // Dos queries paralelas: assignments + todas las entregas del usuario
+  const [assignments, entregasMap] = await Promise.all([
+    getAssignments(),
+    getEntregasDeUsuario(user.githubUsername),
+  ]);
 
-  // Para cada assignment, buscar si ya tiene entrega
-  const assignmentsConEntrega: {
-    assignment: Assignment;
-    entrega: Entrega | undefined;
-  }[] = await Promise.all(
-    assignments
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
-      .map(async (assignment) => ({
-        assignment,
-        entrega: await getEntregaDeUsuario(
-          assignment.id,
-          user.githubUsername
-        ),
-      }))
-  );
+  const assignmentsConEntrega = assignments
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .map((assignment) => ({
+      assignment,
+      entrega: entregasMap.get(assignment.id) ?? null,
+    }));
 
   return (
     <div>

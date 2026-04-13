@@ -1,18 +1,18 @@
 import { requireAdmin } from "@/lib/session";
-import { getAssignments, getEntregas } from "@/lib/store";
+import { getAssignments, getEntregaCountsByAssignment, getActiveRepoCountsByAssignment } from "@/lib/repositories";
 import Link from "next/link";
 import { DeleteAssignmentButton } from "./delete-button";
+import { DeleteReposButton } from "./delete-repos-button";
 
 export default async function AdminAssignmentsPage() {
   await requireAdmin();
-  const assignments = await getAssignments();
 
-  // Contar entregas por assignment
-  const entregasCounts = new Map<string, number>();
-  for (const a of assignments) {
-    const entregas = await getEntregas(a.id);
-    entregasCounts.set(a.id, entregas.length);
-  }
+  // Una query para assignments, una para conteos — en paralelo
+  const [assignments, entregasCounts, activeRepoCounts] = await Promise.all([
+    getAssignments(),
+    getEntregaCountsByAssignment(),
+    getActiveRepoCountsByAssignment(),
+  ]);
 
   return (
     <div>
@@ -88,11 +88,21 @@ export default async function AdminAssignmentsPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <Link
+                          href={`/admin/assignments/${a.id}`}
+                          className="text-gray-500 hover:text-gray-700 text-xs font-medium"
+                        >
+                          Ver
+                        </Link>
+                        <Link
                           href={`/admin/assignments/${a.id}/edit`}
                           className="text-pdep-600 hover:text-pdep-800 text-xs font-medium"
                         >
                           Editar
                         </Link>
+                        <DeleteReposButton
+                          assignmentId={a.id}
+                          activeRepoCount={activeRepoCounts.get(a.id) ?? 0}
+                        />
                         <DeleteAssignmentButton id={a.id} titulo={a.titulo} />
                       </div>
                     </td>

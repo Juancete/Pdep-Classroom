@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
-import { getAssignment, getEntregaDeUsuario, createEntrega } from "@/lib/store";
+import { getAssignment, getEntregaDeUsuario, createEntrega, getGrupoDeAlumnoEnAssignment } from "@/lib/repositories";
 import { crearEntrega, repoExists } from "@/lib/github";
-import { getGrupoDeAlumno } from "@/lib/sheets";
 import { buildRepoName } from "@/lib/naming";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -23,17 +22,11 @@ export async function POST(
     const assignment = await getAssignment(params.id);
 
     if (!assignment) {
-      return NextResponse.json(
-        { error: "Assignment no encontrado" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Assignment no encontrado" }, { status: 404 });
     }
 
     // ── Ya tiene entrega? ────────────────────────────────────
-    const existente = await getEntregaDeUsuario(
-      assignment.id,
-      user.githubUsername
-    );
+    const existente = await getEntregaDeUsuario(assignment.id, user.githubUsername);
     if (existente) {
       return NextResponse.json(
         { error: "Ya aceptaste este assignment", repoUrl: existente.repoUrl },
@@ -46,22 +39,17 @@ export async function POST(
     let grupoId: string | undefined;
 
     if (assignment.tipo === "grupal") {
-      const grupo = await getGrupoDeAlumno(
-        user.githubUsername,
-        assignment.paradigma
-      );
+      const grupo = await getGrupoDeAlumnoEnAssignment(assignment.id, user.githubUsername);
       if (!grupo) {
         return NextResponse.json(
           {
             error:
-              "No tenés grupo asignado para " +
-              assignment.paradigma +
-              ". Contactá a tu docente.",
+              "No tenés grupo asignado para este TP. Contactá a tu docente.",
           },
           { status: 400 }
         );
       }
-      usernames = grupo.miembros;
+      usernames = grupo.alumnos.getItems().map((a) => a.githubUsername);
       grupoId = grupo.id;
     } else {
       usernames = [user.githubUsername];
@@ -73,15 +61,10 @@ export async function POST(
       : assignment.templateRepo;
 
     // ── Nombre del repo ──────────────────────────────────────
-    const candidateRepoName = buildRepoName({
-      slug: assignment.slug,
-      usernames,
-      grupoId,
-    });
+    const candidateRepoName = buildRepoName({ slug: assignment.slug, usernames, grupoId });
 
     // Verificar que no exista ya (por si otro miembro del grupo aceptó)
     if (await repoExists(candidateRepoName)) {
-      // El repo existe pero no tenemos entrega registrada — registrarla
       const org = process.env.GITHUB_ORG ?? "pdep-mn-utn";
       const entrega = await createEntrega({
         assignmentId: assignment.id,
@@ -95,14 +78,13 @@ export async function POST(
 
     // ── Crear repo y dar acceso ──────────────────────────────
     const resultado = await crearEntrega({
-      templateRepo: templateRepo,
+      templateRepo,
       slug: assignment.slug,
       usernames,
       grupoId,
       descripcion: `${assignment.titulo} — PdeP`,
     });
 
-    // ── Guardar la entrega ───────────────────────────────────
     const entrega = await createEntrega({
       assignmentId: assignment.id,
       repoName: resultado.repoName,
