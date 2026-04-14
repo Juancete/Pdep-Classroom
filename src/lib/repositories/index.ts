@@ -32,6 +32,7 @@ export {
 export {
   getComisiones,
   getComision,
+  getComisionActiva,
   createComision,
   updateComision,
   deleteComision,

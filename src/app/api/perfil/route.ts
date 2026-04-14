@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
-import { registrarAlumno, type RegistroInput } from "@/lib/sheets";
+import { actualizarAlumno, type ActualizarInput } from "@/lib/sheets";
 import { getComisionActiva } from "@/lib/repositories";
 
-export async function POST(req: Request) {
+export async function PATCH(req: Request) {
   try {
     const user = await requireUser();
-    const body = (await req.json()) as RegistroInput;
-
-    // Forzar el githubUsername del usuario autenticado (no confiar en el body)
-    body.githubUsername = user.githubUsername;
+    const body = (await req.json()) as ActualizarInput;
 
     const comisionActiva = await getComisionActiva();
-    const result = await registrarAlumno(
+    const result = await actualizarAlumno(
+      user.githubUsername,
       body,
       comisionActiva?.spreadsheetId,
       comisionActiva?.columnConfig

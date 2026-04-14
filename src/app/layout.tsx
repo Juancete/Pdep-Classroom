@@ -56,7 +56,7 @@ export async function Nav() {
                   </Link>
                 </>
               )}
-              <UserMenu username={user.githubUsername} image={user.image} />
+              <UserMenu username={user.githubUsername} image={user.image} isAdmin={user.isAdmin} />
             </>
           )}
         </div>
