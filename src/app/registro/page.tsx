@@ -1,7 +1,8 @@
 import { auth } from "@/lib/auth";
 import { getAlumnoByGithub } from "@/lib/sheets";
+import { getComisionActiva } from "@/lib/repositories";
 import { redirect } from "next/navigation";
-import { RegistroForm } from "./registro-form";
+import { AlumnoForm } from "@/app/components/AlumnoForm";
 import type { PdepUser } from "@/types";
 
 export default async function RegistroPage() {
@@ -11,9 +12,19 @@ export default async function RegistroPage() {
   const pdepUser = (session as unknown as { pdepUser: PdepUser }).pdepUser;
   const githubUsername = pdepUser.githubUsername;
 
-  // Si ya está registrado, mandar al dashboard
-  const existente = await getAlumnoByGithub(githubUsername);
+  const comisionActiva = await getComisionActiva();
+
+  const existente = await getAlumnoByGithub(
+    githubUsername,
+    comisionActiva?.spreadsheetId,
+    comisionActiva?.columnConfig
+  );
   if (existente) redirect("/dashboard");
+
+  // Split del nombre de GitHub en nombre/apellido como sugerencia
+  const parts = (session.user?.name ?? "").split(" ");
+  const defaultNombre = parts.slice(0, -1).join(" ") || parts[0] || "";
+  const defaultApellido = parts.length > 1 ? parts[parts.length - 1] : "";
 
   return (
     <div className="max-w-md mx-auto">
@@ -26,10 +37,19 @@ export default async function RegistroPage() {
         </span>
       </p>
 
-      <RegistroForm
-        githubUsername={githubUsername}
-        email={session.user?.email ?? ""}
-        nombre={session.user?.name ?? ""}
+      <AlumnoForm
+        defaultValues={{
+          githubUsername,
+          email: session.user?.email ?? "",
+          nombre: defaultNombre,
+          apellido: defaultApellido,
+        }}
+        apiEndpoint="/api/registro"
+        method="POST"
+        extraBody={{ githubUsername }}
+        onSuccessRedirect="/dashboard"
+        submitLabel="Registrarme"
+        successMessage="¡Registro exitoso! Redirigiendo al dashboard…"
       />
     </div>
   );

@@ -24,6 +24,7 @@ export default async function EditComisionPage({
           anio: comision.anio,
           spreadsheetId: comision.spreadsheetId,
           activa: comision.activa,
+          columnConfig: comision.columnConfig,
         }}
         submitLabel="Guardar cambios"
       />
