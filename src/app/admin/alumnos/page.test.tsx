@@ -6,6 +6,7 @@ import { Alumno } from "@/domain/entities";
 
 const mockRequireAdmin = vi.fn();
 const mockGetAlumnos = vi.fn();
+const mockGetComisionActiva = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
@@ -13,6 +14,10 @@ vi.mock("@/lib/session", () => ({
 
 vi.mock("@/lib/sheets", () => ({
   getAlumnos: () => mockGetAlumnos(),
+}));
+
+vi.mock("@/lib/repositories", () => ({
+  getComisionActiva: () => mockGetComisionActiva(),
 }));
 
 import AdminAlumnosPage from "./page";
@@ -36,6 +41,7 @@ describe("Admin Alumnos page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireAdmin.mockResolvedValue(undefined);
+    mockGetComisionActiva.mockResolvedValue({ spreadsheetId: "sheet-1", columnConfig: undefined });
   });
 
   it("siempre llama a requireAdmin", async () => {
