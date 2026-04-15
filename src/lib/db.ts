@@ -1,3 +1,4 @@
+import "reflect-metadata";
 import { MikroORM } from "@mikro-orm/postgresql";
 import config from "../../mikro-orm.config";
 
@@ -45,7 +46,7 @@ export async function getEM() {
 
 // Helper genérico para eliminar cualquier entidad por id
 export async function deleteEntity<T extends object>(
-  EntityClass: new (...args: never[]) => T,
+  EntityClass: abstract new (...args: never[]) => T,
   id: string
 ): Promise<void> {
   const em = await getEM();

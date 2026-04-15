@@ -1,13 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // MikroORM usa ts-morph para leer metadata de entidades desde el filesystem.
-  // Si corre dentro de webpack (RSC), los paths se transforman a webpack-internal://
-  // y ts-morph no puede resolver los archivos. Externalizar hace que corra en Node.js puro.
   experimental: {
     serverComponentsExternalPackages: [
       "@mikro-orm/core",
       "@mikro-orm/postgresql",
-      "@mikro-orm/reflection",
       "@mikro-orm/migrations",
     ],
   },
@@ -18,7 +14,14 @@ const nextConfig = {
     ],
   },
 
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
+    // MikroORM uses class names to register entities. In production,
+    // the minifier renames all classes to single letters causing duplicates.
+    // Disabling minimization on the server bundle fixes this.
+    if (isServer) {
+      config.optimization.minimize = false;
+    }
+
     // Knex incluye drivers opcionales que no usamos. Sin esto Next.js
     // intenta resolver oracledb, mssql, sqlite3, etc. y falla.
     config.externals.push(

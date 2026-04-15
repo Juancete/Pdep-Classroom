@@ -19,8 +19,9 @@ describe("parseAlumnosRows", () => {
       nombre: "Juan",
       githubUsername: "juangarcia",
       email: "juan@mail.com",
-      comision: "miércoles noche",
     });
+    // comision es una relación ManyToOne, no se resuelve desde la planilla
+    expect(result[0].comision).toBeUndefined();
   });
 
   it("quita @ del username de GitHub", () => {
@@ -49,8 +50,8 @@ describe("parseAlumnosRows", () => {
     expect(parseAlumnosRows(rows)).toHaveLength(1);
   });
 
-  it("comisión queda undefined si está vacía en la planilla", () => {
-    const rows = [["123", "A", "B", "user", "a@b.com", ""]];
+  it("comisión siempre queda undefined (es una relación, no un string)", () => {
+    const rows = [["123", "A", "B", "user", "a@b.com", "miércoles noche"]];
     expect(parseAlumnosRows(rows)[0].comision).toBeUndefined();
   });
 

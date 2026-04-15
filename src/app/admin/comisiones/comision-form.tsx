@@ -161,7 +161,6 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel }: Props)
           <ColSelect name="col_nombre" label="Nombre" defaultValue={cfg.nombre} error={errors.col_nombre?.[0]} />
           <ColSelect name="col_githubUsername" label="Usuario GitHub" defaultValue={cfg.githubUsername} error={errors.col_githubUsername?.[0]} />
           <ColSelect name="col_email" label="Email" defaultValue={cfg.email} error={errors.col_email?.[0]} />
-          <ColSelect name="col_comision" label="Comisión" defaultValue={cfg.comision} error={errors.col_comision?.[0]} />
         </div>
       </fieldset>
 

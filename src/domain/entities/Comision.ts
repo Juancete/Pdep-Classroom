@@ -14,13 +14,13 @@ export class Comision {
   @PrimaryKey({ type: "uuid" })
   id: string = randomUUID();
 
-  @Property()
+  @Property({ type: 'integer' })
   anio!: number;
 
-  @Property()
+  @Property({ type: 'string' })
   spreadsheetId!: string;
 
-  @Property({ default: false })
+  @Property({ type: 'boolean', default: false })
   activa: boolean = false;
 
   @Property({ type: "json", nullable: true })

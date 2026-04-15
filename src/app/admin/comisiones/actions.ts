@@ -1,7 +1,8 @@
 "use server";
 
 import { requireAdmin } from "@/lib/session";
-import { createComision, updateComision } from "@/lib/repositories";
+import { createComision, updateComision, getComision, upsertAlumno } from "@/lib/repositories";
+import { getAlumnos } from "@/lib/sheets";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { DEFAULT_COLUMN_CONFIG } from "@/types";
@@ -31,7 +32,6 @@ const ComisionSchema = z.object({
   col_nombre: ColumnIndexSchema,
   col_githubUsername: ColumnIndexSchema,
   col_email: ColumnIndexSchema,
-  col_comision: ColumnIndexSchema,
 });
 
 function parseFormData(formData: FormData) {
@@ -46,7 +46,6 @@ function parseFormData(formData: FormData) {
     col_nombre: formData.get("col_nombre") ?? DEFAULT_COLUMN_CONFIG.nombre,
     col_githubUsername: formData.get("col_githubUsername") ?? DEFAULT_COLUMN_CONFIG.githubUsername,
     col_email: formData.get("col_email") ?? DEFAULT_COLUMN_CONFIG.email,
-    col_comision: formData.get("col_comision") ?? DEFAULT_COLUMN_CONFIG.comision,
   };
 }
 
@@ -59,7 +58,6 @@ function toColumnConfig(data: z.infer<typeof ComisionSchema>) {
     nombre: data.col_nombre,
     githubUsername: data.col_githubUsername,
     email: data.col_email,
-    comision: data.col_comision,
   };
 }
 
@@ -98,4 +96,35 @@ export async function actualizarComision(
   const { anio, spreadsheetId, activa } = result.data;
   await updateComision(id, { anio, spreadsheetId, activa, columnConfig: toColumnConfig(result.data) });
   redirect("/admin/comisiones");
+}
+
+export type SyncState =
+  | { status: "idle" }
+  | { status: "ok"; sincronizados: number }
+  | { status: "error"; message: string };
+
+export async function sincronizarAlumnos(
+  _prevState: SyncState,
+  formData: FormData
+): Promise<SyncState> {
+  await requireAdmin();
+
+  const id = formData.get("comisionId") as string;
+  const comision = await getComision(id);
+  if (!comision) return { status: "error", message: "Comisión no encontrada" };
+
+  let alumnos;
+  try {
+    alumnos = await getAlumnos(comision.spreadsheetId, comision.columnConfig);
+  } catch (e) {
+    return { status: "error", message: `No se pudo leer la planilla: ${(e as Error).message}` };
+  }
+
+  let sincronizados = 0;
+  for (const alumno of alumnos) {
+    await upsertAlumno({ ...alumno, comision });
+    sincronizados++;
+  }
+
+  return { status: "ok", sincronizados };
 }

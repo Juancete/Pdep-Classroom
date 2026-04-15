@@ -8,7 +8,6 @@ export interface ColumnConfig {
   nombre: number;           // default 2 (C)
   githubUsername: number;   // default 3 (D)
   email: number;            // default 4 (E)
-  comision: number;         // default 5 (F)
 }
 
 export const DEFAULT_COLUMN_CONFIG: ColumnConfig = {
@@ -19,7 +18,6 @@ export const DEFAULT_COLUMN_CONFIG: ColumnConfig = {
   nombre: 2,
   githubUsername: 3,
   email: 4,
-  comision: 5,
 };
 
 // ── Paradigmas ──────────────────────────────────────────────
