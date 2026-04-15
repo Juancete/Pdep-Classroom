@@ -23,6 +23,8 @@ export const config = {
     "/admin/:path*",
     "/api/assignments/:path*",
     "/api/registro",
+    "/api/perfil",
     "/registro",
+    "/perfil",
   ],
 };

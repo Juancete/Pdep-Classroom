@@ -35,4 +35,19 @@ describe("UserMenu", () => {
     expect(mockSignOut).toHaveBeenCalledOnce();
     expect(mockSignOut).toHaveBeenCalledWith({ callbackUrl: "/" });
   });
+
+  it("muestra el link Editar perfil para alumnos", () => {
+    render(<UserMenu username="juangarcia" image="" isAdmin={false} />);
+    expect(screen.getByRole("link", { name: "Editar perfil" })).toHaveAttribute("href", "/perfil");
+  });
+
+  it("no muestra el link Editar perfil para admins", () => {
+    render(<UserMenu username="admin" image="" isAdmin={true} />);
+    expect(screen.queryByRole("link", { name: "Editar perfil" })).not.toBeInTheDocument();
+  });
+
+  it("muestra Editar perfil por defecto (sin isAdmin)", () => {
+    render(<UserMenu username="juangarcia" image="" />);
+    expect(screen.getByRole("link", { name: "Editar perfil" })).toBeInTheDocument();
+  });
 });
