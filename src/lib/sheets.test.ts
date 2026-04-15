@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAlumnosRows, validateRegistro } from "./sheets";
+import { parseAlumnosRows, validateRegistro, colLetter, actualizarAlumno } from "./sheets";
 
 // ── parseAlumnosRows ────────────────────────────────────────
 
@@ -144,4 +144,83 @@ describe("validateRegistro", () => {
     expect(validateRegistro({ ...valid, email: "" })).toContain("email");
   });
 
+});
+
+// ── colLetter ────────────────────────────────────────────────
+
+describe("colLetter", () => {
+  it("0 → A", () => expect(colLetter(0)).toBe("A"));
+  it("1 → B", () => expect(colLetter(1)).toBe("B"));
+  it("25 → Z", () => expect(colLetter(25)).toBe("Z"));
+  it("26 → AA", () => expect(colLetter(26)).toBe("AA"));
+  it("27 → AB", () => expect(colLetter(27)).toBe("AB"));
+  it("51 → AZ", () => expect(colLetter(51)).toBe("AZ"));
+  it("52 → BA", () => expect(colLetter(52)).toBe("BA"));
+});
+
+// ── actualizarAlumno – validaciones síncronas ────────────────
+
+describe("actualizarAlumno – validaciones", () => {
+  const valid = {
+    legajo: "12345",
+    apellido: "García",
+    nombre: "Juan",
+    email: "juan@gmail.com",
+  };
+
+  it("rechaza apellido vacío", async () => {
+    const r = await actualizarAlumno("user", { ...valid, apellido: "" });
+    expect(r).toEqual({ ok: false, error: "El apellido es obligatorio" });
+  });
+
+  it("rechaza apellido con solo espacios", async () => {
+    const r = await actualizarAlumno("user", { ...valid, apellido: "   " });
+    expect(r).toEqual({ ok: false, error: "El apellido es obligatorio" });
+  });
+
+  it("rechaza nombre vacío", async () => {
+    const r = await actualizarAlumno("user", { ...valid, nombre: "" });
+    expect(r).toEqual({ ok: false, error: "El nombre es obligatorio" });
+  });
+
+  it("rechaza nombre con solo espacios", async () => {
+    const r = await actualizarAlumno("user", { ...valid, nombre: "   " });
+    expect(r).toEqual({ ok: false, error: "El nombre es obligatorio" });
+  });
+
+  it("rechaza legajo vacío", async () => {
+    const r = await actualizarAlumno("user", { ...valid, legajo: "" });
+    expect(r).toEqual({ ok: false, error: "El legajo debe tener entre 4 y 8 dígitos" });
+  });
+
+  it("rechaza legajo con letras", async () => {
+    const r = await actualizarAlumno("user", { ...valid, legajo: "abc12" });
+    expect(r).toEqual({ ok: false, error: "El legajo debe tener entre 4 y 8 dígitos" });
+  });
+
+  it("rechaza legajo demasiado corto", async () => {
+    const r = await actualizarAlumno("user", { ...valid, legajo: "12" });
+    expect(r).toEqual({ ok: false, error: "El legajo debe tener entre 4 y 8 dígitos" });
+  });
+
+  it("rechaza legajo demasiado largo", async () => {
+    const r = await actualizarAlumno("user", { ...valid, legajo: "123456789" });
+    expect(r).toEqual({ ok: false, error: "El legajo debe tener entre 4 y 8 dígitos" });
+  });
+
+  it("rechaza email sin @", async () => {
+    const r = await actualizarAlumno("user", { ...valid, email: "juangmail.com" });
+    expect(r).toEqual({ ok: false, error: "El email no es válido" });
+  });
+
+  it("rechaza email vacío", async () => {
+    const r = await actualizarAlumno("user", { ...valid, email: "" });
+    expect(r).toEqual({ ok: false, error: "El email no es válido" });
+  });
+
+  it("lanza error si no hay spreadsheetId configurado (input válido)", async () => {
+    await expect(
+      actualizarAlumno("user", valid, undefined)
+    ).rejects.toThrow("No hay una comisión activa");
+  });
 });

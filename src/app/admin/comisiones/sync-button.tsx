@@ -1,8 +1,6 @@
 "use client";
 
 import { useFormState, useFormStatus } from "react-dom";
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { sincronizarAlumnos, type SyncState } from "./actions";
 
 function SyncSubmitButton() {
@@ -19,15 +17,10 @@ function SyncSubmitButton() {
 }
 
 export function SyncButton({ comisionId }: { comisionId: string }) {
-  const router = useRouter();
   const [state, action] = useFormState<SyncState, FormData>(
     sincronizarAlumnos,
     { status: "idle" }
   );
-
-  useEffect(() => {
-    if (state.status === "ok") router.refresh();
-  }, [state, router]);
 
   return (
     <form action={action} className="flex items-center gap-2">

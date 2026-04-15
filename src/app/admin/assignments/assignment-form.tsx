@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useFormState } from "react-dom";
 import { PARADIGMAS } from "@/types";
 import type { AssignmentFormState } from "@/lib/assignment-schema";
@@ -44,7 +44,6 @@ function TemplateRepoCombobox({
   const [query, setQuery] = useState(defaultValue ?? "");
   const [selected, setSelected] = useState(defaultValue ?? "");
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const filtered = query
     ? templates.filter((t) =>
@@ -53,25 +52,19 @@ function TemplateRepoCombobox({
       )
     : templates;
 
-  // Cerrar al hacer click fuera
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        // Si el query no coincide con ningún template, restaurar el seleccionado
-        if (!templates.find((t) => t.name === query)) {
-          setQuery(selected);
-        }
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [query, selected, templates]);
-
   function handleSelect(name: string) {
     setSelected(name);
     setQuery(name);
     setOpen(false);
+  }
+
+  function handleBlur(e: React.FocusEvent<HTMLDivElement>) {
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setOpen(false);
+      if (!templates.find((t) => t.name === query)) {
+        setQuery(selected);
+      }
+    }
   }
 
   const borderClass = hasError
@@ -79,7 +72,7 @@ function TemplateRepoCombobox({
     : "border-gray-300 focus:ring-pdep-500 focus:border-pdep-500";
 
   return (
-    <div ref={containerRef} className="relative">
+    <div onBlur={handleBlur} className="relative">
       {/* Hidden input que va al FormData */}
       <input type="hidden" name="templateRepo" value={selected} />
 
