@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/session";
 import { createComision, updateComision, getComision, upsertAlumno } from "@/lib/repositories";
 import { getAlumnos } from "@/lib/sheets";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { DEFAULT_COLUMN_CONFIG } from "@/types";
 
@@ -126,5 +127,6 @@ export async function sincronizarAlumnos(
     sincronizados++;
   }
 
+  revalidatePath("/admin/comisiones");
   return { status: "ok", sincronizados };
 }
