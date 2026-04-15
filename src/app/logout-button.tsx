@@ -1,6 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
+import Link from "next/link";
 
 interface Props {
   username: string;
@@ -20,12 +21,12 @@ export function UserMenu({ username, image, isAdmin = false }: Props) {
       <div className="absolute right-0 top-full pt-2 hidden group-hover:block">
         <div className="bg-pdep-800 border border-pdep-700 rounded-lg shadow-lg py-1 min-w-[140px]">
           {!isAdmin && (
-            <a
+            <Link
               href="/perfil"
               className="block px-4 py-2 text-sm text-pdep-200 hover:text-white hover:bg-pdep-700 transition-colors"
             >
               Editar perfil
-            </a>
+            </Link>
           )}
           <button
             onClick={() => signOut({ callbackUrl: "/" })}

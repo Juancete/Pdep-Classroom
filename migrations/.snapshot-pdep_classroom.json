@@ -22,93 +22,13 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
-        "legajo": {
-          "name": "legajo",
-          "type": "varchar(255)",
+        "anio": {
+          "name": "anio",
+          "type": "int",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": true,
-          "length": 255,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
-        "nombre": {
-          "name": "nombre",
-          "type": "varchar(255)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 255,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
-        "apellido": {
-          "name": "apellido",
-          "type": "varchar(255)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 255,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
-        "github_username": {
-          "name": "github_username",
-          "type": "varchar(255)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": true,
-          "length": 255,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
-        "email": {
-          "name": "email",
-          "type": "varchar(255)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 255,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
-        "comision_id": {
-          "name": "comision_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
           "unique": false,
           "length": null,
           "precision": null,
@@ -116,61 +36,74 @@
           "default": null,
           "comment": null,
           "enumItems": [],
-          "mappedType": "uuid"
+          "mappedType": "integer"
+        },
+        "spreadsheet_id": {
+          "name": "spreadsheet_id",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "activa": {
+          "name": "activa",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "false",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "column_config": {
+          "name": "column_config",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "json"
         }
       },
-      "name": "alumno",
+      "name": "comision",
       "schema": "public",
       "indexes": [
         {
-          "columnNames": [
-            "github_username"
-          ],
-          "composite": false,
-          "constraint": true,
-          "keyName": "alumno_github_username_unique",
-          "unique": true,
-          "primary": false
-        },
-        {
-          "columnNames": [
-            "legajo"
-          ],
-          "composite": false,
-          "constraint": true,
-          "keyName": "alumno_legajo_unique",
-          "unique": true,
-          "primary": false
-        },
-        {
+          "keyName": "comision_pkey",
           "columnNames": [
             "id"
           ],
           "composite": false,
-          "constraint": false,
-          "keyName": "alumno_pkey",
-          "unique": true,
-          "primary": true
+          "constraint": true,
+          "primary": true,
+          "unique": true
         }
       ],
       "checks": [],
-      "foreignKeys": {
-        "alumno_comision_id_foreign": {
-          "columnNames": [
-            "comision_id"
-          ],
-          "constraintName": "alumno_comision_id_foreign",
-          "localTableName": "public.alumno",
-          "referencedTableName": "public.comision",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "set null"
-        }
-      },
-      "nativeEnums": {},
-      "comment": null
+      "foreignKeys": {},
+      "nativeEnums": {}
     },
     {
       "columns": {
@@ -311,7 +244,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamptz(6)",
+          "type": "timestamptz",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
@@ -343,15 +276,15 @@
         },
         "max_integrantes": {
           "name": "max_integrantes",
-          "type": "int4",
+          "type": "int",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
           "nullable": true,
           "unique": false,
           "length": null,
-          "precision": 32,
-          "scale": 0,
+          "precision": null,
+          "scale": null,
           "default": null,
           "comment": null,
           "enumItems": [],
@@ -363,43 +296,209 @@
       "indexes": [
         {
           "columnNames": [
-            "id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "assignment_pkey",
-          "unique": true,
-          "primary": true
-        },
-        {
-          "columnNames": [
             "tipo"
           ],
           "composite": false,
-          "constraint": false,
           "keyName": "assignment_tipo_index",
-          "unique": false,
-          "primary": false
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "assignment_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
         }
       ],
       "checks": [],
       "foreignKeys": {
         "assignment_comision_id_foreign": {
+          "constraintName": "assignment_comision_id_foreign",
           "columnNames": [
             "comision_id"
           ],
-          "constraintName": "assignment_comision_id_foreign",
           "localTableName": "public.assignment",
-          "referencedTableName": "public.comision",
           "referencedColumnNames": [
             "id"
           ],
-          "updateRule": "cascade",
-          "deleteRule": "set null"
+          "referencedTableName": "public.comision",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
         }
       },
-      "nativeEnums": {},
-      "comment": null
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "legajo": {
+          "name": "legajo",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "apellido": {
+          "name": "apellido",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "github_username": {
+          "name": "github_username",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "comision_id": {
+          "name": "comision_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        }
+      },
+      "name": "alumno",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "legajo"
+          ],
+          "composite": false,
+          "keyName": "alumno_legajo_unique",
+          "constraint": true,
+          "primary": false,
+          "unique": true
+        },
+        {
+          "columnNames": [
+            "github_username"
+          ],
+          "composite": false,
+          "keyName": "alumno_github_username_unique",
+          "constraint": true,
+          "primary": false,
+          "unique": true
+        },
+        {
+          "keyName": "alumno_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "alumno_comision_id_foreign": {
+          "constraintName": "alumno_comision_id_foreign",
+          "columnNames": [
+            "comision_id"
+          ],
+          "localTableName": "public.alumno",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.comision",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
+        }
+      },
+      "nativeEnums": {}
     },
     {
       "columns": {
@@ -440,48 +539,47 @@
       "schema": "public",
       "indexes": [
         {
+          "keyName": "assignment_alumnos_pkey",
           "columnNames": [
             "assignment_id",
             "alumno_id"
           ],
           "composite": true,
-          "constraint": false,
-          "keyName": "assignment_alumnos_pkey",
-          "unique": true,
-          "primary": true
+          "constraint": true,
+          "primary": true,
+          "unique": true
         }
       ],
       "checks": [],
       "foreignKeys": {
-        "assignment_alumnos_alumno_id_foreign": {
-          "columnNames": [
-            "alumno_id"
-          ],
-          "constraintName": "assignment_alumnos_alumno_id_foreign",
-          "localTableName": "public.assignment_alumnos",
-          "referencedTableName": "public.alumno",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
-        },
         "assignment_alumnos_assignment_id_foreign": {
+          "constraintName": "assignment_alumnos_assignment_id_foreign",
           "columnNames": [
             "assignment_id"
           ],
-          "constraintName": "assignment_alumnos_assignment_id_foreign",
           "localTableName": "public.assignment_alumnos",
-          "referencedTableName": "public.assignment",
           "referencedColumnNames": [
             "id"
           ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
+          "referencedTableName": "public.assignment",
+          "deleteRule": "cascade",
+          "updateRule": "cascade"
+        },
+        "assignment_alumnos_alumno_id_foreign": {
+          "constraintName": "assignment_alumnos_alumno_id_foreign",
+          "columnNames": [
+            "alumno_id"
+          ],
+          "localTableName": "public.assignment_alumnos",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.alumno",
+          "deleteRule": "cascade",
+          "updateRule": "cascade"
         }
       },
-      "nativeEnums": {},
-      "comment": null
+      "nativeEnums": {}
     },
     {
       "columns": {
@@ -501,24 +599,8 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
-        "anio": {
-          "name": "anio",
-          "type": "int4",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": 32,
-          "scale": 0,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "integer"
-        },
-        "spreadsheet_id": {
-          "name": "spreadsheet_id",
+        "nombre": {
+          "name": "nombre",
           "type": "varchar(255)",
           "unsigned": false,
           "autoincrement": false,
@@ -533,9 +615,9 @@
           "enumItems": [],
           "mappedType": "string"
         },
-        "activa": {
-          "name": "activa",
-          "type": "bool",
+        "paradigma": {
+          "name": "paradigma",
+          "type": "text",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
@@ -544,18 +626,22 @@
           "length": null,
           "precision": null,
           "scale": null,
-          "default": "false",
+          "default": null,
           "comment": null,
-          "enumItems": [],
-          "mappedType": "boolean"
+          "enumItems": [
+            "funcional",
+            "logico",
+            "objetos"
+          ],
+          "mappedType": "enum"
         },
-        "column_config": {
-          "name": "column_config",
-          "type": "jsonb",
+        "max_integrantes": {
+          "name": "max_integrantes",
+          "type": "int",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": true,
+          "nullable": false,
           "unique": false,
           "length": null,
           "precision": null,
@@ -563,27 +649,72 @@
           "default": null,
           "comment": null,
           "enumItems": [],
-          "mappedType": "json"
+          "mappedType": "integer"
+        },
+        "creado_por": {
+          "name": "creado_por",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "assignment_id": {
+          "name": "assignment_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
         }
       },
-      "name": "comision",
+      "name": "grupo",
       "schema": "public",
       "indexes": [
         {
+          "keyName": "grupo_pkey",
           "columnNames": [
             "id"
           ],
           "composite": false,
-          "constraint": false,
-          "keyName": "comision_pkey",
-          "unique": true,
-          "primary": true
+          "constraint": true,
+          "primary": true,
+          "unique": true
         }
       ],
       "checks": [],
-      "foreignKeys": {},
-      "nativeEnums": {},
-      "comment": null
+      "foreignKeys": {
+        "grupo_assignment_id_foreign": {
+          "constraintName": "grupo_assignment_id_foreign",
+          "columnNames": [
+            "assignment_id"
+          ],
+          "localTableName": "public.grupo",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.assignment",
+          "deleteRule": "cascade",
+          "updateRule": "cascade"
+        }
+      },
+      "nativeEnums": {}
     },
     {
       "columns": {
@@ -610,6 +741,22 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "alumno_id": {
+          "name": "alumno_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
           "unique": false,
           "length": null,
           "precision": null,
@@ -683,41 +830,9 @@
           "enumItems": [],
           "mappedType": "string"
         },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamptz(6)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        },
-        "alumno_id": {
-          "name": "alumno_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
         "repo_deleted": {
           "name": "repo_deleted",
-          "type": "bool",
+          "type": "boolean",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
@@ -730,202 +845,81 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "boolean"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
         }
       },
       "name": "entrega",
       "schema": "public",
       "indexes": [
         {
+          "keyName": "entrega_pkey",
           "columnNames": [
             "id"
           ],
           "composite": false,
-          "constraint": false,
-          "keyName": "entrega_pkey",
-          "unique": true,
-          "primary": true
+          "constraint": true,
+          "primary": true,
+          "unique": true
         }
       ],
       "checks": [],
       "foreignKeys": {
+        "entrega_assignment_id_foreign": {
+          "constraintName": "entrega_assignment_id_foreign",
+          "columnNames": [
+            "assignment_id"
+          ],
+          "localTableName": "public.entrega",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.assignment",
+          "deleteRule": "cascade",
+          "updateRule": "cascade"
+        },
         "entrega_alumno_id_foreign": {
+          "constraintName": "entrega_alumno_id_foreign",
           "columnNames": [
             "alumno_id"
           ],
-          "constraintName": "entrega_alumno_id_foreign",
           "localTableName": "public.entrega",
+          "referencedColumnNames": [
+            "id"
+          ],
           "referencedTableName": "public.alumno",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "set null"
-        },
-        "entrega_assignment_id_foreign": {
-          "columnNames": [
-            "assignment_id"
-          ],
-          "constraintName": "entrega_assignment_id_foreign",
-          "localTableName": "public.entrega",
-          "referencedTableName": "public.assignment",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
+          "deleteRule": "set null",
+          "updateRule": "cascade"
         },
         "entrega_grupo_id_foreign": {
+          "constraintName": "entrega_grupo_id_foreign",
           "columnNames": [
             "grupo_id"
           ],
-          "constraintName": "entrega_grupo_id_foreign",
           "localTableName": "public.entrega",
+          "referencedColumnNames": [
+            "id"
+          ],
           "referencedTableName": "public.grupo",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "set null"
+          "deleteRule": "set null",
+          "updateRule": "cascade"
         }
       },
-      "nativeEnums": {},
-      "comment": null
-    },
-    {
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": true,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
-        "nombre": {
-          "name": "nombre",
-          "type": "varchar(255)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 255,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
-        "paradigma": {
-          "name": "paradigma",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [
-            "funcional",
-            "logico",
-            "objetos"
-          ],
-          "mappedType": "enum"
-        },
-        "max_integrantes": {
-          "name": "max_integrantes",
-          "type": "int4",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": 32,
-          "scale": 0,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "integer"
-        },
-        "creado_por": {
-          "name": "creado_por",
-          "type": "varchar(255)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 255,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
-        "assignment_id": {
-          "name": "assignment_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        }
-      },
-      "name": "grupo",
-      "schema": "public",
-      "indexes": [
-        {
-          "columnNames": [
-            "id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "grupo_pkey",
-          "unique": true,
-          "primary": true
-        }
-      ],
-      "checks": [],
-      "foreignKeys": {
-        "grupo_assignment_id_foreign": {
-          "columnNames": [
-            "assignment_id"
-          ],
-          "constraintName": "grupo_assignment_id_foreign",
-          "localTableName": "public.grupo",
-          "referencedTableName": "public.assignment",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
-        }
-      },
-      "nativeEnums": {},
-      "comment": null
+      "nativeEnums": {}
     },
     {
       "columns": {
@@ -966,48 +960,47 @@
       "schema": "public",
       "indexes": [
         {
+          "keyName": "grupo_alumnos_pkey",
           "columnNames": [
             "grupo_id",
             "alumno_id"
           ],
           "composite": true,
-          "constraint": false,
-          "keyName": "grupo_alumnos_pkey",
-          "unique": true,
-          "primary": true
+          "constraint": true,
+          "primary": true,
+          "unique": true
         }
       ],
       "checks": [],
       "foreignKeys": {
-        "grupo_alumnos_alumno_id_foreign": {
-          "columnNames": [
-            "alumno_id"
-          ],
-          "constraintName": "grupo_alumnos_alumno_id_foreign",
-          "localTableName": "public.grupo_alumnos",
-          "referencedTableName": "public.alumno",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
-        },
         "grupo_alumnos_grupo_id_foreign": {
+          "constraintName": "grupo_alumnos_grupo_id_foreign",
           "columnNames": [
             "grupo_id"
           ],
-          "constraintName": "grupo_alumnos_grupo_id_foreign",
           "localTableName": "public.grupo_alumnos",
-          "referencedTableName": "public.grupo",
           "referencedColumnNames": [
             "id"
           ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
+          "referencedTableName": "public.grupo",
+          "deleteRule": "cascade",
+          "updateRule": "cascade"
+        },
+        "grupo_alumnos_alumno_id_foreign": {
+          "constraintName": "grupo_alumnos_alumno_id_foreign",
+          "columnNames": [
+            "alumno_id"
+          ],
+          "localTableName": "public.grupo_alumnos",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.alumno",
+          "deleteRule": "cascade",
+          "updateRule": "cascade"
         }
       },
-      "nativeEnums": {},
-      "comment": null
+      "nativeEnums": {}
     }
   ],
   "nativeEnums": {}
