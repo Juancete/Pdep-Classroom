@@ -66,6 +66,40 @@ export async function upsertAlumno(data: AlumnoData): Promise<Alumno> {
   return createAlumno(data);
 }
 
+/** Crea o actualiza múltiples alumnos en un solo flush. */
+export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
+  if (dataList.length === 0) return 0;
+
+  const em = await getEM();
+  const githubUsernames = dataList.map((d) => d.githubUsername.toLowerCase().trim());
+  const existentes = await em.find(Alumno, { githubUsername: { $in: githubUsernames } });
+  const existentesPorGithub = new Map(existentes.map((a) => [a.githubUsername, a]));
+
+  for (const data of dataList) {
+    const key = data.githubUsername.toLowerCase().trim();
+    const existing = existentesPorGithub.get(key);
+    if (existing) {
+      existing.legajo = data.legajo.trim();
+      existing.nombre = data.nombre.trim();
+      existing.apellido = data.apellido.trim();
+      existing.email = data.email.toLowerCase().trim();
+      existing.comision = data.comision;
+    } else {
+      const alumno = new Alumno();
+      alumno.legajo = data.legajo.trim();
+      alumno.nombre = data.nombre.trim();
+      alumno.apellido = data.apellido.trim();
+      alumno.githubUsername = key;
+      alumno.email = data.email.toLowerCase().trim();
+      alumno.comision = data.comision;
+      em.persist(alumno);
+    }
+  }
+
+  await em.flush();
+  return dataList.length;
+}
+
 export async function countAlumnos(): Promise<number> {
   const em = await getEM();
   return em.count(Alumno, {});

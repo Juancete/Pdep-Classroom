@@ -4,6 +4,7 @@ export {
   getAlumnoByLegajo,
   createAlumno,
   upsertAlumno,
+  upsertAlumnos,
   countAlumnos,
 } from "./AlumnoRepository";
 export type { AlumnoData } from "./AlumnoRepository";
