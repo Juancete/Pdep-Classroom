@@ -1,29 +1,29 @@
-import { Entity, PrimaryKey, Property } from "@mikro-orm/core";
+import { Entity, ManyToOne, PrimaryKey, Property } from "@mikro-orm/core";
 import { randomUUID } from "crypto";
+import { Comision } from "./Comision";
 
 @Entity()
 export class Alumno {
   @PrimaryKey({ type: "uuid" })
   id: string = randomUUID();
 
-  @Property({ unique: true })
+  @Property({ type: 'string', unique: true })
   legajo!: string;
 
-  @Property()
+  @Property({ type: 'string' })
   nombre!: string;
 
-  @Property()
+  @Property({ type: 'string' })
   apellido!: string;
 
-  @Property({ unique: true })
+  @Property({ type: 'string', unique: true })
   githubUsername!: string;
 
-  @Property()
+  @Property({ type: 'string' })
   email!: string;
 
-  // Nombre de la comisión tal como aparece en la planilla, ej: "miércoles noche"
-  @Property({ nullable: true })
-  comision?: string;
+  @ManyToOne(() => Comision, { nullable: true })
+  comision?: Comision;
 
   get nombreCompleto(): string {
     return `${this.apellido}, ${this.nombre}`;

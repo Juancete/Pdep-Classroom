@@ -7,8 +7,7 @@ if (!process.env.DATABASE_URL) {
   config({ path: ".env.local" });
 }
 
-import { defineConfig } from "@mikro-orm/postgresql";
-import { TsMorphMetadataProvider } from "@mikro-orm/reflection";
+import { defineConfig, ReflectMetadataProvider } from "@mikro-orm/postgresql";
 import { Migrator } from "@mikro-orm/migrations";
 import {
   Alumno,
@@ -23,12 +22,16 @@ import {
 export default defineConfig({
   // Conexión
   clientUrl: process.env.DATABASE_URL ?? "postgresql://localhost:5432/pdep_classroom",
+  driverOptions: {
+    connection: { ssl: process.env.DATABASE_URL?.includes("neon.tech") ? { rejectUnauthorized: false } : false },
+  },
 
   // Entidades
   entities: [Alumno, Comision, Assignment, IndividualAssignment, GrupalAssignment, Grupo, Entrega],
 
-  // Extrae tipos en build-time via ts-morph (sin reflect-metadata)
-  metadataProvider: TsMorphMetadataProvider,
+  // Usa reflect-metadata en runtime (funciona en webpack/RSC sin necesitar
+  // leer archivos .ts desde el filesystem).
+  metadataProvider: ReflectMetadataProvider,
 
   // Migraciones
   extensions: [Migrator],

@@ -1,9 +1,28 @@
 import { requireAdmin } from "@/lib/session";
 import { getAlumnos } from "@/lib/sheets";
+import { getComisionActiva } from "@/lib/repositories";
+import Link from "next/link";
 
 export default async function AdminAlumnosPage() {
   await requireAdmin();
-  const alumnos = await getAlumnos();
+
+  const comision = await getComisionActiva();
+  if (!comision) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold mb-1">Alumnos</h1>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8 text-center text-yellow-800">
+          No hay ninguna comisión activa configurada.{" "}
+          <Link href="/admin/comisiones/new" className="underline font-medium">
+            Crear una comisión
+          </Link>{" "}
+          para poder ver los alumnos.
+        </div>
+      </div>
+    );
+  }
+
+  const alumnos = await getAlumnos(comision.spreadsheetId, comision.columnConfig);
 
   return (
     <div>
