@@ -3,73 +3,85 @@
 import { useState } from "react";
 import { useApiCall } from "@/app/hooks/useApiCall";
 
-export function RegistroForm({
-  githubUsername,
-  email,
-  nombre,
-}: {
+const INPUT_CLASS =
+  "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pdep-500 focus:border-pdep-500 outline-none";
+const READONLY_CLASS =
+  "w-full border border-gray-200 bg-gray-50 rounded-lg px-3 py-2 text-sm font-mono text-gray-500";
+
+export interface AlumnoFormValues {
   githubUsername: string;
-  email: string;
-  nombre: string;
-}) {
+  legajo?: string;
+  apellido?: string;
+  nombre?: string;
+  email?: string;
+}
+
+type Props = {
+  defaultValues: AlumnoFormValues;
+  apiEndpoint: string;
+  method: "POST" | "PATCH";
+  /** Campos adicionales a mergear en el body (ej: githubUsername para registro) */
+  extraBody?: Record<string, string>;
+  /** Si se indica, redirige a esta URL tras el éxito */
+  onSuccessRedirect?: string;
+  submitLabel: string;
+  successMessage: string;
+};
+
+export function AlumnoForm({
+  defaultValues,
+  apiEndpoint,
+  method,
+  extraBody,
+  onSuccessRedirect,
+  submitLabel,
+  successMessage,
+}: Props) {
   const { loading, error, call } = useApiCall();
   const [success, setSuccess] = useState(false);
-
-  // Intentar splitear nombre de GitHub en nombre/apellido
-  const parts = nombre.split(" ");
-  const defaultNombre = parts.slice(0, -1).join(" ") || parts[0] || "";
-  const defaultApellido = parts.length > 1 ? parts[parts.length - 1] : "";
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     await call(async () => {
-      const res = await fetch("/api/registro", {
-        method: "POST",
+      const body = {
+        legajo: form.get("legajo") as string,
+        apellido: form.get("apellido") as string,
+        nombre: form.get("nombre") as string,
+        email: form.get("email") as string,
+        ...extraBody,
+      };
+      const res = await fetch(apiEndpoint, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          legajo: form.get("legajo"),
-          apellido: form.get("apellido"),
-          nombre: form.get("nombre"),
-          githubUsername,
-          email: form.get("email"),
-        }),
+        body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Error al registrar");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Error al guardar");
       setSuccess(true);
-      setTimeout(() => {
-        window.location.href = "/dashboard";
-      }, 1500);
+      if (onSuccessRedirect) {
+        setTimeout(() => { window.location.href = onSuccessRedirect; }, 1500);
+      }
     });
   }
 
   if (success) {
     return (
       <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-        <p className="text-green-700 font-medium">¡Registro exitoso!</p>
-        <p className="text-green-600 text-sm mt-1">
-          Redirigiendo al dashboard…
-        </p>
+        <p className="text-green-700 font-medium">{successMessage}</p>
       </div>
     );
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* GitHub username - readonly */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Usuario de GitHub
         </label>
-        <input
-          value={githubUsername}
-          disabled
-          className="w-full border border-gray-200 bg-gray-50 rounded-lg px-3 py-2 text-sm font-mono text-gray-500"
-        />
+        <input value={defaultValues.githubUsername} disabled className={READONLY_CLASS} />
       </div>
 
-      {/* Legajo */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Legajo <span className="text-red-500">*</span>
@@ -79,11 +91,11 @@ export function RegistroForm({
           required
           pattern="\d{4,8}"
           placeholder="12345678"
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pdep-500 focus:border-pdep-500 outline-none"
+          defaultValue={defaultValues.legajo}
+          className={INPUT_CLASS}
         />
       </div>
 
-      {/* Apellido */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Apellido <span className="text-red-500">*</span>
@@ -91,12 +103,11 @@ export function RegistroForm({
         <input
           name="apellido"
           required
-          defaultValue={defaultApellido}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pdep-500 focus:border-pdep-500 outline-none"
+          defaultValue={defaultValues.apellido}
+          className={INPUT_CLASS}
         />
       </div>
 
-      {/* Nombre */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Nombre <span className="text-red-500">*</span>
@@ -104,12 +115,11 @@ export function RegistroForm({
         <input
           name="nombre"
           required
-          defaultValue={defaultNombre}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pdep-500 focus:border-pdep-500 outline-none"
+          defaultValue={defaultValues.nombre}
+          className={INPUT_CLASS}
         />
       </div>
 
-      {/* Email */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Email <span className="text-red-500">*</span>
@@ -118,8 +128,8 @@ export function RegistroForm({
           name="email"
           type="email"
           required
-          defaultValue={email}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pdep-500 focus:border-pdep-500 outline-none"
+          defaultValue={defaultValues.email}
+          className={INPUT_CLASS}
         />
       </div>
 
@@ -134,7 +144,7 @@ export function RegistroForm({
         disabled={loading}
         className="w-full bg-pdep-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-pdep-700 transition-colors disabled:opacity-50"
       >
-        {loading ? "Registrando…" : "Registrarme"}
+        {loading ? "Guardando…" : submitLabel}
       </button>
     </form>
   );

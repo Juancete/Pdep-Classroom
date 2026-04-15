@@ -6,3 +6,4 @@ data/
 temp/
 tsconfig.tsbuildinfo
 coverage/
+.vercel

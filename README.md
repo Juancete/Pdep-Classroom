@@ -311,31 +311,82 @@ Abrir http://localhost:3000.
 
 ### 8. Deploy a Vercel
 
+#### 8.1 Primer deploy
+
 ```bash
 pnpm i -g vercel
-vercel
+vercel          # vincula el proyecto, hace el primer deploy a preview
+vercel --prod   # promueve a producción
 ```
 
-Variables de entorno a configurar en Vercel:
+#### 8.2 Configurar variables de entorno
 
-| Variable | Dónde obtenerla |
-|---|---|
-| `DATABASE_URL` | Neon → Connection Details (pooled) |
-| `GITHUB_CLIENT_ID` | GitHub OAuth App |
-| `GITHUB_CLIENT_SECRET` | GitHub OAuth App |
-| `GITHUB_APP_ID` | GitHub App → About |
-| `GITHUB_APP_PRIVATE_KEY` | GitHub App → Private Keys (base64) |
-| `GITHUB_APP_INSTALLATION_ID` | URL de instalación de la app |
-| `GITHUB_ORG` | `pdep-mn-utn` |
-| `GOOGLE_SERVICE_ACCOUNT_KEY` | Google Cloud → Credentials (base64) |
-| `GOOGLE_SHEET_ALUMNOS_ID` | ID de la planilla en la URL |
-| `NEXTAUTH_URL` | URL del deploy (ej: `https://pdep.vercel.app`) |
-| `NEXTAUTH_SECRET` | `npx auth secret` |
-| `ADMIN_GITHUB_USERNAMES` | usernames separados por coma |
+Cada variable se agrega con `vercel env add`. El CLI pregunta el valor y en qué entornos aplicarlo (Production / Preview / Development).
 
-Después del deploy, actualizar las URLs de callback en la GitHub OAuth App:
+```bash
+# Base de datos (Neon — connection string pooled)
+vercel env add DATABASE_URL
+
+# GitHub OAuth App
+vercel env add GITHUB_CLIENT_ID
+vercel env add GITHUB_CLIENT_SECRET
+
+# GitHub App (instalada en la org)
+vercel env add GITHUB_APP_ID
+vercel env add GITHUB_APP_PRIVATE_KEY        # base64 del .pem, sin saltos de línea
+vercel env add GITHUB_APP_INSTALLATION_ID
+
+# Org de GitHub
+vercel env add GITHUB_ORG                    # valor: pdep-mn-utn
+
+# Google Sheets — service account
+vercel env add GOOGLE_SERVICE_ACCOUNT_KEY    # base64 del JSON
+
+# NextAuth
+vercel env add NEXTAUTH_SECRET               # npx auth secret
+
+# Admins
+vercel env add ADMIN_GITHUB_USERNAMES        # usernames separados por coma
+```
+
+Para verificar qué está cargado:
+
+```bash
+vercel env ls
+```
+
+Para actualizar un valor existente:
+
+```bash
+vercel env rm NOMBRE_VARIABLE
+vercel env add NOMBRE_VARIABLE
+```
+
+#### 8.3 Aplicar migraciones en producción
+
+Después del primer deploy (o cada vez que haya migraciones nuevas), aplicarlas desde local apuntando a la DB de Neon:
+
+```bash
+DATABASE_URL="postgresql://user:pass@ep-xxx.neon.tech/pdep_classroom?sslmode=require" \
+  pnpm db:migration:up
+```
+
+O con el `.env.local` apuntando a Neon directamente:
+
+```bash
+pnpm db:migration:up
+```
+
+#### 8.4 Actualizar URLs de callback
+
+Después del deploy, actualizar la GitHub OAuth App con la URL real de Vercel:
+
 - Homepage URL: `https://tu-dominio.vercel.app`
 - Callback URL: `https://tu-dominio.vercel.app/api/auth/callback/github`
+
+#### 8.5 Crear la primera comisión
+
+Una vez en producción, entrar como admin y crear al menos una comisión activa en `/admin/comisiones` con el ID de la planilla de Google Sheets. Sin una comisión activa, las páginas de alumnos, registro y perfil no funcionan.
 
 ## Cómo funciona
 
@@ -363,64 +414,83 @@ Los repos se crean con la convención:
 src/
 ├── app/
 │   ├── api/
-│   │   ├── auth/[...nextauth]/route.ts        # OAuth flow
-│   │   ├── registro/route.ts                  # POST registro → Sheets
+│   │   ├── auth/[...nextauth]/route.ts        # OAuth flow (GitHub)
+│   │   ├── registro/route.ts                  # POST registro alumno → Sheets + DB
+│   │   ├── perfil/route.ts                    # PATCH actualizar datos alumno
 │   │   ├── assignments/
-│   │   │   ├── route.ts                       # GET assignments
+│   │   │   ├── route.ts                       # GET assignments de la comisión activa
 │   │   │   └── [id]/
-│   │   │       ├── route.ts                   # GET/DELETE assignment
-│   │   │       ├── accept/route.ts            # POST crear repo
-│   │   │       └── repos/route.ts             # GET repos del assignment
+│   │   │       ├── route.ts                   # GET / DELETE assignment
+│   │   │       ├── accept/route.ts            # POST crear repo en GitHub
+│   │   │       └── repos/route.ts             # GET repos activos del assignment
 │   │   └── comisiones/[id]/route.ts           # PATCH comisión
 │   ├── admin/
 │   │   ├── assignments/
 │   │   │   ├── page.tsx                       # Listar assignments
 │   │   │   ├── new/page.tsx                   # Crear assignment
-│   │   │   ├── [id]/page.tsx                  # Detalle + entregas
+│   │   │   ├── [id]/page.tsx                  # Detalle: entregas, estadísticas
+│   │   │   │   └── entregas-table.tsx         # Tabla de entregas con filtro (client)
 │   │   │   ├── [id]/edit/page.tsx             # Editar assignment
-│   │   │   └── actions.ts                     # Server actions CRUD
+│   │   │   ├── actions.ts                     # Server actions CRUD
+│   │   │   ├── assignment-form.tsx            # Form compartido crear/editar
+│   │   │   ├── delete-button.tsx              # Eliminar assignment
+│   │   │   └── delete-repos-button.tsx        # Eliminar repos del assignment en GitHub
 │   │   ├── comisiones/
 │   │   │   ├── page.tsx                       # Listar comisiones
 │   │   │   ├── new/page.tsx                   # Crear comisión
-│   │   │   ├── [id]/edit/page.tsx             # Editar comisión
-│   │   │   └── actions.ts                     # Server actions CRUD
+│   │   │   ├── [id]/edit/page.tsx             # Editar comisión (con config de columnas)
+│   │   │   ├── actions.ts                     # Server actions CRUD + sincronizar alumnos
+│   │   │   ├── comision-form.tsx              # Form compartido crear/editar
+│   │   │   ├── delete-button.tsx              # Eliminar comisión
+│   │   │   └── sync-button.tsx                # Sincronizar alumnos desde Sheets → DB
+│   │   ├── alumnos/page.tsx                   # Ver alumnos (desde comisión activa)
 │   │   ├── grupos/page.tsx                    # Ver grupos (de Sheets)
-│   │   └── alumnos/page.tsx                   # Ver alumnos (de Sheets)
+│   │   ├── delete-button.tsx                  # Componente genérico de eliminar
+│   │   └── ui.tsx                             # Componentes UI compartidos del panel admin
+│   ├── components/
+│   │   ├── AlumnoForm.tsx                     # Form reutilizable registro/edición alumno
+│   │   └── PageSkeleton.tsx                   # Skeleton de carga genérico
+│   ├── hooks/
+│   │   └── useApiCall.ts                      # Hook genérico para llamadas a la API REST
 │   ├── dashboard/
-│   │   ├── page.tsx                           # Dashboard (redirige a /registro si no está)
-│   │   └── accept-button.tsx                  # Botón de aceptar (client)
-│   ├── registro/
-│   │   ├── page.tsx                           # Registro de alumno
-│   │   └── registro-form.tsx                  # Form client component
-│   ├── login/page.tsx
-│   ├── layout.tsx                             # Layout con nav
+│   │   ├── page.tsx                           # Dashboard alumno: TPs pendientes y estado
+│   │   └── accept-button.tsx                  # Botón aceptar TP (client)
+│   ├── registro/page.tsx                      # Registro de alumno (con AlumnoForm)
+│   ├── perfil/page.tsx                        # Editar perfil alumno (con AlumnoForm)
+│   ├── login/page.tsx                         # Página de login con GitHub
+│   ├── nav.tsx                                # Barra de navegación (server component)
+│   ├── logout-button.tsx                      # Botón de logout (client)
+│   ├── error.tsx                              # Boundary de error global
+│   ├── layout.tsx                             # Layout raíz con nav y sesión
 │   └── page.tsx                               # Landing
 ├── domain/
-│   └── entities/                             # Entidades MikroORM
-│       ├── Assignment.ts / GrupalAssignment.ts / IndividualAssignment.ts
-│       ├── Comision.ts
+│   └── entities/                              # Entidades MikroORM
+│       ├── Assignment.ts                      # Base abstracta
+│       ├── IndividualAssignment.ts
+│       ├── GrupalAssignment.ts
+│       ├── Comision.ts                        # Incluye columnConfig para la planilla
 │       ├── Entrega.ts
 │       ├── Alumno.ts
 │       └── Grupo.ts
 ├── lib/
-│   ├── auth.ts                                # NextAuth config
-│   ├── github.ts                              # Octokit: crear repos, permisos
-│   ├── github-errors.ts                       # Manejo de errores de la API de GitHub
+│   ├── auth.ts                                # NextAuth config (GitHub OAuth)
+│   ├── github.ts                              # Octokit: crear/eliminar repos, collaborators, templates
+│   ├── github-errors.ts                       # Tipado y manejo de errores de la API de GitHub
 │   ├── naming.ts                              # Funciones puras: slugify, buildRepoName
-│   ├── sheets.ts                              # Google Sheets: leer y escribir alumnos/grupos
-│   ├── session.ts                             # Helpers getCurrentUser/requireAdmin
+│   ├── sheets.ts                              # Google Sheets: leer/escribir alumnos
+│   ├── session.ts                             # requireUser / requireAdmin
 │   ├── api-auth.ts                            # Middleware de auth para API routes
 │   ├── assignment-schema.ts                   # Schemas Zod para assignments
 │   ├── rate-limit.ts                          # Rate limiting por IP
-│   ├── db.ts                                  # Conexión MikroORM
-│   └── repositories/                         # Repositorios MikroORM
+│   ├── db.ts                                  # Singleton MikroORM (getOrm / getEM)
+│   └── repositories/                          # Acceso a datos por entidad
+│       ├── AlumnoRepository.ts
 │       ├── AssignmentRepository.ts
 │       ├── ComisionRepository.ts
 │       ├── EntregaRepository.ts
-│       ├── AlumnoRepository.ts
 │       └── GrupoRepository.ts
-├── types/index.ts                             # Tipos del dominio
-└── middleware.ts                              # Auth middleware
+├── types/index.ts                             # ColumnConfig, PdepUser, tipos del dominio
+└── middleware.ts                              # Auth middleware (protege rutas /admin, /dashboard)
 ```
 
 ## Tests
@@ -460,19 +530,30 @@ La planilla sigue siendo la fuente de verdad — la app solo escribe ahí.
 
 - [x] Migrar persistencia de JSON a PostgreSQL + MikroORM
 - [x] Agregar delete/edit de assignments
-- [ ] Vista de entregas por assignment (quién entregó, quién no)
+- [x] Vista de entregas por assignment (quién entregó, quién no, con estadísticas)
+- [x] Rate limiting en el endpoint de accept (para evitar duplicados por double-click)
+- [x] Registro de alumnos desde la app (sin editar la planilla manualmente)
+- [x] Edición de perfil por parte del alumno
+- [x] Sincronización de alumnos desde Sheets a la DB por comisión
+- [x] Configuración de columnas de la planilla por comisión
+- [x] Eliminar repos de un assignment desde el panel admin
 - [ ] Notificaciones por mail cuando se publica un assignment
 - [ ] Autograding con GitHub Actions en los templates
-- [x] Rate limiting en el endpoint de accept (para evitar duplicados por double-click)
 - [ ] Export de estado de entregas a Google Sheets (cerrar el loop con la planilla)
-- [ ] Suscribir a los alumnos al grupo de google groups automáticamente.
+- [ ] Suscribir a los alumnos al grupo de Google Groups automáticamente
 
 ## API de GitHub — Estabilidad
 
-La REST API v3 de GitHub tiene política de versionado conservadora. Los 3 endpoints que usa esta app existen desde 2019+ y no van a cambiar:
+La REST API v3 de GitHub tiene política de versionado conservadora. Todos los endpoints que usa esta app existen desde 2019+ y no van a cambiar:
 
-- `POST /repos/{template_owner}/{template_repo}/generate` — crear desde template
-- `PUT /repos/{owner}/{repo}/collaborators/{username}` — dar acceso
-- `GET /repos/{owner}/{repo}` — verificar existencia
+| Endpoint | Uso |
+|---|---|
+| `POST /repos/{template_owner}/{template_repo}/generate` | Crear repo desde template |
+| `PUT /repos/{owner}/{repo}/collaborators/{username}` | Dar acceso push al alumno |
+| `GET /repos/{owner}/{repo}` | Verificar si el repo ya existe |
+| `GET /orgs/{org}/repos` | Listar repos de la org (para entregas y templates) |
+| `DELETE /repos/{owner}/{repo}` | Eliminar repo (limpieza de assignments) |
+
+La autenticación usa una **GitHub App** instalada en la org (no un PAT personal), lo que da permisos de admin sobre los repos sin depender de un usuario específico. Como fallback para desarrollo local se puede usar un PAT clásico con scopes `repo` y `admin:org`.
 
 Es más estable que depender de GitHub Classroom, que es un producto con mantenimiento errático.

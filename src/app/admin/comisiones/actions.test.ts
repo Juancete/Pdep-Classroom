@@ -5,7 +5,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockRequireAdmin = vi.fn();
 const mockCreateComision = vi.fn();
 const mockUpdateComision = vi.fn();
+const mockGetComision = vi.fn();
+const mockUpsertAlumno = vi.fn();
 const mockRedirect = vi.fn();
+const mockGetAlumnos = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
@@ -14,13 +17,23 @@ vi.mock("@/lib/session", () => ({
 vi.mock("@/lib/repositories", () => ({
   createComision: (...args: unknown[]) => mockCreateComision(...args),
   updateComision: (...args: unknown[]) => mockUpdateComision(...args),
+  getComision: (...args: unknown[]) => mockGetComision(...args),
+  upsertAlumno: (...args: unknown[]) => mockUpsertAlumno(...args),
+}));
+
+vi.mock("@/lib/sheets", () => ({
+  getAlumnos: (...args: unknown[]) => mockGetAlumnos(...args),
 }));
 
 vi.mock("next/navigation", () => ({
   redirect: (path: string) => mockRedirect(path),
 }));
 
-import { crearComision, actualizarComision } from "./actions";
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+}));
+
+import { crearComision, actualizarComision, sincronizarAlumnos } from "./actions";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -152,5 +165,72 @@ describe("actualizarComision", () => {
     );
     expect(result).toMatchObject({ ok: false });
     expect(mockUpdateComision).not.toHaveBeenCalled();
+  });
+});
+
+// ── sincronizarAlumnos ───────────────────────────────────────
+
+describe("sincronizarAlumnos", () => {
+  const comisionMock = { id: "c1", spreadsheetId: "sheet-abc", columnConfig: {} };
+
+  function makeSync(fields: Record<string, string> = {}) {
+    return makeFormData({ comisionId: "c1", ...fields });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequireAdmin.mockResolvedValue(undefined);
+    mockGetComision.mockResolvedValue(comisionMock);
+    mockGetAlumnos.mockResolvedValue([]);
+    mockUpsertAlumno.mockResolvedValue(undefined);
+  });
+
+  it("siempre llama a requireAdmin", async () => {
+    await sincronizarAlumnos({ status: "idle" }, makeSync());
+    expect(mockRequireAdmin).toHaveBeenCalledOnce();
+  });
+
+  it("retorna error si la comisión no existe", async () => {
+    mockGetComision.mockResolvedValue(null);
+    const result = await sincronizarAlumnos({ status: "idle" }, makeSync());
+    expect(result).toEqual({ status: "error", message: "Comisión no encontrada" });
+    expect(mockGetAlumnos).not.toHaveBeenCalled();
+  });
+
+  it("retorna error si no se puede leer la planilla", async () => {
+    mockGetAlumnos.mockRejectedValue(new Error("acceso denegado"));
+    const result = await sincronizarAlumnos({ status: "idle" }, makeSync());
+    expect(result).toEqual({
+      status: "error",
+      message: "No se pudo leer la planilla: acceso denegado",
+    });
+  });
+
+  it("sincroniza correctamente y retorna el conteo", async () => {
+    const alumnos = [
+      { legajo: "111", nombre: "Ana", apellido: "López", githubUsername: "ana", email: "a@b.com" },
+      { legajo: "222", nombre: "Beto", apellido: "Ruiz", githubUsername: "beto", email: "b@b.com" },
+    ];
+    mockGetAlumnos.mockResolvedValue(alumnos);
+
+    const result = await sincronizarAlumnos({ status: "idle" }, makeSync());
+
+    expect(result).toEqual({ status: "ok", sincronizados: 2 });
+    expect(mockUpsertAlumno).toHaveBeenCalledTimes(2);
+  });
+
+  it("llama a upsertAlumno con la comisión incluida", async () => {
+    const alumno = { legajo: "111", nombre: "Ana", apellido: "López", githubUsername: "ana", email: "a@b.com" };
+    mockGetAlumnos.mockResolvedValue([alumno]);
+
+    await sincronizarAlumnos({ status: "idle" }, makeSync());
+
+    expect(mockUpsertAlumno).toHaveBeenCalledWith({ ...alumno, comision: comisionMock });
+  });
+
+  it("retorna 0 sincronizados si la planilla está vacía", async () => {
+    mockGetAlumnos.mockResolvedValue([]);
+    const result = await sincronizarAlumnos({ status: "idle" }, makeSync());
+    expect(result).toEqual({ status: "ok", sincronizados: 0 });
   });
 });
