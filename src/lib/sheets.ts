@@ -27,9 +27,8 @@ function resolveConfig(config?: Partial<ColumnConfig>): ColumnConfig {
 }
 
 function resolveSpreadsheetId(spreadsheetId?: string): string {
-  const id = spreadsheetId ?? process.env.GOOGLE_SHEET_ALUMNOS_ID;
-  if (!id) throw new Error("GOOGLE_SHEET_ALUMNOS_ID no está configurado.");
-  return id;
+  if (!spreadsheetId) throw new Error("No hay una comisión activa con planilla configurada. Creá una comisión en /admin/comisiones.");
+  return spreadsheetId;
 }
 
 // Calcula el rango para leer todas las filas de datos.
