@@ -4,7 +4,7 @@ import type { Grupo } from "./Grupo";
 
 @Entity({ discriminatorValue: "grupal" })
 export class GrupalAssignment extends Assignment {
-  @Property()
+  @Property({ type: 'integer' })
   maxIntegrantes!: number;
 
   @OneToMany("Grupo", "assignment")

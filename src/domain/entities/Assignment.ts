@@ -16,16 +16,16 @@ export abstract class Assignment {
   @PrimaryKey({ type: "uuid" })
   id: string = randomUUID();
 
-  @Property()
+  @Property({ type: 'string' })
   titulo!: string;
 
-  @Property()
+  @Property({ type: 'string' })
   slug!: string;
 
-  @Property({ nullable: true })
+  @Property({ type: 'string', nullable: true })
   descripcion?: string;
 
-  @Property()
+  @Property({ type: 'string' })
   templateRepo!: string;
 
   @Enum({ items: ["funcional", "logico", "objetos"] })
@@ -37,7 +37,7 @@ export abstract class Assignment {
   @Property({ nullable: true, type: "date" })
   deadline?: Date;
 
-  @Property()
+  @Property({ type: 'datetime' })
   createdAt: Date = new Date();
 
   @ManyToOne(() => Comision, { nullable: true })
