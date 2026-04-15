@@ -37,7 +37,7 @@ function resolveSpreadsheetId(spreadsheetId?: string): string {
 function buildReadRange(config: ColumnConfig): string {
   const maxCol = Math.max(
     config.legajo, config.apellido, config.nombre,
-    config.githubUsername, config.email, config.comision
+    config.githubUsername, config.email
   );
   const startRow = config.headerRows + 1;
   const endCol = colLetter(maxCol);
@@ -70,7 +70,7 @@ export function parseAlumnosRows(
       a.nombre = norm(row[config.nombre]);
       a.githubUsername = norm(row[config.githubUsername]).replace("@", "").toLowerCase();
       a.email = norm(row[config.email]);
-      a.comision = norm(row[config.comision]) || undefined;
+      // comision es una relación ManyToOne — no se puede resolver desde la planilla
       return a;
     });
 }
@@ -194,7 +194,7 @@ export async function registrarAlumno(
   // Construir la fila según la config de columnas
   const maxCol = Math.max(
     cfg.legajo, cfg.apellido, cfg.nombre,
-    cfg.githubUsername, cfg.email, cfg.comision
+    cfg.githubUsername, cfg.email
   );
   const row = new Array(maxCol + 1).fill("");
   row[cfg.legajo] = input.legajo.trim();
@@ -202,7 +202,6 @@ export async function registrarAlumno(
   row[cfg.nombre] = input.nombre.trim();
   row[cfg.githubUsername] = input.githubUsername.trim().toLowerCase();
   row[cfg.email] = input.email.trim().toLowerCase();
-  row[cfg.comision] = "";
 
   const sheets = getSheetsClient(false);
   await sheets.spreadsheets.values.append({
@@ -253,7 +252,7 @@ export async function actualizarAlumno(
   const sheets = getSheetsClient(false);
   const maxCol = Math.max(
     cfg.legajo, cfg.apellido, cfg.nombre,
-    cfg.githubUsername, cfg.email, cfg.comision
+    cfg.githubUsername, cfg.email
   );
   const range = `${cfg.sheetName}!A${rowNumber}:${colLetter(maxCol)}${rowNumber}`;
 

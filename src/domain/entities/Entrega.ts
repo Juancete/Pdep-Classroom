@@ -29,16 +29,16 @@ export class Entrega {
   @Property({ type: "array" })
   githubUsernames: string[] = [];
 
-  @Property({ nullable: true })
+  @Property({ type: 'string', nullable: true })
   repoName?: string;
 
-  @Property({ nullable: true })
+  @Property({ type: 'string', nullable: true })
   repoUrl?: string;
 
-  @Property({ default: false })
+  @Property({ type: 'boolean', default: false })
   repoDeleted: boolean = false;
 
-  @Property()
+  @Property({ type: 'datetime' })
   createdAt: Date = new Date();
 
   hasRepo(): boolean {

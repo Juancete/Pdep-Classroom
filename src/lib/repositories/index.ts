@@ -3,7 +3,10 @@ export {
   getAlumnoByGithub,
   getAlumnoByLegajo,
   createAlumno,
+  upsertAlumno,
+  countAlumnos,
 } from "./AlumnoRepository";
+export type { AlumnoData } from "./AlumnoRepository";
 
 export {
   getAssignments,

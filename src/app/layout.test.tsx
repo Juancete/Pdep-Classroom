@@ -26,7 +26,7 @@ vi.mock("./logout-button", () => ({
   ),
 }));
 
-import { Nav } from "./layout";
+import { Nav } from "./nav";
 
 // ── Helpers ─────────────────────────────────────────────────
 

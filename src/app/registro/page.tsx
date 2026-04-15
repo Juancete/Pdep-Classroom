@@ -3,6 +3,7 @@ import { getAlumnoByGithub } from "@/lib/sheets";
 import { getComisionActiva } from "@/lib/repositories";
 import { redirect } from "next/navigation";
 import { AlumnoForm } from "@/app/components/AlumnoForm";
+import { upsertAlumno } from "@/lib/repositories";
 import type { PdepUser } from "@/types";
 
 export default async function RegistroPage() {
@@ -19,7 +20,10 @@ export default async function RegistroPage() {
     comisionActiva?.spreadsheetId,
     comisionActiva?.columnConfig
   );
-  if (existente) redirect("/dashboard");
+  if (existente) {
+    await upsertAlumno({ ...existente, comision: comisionActiva ?? undefined });
+    redirect("/dashboard");
+  }
 
   // Split del nombre de GitHub en nombre/apellido como sugerencia
   const parts = (session.user?.name ?? "").split(" ");

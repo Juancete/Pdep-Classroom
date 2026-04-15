@@ -7,6 +7,7 @@ import type { PdepUser } from "@/types";
 const mockAuth = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
 const mockGetComisionActiva = vi.fn();
+const mockUpsertAlumno = vi.fn();
 const mockRedirect = vi.fn().mockImplementation((url: string) => {
   throw new Error(`REDIRECT:${url}`);
 });
@@ -21,6 +22,7 @@ vi.mock("@/lib/sheets", () => ({
 
 vi.mock("@/lib/repositories", () => ({
   getComisionActiva: () => mockGetComisionActiva(),
+  upsertAlumno: (...args: unknown[]) => mockUpsertAlumno(...args),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -65,6 +67,7 @@ describe("Registro page", () => {
       throw new Error(`REDIRECT:${url}`);
     });
     mockGetComisionActiva.mockResolvedValue(null);
+    mockUpsertAlumno.mockResolvedValue(undefined);
   });
 
   describe("redirecciones", () => {
@@ -88,6 +91,41 @@ describe("Registro page", () => {
 
       await expect(RegistroPage()).rejects.toThrow("REDIRECT:/dashboard");
       expect(mockRedirect).toHaveBeenCalledWith("/dashboard");
+    });
+
+    it("hace upsert en la DB cuando el alumno es reconocido desde la planilla", async () => {
+      const alumno = {
+        legajo: "12345",
+        nombre: "Juan",
+        apellido: "Garcia",
+        githubUsername: "juangarcia",
+        email: "juan@example.com",
+      };
+      mockAuth.mockResolvedValue(makeSession("juangarcia"));
+      mockGetAlumnoByGithub.mockResolvedValue(alumno);
+
+      await expect(RegistroPage()).rejects.toThrow("REDIRECT:/dashboard");
+      // comisionActiva es null en el mock → comision: undefined en el upsert
+      expect(mockUpsertAlumno).toHaveBeenCalledWith({ ...alumno, comision: undefined });
+    });
+
+    it("hace upsert con la comisión activa cuando existe", async () => {
+      const comision = { id: "c1", spreadsheetId: "s1", columnConfig: null };
+      mockGetComisionActiva.mockResolvedValue(comision);
+      const alumno = { legajo: "12345", nombre: "Juan", apellido: "G", githubUsername: "j", email: "j@j.com" };
+      mockAuth.mockResolvedValue(makeSession("j"));
+      mockGetAlumnoByGithub.mockResolvedValue(alumno);
+
+      await expect(RegistroPage()).rejects.toThrow("REDIRECT:/dashboard");
+      expect(mockUpsertAlumno).toHaveBeenCalledWith({ ...alumno, comision });
+    });
+
+    it("no hace upsert si el alumno no está en la planilla", async () => {
+      mockAuth.mockResolvedValue(makeSession("nuevouser"));
+      mockGetAlumnoByGithub.mockResolvedValue(null);
+
+      await RegistroPage();
+      expect(mockUpsertAlumno).not.toHaveBeenCalled();
     });
   });
 

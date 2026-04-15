@@ -17,7 +17,7 @@ export class Grupo {
   @PrimaryKey({ type: "uuid" })
   id: string = randomUUID();
 
-  @Property()
+  @Property({ type: 'string' })
   nombre!: string;
 
   @Enum({ items: ["funcional", "logico", "objetos"] })
@@ -26,10 +26,10 @@ export class Grupo {
   @ManyToMany(() => Alumno)
   alumnos = new Collection<Alumno>(this);
 
-  @Property()
+  @Property({ type: 'integer' })
   maxIntegrantes!: number;
 
-  @Property()
+  @Property({ type: 'string' })
   creadoPor!: string;
 
   @ManyToOne("GrupalAssignment", { deleteRule: "cascade" })
