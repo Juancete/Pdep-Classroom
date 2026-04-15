@@ -1,0 +1,23 @@
+language: "es"
+
+reviews:
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+
+  path_filters:
+    - "!**/*.lock"
+    - "!**/pnpm-lock.yaml"
+    - "!**/.next/**"
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "master"
+      - "Development"
+
+chat:
+  auto_reply: true
