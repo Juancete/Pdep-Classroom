@@ -1,6 +1,9 @@
-import { auth } from "@/lib/auth";
+import NextAuth from "next-auth";
+import { authConfig } from "@/lib/auth.config";
 import { NextResponse } from "next/server";
 import type { PdepUser } from "@/types";
+
+const { auth } = NextAuth(authConfig);
 
 export default auth((req) => {
   const pdepUser = (req.auth as unknown as { pdepUser?: PdepUser } | null)
