@@ -87,12 +87,17 @@ describe("PATCH /api/perfil", () => {
     expect(mockUpsertAlumno).not.toHaveBeenCalled();
   });
 
-  it("maneja ausencia de comisión activa pasando undefined", async () => {
+  it("devuelve 400 si no hay comisión activa con planilla (sin upsert en DB)", async () => {
     mockGetComisionActiva.mockResolvedValue(null);
-    await PATCH(makeRequest(validBody));
-    expect(mockUpsertAlumno).toHaveBeenCalledWith(
-      expect.objectContaining({ comision: undefined, registroConfirmadoEn: undefined })
-    );
+    mockUpsertarAlumnoEnSheets.mockResolvedValue({
+      ok: false,
+      error: "No hay una comisión activa con planilla configurada. Creá una comisión en /admin/comisiones.",
+    });
+    const res = await PATCH(makeRequest(validBody));
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toMatch(/comisión activa/i);
+    expect(mockUpsertAlumno).not.toHaveBeenCalled();
   });
 
   it("devuelve 500 si algo tira un error inesperado", async () => {

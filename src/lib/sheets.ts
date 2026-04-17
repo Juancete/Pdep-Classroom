@@ -183,7 +183,12 @@ export async function upsertarAlumnoEnSheets(
   const validationError = validateRegistro(input);
   if (validationError) return { ok: false, error: validationError };
 
-  const id = resolveSpreadsheetId(spreadsheetId);
+  let id: string;
+  try {
+    id = resolveSpreadsheetId(spreadsheetId);
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
   const cfg = resolveConfig(config);
   const githubNormalizado = input.githubUsername.trim().toLowerCase();
 

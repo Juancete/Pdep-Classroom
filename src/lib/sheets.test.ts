@@ -268,9 +268,10 @@ describe("upsertarAlumnoEnSheets – validaciones", () => {
     expect(r).toEqual({ ok: false, error: "El usuario de GitHub es obligatorio" });
   });
 
-  it("lanza error si no hay spreadsheetId configurado (input válido)", async () => {
-    await expect(upsertarAlumnoEnSheets(valid, undefined)).rejects.toThrow(
-      "No hay una comisión activa"
+  it("devuelve {ok:false} si no hay spreadsheetId configurado (input válido)", async () => {
+    const r = await upsertarAlumnoEnSheets(valid, undefined);
+    expect(r).toEqual(
+      expect.objectContaining({ ok: false, error: expect.stringMatching(/comisión activa/i) })
     );
   });
 });
