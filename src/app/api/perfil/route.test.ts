@@ -87,12 +87,12 @@ describe("PATCH /api/perfil", () => {
     expect(mockUpsertAlumno).not.toHaveBeenCalled();
   });
 
-  it("maneja ausencia de comisión activa pasando undefined", async () => {
+  it("devuelve 409 sin tocar Sheets ni DB si no hay comisión activa", async () => {
     mockGetComisionActiva.mockResolvedValue(null);
-    await PATCH(makeRequest(validBody));
-    expect(mockUpsertAlumno).toHaveBeenCalledWith(
-      expect.objectContaining({ comision: undefined, registroConfirmadoEn: undefined })
-    );
+    const res = await PATCH(makeRequest(validBody));
+    expect(res.status).toBe(409);
+    expect(mockUpsertarAlumnoEnSheets).not.toHaveBeenCalled();
+    expect(mockUpsertAlumno).not.toHaveBeenCalled();
   });
 
   it("devuelve 500 si algo tira un error inesperado", async () => {

@@ -30,11 +30,14 @@ export default async function RegistroPage() {
   // Prefill: gana lo que el alumno confirmó alguna vez (DB); si no, lo que
   // pre-cargó el admin en la planilla (Sheets); y como último recurso, lo que
   // viene del perfil de GitHub de la sesión.
-  const alumnoSheets = await getAlumnoDeSheets(
-    githubUsername,
-    comisionActiva?.spreadsheetId,
-    comisionActiva?.columnConfig
-  );
+  // Sin comisión activa no hay planilla que leer; caemos al prefill de DB/sesión.
+  const alumnoSheets = comisionActiva
+    ? await getAlumnoDeSheets(
+        githubUsername,
+        comisionActiva.spreadsheetId,
+        comisionActiva.columnConfig
+      )
+    : undefined;
 
   const nameParts = (session.user?.name ?? "").split(" ").filter(Boolean);
   const defaultNombre = nameParts.slice(0, -1).join(" ") || nameParts[0] || "";

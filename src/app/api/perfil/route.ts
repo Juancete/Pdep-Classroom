@@ -16,10 +16,17 @@ export async function PATCH(req: Request) {
     };
 
     const comisionActiva = await getComisionActiva();
+    if (!comisionActiva) {
+      return NextResponse.json(
+        { error: "No hay una comisión activa con planilla configurada. Pedile a un admin que configure una en /admin/comisiones." },
+        { status: 409 }
+      );
+    }
+
     const result = await upsertarAlumnoEnSheets(
       input,
-      comisionActiva?.spreadsheetId,
-      comisionActiva?.columnConfig
+      comisionActiva.spreadsheetId,
+      comisionActiva.columnConfig
     );
 
     if (!result.ok) {
@@ -32,8 +39,8 @@ export async function PATCH(req: Request) {
       apellido: input.apellido,
       githubUsername: input.githubUsername,
       email: input.email,
-      comision: comisionActiva ?? undefined,
-      registroConfirmadoEn: comisionActiva ?? undefined,
+      comision: comisionActiva,
+      registroConfirmadoEn: comisionActiva,
     });
 
     return NextResponse.json({ ok: true });

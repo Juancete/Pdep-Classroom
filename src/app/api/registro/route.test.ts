@@ -100,17 +100,12 @@ describe("POST /api/registro", () => {
     expect(mockUpsertAlumno).not.toHaveBeenCalled();
   });
 
-  it("maneja ausencia de comisión activa pasando undefined a los helpers", async () => {
+  it("devuelve 409 sin tocar Sheets ni DB si no hay comisión activa", async () => {
     mockGetComisionActiva.mockResolvedValue(null);
-    await POST(makeRequest(validBody));
-    expect(mockUpsertarAlumnoEnSheets).toHaveBeenCalledWith(
-      expect.any(Object),
-      undefined,
-      undefined
-    );
-    expect(mockUpsertAlumno).toHaveBeenCalledWith(
-      expect.objectContaining({ comision: undefined, registroConfirmadoEn: undefined })
-    );
+    const res = await POST(makeRequest(validBody));
+    expect(res.status).toBe(409);
+    expect(mockUpsertarAlumnoEnSheets).not.toHaveBeenCalled();
+    expect(mockUpsertAlumno).not.toHaveBeenCalled();
   });
 
   it("devuelve 500 si algo tira un error inesperado", async () => {
