@@ -1,9 +1,11 @@
 import { auth } from "@/lib/auth";
-import { getAlumnoByGithub } from "@/lib/sheets";
-import { getComisionActiva } from "@/lib/repositories";
+import { getAlumnoByGithub as getAlumnoDeSheets } from "@/lib/sheets";
+import {
+  getAlumnoByGithub as getAlumnoDeDB,
+  getComisionActiva,
+} from "@/lib/repositories";
 import { redirect } from "next/navigation";
 import { AlumnoForm } from "@/app/components/AlumnoForm";
-import { upsertAlumno } from "@/lib/repositories";
 import type { PdepUser } from "@/types";
 
 export default async function RegistroPage() {
@@ -14,46 +16,61 @@ export default async function RegistroPage() {
   const githubUsername = pdepUser.githubUsername;
 
   const comisionActiva = await getComisionActiva();
+  const alumnoDB = await getAlumnoDeDB(githubUsername);
 
-  const existente = await getAlumnoByGithub(
+  // Si ya confirmó los datos para esta comisión, no tiene nada que hacer acá.
+  if (
+    alumnoDB &&
+    comisionActiva &&
+    alumnoDB.registroConfirmadoEn?.id === comisionActiva.id
+  ) {
+    redirect("/dashboard");
+  }
+
+  // Prefill: gana lo que el alumno confirmó alguna vez (DB); si no, lo que
+  // pre-cargó el admin en la planilla (Sheets); y como último recurso, lo que
+  // viene del perfil de GitHub de la sesión.
+  const alumnoSheets = await getAlumnoDeSheets(
     githubUsername,
     comisionActiva?.spreadsheetId,
     comisionActiva?.columnConfig
   );
-  if (existente) {
-    await upsertAlumno({ ...existente, comision: comisionActiva ?? undefined });
-    redirect("/dashboard");
-  }
 
-  // Split del nombre de GitHub en nombre/apellido como sugerencia
-  const parts = (session.user?.name ?? "").split(" ");
-  const defaultNombre = parts.slice(0, -1).join(" ") || parts[0] || "";
-  const defaultApellido = parts.length > 1 ? parts[parts.length - 1] : "";
+  const nameParts = (session.user?.name ?? "").split(" ").filter(Boolean);
+  const defaultNombre = nameParts.slice(0, -1).join(" ") || nameParts[0] || "";
+  const defaultApellido = nameParts.length > 1 ? nameParts[nameParts.length - 1] : "";
+
+  const defaultValues = {
+    githubUsername,
+    legajo: alumnoDB?.legajo ?? alumnoSheets?.legajo ?? "",
+    apellido: alumnoDB?.apellido ?? alumnoSheets?.apellido ?? defaultApellido,
+    nombre: alumnoDB?.nombre ?? alumnoSheets?.nombre ?? defaultNombre,
+    email: alumnoDB?.email ?? alumnoSheets?.email ?? session.user?.email ?? "",
+  };
+
+  const esRecursante = Boolean(alumnoDB);
 
   return (
     <div className="max-w-md mx-auto">
       <h1 className="text-2xl font-bold mb-2">Registro</h1>
       <p className="text-gray-500 text-sm mb-6">
-        Completá tus datos para registrarte en el curso. Tu usuario de GitHub
-        ya está vinculado:{" "}
+        {esRecursante
+          ? "Confirmá tus datos para esta cursada. "
+          : "Completá tus datos para registrarte en el curso. "}
+        Tu usuario de GitHub ya está vinculado:{" "}
         <span className="font-mono font-medium text-gray-700">
           {githubUsername}
         </span>
       </p>
 
       <AlumnoForm
-        defaultValues={{
-          githubUsername,
-          email: session.user?.email ?? "",
-          nombre: defaultNombre,
-          apellido: defaultApellido,
-        }}
+        defaultValues={defaultValues}
         apiEndpoint="/api/registro"
         method="POST"
         extraBody={{ githubUsername }}
         onSuccessRedirect="/dashboard"
-        submitLabel="Registrarme"
-        successMessage="¡Registro exitoso! Redirigiendo al dashboard…"
+        submitLabel={esRecursante ? "Confirmar datos" : "Registrarme"}
+        successMessage="¡Listo! Redirigiendo al dashboard…"
       />
     </div>
   );

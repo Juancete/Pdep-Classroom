@@ -5,9 +5,9 @@ import type { PdepUser } from "@/types";
 // ── Mocks ────────────────────────────────────────────────────
 
 const mockAuth = vi.fn();
-const mockGetAlumnoByGithub = vi.fn();
+const mockGetAlumnoDeSheets = vi.fn();
+const mockGetAlumnoDeDB = vi.fn();
 const mockGetComisionActiva = vi.fn();
-const mockUpsertAlumno = vi.fn();
 const mockRedirect = vi.fn().mockImplementation((url: string) => {
   throw new Error(`REDIRECT:${url}`);
 });
@@ -17,12 +17,12 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/sheets", () => ({
-  getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
+  getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoDeSheets(...args),
 }));
 
 vi.mock("@/lib/repositories", () => ({
+  getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoDeDB(...args),
   getComisionActiva: () => mockGetComisionActiva(),
-  upsertAlumno: (...args: unknown[]) => mockUpsertAlumno(...args),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -30,12 +30,21 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/app/components/AlumnoForm", () => ({
-  AlumnoForm: ({ defaultValues }: { defaultValues: { githubUsername: string; email: string; nombre: string; apellido: string } }) => (
+  AlumnoForm: ({
+    defaultValues,
+    submitLabel,
+  }: {
+    defaultValues: { githubUsername: string; email: string; nombre: string; apellido: string; legajo?: string };
+    submitLabel: string;
+  }) => (
     <div
       data-testid="alumno-form"
       data-github={defaultValues.githubUsername}
       data-email={defaultValues.email}
       data-nombre={defaultValues.nombre}
+      data-apellido={defaultValues.apellido}
+      data-legajo={defaultValues.legajo ?? ""}
+      data-submit-label={submitLabel}
     />
   ),
 }));
@@ -67,7 +76,8 @@ describe("Registro page", () => {
       throw new Error(`REDIRECT:${url}`);
     });
     mockGetComisionActiva.mockResolvedValue(null);
-    mockUpsertAlumno.mockResolvedValue(undefined);
+    mockGetAlumnoDeDB.mockResolvedValue(null);
+    mockGetAlumnoDeSheets.mockResolvedValue(null);
   });
 
   describe("redirecciones", () => {
@@ -78,132 +88,208 @@ describe("Registro page", () => {
       expect(mockRedirect).toHaveBeenCalledWith("/login");
     });
 
-    it("redirige a /dashboard si el alumno ya está registrado", async () => {
-      mockAuth.mockResolvedValue(makeSession("juangarcia"));
-      mockGetAlumnoByGithub.mockResolvedValue({
+    it("redirige a /dashboard si el alumno ya confirmó sus datos para la comisión activa", async () => {
+      const comision = { id: "c1", spreadsheetId: "s1", columnConfig: null };
+      mockGetComisionActiva.mockResolvedValue(comision);
+      mockAuth.mockResolvedValue(makeSession("juan"));
+      mockGetAlumnoDeDB.mockResolvedValue({
         legajo: "12345",
         nombre: "Juan",
-        apellido: "Garcia",
-        githubUsername: "juangarcia",
-        email: "juan@example.com",
-        comision: "miércoles noche",
+        apellido: "G",
+        githubUsername: "juan",
+        email: "juan@mail.com",
+        registroConfirmadoEn: { id: "c1" },
       });
 
       await expect(RegistroPage()).rejects.toThrow("REDIRECT:/dashboard");
-      expect(mockRedirect).toHaveBeenCalledWith("/dashboard");
     });
 
-    it("hace upsert en la DB cuando el alumno es reconocido desde la planilla", async () => {
-      const alumno = {
+    it("NO redirige a /dashboard si el alumno confirmó en una comisión distinta (recursante)", async () => {
+      const comision = { id: "c2", spreadsheetId: "s1", columnConfig: null };
+      mockGetComisionActiva.mockResolvedValue(comision);
+      mockAuth.mockResolvedValue(makeSession("juan"));
+      mockGetAlumnoDeDB.mockResolvedValue({
         legajo: "12345",
         nombre: "Juan",
-        apellido: "Garcia",
-        githubUsername: "juangarcia",
-        email: "juan@example.com",
-      };
-      mockAuth.mockResolvedValue(makeSession("juangarcia"));
-      mockGetAlumnoByGithub.mockResolvedValue(alumno);
-
-      await expect(RegistroPage()).rejects.toThrow("REDIRECT:/dashboard");
-      // comisionActiva es null en el mock → comision: undefined en el upsert
-      expect(mockUpsertAlumno).toHaveBeenCalledWith({ ...alumno, comision: undefined });
-    });
-
-    it("hace upsert con la comisión activa cuando existe", async () => {
-      const comision = { id: "c1", spreadsheetId: "s1", columnConfig: null };
-      mockGetComisionActiva.mockResolvedValue(comision);
-      const alumno = { legajo: "12345", nombre: "Juan", apellido: "G", githubUsername: "j", email: "j@j.com" };
-      mockAuth.mockResolvedValue(makeSession("j"));
-      mockGetAlumnoByGithub.mockResolvedValue(alumno);
-
-      await expect(RegistroPage()).rejects.toThrow("REDIRECT:/dashboard");
-      expect(mockUpsertAlumno).toHaveBeenCalledWith({ ...alumno, comision });
-    });
-
-    it("no hace upsert si el alumno no está en la planilla", async () => {
-      mockAuth.mockResolvedValue(makeSession("nuevouser"));
-      mockGetAlumnoByGithub.mockResolvedValue(null);
+        apellido: "G",
+        githubUsername: "juan",
+        email: "juan@mail.com",
+        registroConfirmadoEn: { id: "c1" },
+      });
 
       await RegistroPage();
-      expect(mockUpsertAlumno).not.toHaveBeenCalled();
+      expect(mockRedirect).not.toHaveBeenCalled();
+    });
+
+    it("NO redirige a /dashboard si el alumno nunca confirmó (registroConfirmadoEn null)", async () => {
+      const comision = { id: "c1", spreadsheetId: "s1", columnConfig: null };
+      mockGetComisionActiva.mockResolvedValue(comision);
+      mockAuth.mockResolvedValue(makeSession("juan"));
+      mockGetAlumnoDeDB.mockResolvedValue({
+        legajo: "12345",
+        nombre: "Juan",
+        apellido: "G",
+        githubUsername: "juan",
+        email: "juan@mail.com",
+        registroConfirmadoEn: null,
+      });
+
+      await RegistroPage();
+      expect(mockRedirect).not.toHaveBeenCalled();
+    });
+
+    it("NO redirige si no hay comisión activa aunque el alumno exista en DB", async () => {
+      mockGetComisionActiva.mockResolvedValue(null);
+      mockAuth.mockResolvedValue(makeSession("juan"));
+      mockGetAlumnoDeDB.mockResolvedValue({
+        legajo: "12345",
+        nombre: "Juan",
+        apellido: "G",
+        githubUsername: "juan",
+        email: "juan@mail.com",
+        registroConfirmadoEn: null,
+      });
+
+      await RegistroPage();
+      expect(mockRedirect).not.toHaveBeenCalled();
     });
   });
 
-  describe("render cuando el alumno no está registrado", () => {
-    beforeEach(() => {
+  describe("prefill del formulario", () => {
+    it("usa los datos de DB cuando el alumno existe (recursante — gana DB)", async () => {
+      const comision = { id: "c2", spreadsheetId: "s1", columnConfig: null };
+      mockGetComisionActiva.mockResolvedValue(comision);
+      mockAuth.mockResolvedValue(makeSession("juan"));
+      mockGetAlumnoDeDB.mockResolvedValue({
+        legajo: "99999",
+        nombre: "Juan Carlos",
+        apellido: "García",
+        githubUsername: "juan",
+        email: "personal@gmail.com",
+        registroConfirmadoEn: { id: "c1" },
+      });
+      // Sheets tiene otro email y otro legajo (el admin rearmó la planilla) — debe ganar DB
+      mockGetAlumnoDeSheets.mockResolvedValue({
+        legajo: "11111",
+        nombre: "Juan",
+        apellido: "G",
+        githubUsername: "juan",
+        email: "institucional@utn.edu.ar",
+      });
+
+      const element = await RegistroPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain('data-legajo="99999"');
+      expect(html).toContain('data-email="personal@gmail.com"');
+      expect(html).toContain('data-nombre="Juan Carlos"');
+      expect(html).toContain('data-apellido="García"');
+    });
+
+    it("usa los datos de Sheets cuando no hay DB (nuevo alumno pre-cargado por admin)", async () => {
+      const comision = { id: "c1", spreadsheetId: "s1", columnConfig: null };
+      mockGetComisionActiva.mockResolvedValue(comision);
+      mockAuth.mockResolvedValue(makeSession("nuevo"));
+      mockGetAlumnoDeDB.mockResolvedValue(null);
+      mockGetAlumnoDeSheets.mockResolvedValue({
+        legajo: "54321",
+        nombre: "María",
+        apellido: "Pérez",
+        githubUsername: "nuevo",
+        email: "maria@utn.edu.ar",
+      });
+
+      const element = await RegistroPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain('data-legajo="54321"');
+      expect(html).toContain('data-email="maria@utn.edu.ar"');
+      expect(html).toContain('data-nombre="María"');
+      expect(html).toContain('data-apellido="Pérez"');
+    });
+
+    it("cae a la sesión cuando no hay DB ni Sheets (nuevo sin pre-carga)", async () => {
+      mockGetComisionActiva.mockResolvedValue(null);
       mockAuth.mockResolvedValue(makeSession("nuevouser"));
-      mockGetAlumnoByGithub.mockResolvedValue(null);
-    });
+      mockGetAlumnoDeDB.mockResolvedValue(null);
+      mockGetAlumnoDeSheets.mockResolvedValue(null);
 
-    it("muestra el título de registro", async () => {
-      const element = await RegistroPage();
-      const html = renderToStaticMarkup(element);
-      expect(html).toContain("Registro");
-    });
-
-    it("muestra el nombre de usuario de GitHub vinculado", async () => {
-      const element = await RegistroPage();
-      const html = renderToStaticMarkup(element);
-      expect(html).toContain("nuevouser");
-    });
-
-    it("renderiza el AlumnoForm", async () => {
-      const element = await RegistroPage();
-      const html = renderToStaticMarkup(element);
-      expect(html).toContain('data-testid="alumno-form"');
-    });
-
-    it("pasa el githubUsername correcto al AlumnoForm", async () => {
       const element = await RegistroPage();
       const html = renderToStaticMarkup(element);
       expect(html).toContain('data-github="nuevouser"');
-    });
-
-    it("pasa el email de la sesión al AlumnoForm", async () => {
-      const session = makeSession("nuevouser");
-      mockAuth.mockResolvedValue(session);
-
-      const element = await RegistroPage();
-      const html = renderToStaticMarkup(element);
       expect(html).toContain('data-email="test@example.com"');
+      expect(html).toContain('data-nombre="Test"');
+      expect(html).toContain('data-apellido="User"');
+      expect(html).toContain('data-legajo=""');
     });
 
-    it("pasa el nombre spliteado de la sesión al AlumnoForm", async () => {
+    it("no crashea si el nombre de sesión está vacío", async () => {
       const session = makeSession("nuevouser");
+      session.user.name = "";
       mockAuth.mockResolvedValue(session);
+      mockGetAlumnoDeDB.mockResolvedValue(null);
+      mockGetAlumnoDeSheets.mockResolvedValue(null);
 
       const element = await RegistroPage();
       const html = renderToStaticMarkup(element);
-      // "Test User" → nombre: "Test", apellido: "User"
-      expect(html).toContain('data-nombre="Test"');
+      expect(html).toContain('data-nombre=""');
+      expect(html).toContain('data-apellido=""');
+    });
+  });
+
+  describe("copy y submit label", () => {
+    it("muestra 'Registrarme' para alumno nuevo", async () => {
+      mockAuth.mockResolvedValue(makeSession("nuevo"));
+      mockGetAlumnoDeDB.mockResolvedValue(null);
+
+      const element = await RegistroPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain('data-submit-label="Registrarme"');
+      expect(html).toContain("Completá tus datos");
     });
 
-    it("consulta por el username correcto en sheets", async () => {
-      await RegistroPage();
-      expect(mockGetAlumnoByGithub).toHaveBeenCalledWith("nuevouser", undefined, undefined);
-    });
+    it("muestra 'Confirmar datos' para recursante (ya está en DB pero no confirmó esta comisión)", async () => {
+      const comision = { id: "c2", spreadsheetId: "s1", columnConfig: null };
+      mockGetComisionActiva.mockResolvedValue(comision);
+      mockAuth.mockResolvedValue(makeSession("juan"));
+      mockGetAlumnoDeDB.mockResolvedValue({
+        legajo: "12345",
+        nombre: "Juan",
+        apellido: "G",
+        githubUsername: "juan",
+        email: "juan@mail.com",
+        registroConfirmadoEn: { id: "c1" },
+      });
 
-    it("usa el spreadsheetId y columnConfig de la comisión activa", async () => {
+      const element = await RegistroPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain('data-submit-label="Confirmar datos"');
+      expect(html).toContain("Confirmá tus datos");
+    });
+  });
+
+  describe("consulta a Sheets", () => {
+    it("consulta Sheets con el spreadsheetId y columnConfig de la comisión activa", async () => {
       const comision = {
+        id: "c1",
         spreadsheetId: "sheet-xyz",
-        columnConfig: { sheetName: "Alumnos", headerRows: 1, legajo: 0, apellido: 1, nombre: 2, githubUsername: 3, email: 4, comision: 5 },
+        columnConfig: { sheetName: "Alumnos", headerRows: 1, legajo: 0, apellido: 1, nombre: 2, githubUsername: 3, email: 4 },
       };
       mockGetComisionActiva.mockResolvedValue(comision);
       mockAuth.mockResolvedValue(makeSession("nuevouser"));
-      mockGetAlumnoByGithub.mockResolvedValue(null);
 
       await RegistroPage();
 
-      expect(mockGetAlumnoByGithub).toHaveBeenCalledWith(
+      expect(mockGetAlumnoDeSheets).toHaveBeenCalledWith(
         "nuevouser",
         "sheet-xyz",
         comision.columnConfig
       );
     });
 
-    it("no redirige a /login ni /dashboard", async () => {
+    it("consulta la DB con el username de la sesión", async () => {
+      mockAuth.mockResolvedValue(makeSession("miuser"));
+
       await RegistroPage();
-      expect(mockRedirect).not.toHaveBeenCalled();
+      expect(mockGetAlumnoDeDB).toHaveBeenCalledWith("miuser");
     });
   });
 });

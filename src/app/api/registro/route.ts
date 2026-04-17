@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
-import { registrarAlumno, type RegistroInput } from "@/lib/sheets";
+import { upsertarAlumnoEnSheets, type RegistroInput } from "@/lib/sheets";
 import { getComisionActiva, upsertAlumno } from "@/lib/repositories";
 
 export async function POST(req: Request) {
@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     body.githubUsername = user.githubUsername;
 
     const comisionActiva = await getComisionActiva();
-    const result = await registrarAlumno(
+    const result = await upsertarAlumnoEnSheets(
       body,
       comisionActiva?.spreadsheetId,
       comisionActiva?.columnConfig
@@ -29,6 +29,7 @@ export async function POST(req: Request) {
       githubUsername: body.githubUsername,
       email: body.email,
       comision: comisionActiva ?? undefined,
+      registroConfirmadoEn: comisionActiva ?? undefined,
     });
 
     return NextResponse.json({ ok: true });

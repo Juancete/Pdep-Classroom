@@ -7,7 +7,6 @@ import type { Alumno } from "@/domain/entities";
 
 const mockAuth = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
-const mockGetComisionActiva = vi.fn();
 const mockRedirect = vi.fn().mockImplementation((url: string) => {
   throw new Error(`REDIRECT:${url}`);
 });
@@ -16,12 +15,8 @@ vi.mock("@/lib/auth", () => ({
   auth: () => mockAuth(),
 }));
 
-vi.mock("@/lib/sheets", () => ({
-  getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
-}));
-
 vi.mock("@/lib/repositories", () => ({
-  getComisionActiva: () => mockGetComisionActiva(),
+  getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -29,11 +24,12 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/app/components/AlumnoForm", () => ({
-  AlumnoForm: ({ defaultValues }: { defaultValues: { githubUsername: string; legajo: string } }) => (
+  AlumnoForm: ({ defaultValues }: { defaultValues: { githubUsername: string; legajo?: string; email?: string } }) => (
     <div
       data-testid="alumno-form"
       data-github={defaultValues.githubUsername}
-      data-legajo={defaultValues.legajo}
+      data-legajo={defaultValues.legajo ?? ""}
+      data-email={defaultValues.email ?? ""}
     />
   ),
 }));
@@ -76,7 +72,6 @@ describe("Perfil page", () => {
     mockRedirect.mockImplementation((url: string) => {
       throw new Error(`REDIRECT:${url}`);
     });
-    mockGetComisionActiva.mockResolvedValue(null);
   });
 
   describe("redirecciones", () => {
@@ -87,7 +82,7 @@ describe("Perfil page", () => {
       expect(mockRedirect).toHaveBeenCalledWith("/login");
     });
 
-    it("redirige a /registro si el alumno no está en la planilla", async () => {
+    it("redirige a /registro si el alumno no está en la DB", async () => {
       mockAuth.mockResolvedValue(makeSession("nuevo"));
       mockGetAlumnoByGithub.mockResolvedValue(null);
 
@@ -119,31 +114,12 @@ describe("Perfil page", () => {
       const html = renderToStaticMarkup(element);
       expect(html).toContain('data-github="juangarcia"');
       expect(html).toContain('data-legajo="12345"');
+      expect(html).toContain('data-email="juan@example.com"');
     });
 
-    it("consulta getAlumnoByGithub con el username de la sesión", async () => {
+    it("consulta getAlumnoByGithub de la DB con el username de la sesión", async () => {
       await PerfilPage();
-      expect(mockGetAlumnoByGithub).toHaveBeenCalledWith(
-        "juangarcia",
-        undefined,
-        undefined
-      );
-    });
-
-    it("usa el spreadsheetId y columnConfig de la comisión activa", async () => {
-      const comision = {
-        spreadsheetId: "sheet-abc",
-        columnConfig: { sheetName: "Listado", headerRows: 1, legajo: 0, apellido: 1, nombre: 2, githubUsername: 3, email: 4, comision: 5 },
-      };
-      mockGetComisionActiva.mockResolvedValue(comision);
-
-      await PerfilPage();
-
-      expect(mockGetAlumnoByGithub).toHaveBeenCalledWith(
-        "juangarcia",
-        "sheet-abc",
-        comision.columnConfig
-      );
+      expect(mockGetAlumnoByGithub).toHaveBeenCalledWith("juangarcia");
     });
   });
 });
