@@ -61,6 +61,21 @@ describe("AlumnoForm", () => {
       renderForm({ submitLabel: "Registrarme" });
       expect(screen.getByRole("button", { name: "Registrarme" })).toBeInTheDocument();
     });
+
+    it("muestra la explicación sobre el email leído asiduamente", () => {
+      renderForm();
+      expect(
+        screen.getByText(/email que leas asiduamente/i)
+      ).toBeInTheDocument();
+    });
+
+    it("el input de email tiene pattern RFC-lite para validar en el cliente", () => {
+      renderForm();
+      const emailInput = screen.getByDisplayValue("juan@example.com");
+      expect(emailInput).toHaveAttribute("pattern", "[^\\s@]+@[^\\s@]+\\.[^\\s@]+");
+      expect(emailInput).toHaveAttribute("type", "email");
+      expect(emailInput).toBeRequired();
+    });
   });
 
   describe("submit exitoso", () => {

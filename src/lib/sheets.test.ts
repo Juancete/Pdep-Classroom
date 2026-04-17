@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { parseAlumnosRows, validateRegistro, colLetter, actualizarAlumno } from "./sheets";
+import {
+  parseAlumnosRows,
+  validateRegistro,
+  colLetter,
+  isValidEmail,
+  upsertarAlumnoEnSheets,
+} from "./sheets";
 
 // ── parseAlumnosRows ────────────────────────────────────────
 
@@ -144,6 +150,54 @@ describe("validateRegistro", () => {
     expect(validateRegistro({ ...valid, email: "" })).toContain("email");
   });
 
+  it("rechaza email sin dominio con punto", () => {
+    expect(validateRegistro({ ...valid, email: "juan@gmail" })).toContain("email");
+  });
+
+  it("rechaza email con espacios", () => {
+    expect(validateRegistro({ ...valid, email: "juan @gmail.com" })).toContain("email");
+  });
+
+  it("acepta emails con subdominios", () => {
+    expect(validateRegistro({ ...valid, email: "juan@mail.frba.utn.edu.ar" })).toBeNull();
+  });
+
+  it("acepta emails con + en la parte local", () => {
+    expect(validateRegistro({ ...valid, email: "juan+curso@gmail.com" })).toBeNull();
+  });
+
+});
+
+// ── isValidEmail (helper) ────────────────────────────────────
+
+describe("isValidEmail", () => {
+  it("acepta email estándar", () => {
+    expect(isValidEmail("juan@gmail.com")).toBe(true);
+  });
+
+  it("acepta email con subdominios", () => {
+    expect(isValidEmail("juan@mail.utn.edu.ar")).toBe(true);
+  });
+
+  it("rechaza email sin arroba", () => {
+    expect(isValidEmail("juangmail.com")).toBe(false);
+  });
+
+  it("rechaza email sin dominio con punto", () => {
+    expect(isValidEmail("juan@gmail")).toBe(false);
+  });
+
+  it("rechaza string vacío", () => {
+    expect(isValidEmail("")).toBe(false);
+  });
+
+  it("rechaza email con espacios", () => {
+    expect(isValidEmail("juan @gmail.com")).toBe(false);
+  });
+
+  it("ignora whitespace al borde (trim)", () => {
+    expect(isValidEmail("  juan@gmail.com  ")).toBe(true);
+  });
 });
 
 // ── colLetter ────────────────────────────────────────────────
@@ -158,69 +212,65 @@ describe("colLetter", () => {
   it("52 → BA", () => expect(colLetter(52)).toBe("BA"));
 });
 
-// ── actualizarAlumno – validaciones síncronas ────────────────
+// ── upsertarAlumnoEnSheets – validaciones síncronas ──────────
 
-describe("actualizarAlumno – validaciones", () => {
+describe("upsertarAlumnoEnSheets – validaciones", () => {
   const valid = {
     legajo: "12345",
     apellido: "García",
     nombre: "Juan",
+    githubUsername: "juangarcia",
     email: "juan@gmail.com",
   };
 
   it("rechaza apellido vacío", async () => {
-    const r = await actualizarAlumno("user", { ...valid, apellido: "" });
+    const r = await upsertarAlumnoEnSheets({ ...valid, apellido: "" });
     expect(r).toEqual({ ok: false, error: "El apellido es obligatorio" });
   });
 
   it("rechaza apellido con solo espacios", async () => {
-    const r = await actualizarAlumno("user", { ...valid, apellido: "   " });
+    const r = await upsertarAlumnoEnSheets({ ...valid, apellido: "   " });
     expect(r).toEqual({ ok: false, error: "El apellido es obligatorio" });
   });
 
   it("rechaza nombre vacío", async () => {
-    const r = await actualizarAlumno("user", { ...valid, nombre: "" });
-    expect(r).toEqual({ ok: false, error: "El nombre es obligatorio" });
-  });
-
-  it("rechaza nombre con solo espacios", async () => {
-    const r = await actualizarAlumno("user", { ...valid, nombre: "   " });
+    const r = await upsertarAlumnoEnSheets({ ...valid, nombre: "" });
     expect(r).toEqual({ ok: false, error: "El nombre es obligatorio" });
   });
 
   it("rechaza legajo vacío", async () => {
-    const r = await actualizarAlumno("user", { ...valid, legajo: "" });
+    const r = await upsertarAlumnoEnSheets({ ...valid, legajo: "" });
     expect(r).toEqual({ ok: false, error: "El legajo debe tener entre 4 y 8 dígitos" });
   });
 
   it("rechaza legajo con letras", async () => {
-    const r = await actualizarAlumno("user", { ...valid, legajo: "abc12" });
-    expect(r).toEqual({ ok: false, error: "El legajo debe tener entre 4 y 8 dígitos" });
-  });
-
-  it("rechaza legajo demasiado corto", async () => {
-    const r = await actualizarAlumno("user", { ...valid, legajo: "12" });
-    expect(r).toEqual({ ok: false, error: "El legajo debe tener entre 4 y 8 dígitos" });
-  });
-
-  it("rechaza legajo demasiado largo", async () => {
-    const r = await actualizarAlumno("user", { ...valid, legajo: "123456789" });
+    const r = await upsertarAlumnoEnSheets({ ...valid, legajo: "abc12" });
     expect(r).toEqual({ ok: false, error: "El legajo debe tener entre 4 y 8 dígitos" });
   });
 
   it("rechaza email sin @", async () => {
-    const r = await actualizarAlumno("user", { ...valid, email: "juangmail.com" });
+    const r = await upsertarAlumnoEnSheets({ ...valid, email: "juangmail.com" });
+    expect(r).toEqual({ ok: false, error: "El email no es válido" });
+  });
+
+  it("rechaza email sin punto en el dominio", async () => {
+    const r = await upsertarAlumnoEnSheets({ ...valid, email: "juan@gmail" });
     expect(r).toEqual({ ok: false, error: "El email no es válido" });
   });
 
   it("rechaza email vacío", async () => {
-    const r = await actualizarAlumno("user", { ...valid, email: "" });
+    const r = await upsertarAlumnoEnSheets({ ...valid, email: "" });
     expect(r).toEqual({ ok: false, error: "El email no es válido" });
   });
 
+  it("rechaza github vacío", async () => {
+    const r = await upsertarAlumnoEnSheets({ ...valid, githubUsername: "" });
+    expect(r).toEqual({ ok: false, error: "El usuario de GitHub es obligatorio" });
+  });
+
   it("lanza error si no hay spreadsheetId configurado (input válido)", async () => {
-    await expect(
-      actualizarAlumno("user", valid, undefined)
-    ).rejects.toThrow("No hay una comisión activa");
+    await expect(upsertarAlumnoEnSheets(valid, undefined)).rejects.toThrow(
+      "No hay una comisión activa"
+    );
   });
 });

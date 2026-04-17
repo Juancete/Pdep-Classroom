@@ -30,6 +30,7 @@ export interface AlumnoData {
   githubUsername: string;
   email: string;
   comision?: Comision;
+  registroConfirmadoEn?: Comision;
 }
 
 export async function createAlumno(data: AlumnoData): Promise<Alumno> {
@@ -41,6 +42,7 @@ export async function createAlumno(data: AlumnoData): Promise<Alumno> {
   alumno.githubUsername = data.githubUsername.toLowerCase().trim();
   alumno.email = data.email.toLowerCase().trim();
   alumno.comision = data.comision;
+  alumno.registroConfirmadoEn = data.registroConfirmadoEn;
   em.persist(alumno);
   await em.flush();
   return alumno;
@@ -59,6 +61,9 @@ export async function upsertAlumno(data: AlumnoData): Promise<Alumno> {
     existing.apellido = data.apellido.trim();
     existing.email = data.email.toLowerCase().trim();
     existing.comision = data.comision;
+    if (data.registroConfirmadoEn !== undefined) {
+      existing.registroConfirmadoEn = data.registroConfirmadoEn;
+    }
     await em.flush();
     return existing;
   }

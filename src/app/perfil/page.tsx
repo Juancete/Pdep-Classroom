@@ -1,6 +1,5 @@
 import { auth } from "@/lib/auth";
-import { getAlumnoByGithub } from "@/lib/sheets";
-import { getComisionActiva } from "@/lib/repositories";
+import { getAlumnoByGithub } from "@/lib/repositories";
 import { redirect } from "next/navigation";
 import { AlumnoForm } from "@/app/components/AlumnoForm";
 import type { PdepUser } from "@/types";
@@ -12,13 +11,7 @@ export default async function PerfilPage() {
   const pdepUser = (session as unknown as { pdepUser: PdepUser }).pdepUser;
   const githubUsername = pdepUser.githubUsername;
 
-  const comisionActiva = await getComisionActiva();
-  const alumno = await getAlumnoByGithub(
-    githubUsername,
-    comisionActiva?.spreadsheetId,
-    comisionActiva?.columnConfig
-  );
-
+  const alumno = await getAlumnoByGithub(githubUsername);
   if (!alumno) redirect("/registro");
 
   return (
