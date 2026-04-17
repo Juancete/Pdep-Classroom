@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
-import { registrarAlumno, type RegistroInput } from "@/lib/sheets";
+import { upsertarAlumnoEnSheets, type RegistroInput } from "@/lib/sheets";
 import { getComisionActiva, upsertAlumno } from "@/lib/repositories";
 
 export async function POST(req: Request) {
@@ -12,10 +12,17 @@ export async function POST(req: Request) {
     body.githubUsername = user.githubUsername;
 
     const comisionActiva = await getComisionActiva();
-    const result = await registrarAlumno(
+    if (!comisionActiva) {
+      return NextResponse.json(
+        { error: "No hay una comisión activa con planilla configurada. Pedile a un admin que configure una en /admin/comisiones." },
+        { status: 409 }
+      );
+    }
+
+    const result = await upsertarAlumnoEnSheets(
       body,
-      comisionActiva?.spreadsheetId,
-      comisionActiva?.columnConfig
+      comisionActiva.spreadsheetId,
+      comisionActiva.columnConfig
     );
 
     if (!result.ok) {
@@ -28,7 +35,8 @@ export async function POST(req: Request) {
       apellido: body.apellido,
       githubUsername: body.githubUsername,
       email: body.email,
-      comision: comisionActiva ?? undefined,
+      comision: comisionActiva,
+      registroConfirmadoEn: comisionActiva,
     });
 
     return NextResponse.json({ ok: true });

@@ -148,6 +148,14 @@ export interface RegistroInput {
   email: string;
 }
 
+// Regex de email RFC-lite: una arroba, algún dominio, un punto después.
+// Suficiente para detectar typos comunes sin sobre-complicar.
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function isValidEmail(email: string): boolean {
+  return EMAIL_REGEX.test(email.trim());
+}
+
 export function validateRegistro(input: RegistroInput): string | null {
   const { legajo, apellido, nombre, githubUsername, email } = input;
 
@@ -158,11 +166,16 @@ export function validateRegistro(input: RegistroInput): string | null {
   if (!githubUsername.trim()) return "El usuario de GitHub es obligatorio";
   if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(githubUsername.trim()))
     return "El usuario de GitHub no tiene un formato válido";
-  if (!email.trim() || !email.includes("@")) return "El email no es válido";
+  if (!isValidEmail(email)) return "El email no es válido";
   return null;
 }
 
-export async function registrarAlumno(
+// ── Upsert de alumno en la planilla ─────────────────────────
+// Unifica registro (insert) y actualización (update): busca la fila por
+// githubUsername; si existe, la actualiza respetando columnas desconocidas,
+// y si no, la agrega al final.
+
+export async function upsertarAlumnoEnSheets(
   input: RegistroInput,
   spreadsheetId?: string,
   config?: Partial<ColumnConfig>
@@ -172,102 +185,56 @@ export async function registrarAlumno(
 
   const id = resolveSpreadsheetId(spreadsheetId);
   const cfg = resolveConfig(config);
+  const githubNormalizado = input.githubUsername.trim().toLowerCase();
 
-  // Verificar duplicados
+  // El legajo puede pertenecer al mismo alumno (al actualizar) o a otro (colisión).
   const porLegajo = await getAlumnoByLegajo(input.legajo, id, cfg);
-  if (porLegajo) {
+  if (porLegajo && porLegajo.githubUsername.toLowerCase() !== githubNormalizado) {
     return {
       ok: false,
       error: `El legajo ${input.legajo} ya está registrado (${porLegajo.githubUsername})`,
     };
   }
 
-  const porGithub = await getAlumnoByGithub(input.githubUsername, id, cfg);
-  if (porGithub) {
-    return {
-      ok: false,
-      error: `El usuario ${input.githubUsername} ya está registrado (legajo ${porGithub.legajo})`,
-    };
-  }
-
-  // Construir la fila según la config de columnas
+  const rowNumber = await findAlumnoRowIndex(githubNormalizado, id, cfg);
+  const sheets = getSheetsClient(false);
   const maxCol = Math.max(
     cfg.legajo, cfg.apellido, cfg.nombre,
     cfg.githubUsername, cfg.email
   );
-  const row = new Array(maxCol + 1).fill("");
-  row[cfg.legajo] = input.legajo.trim();
-  row[cfg.apellido] = input.apellido.trim();
-  row[cfg.nombre] = input.nombre.trim();
-  row[cfg.githubUsername] = input.githubUsername.trim().toLowerCase();
-  row[cfg.email] = input.email.trim().toLowerCase();
 
-  const sheets = getSheetsClient(false);
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: id,
-    range: `${cfg.sheetName}!A:${colLetter(maxCol)}`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: { values: [row] },
-  });
-
-  return { ok: true };
-}
-
-// ── Actualizar datos de un alumno ya registrado ─────────────
-
-export type ActualizarInput = Omit<RegistroInput, "githubUsername">;
-
-export async function actualizarAlumno(
-  githubUsername: string,
-  updates: ActualizarInput,
-  spreadsheetId?: string,
-  config?: Partial<ColumnConfig>
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!updates.apellido.trim()) return { ok: false, error: "El apellido es obligatorio" };
-  if (!updates.nombre.trim()) return { ok: false, error: "El nombre es obligatorio" };
-  if (!updates.legajo || !/^\d{4,8}$/.test(updates.legajo.trim()))
-    return { ok: false, error: "El legajo debe tener entre 4 y 8 dígitos" };
-  if (!updates.email.trim() || !updates.email.includes("@"))
-    return { ok: false, error: "El email no es válido" };
-
-  const id = resolveSpreadsheetId(spreadsheetId);
-  const cfg = resolveConfig(config);
-
-  const rowNumber = await findAlumnoRowIndex(githubUsername, id, cfg);
   if (rowNumber === null) {
-    return { ok: false, error: "No se encontró al alumno en la planilla" };
+    const row = new Array(maxCol + 1).fill("");
+    row[cfg.legajo] = input.legajo.trim();
+    row[cfg.apellido] = input.apellido.trim();
+    row[cfg.nombre] = input.nombre.trim();
+    row[cfg.githubUsername] = githubNormalizado;
+    row[cfg.email] = input.email.trim().toLowerCase();
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: id,
+      range: `${cfg.sheetName}!A:${colLetter(maxCol)}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [row] },
+    });
+    return { ok: true };
   }
 
-  // Verificar que el legajo no esté tomado por otro alumno
-  const porLegajo = await getAlumnoByLegajo(updates.legajo, id, cfg);
-  if (porLegajo && porLegajo.githubUsername.toLowerCase() !== githubUsername.toLowerCase()) {
-    return {
-      ok: false,
-      error: `El legajo ${updates.legajo} ya está registrado (${porLegajo.githubUsername})`,
-    };
-  }
-
-  // Leer la fila completa primero para no pisar columnas desconocidas
-  const sheets = getSheetsClient(false);
-  const maxCol = Math.max(
-    cfg.legajo, cfg.apellido, cfg.nombre,
-    cfg.githubUsername, cfg.email
-  );
+  // Leemos la fila completa para no pisar columnas desconocidas que el admin
+  // pueda tener (notas, observaciones, etc).
   const range = `${cfg.sheetName}!A${rowNumber}:${colLetter(maxCol)}${rowNumber}`;
-
   const { data: existing } = await sheets.spreadsheets.values.get({
     spreadsheetId: id,
     range,
   });
   const existingRow: unknown[] = existing.values?.[0] ?? [];
-  // Expandir si hace falta
   while (existingRow.length <= maxCol) existingRow.push("");
 
-  existingRow[cfg.legajo] = updates.legajo.trim();
-  existingRow[cfg.apellido] = updates.apellido.trim();
-  existingRow[cfg.nombre] = updates.nombre.trim();
-  existingRow[cfg.email] = updates.email.trim().toLowerCase();
-  // githubUsername y comision no se tocan
+  existingRow[cfg.legajo] = input.legajo.trim();
+  existingRow[cfg.apellido] = input.apellido.trim();
+  existingRow[cfg.nombre] = input.nombre.trim();
+  existingRow[cfg.email] = input.email.trim().toLowerCase();
+  // githubUsername NO se sobrescribe: la fila se identifica por él.
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: id,
@@ -275,7 +242,6 @@ export async function actualizarAlumno(
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [existingRow] },
   });
-
   return { ok: true };
 }
 
