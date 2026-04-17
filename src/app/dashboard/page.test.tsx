@@ -7,6 +7,7 @@ import { IndividualAssignment, Entrega } from "@/domain/entities";
 
 const mockRequireUser = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
+const mockGetComisionActiva = vi.fn();
 const mockGetAssignments = vi.fn();
 const mockGetEntregaDeUsuario = vi.fn();
 const mockRedirect = vi.fn().mockImplementation((url: string) => {
@@ -17,17 +18,11 @@ vi.mock("@/lib/session", () => ({
   requireUser: () => mockRequireUser(),
 }));
 
-vi.mock("next/cache", () => ({
-  unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
-}));
-
-vi.mock("@/lib/sheets", () => ({
-  getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
-}));
-
 vi.mock("@/lib/repositories", () => ({
   getAssignments: () => mockGetAssignments(),
   getEntregasDeUsuario: (username: string) => mockGetEntregaDeUsuario(username),
+  getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
+  getComisionActiva: () => mockGetComisionActiva(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -89,10 +84,12 @@ describe("Dashboard page", () => {
     });
     mockGetAssignments.mockResolvedValue([]);
     mockGetEntregaDeUsuario.mockResolvedValue(new Map());
+    mockGetComisionActiva.mockResolvedValue({ id: "c1" });
+    mockGetAlumnoByGithub.mockResolvedValue(null);
   });
 
   describe("redirecciones", () => {
-    it("redirige a /registro si el alumno no está registrado y no es admin", async () => {
+    it("redirige a /registro si el alumno no existe en la DB y no es admin", async () => {
       mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
       mockGetAlumnoByGithub.mockResolvedValue(null);
 
@@ -100,7 +97,22 @@ describe("Dashboard page", () => {
       expect(mockRedirect).toHaveBeenCalledWith("/registro");
     });
 
-    it("no redirige a /registro si el alumno está registrado", async () => {
+    it("redirige a /registro si el alumno confirmó en otra comisión (recursante)", async () => {
+      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
+      mockGetComisionActiva.mockResolvedValue({ id: "c2" });
+      mockGetAlumnoByGithub.mockResolvedValue({
+        legajo: "12345",
+        nombre: "Test",
+        apellido: "User",
+        githubUsername: "testuser",
+        email: "test@example.com",
+        registroConfirmadoEn: { id: "c1" },
+      });
+
+      await expect(DashboardPage()).rejects.toThrow("REDIRECT:/registro");
+    });
+
+    it("redirige a /registro si el alumno nunca confirmó (registroConfirmadoEn null)", async () => {
       mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
       mockGetAlumnoByGithub.mockResolvedValue({
         legajo: "12345",
@@ -108,8 +120,32 @@ describe("Dashboard page", () => {
         apellido: "User",
         githubUsername: "testuser",
         email: "test@example.com",
-        comision: "miércoles noche",
+        registroConfirmadoEn: null,
       });
+
+      await expect(DashboardPage()).rejects.toThrow("REDIRECT:/registro");
+    });
+
+    it("no redirige si el alumno confirmó para la comisión activa", async () => {
+      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
+      mockGetAlumnoByGithub.mockResolvedValue({
+        legajo: "12345",
+        nombre: "Test",
+        apellido: "User",
+        githubUsername: "testuser",
+        email: "test@example.com",
+        registroConfirmadoEn: { id: "c1" },
+      });
+
+      const element = await DashboardPage();
+      expect(element).toBeDefined();
+      expect(mockRedirect).not.toHaveBeenCalled();
+    });
+
+    it("no redirige si no hay comisión activa (deja pasar aunque no haya confirmado)", async () => {
+      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
+      mockGetComisionActiva.mockResolvedValue(null);
+      mockGetAlumnoByGithub.mockResolvedValue(null);
 
       const element = await DashboardPage();
       expect(element).toBeDefined();
@@ -262,7 +298,7 @@ describe("Dashboard page", () => {
 
     it("consulta las entregas usando el username del usuario actual", async () => {
       mockRequireUser.mockResolvedValue(
-        makeUser({ githubUsername: "miusuario" })
+        makeUser({ githubUsername: "miusuario", isAdmin: true })
       );
       mockGetAssignments.mockResolvedValue([makeAssignment({ id: "tp-1" })]);
       mockGetEntregaDeUsuario.mockResolvedValue(new Map());

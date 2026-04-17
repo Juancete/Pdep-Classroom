@@ -128,9 +128,15 @@ export function AlumnoForm({
           name="email"
           type="email"
           required
+          pattern="[^\s@]+@[^\s@]+\.[^\s@]+"
+          title="Ingresá un email con formato válido (usuario@dominio.com)"
           defaultValue={defaultValues.email}
           className={INPUT_CLASS}
         />
+        <p className="text-xs text-gray-500 mt-1">
+          Ingresá un email que leas asiduamente — por este canal mandamos
+          avisos importantes del curso.
+        </p>
       </div>
 
       {error && (

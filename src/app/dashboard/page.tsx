@@ -1,24 +1,30 @@
 import { requireUser } from "@/lib/session";
-import { getAssignments, getEntregasDeUsuario } from "@/lib/repositories";
-import { getAlumnoByGithub } from "@/lib/sheets";
+import {
+  getAssignments,
+  getEntregasDeUsuario,
+  getAlumnoByGithub,
+  getComisionActiva,
+} from "@/lib/repositories";
 import { AcceptButton } from "./accept-button";
 import { redirect } from "next/navigation";
-import { unstable_cache } from "next/cache";
-
-// Cachea la verificación de alumno por 5 minutos — evita un round-trip a Sheets en cada render
-const getAlumnoCached = unstable_cache(
-  async (username: string) => getAlumnoByGithub(username),
-  ["alumno-by-github"],
-  { revalidate: 300 }
-);
 
 export default async function DashboardPage() {
   const user = await requireUser();
 
-  // Si no es admin y no está registrado, mandar a registro
+  // Los admins no pasan por el gate de registro; pueden entrar sin estar como alumnos.
   if (!user.isAdmin) {
-    const alumno = await getAlumnoCached(user.githubUsername);
-    if (!alumno) redirect("/registro");
+    const [alumno, comisionActiva] = await Promise.all([
+      getAlumnoByGithub(user.githubUsername),
+      getComisionActiva(),
+    ]);
+    // Sin comisión activa no podemos pedirle nada — se deja pasar.
+    // Con comisión activa, bloquear hasta que el alumno la haya confirmado.
+    if (
+      comisionActiva &&
+      alumno?.registroConfirmadoEn?.id !== comisionActiva.id
+    ) {
+      redirect("/registro");
+    }
   }
 
   // Dos queries paralelas: assignments + todas las entregas del usuario
