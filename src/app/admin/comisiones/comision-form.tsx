@@ -125,7 +125,7 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel }: Props)
         </p>
 
         {/* Nombre de la hoja y filas de encabezado */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
               Nombre de la hoja
@@ -155,7 +155,7 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel }: Props)
         </div>
 
         {/* Selectores de columna */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <ColSelect name="col_legajo" label="Legajo" defaultValue={cfg.legajo} error={errors.col_legajo?.[0]} />
           <ColSelect name="col_apellido" label="Apellido" defaultValue={cfg.apellido} error={errors.col_apellido?.[0]} />
           <ColSelect name="col_nombre" label="Nombre" defaultValue={cfg.nombre} error={errors.col_nombre?.[0]} />
@@ -165,11 +165,11 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel }: Props)
       </fieldset>
 
       {/* Submit */}
-      <div className="flex gap-3 pt-2">
+      <div className="flex flex-col sm:flex-row gap-3 pt-2">
         <SubmitButton label={submitLabel} />
         <a
           href="/admin/comisiones"
-          className="px-5 py-2 rounded-lg text-sm font-medium text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors"
+          className="px-5 py-2 rounded-lg text-sm font-medium text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors text-center"
         >
           Cancelar
         </a>

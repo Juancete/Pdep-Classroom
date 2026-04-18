@@ -90,6 +90,7 @@ export function AlumnoForm({
           name="legajo"
           required
           pattern="\d{4,8}"
+          inputMode="numeric"
           placeholder="12345678"
           defaultValue={defaultValues.legajo}
           className={INPUT_CLASS}

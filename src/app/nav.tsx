@@ -1,9 +1,23 @@
 import { getCurrentUser } from "@/lib/session";
 import Link from "next/link";
-import { UserMenu } from "./logout-button";
+import { NavMenu, type NavLink } from "./nav-menu";
 
 export async function Nav() {
   const user = await getCurrentUser();
+
+  const links: NavLink[] = user
+    ? [
+        { href: "/dashboard", label: "Mis TPs" },
+        ...(user.isAdmin
+          ? [
+              { href: "/admin/assignments", label: "Assignments" },
+              { href: "/admin/grupos", label: "Grupos" },
+              { href: "/admin/comisiones", label: "Comisiones" },
+              { href: "/admin/alumnos", label: "Alumnos" },
+            ]
+          : []),
+      ]
+    : [];
 
   return (
     <nav className="bg-pdep-900 text-white">
@@ -12,47 +26,14 @@ export async function Nav() {
           PdeP <span className="font-light text-pdep-200">Classroom</span>
         </Link>
 
-        <div className="flex items-center gap-6 text-sm">
-          {user && (
-            <>
-              <Link
-                href="/dashboard"
-                className="hover:text-pdep-200 transition-colors"
-              >
-                Mis TPs
-              </Link>
-              {user.isAdmin && (
-                <>
-                  <Link
-                    href="/admin/assignments"
-                    className="hover:text-pdep-200 transition-colors"
-                  >
-                    Assignments
-                  </Link>
-                  <Link
-                    href="/admin/grupos"
-                    className="hover:text-pdep-200 transition-colors"
-                  >
-                    Grupos
-                  </Link>
-                  <Link
-                    href="/admin/comisiones"
-                    className="hover:text-pdep-200 transition-colors"
-                  >
-                    Comisiones
-                  </Link>
-                  <Link
-                    href="/admin/alumnos"
-                    className="hover:text-pdep-200 transition-colors"
-                  >
-                    Alumnos
-                  </Link>
-                </>
-              )}
-              <UserMenu username={user.githubUsername} image={user.image} isAdmin={user.isAdmin} />
-            </>
-          )}
-        </div>
+        {user && (
+          <NavMenu
+            links={links}
+            username={user.githubUsername}
+            image={user.image}
+            isAdmin={user.isAdmin}
+          />
+        )}
       </div>
     </nav>
   );
