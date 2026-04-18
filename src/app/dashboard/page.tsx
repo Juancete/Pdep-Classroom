@@ -57,10 +57,10 @@ export default async function DashboardPage() {
           {assignmentsConEntrega.map(({ assignment, entrega }) => (
             <div
               key={assignment.id}
-              className="bg-white border border-gray-200 rounded-lg p-5 flex items-center justify-between"
+              className="bg-white border border-gray-200 rounded-lg p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
             >
-              <div>
-                <div className="flex items-center gap-2 mb-1">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
                   <h3 className="font-semibold">{assignment.titulo}</h3>
                   <span className="text-xs bg-pdep-100 text-pdep-700 px-2 py-0.5 rounded-full font-medium">
                     {assignment.paradigma}
@@ -86,13 +86,13 @@ export default async function DashboardPage() {
                 )}
               </div>
 
-              <div className="flex-shrink-0 ml-4">
+              <div className="flex-shrink-0 w-full sm:w-auto">
                 {entrega ? (
                   <a
                     href={entrega.repoUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-sm bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg font-medium hover:bg-green-100 transition-colors"
+                    className="inline-flex items-center justify-center gap-1.5 text-sm bg-green-50 text-green-700 border border-green-200 px-3 py-2 rounded-lg font-medium hover:bg-green-100 transition-colors w-full sm:w-auto"
                   >
                     <svg
                       className="w-4 h-4"
