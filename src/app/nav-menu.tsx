@@ -78,83 +78,84 @@ export function NavMenu({ links, username, image, isAdmin }: Props) {
         </svg>
       </button>
 
-      {open && (
-        <>
-          <div
-            className="md:hidden fixed inset-0 bg-black/50 z-40"
+      <div
+        className={`md:hidden fixed inset-0 bg-black/50 z-40 transition-opacity ${
+          open ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+        onClick={() => setOpen(false)}
+        aria-hidden="true"
+      />
+
+      <aside
+        id="mobile-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menú de navegación"
+        inert={!open}
+        className={`md:hidden fixed right-0 top-0 bottom-0 w-72 max-w-[85vw] bg-pdep-900 z-50 shadow-xl transform transition-transform ${
+          open ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div className="flex items-center justify-between h-14 px-4 border-b border-pdep-800">
+          <span className="font-bold text-white">Menú</span>
+          <button
+            type="button"
+            className="p-2 -mr-2 text-pdep-200 hover:text-white transition-colors"
+            aria-label="Cerrar menú"
             onClick={() => setOpen(false)}
-            aria-hidden="true"
-          />
-
-          <aside
-            id="mobile-drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Menú de navegación"
-            className="md:hidden fixed right-0 top-0 bottom-0 w-72 max-w-[85vw] bg-pdep-900 z-50 shadow-xl"
           >
-            <div className="flex items-center justify-between h-14 px-4 border-b border-pdep-800">
-              <span className="font-bold text-white">Menú</span>
-              <button
-                type="button"
-                className="p-2 -mr-2 text-pdep-200 hover:text-white transition-colors"
-                aria-label="Cerrar menú"
-                onClick={() => setOpen(false)}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={2}
-                  stroke="currentColor"
-                  className="w-6 h-6"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M6 6l12 12M6 18L18 6"
-                  />
-                </svg>
-              </button>
-            </div>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+              className="w-6 h-6"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6 6l12 12M6 18L18 6"
+              />
+            </svg>
+          </button>
+        </div>
 
-            <div className="flex items-center gap-3 px-4 py-4 border-b border-pdep-800">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={image} alt="" className="w-10 h-10 rounded-full" />
-              <span className="font-mono text-sm text-pdep-200 truncate">
-                {username}
-              </span>
-            </div>
+        <div className="flex items-center gap-3 px-4 py-4 border-b border-pdep-800">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={image} alt="" className="w-10 h-10 rounded-full" />
+          <span className="font-mono text-sm text-pdep-200 truncate">
+            {username}
+          </span>
+        </div>
 
-            <nav className="flex flex-col py-2">
-              {links.map((l) => (
-                <Link
-                  key={l.href}
-                  href={l.href}
-                  className="px-4 py-3 text-white hover:bg-pdep-800 transition-colors"
-                >
-                  {l.label}
-                </Link>
-              ))}
-              {!isAdmin && (
-                <Link
-                  href="/perfil"
-                  className="px-4 py-3 text-pdep-200 hover:bg-pdep-800 hover:text-white transition-colors"
-                >
-                  Editar perfil
-                </Link>
-              )}
-              <button
-                type="button"
-                className="text-left px-4 py-3 text-pdep-200 hover:bg-pdep-800 hover:text-white transition-colors"
-                onClick={() => signOut({ callbackUrl: "/" })}
-              >
-                Salir
-              </button>
-            </nav>
-          </aside>
-        </>
-      )}
+        <nav className="flex flex-col py-2">
+          {links.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className="px-4 py-3 text-white hover:bg-pdep-800 transition-colors"
+            >
+              {l.label}
+            </Link>
+          ))}
+          {!isAdmin && (
+            <Link
+              href="/perfil"
+              className="px-4 py-3 text-pdep-200 hover:bg-pdep-800 hover:text-white transition-colors"
+            >
+              Editar perfil
+            </Link>
+          )}
+          <button
+            type="button"
+            className="text-left px-4 py-3 text-pdep-200 hover:bg-pdep-800 hover:text-white transition-colors"
+            onClick={() => signOut({ callbackUrl: "/" })}
+          >
+            Salir
+          </button>
+        </nav>
+      </aside>
     </>
   );
 }
