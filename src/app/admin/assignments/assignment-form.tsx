@@ -222,7 +222,7 @@ export function AssignmentForm({
       </div>
 
       {/* Paradigma y Tipo en fila */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Paradigma *
@@ -304,11 +304,11 @@ export function AssignmentForm({
       </div>
 
       {/* Submit */}
-      <div className="flex gap-3 pt-2">
+      <div className="flex flex-col sm:flex-row gap-3 pt-2">
         <SubmitButton label={submitLabel} />
         <a
           href="/admin/assignments"
-          className="px-5 py-2 rounded-lg text-sm font-medium text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors"
+          className="px-5 py-2 rounded-lg text-sm font-medium text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors text-center"
         >
           Cancelar
         </a>
