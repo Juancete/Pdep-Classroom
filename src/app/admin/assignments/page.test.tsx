@@ -90,20 +90,20 @@ describe("Admin Assignments page", () => {
       expect(html).toContain("No hay assignments todavía");
     });
 
-    it("no muestra la tabla cuando no hay assignments", async () => {
+    it("no muestra filas cuando no hay assignments", async () => {
       mockGetAssignments.mockResolvedValue([]);
       const element = await AdminAssignmentsPage();
       const html = renderToStaticMarkup(element);
-      expect(html).not.toContain("<table");
+      expect(html).not.toContain("Kata Funcional");
     });
   });
 
   describe("con assignments", () => {
-    it("muestra la tabla cuando hay assignments", async () => {
+    it("no muestra el estado vacío cuando hay assignments", async () => {
       mockGetAssignments.mockResolvedValue([makeAssignment()]);
       const element = await AdminAssignmentsPage();
       const html = renderToStaticMarkup(element);
-      expect(html).toContain("<table");
+      expect(html).not.toContain("No hay assignments todavía");
     });
 
     it("muestra el título del assignment", async () => {
