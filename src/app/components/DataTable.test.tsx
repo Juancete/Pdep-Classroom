@@ -55,7 +55,7 @@ describe("DataTable", () => {
     expect(screen.getByText("Tipo")).toHaveClass("md:hidden");
   });
 
-  it("DataHeader solo se muestra en md+ (hidden md:grid)", () => {
+  it("DataHeader solo se muestra en md+", () => {
     const { container } = render(
       <DataTable columns="1fr 1fr">
         <DataHeader>
@@ -64,7 +64,7 @@ describe("DataTable", () => {
         </DataHeader>
       </DataTable>
     );
-    const header = container.querySelector(".hidden.md\\:grid");
+    const header = container.querySelector(".hidden.md\\:block");
     expect(header).toBeInTheDocument();
     expect(screen.getByText("Título")).toBeInTheDocument();
     expect(screen.getByText("Entregas")).toHaveClass("text-right");
@@ -82,6 +82,28 @@ describe("DataTable", () => {
     );
     expect(screen.queryByText("Título")).not.toBeInTheDocument();
     expect(screen.getByText("Mi TP").className).toContain("font-semibold");
+  });
+
+  it("expone roles ARIA tabulares para screen readers", () => {
+    render(
+      <DataTable columns="1fr 1fr">
+        <DataHeader>
+          <DataHeaderCell>A</DataHeaderCell>
+          <DataHeaderCell>B</DataHeaderCell>
+        </DataHeader>
+        <DataBody>
+          <DataRow>
+            <DataCell label="A">a1</DataCell>
+            <DataCell label="B">b1</DataCell>
+          </DataRow>
+        </DataBody>
+      </DataTable>
+    );
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getAllByRole("rowgroup")).toHaveLength(2);
+    expect(screen.getAllByRole("row")).toHaveLength(2);
+    expect(screen.getAllByRole("columnheader")).toHaveLength(2);
+    expect(screen.getAllByRole("cell")).toHaveLength(2);
   });
 
   it("DataEmpty muestra el mensaje vacío", () => {
