@@ -46,13 +46,13 @@ export default async function AdminAssignmentsPage() {
       {sorted.length === 0 ? (
         <DataEmpty>No hay assignments todavía. Creá el primero.</DataEmpty>
       ) : (
-        <DataTable columns="2fr 1fr 1fr 1.5fr 90px 110px auto">
+        <DataTable columns="2fr 1fr 1fr 1.5fr 90px 110px 180px">
           <DataHeader>
             <DataHeaderCell>Título</DataHeaderCell>
             <DataHeaderCell>Paradigma</DataHeaderCell>
             <DataHeaderCell>Tipo</DataHeaderCell>
             <DataHeaderCell>Template</DataHeaderCell>
-            <DataHeaderCell align="right">Entregas</DataHeaderCell>
+            <DataHeaderCell>Entregas</DataHeaderCell>
             <DataHeaderCell>Deadline</DataHeaderCell>
             <DataHeaderCell>Acciones</DataHeaderCell>
           </DataHeader>
@@ -75,7 +75,7 @@ export default async function AdminAssignmentsPage() {
                     {a.templateRepo}
                   </span>
                 </DataCell>
-                <DataCell label="Entregas" align="right">
+                <DataCell label="Entregas">
                   <span className="font-mono">
                     {entregasCounts.get(a.id) ?? 0}
                   </span>

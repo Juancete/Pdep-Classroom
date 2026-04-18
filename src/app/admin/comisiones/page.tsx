@@ -30,7 +30,7 @@ export default async function AdminComisionesPage() {
       {comisiones.length === 0 ? (
         <DataEmpty>No hay comisiones todavía.</DataEmpty>
       ) : (
-        <DataTable columns="100px 2fr 140px auto">
+        <DataTable columns="100px 2fr 140px 160px">
           <DataHeader>
             <DataHeaderCell>Año</DataHeaderCell>
             <DataHeaderCell>Planilla</DataHeaderCell>

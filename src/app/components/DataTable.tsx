@@ -9,7 +9,11 @@ function alignClass(align: Align, prefix = "") {
 }
 
 interface DataTableProps {
-  /** grid-template-columns aplicado en md+; ej: "2fr 1fr 1fr 100px auto" */
+  /**
+   * grid-template-columns aplicado en md+; ej: "2fr 1fr 1fr 100px 180px".
+   * Evitá `auto`: el header y las filas son grids separados, y `auto` se
+   * resuelve distinto en cada uno, desalineando las columnas.
+   */
   columns: string;
   children: ReactNode;
   className?: string;
@@ -58,7 +62,7 @@ export function DataHeaderCell({
   align?: Align;
 }) {
   return (
-    <div role="columnheader" className={alignClass(align)}>
+    <div role="columnheader" className={`min-w-0 ${alignClass(align)}`}>
       {children}
     </div>
   );
