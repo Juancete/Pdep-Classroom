@@ -28,7 +28,7 @@ export function DataTable({
     ? ""
     : "bg-white border border-gray-200 rounded-lg overflow-hidden";
   return (
-    <div className={`${containerClass} ${className}`} style={style}>
+    <div role="table" className={`${containerClass} ${className}`} style={style}>
       {children}
     </div>
   );
@@ -38,11 +38,14 @@ const ROW_TEMPLATE = { gridTemplateColumns: "var(--data-cols)" } as CSSPropertie
 
 export function DataHeader({ children }: { children: ReactNode }) {
   return (
-    <div
-      className="hidden md:grid gap-3 bg-gray-50 border-b border-gray-200 px-4 py-3 text-xs font-medium text-gray-600 uppercase tracking-wide items-center"
-      style={ROW_TEMPLATE}
-    >
-      {children}
+    <div role="rowgroup" className="hidden md:block">
+      <div
+        role="row"
+        className="grid gap-3 bg-gray-50 border-b border-gray-200 px-4 py-3 text-xs font-medium text-gray-600 uppercase tracking-wide items-center"
+        style={ROW_TEMPLATE}
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -54,16 +57,25 @@ export function DataHeaderCell({
   children: ReactNode;
   align?: Align;
 }) {
-  return <div className={alignClass(align)}>{children}</div>;
+  return (
+    <div role="columnheader" className={alignClass(align)}>
+      {children}
+    </div>
+  );
 }
 
 export function DataBody({ children }: { children: ReactNode }) {
-  return <div className="divide-y divide-gray-100">{children}</div>;
+  return (
+    <div role="rowgroup" className="divide-y divide-gray-100">
+      {children}
+    </div>
+  );
 }
 
 export function DataRow({ children }: { children: ReactNode }) {
   return (
     <div
+      role="row"
       className="block md:grid md:gap-3 md:items-center px-4 py-4 md:py-3 hover:bg-gray-50 space-y-3 md:space-y-0 text-sm"
       style={ROW_TEMPLATE}
     >
@@ -97,7 +109,7 @@ export function DataCell({
     ? "text-base font-semibold text-gray-900 md:text-sm md:font-medium"
     : "";
   return (
-    <div className={`min-w-0 ${alignClass(align, "md:")} ${className}`}>
+    <div role="cell" className={`min-w-0 ${alignClass(align, "md:")} ${className}`}>
       {showLabel && (
         <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-0.5 md:hidden">
           {label}
