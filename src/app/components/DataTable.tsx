@@ -13,15 +13,22 @@ interface DataTableProps {
   columns: string;
   children: ReactNode;
   className?: string;
+  /** Si true, no aplica el contenedor (bg/borde/rounded). Usalo cuando el padre envuelve. */
+  bare?: boolean;
 }
 
-export function DataTable({ columns, children, className = "" }: DataTableProps) {
+export function DataTable({
+  columns,
+  children,
+  className = "",
+  bare = false,
+}: DataTableProps) {
   const style = { ["--data-cols" as string]: columns } as CSSProperties;
+  const containerClass = bare
+    ? ""
+    : "bg-white border border-gray-200 rounded-lg overflow-hidden";
   return (
-    <div
-      className={`bg-white border border-gray-200 rounded-lg overflow-hidden ${className}`}
-      style={style}
-    >
+    <div className={`${containerClass} ${className}`} style={style}>
       {children}
     </div>
   );
