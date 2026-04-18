@@ -6,6 +6,7 @@ const nextConfig = {
       "@mikro-orm/postgresql",
       "@mikro-orm/migrations",
     ],
+    instrumentationHook: true,
   },
 
   images: {
