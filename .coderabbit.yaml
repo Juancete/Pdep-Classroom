@@ -1,7 +1,7 @@
 language: "es"
 
 reviews:
-  request_changes_workflow: true
+  request_changes_workflow: false
   high_level_summary: true
   poem: false
   review_status: true
@@ -18,6 +18,17 @@ reviews:
     base_branches:
       - "master"
       - "Development"
+
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+    simplify:
+      enabled: false
+
+  auto_apply_labels: false
+  auto_assign_reviewers: false
 
 chat:
   auto_reply: true
