@@ -27,7 +27,7 @@ export default async function AdminGruposPage({
       </p>
 
       {/* Filtro por paradigma */}
-      <div className="flex gap-2 mb-6">
+      <div className="flex flex-wrap gap-2 mb-6">
         <a
           href="/admin/grupos"
           className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
