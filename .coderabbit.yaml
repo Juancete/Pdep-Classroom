@@ -17,7 +17,7 @@ reviews:
     drafts: false
     base_branches:
       - "master"
-      - "Development"
+      - "development"
 
   finishing_touches:
     docstrings:
