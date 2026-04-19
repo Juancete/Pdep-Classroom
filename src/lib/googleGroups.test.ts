@@ -91,14 +91,38 @@ describe("agregarMiembroAGrupo", () => {
     );
   });
 
-  it("retorna 'already_member' cuando la API devuelve 409", async () => {
+  it("retorna 'already_member' cuando la API devuelve 409 en err.code", async () => {
     mockMembersInsert.mockRejectedValue(gaxiosError(409, "duplicate"));
     const result = await agregarMiembroAGrupo("juan@gmail.com");
     expect(result).toEqual({ status: "already_member" });
   });
 
-  it("retorna 'already_member' cuando el reason es 'duplicate' (aunque el code no sea 409)", async () => {
+  it("retorna 'already_member' cuando la API devuelve 409 en err.status", async () => {
+    // googleapis a veces expone el status por err.status en vez de err.code
+    const err = Object.assign(new Error("Conflict"), { status: 409 });
+    mockMembersInsert.mockRejectedValue(err);
+    const result = await agregarMiembroAGrupo("juan@gmail.com");
+    expect(result).toEqual({ status: "already_member" });
+  });
+
+  it("retorna 'already_member' cuando el reason 'duplicate' viene top-level en err.errors", async () => {
     mockMembersInsert.mockRejectedValue(gaxiosError(400, "duplicate"));
+    const result = await agregarMiembroAGrupo("juan@gmail.com");
+    expect(result).toEqual({ status: "already_member" });
+  });
+
+  it("retorna 'already_member' cuando el reason 'duplicate' viene anidado en response.data.error.errors", async () => {
+    const err = Object.assign(new Error("Member already exists"), {
+      code: 400,
+      response: {
+        data: {
+          error: {
+            errors: [{ reason: "duplicate", message: "Member already exists" }],
+          },
+        },
+      },
+    });
+    mockMembersInsert.mockRejectedValue(err);
     const result = await agregarMiembroAGrupo("juan@gmail.com");
     expect(result).toEqual({ status: "already_member" });
   });

@@ -59,11 +59,23 @@ export type AgregarMiembroResult =
   | { status: "error"; error: string };
 
 // Detecta el caso "el miembro ya existía en el grupo" a partir de la respuesta
-// de la API. Google devuelve 409 + reason "duplicate" para este caso.
+// de la API. Google devuelve 409 + reason "duplicate" para este caso, pero
+// googleapis expone el status por varias rutas (err.code, err.status) y los
+// errores detallados pueden venir top-level o anidados en response.data.error.
 function isDuplicateError(e: unknown): boolean {
-  const err = e as { code?: number; errors?: { reason?: string }[] };
-  if (err.code === 409) return true;
-  return Boolean(err.errors?.some((x) => x.reason === "duplicate"));
+  const err = e as {
+    code?: number;
+    status?: number;
+    errors?: { reason?: string }[];
+    response?: { data?: { error?: { errors?: { reason?: string }[] } } };
+  };
+  if (err.code === 409 || err.status === 409) return true;
+  const hasDuplicateReason = (errors?: { reason?: string }[]) =>
+    Boolean(errors?.some((x) => x.reason === "duplicate"));
+  return (
+    hasDuplicateReason(err.errors) ||
+    hasDuplicateReason(err.response?.data?.error?.errors)
+  );
 }
 
 export async function agregarMiembroAGrupo(
