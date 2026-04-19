@@ -39,6 +39,7 @@ export function AlumnoForm({
 }: Props) {
   const { loading, error, call } = useApiCall();
   const [success, setSuccess] = useState(false);
+  const [groupWarning, setGroupWarning] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -58,17 +59,32 @@ export function AlumnoForm({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Error al guardar");
+      const hasGroupWarning = json.groupSubscription === "error";
+      setGroupWarning(hasGroupWarning);
       setSuccess(true);
+      // Damos más tiempo antes de redirigir si hay que mostrar el warning
+      // para que el alumno alcance a leerlo.
       if (onSuccessRedirect) {
-        setTimeout(() => { window.location.href = onSuccessRedirect; }, 1500);
+        const delay = hasGroupWarning ? 5000 : 1500;
+        setTimeout(() => { window.location.href = onSuccessRedirect; }, delay);
       }
     });
   }
 
   if (success) {
     return (
-      <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-        <p className="text-green-700 font-medium">{successMessage}</p>
+      <div className="space-y-3">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
+          <p className="text-green-700 font-medium">{successMessage}</p>
+        </div>
+        {groupWarning && (
+          <div
+            role="alert"
+            className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-800"
+          >
+            No pudimos suscribirte al grupo del curso. Avisale a un docente para que te agregue manualmente.
+          </div>
+        )}
       </div>
     );
   }
