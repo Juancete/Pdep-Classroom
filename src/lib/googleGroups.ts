@@ -10,20 +10,6 @@ function getAdminSubject(): string | null {
   return process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL?.trim() || null;
 }
 
-// Se llama al boot desde instrumentation.ts para frenar el deploy si la
-// config está incoherente — evita que un alumno reciba el error de
-// misconfig como respuesta del registro.
-export function assertGoogleGroupsConfig(): void {
-  const groupEmail = getGroupEmail();
-  const adminSubject = getAdminSubject();
-  if (groupEmail && !adminSubject) {
-    throw new Error(
-      "Configuración inválida: GOOGLE_GROUP_EMAIL está seteada pero GOOGLE_WORKSPACE_ADMIN_EMAIL no. " +
-        "La suscripción al grupo requiere domain-wide delegation — configurá ambas o ninguna."
-    );
-  }
-}
-
 // ── Cliente de Admin Directory API ──────────────────────────
 // Agregar miembros a un Google Group requiere Domain-Wide Delegation:
 // el service account impersona a un admin del workspace.

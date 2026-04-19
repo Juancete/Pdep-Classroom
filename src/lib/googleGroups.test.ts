@@ -18,7 +18,7 @@ vi.mock("googleapis", () => ({
   },
 }));
 
-import { agregarMiembroAGrupo, assertGoogleGroupsConfig } from "./googleGroups";
+import { agregarMiembroAGrupo } from "./googleGroups";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -133,43 +133,4 @@ describe("agregarMiembroAGrupo", () => {
     expect(result).toEqual({ status: "error", error: "Sin permisos" });
   });
 
-});
-
-// ── assertGoogleGroupsConfig ─────────────────────────────────
-// Esta función corre al boot desde instrumentation.ts — acá testeamos
-// que tire cuando la config es incoherente, para que el deploy falle
-// antes de que un alumno reciba un error en su cara.
-
-describe("assertGoogleGroupsConfig", () => {
-  const ENV_BACKUP = { ...process.env };
-
-  afterEach(() => {
-    process.env = { ...ENV_BACKUP };
-  });
-
-  it("no tira si ninguna env var está seteada (feature desactivada)", () => {
-    delete process.env.GOOGLE_GROUP_EMAIL;
-    delete process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL;
-    expect(() => assertGoogleGroupsConfig()).not.toThrow();
-  });
-
-  it("no tira si ambas env vars están seteadas", () => {
-    process.env.GOOGLE_GROUP_EMAIL = "pdep@googlegroups.com";
-    process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL = "admin@utn.edu.ar";
-    expect(() => assertGoogleGroupsConfig()).not.toThrow();
-  });
-
-  it("tira si GOOGLE_GROUP_EMAIL está seteada pero GOOGLE_WORKSPACE_ADMIN_EMAIL no", () => {
-    process.env.GOOGLE_GROUP_EMAIL = "pdep@googlegroups.com";
-    delete process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL;
-    expect(() => assertGoogleGroupsConfig()).toThrow(
-      /GOOGLE_WORKSPACE_ADMIN_EMAIL/
-    );
-  });
-
-  it("no tira si GOOGLE_WORKSPACE_ADMIN_EMAIL está seteada pero GOOGLE_GROUP_EMAIL no (feature desactivada)", () => {
-    delete process.env.GOOGLE_GROUP_EMAIL;
-    process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL = "admin@utn.edu.ar";
-    expect(() => assertGoogleGroupsConfig()).not.toThrow();
-  });
 });
