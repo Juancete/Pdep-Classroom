@@ -4,6 +4,18 @@ import { upsertarAlumnoEnSheets, type RegistroInput } from "@/lib/sheets";
 import { getComisionActiva, upsertAlumno } from "@/lib/repositories";
 import { agregarMiembroAGrupo } from "@/lib/googleGroups";
 
+// Enmascara la parte local del email para no escupir PII a los logs,
+// preservando dominio y primeras 2 letras para que un admin pueda
+// reconocer al alumno (combinado con el githubUsername del log).
+function maskEmail(email: string): string {
+  const at = email.indexOf("@");
+  if (at <= 0) return "***";
+  const user = email.slice(0, at);
+  const domain = email.slice(at);
+  const visible = user.slice(0, 2);
+  return `${visible}${"*".repeat(Math.max(user.length - 2, 1))}${domain}`;
+}
+
 export async function POST(req: Request) {
   try {
     const user = await requireUser();
@@ -46,7 +58,7 @@ export async function POST(req: Request) {
     const groupSubscription = await agregarMiembroAGrupo(body.email);
     if (groupSubscription.status === "error") {
       console.error(
-        `Error al suscribir ${body.email} al Google Group: ${groupSubscription.error}`
+        `Error al suscribir al Google Group: github=${body.githubUsername} email=${maskEmail(body.email)} — ${groupSubscription.error}`
       );
     }
 
