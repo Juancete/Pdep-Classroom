@@ -117,6 +117,60 @@ describe("AlumnoForm", () => {
     });
   });
 
+  describe("warning de suscripción al grupo", () => {
+    function mockRegistroOk(groupSubscription?: string) {
+      const body = groupSubscription
+        ? { ok: true, groupSubscription }
+        : { ok: true };
+      vi.mocked(fetch).mockResolvedValue(
+        new Response(JSON.stringify(body), { status: 200 })
+      );
+    }
+
+    const WARNING_PATTERN = /no pudimos suscribirte al grupo/i;
+
+    it("muestra el warning cuando groupSubscription === 'error'", async () => {
+      mockRegistroOk("error");
+      renderForm();
+      fireEvent.submit(screen.getByRole("button").closest("form")!);
+      await waitFor(() =>
+        expect(screen.getByRole("alert")).toHaveTextContent(WARNING_PATTERN)
+      );
+    });
+
+    it("no muestra el warning cuando groupSubscription === 'added'", async () => {
+      mockRegistroOk("added");
+      renderForm({ successMessage: "Listo" });
+      fireEvent.submit(screen.getByRole("button").closest("form")!);
+      await waitFor(() => screen.getByText("Listo"));
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("no muestra el warning cuando groupSubscription === 'already_member'", async () => {
+      mockRegistroOk("already_member");
+      renderForm({ successMessage: "Listo" });
+      fireEvent.submit(screen.getByRole("button").closest("form")!);
+      await waitFor(() => screen.getByText("Listo"));
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("no muestra el warning cuando groupSubscription === 'skipped'", async () => {
+      mockRegistroOk("skipped");
+      renderForm({ successMessage: "Listo" });
+      fireEvent.submit(screen.getByRole("button").closest("form")!);
+      await waitFor(() => screen.getByText("Listo"));
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("no muestra el warning cuando la respuesta no trae groupSubscription (ej. /api/perfil)", async () => {
+      mockRegistroOk();
+      renderForm({ successMessage: "Listo" });
+      fireEvent.submit(screen.getByRole("button").closest("form")!);
+      await waitFor(() => screen.getByText("Listo"));
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+  });
+
   describe("submit con error del servidor", () => {
     it("muestra el mensaje de error de la API", async () => {
       vi.mocked(fetch).mockResolvedValue(
