@@ -2,6 +2,19 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
 import { upsertarAlumnoEnSheets, type RegistroInput } from "@/lib/sheets";
 import { getComisionActiva, upsertAlumno } from "@/lib/repositories";
+import { agregarMiembroAGrupo } from "@/lib/googleGroups";
+
+// Enmascara la parte local del email para no escupir PII a los logs,
+// preservando dominio y primeras 2 letras para que un admin pueda
+// reconocer al alumno (combinado con el githubUsername del log).
+function maskEmail(email: string): string {
+  const at = email.indexOf("@");
+  if (at <= 0) return "***";
+  const user = email.slice(0, at);
+  const domain = email.slice(at);
+  const visible = user.slice(0, 2);
+  return `${visible}${"*".repeat(Math.max(user.length - 2, 1))}${domain}`;
+}
 
 export async function POST(req: Request) {
   try {
@@ -39,7 +52,17 @@ export async function POST(req: Request) {
       registroConfirmadoEn: comisionActiva,
     });
 
-    return NextResponse.json({ ok: true });
+    // El alta ya quedó persistida — una falla al suscribir al grupo no
+    // debe romper el registro. Informamos el resultado para que la UI lo
+    // muestre si corresponde y logueamos el detalle server-side.
+    const groupSubscription = await agregarMiembroAGrupo(body.email);
+    if (groupSubscription.status === "error") {
+      console.error(
+        `Error al suscribir al Google Group: github=${body.githubUsername} email=${maskEmail(body.email)} — ${groupSubscription.error}`
+      );
+    }
+
+    return NextResponse.json({ ok: true, groupSubscription: groupSubscription.status });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error interno";
     return NextResponse.json({ error: msg }, { status: 500 });
