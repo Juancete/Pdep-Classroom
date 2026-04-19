@@ -167,6 +167,22 @@ describe("POST /api/registro", () => {
       expect(mockUpsertAlumno).toHaveBeenCalledOnce();
     });
 
+    it("enmascara el email en el log de error para no exponer PII", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      mockAgregarMiembroAGrupo.mockResolvedValue({
+        status: "error",
+        error: "Sin permisos",
+      });
+      await POST(makeRequest(validBody));
+      const loggedLines = errorSpy.mock.calls.flat().join(" ");
+      // El email completo no debe aparecer, pero sí el dominio y un
+      // identificador útil para el admin (githubUsername).
+      expect(loggedLines).not.toContain("juan@gmail.com");
+      expect(loggedLines).toContain("@gmail.com");
+      expect(loggedLines).toContain("juangarcia");
+      errorSpy.mockRestore();
+    });
+
     it("no intenta suscribir si la escritura en Sheets falla", async () => {
       mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: false, error: "Legajo duplicado" });
       await POST(makeRequest(validBody));
