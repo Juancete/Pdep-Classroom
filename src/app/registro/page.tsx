@@ -51,6 +51,9 @@ export default async function RegistroPage() {
     email: alumnoDB?.email ?? alumnoSheets?.email ?? session.user?.email ?? "",
   };
 
+  // Alumno registrado en la DB pero no en la comisión... Entonces le saco los datos 
+  // para confirmar nuevamente los datos de la nueva cursada
+  // pudo haber cambiado email, etc
   const esRecursante = Boolean(alumnoDB);
 
   return (

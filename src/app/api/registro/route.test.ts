@@ -16,9 +16,25 @@ vi.mock("@/lib/sheets", () => ({
   upsertarAlumnoEnSheets: (...args: unknown[]) => mockUpsertarAlumnoEnSheets(...args),
 }));
 
+const { FakeLegajoConflictError } = vi.hoisted(() => {
+  class FakeLegajoConflictError extends Error {
+    constructor(
+      public readonly legajo: string,
+      public readonly otroGithubUsername: string
+    ) {
+      super(
+        `El legajo ${legajo} ya está registrado con el usuario @${otroGithubUsername}. Verificá que sea el tuyo.`
+      );
+      this.name = "LegajoConflictError";
+    }
+  }
+  return { FakeLegajoConflictError };
+});
+
 vi.mock("@/lib/repositories", () => ({
   getComisionActiva: () => mockGetComisionActiva(),
   upsertAlumno: (data: unknown) => mockUpsertAlumno(data),
+  LegajoConflictError: FakeLegajoConflictError,
 }));
 
 vi.mock("@/lib/googleGroups", () => ({
@@ -104,6 +120,29 @@ describe("POST /api/registro", () => {
     const json = await res.json();
     expect(json.error).toBe("Legajo duplicado");
     expect(mockUpsertAlumno).not.toHaveBeenCalled();
+  });
+
+  it("propaga el field de Sheets en la respuesta para que el form lo pinte inline", async () => {
+    mockUpsertarAlumnoEnSheets.mockResolvedValue({
+      ok: false,
+      error: "El legajo 12345 ya está registrado con el usuario @otro. Verificá que sea el tuyo.",
+      field: "legajo",
+    });
+    const res = await POST(makeRequest(validBody));
+    const json = await res.json();
+    expect(res.status).toBe(400);
+    expect(json.field).toBe("legajo");
+  });
+
+  it("devuelve 400 con field=legajo si el upsert en DB detecta que el legajo pertenece a otro github", async () => {
+    mockUpsertAlumno.mockRejectedValue(
+      new FakeLegajoConflictError("12345", "otro-alumno")
+    );
+    const res = await POST(makeRequest(validBody));
+    const json = await res.json();
+    expect(res.status).toBe(400);
+    expect(json.field).toBe("legajo");
+    expect(json.error).toContain("otro-alumno");
   });
 
   it("devuelve 409 sin tocar Sheets ni DB si no hay comisión activa", async () => {
