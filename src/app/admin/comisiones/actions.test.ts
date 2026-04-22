@@ -14,11 +14,27 @@ vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
+const { FakeLegajoConflictError } = vi.hoisted(() => {
+  class FakeLegajoConflictError extends Error {
+    constructor(
+      public readonly legajo: string,
+      public readonly otroGithubUsername: string
+    ) {
+      super(
+        `El legajo ${legajo} ya está registrado con el usuario @${otroGithubUsername}. Verificá que sea el tuyo.`
+      );
+      this.name = "LegajoConflictError";
+    }
+  }
+  return { FakeLegajoConflictError };
+});
+
 vi.mock("@/lib/repositories", () => ({
   createComision: (...args: unknown[]) => mockCreateComision(...args),
   updateComision: (...args: unknown[]) => mockUpdateComision(...args),
   getComision: (...args: unknown[]) => mockGetComision(...args),
   upsertAlumnos: (...args: unknown[]) => mockUpsertAlumnos(...args),
+  LegajoConflictError: FakeLegajoConflictError,
 }));
 
 vi.mock("@/lib/sheets", () => ({
@@ -234,5 +250,19 @@ describe("sincronizarAlumnos", () => {
     mockGetAlumnos.mockResolvedValue([]);
     const result = await sincronizarAlumnos({ status: "idle" }, makeSync());
     expect(result).toEqual({ status: "ok", sincronizados: 0 });
+  });
+
+  it("retorna error controlado si upsertAlumnos lanza LegajoConflictError", async () => {
+    mockGetAlumnos.mockResolvedValue([
+      { legajo: "111", nombre: "Ana", apellido: "López", githubUsername: "ana", email: "a@b.com" },
+    ]);
+    mockUpsertAlumnos.mockRejectedValue(new FakeLegajoConflictError("111", "otra-persona"));
+
+    const result = await sincronizarAlumnos({ status: "idle" }, makeSync());
+
+    expect(result).toEqual({
+      status: "error",
+      message: "El legajo 111 ya está registrado con el usuario @otra-persona. Verificá que sea el tuyo.",
+    });
   });
 });

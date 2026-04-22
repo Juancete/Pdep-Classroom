@@ -1,7 +1,7 @@
 "use server";
 
 import { requireAdmin } from "@/lib/session";
-import { createComision, updateComision, getComision, upsertAlumnos } from "@/lib/repositories";
+import { createComision, updateComision, getComision, upsertAlumnos, LegajoConflictError } from "@/lib/repositories";
 import { getAlumnos } from "@/lib/sheets";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -121,7 +121,15 @@ export async function sincronizarAlumnos(
     return { status: "error", message: `No se pudo leer la planilla: ${(e as Error).message}` };
   }
 
-  const sincronizados = await upsertAlumnos(alumnos.map((alumno) => ({ ...alumno, comision })));
+  let sincronizados: number;
+  try {
+    sincronizados = await upsertAlumnos(alumnos.map((alumno) => ({ ...alumno, comision })));
+  } catch (e) {
+    if (e instanceof LegajoConflictError) {
+      return { status: "error", message: e.message };
+    }
+    throw e;
+  }
 
   revalidatePath("/admin/comisiones");
   return { status: "ok", sincronizados };

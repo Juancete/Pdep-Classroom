@@ -105,7 +105,30 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
   if (dataList.length === 0) return 0;
 
   const em = await getEM();
-  const githubUsernames = dataList.map((d) => d.githubUsername.toLowerCase().trim());
+
+  // Validar coherencia legajo↔github antes de persistir: el UNIQUE de la DB
+  // dispararía un error genérico del driver. Así surfaceamos LegajoConflictError
+  // con los datos específicos, igual que upsertAlumno.
+  const githubPorLegajo = new Map<string, string>();
+  for (const data of dataList) {
+    const legajo = data.legajo.trim();
+    const github = data.githubUsername.toLowerCase().trim();
+    const prev = githubPorLegajo.get(legajo);
+    if (prev && prev !== github) {
+      throw new LegajoConflictError(legajo, prev);
+    }
+    githubPorLegajo.set(legajo, github);
+  }
+  const legajos = [...githubPorLegajo.keys()];
+  const alumnosConLegajoTomado = await em.find(Alumno, { legajo: { $in: legajos } });
+  for (const alumno of alumnosConLegajoTomado) {
+    const incomingGithub = githubPorLegajo.get(alumno.legajo)!;
+    if (alumno.githubUsername.toLowerCase() !== incomingGithub) {
+      throw new LegajoConflictError(alumno.legajo, alumno.githubUsername);
+    }
+  }
+
+  const githubUsernames = [...githubPorLegajo.values()];
   const existentes = await em.find(Alumno, { githubUsername: { $in: githubUsernames } });
   const existentesPorGithub = new Map(existentes.map((a) => [a.githubUsername, a]));
 
