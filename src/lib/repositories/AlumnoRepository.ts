@@ -2,6 +2,33 @@ import { getEM } from "@/lib/db";
 import { Alumno } from "@/domain/entities";
 import type { Comision } from "@/domain/entities";
 
+// El legajo es la PK del alumno en la cursada: dos alumnos no pueden compartirlo.
+// La UNIQUE constraint de la DB ya lo garantiza, pero lanzamos este error antes
+// del flush para poder devolverle al cliente un mensaje claro y el `field`
+// afectado en vez de un crash genérico del driver.
+export class LegajoConflictError extends Error {
+  constructor(
+    public readonly legajo: string,
+    public readonly otroGithubUsername: string
+  ) {
+    super(
+      `El legajo ${legajo} ya está registrado con el usuario @${otroGithubUsername}. Verificá que sea el tuyo.`
+    );
+    this.name = "LegajoConflictError";
+  }
+}
+
+async function assertLegajoLibreOPropio(
+  legajo: string,
+  githubUsername: string
+): Promise<void> {
+  const em = await getEM();
+  const otro = await em.findOne(Alumno, { legajo: legajo.trim() });
+  if (otro && otro.githubUsername.toLowerCase() !== githubUsername.toLowerCase().trim()) {
+    throw new LegajoConflictError(legajo.trim(), otro.githubUsername);
+  }
+}
+
 export async function getAlumnos(): Promise<Alumno[]> {
   const em = await getEM();
   return em.find(Alumno, {}, { orderBy: { apellido: "ASC", nombre: "ASC" } });
@@ -34,6 +61,7 @@ export interface AlumnoData {
 }
 
 export async function createAlumno(data: AlumnoData): Promise<Alumno> {
+  await assertLegajoLibreOPropio(data.legajo, data.githubUsername);
   const em = await getEM();
   const alumno = new Alumno();
   alumno.legajo = data.legajo.trim();
@@ -50,6 +78,7 @@ export async function createAlumno(data: AlumnoData): Promise<Alumno> {
 
 /** Crea o actualiza el Alumno en la DB a partir de los datos de la planilla. */
 export async function upsertAlumno(data: AlumnoData): Promise<Alumno> {
+  await assertLegajoLibreOPropio(data.legajo, data.githubUsername);
   const em = await getEM();
   const existing = await em.findOne(Alumno, {
     githubUsername: data.githubUsername.toLowerCase().trim(),

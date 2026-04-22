@@ -175,11 +175,15 @@ export function validateRegistro(input: RegistroInput): string | null {
 // githubUsername; si existe, la actualiza respetando columnas desconocidas,
 // y si no, la agrega al final.
 
+export type UpsertAlumnoResult =
+  | { ok: true }
+  | { ok: false; error: string; field?: "legajo" | "githubUsername" };
+
 export async function upsertarAlumnoEnSheets(
   input: RegistroInput,
   spreadsheetId?: string,
   config?: Partial<ColumnConfig>
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<UpsertAlumnoResult> {
   const validationError = validateRegistro(input);
   if (validationError) return { ok: false, error: validationError };
 
@@ -187,12 +191,14 @@ export async function upsertarAlumnoEnSheets(
   const cfg = resolveConfig(config);
   const githubNormalizado = input.githubUsername.trim().toLowerCase();
 
-  // El legajo puede pertenecer al mismo alumno (al actualizar) o a otro (colisión).
+  // El legajo debe pertenecer al mismo github o a nadie — si ya es de otro
+  // alumno es conflicto, tanto al insertar como al editar.
   const porLegajo = await getAlumnoByLegajo(input.legajo, id, cfg);
   if (porLegajo && porLegajo.githubUsername.toLowerCase() !== githubNormalizado) {
     return {
       ok: false,
-      error: `El legajo ${input.legajo} ya está registrado (${porLegajo.githubUsername})`,
+      error: `El legajo ${input.legajo} ya está registrado con el usuario @${porLegajo.githubUsername}. Verificá que sea el tuyo.`,
+      field: "legajo",
     };
   }
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
 import { upsertarAlumnoEnSheets, type RegistroInput } from "@/lib/sheets";
-import { getComisionActiva, upsertAlumno } from "@/lib/repositories";
+import { getComisionActiva, upsertAlumno, LegajoConflictError } from "@/lib/repositories";
 import { agregarMiembroAGrupo } from "@/lib/googleGroups";
 
 // Enmascara la parte local del email para no escupir PII a los logs,
@@ -39,18 +39,31 @@ export async function POST(req: Request) {
     );
 
     if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+      return NextResponse.json(
+        { error: result.error, field: result.field },
+        { status: 400 }
+      );
     }
 
-    await upsertAlumno({
-      legajo: body.legajo,
-      nombre: body.nombre,
-      apellido: body.apellido,
-      githubUsername: body.githubUsername,
-      email: body.email,
-      comision: comisionActiva,
-      registroConfirmadoEn: comisionActiva,
-    });
+    try {
+      await upsertAlumno({
+        legajo: body.legajo,
+        nombre: body.nombre,
+        apellido: body.apellido,
+        githubUsername: body.githubUsername,
+        email: body.email,
+        comision: comisionActiva,
+        registroConfirmadoEn: comisionActiva,
+      });
+    } catch (e) {
+      if (e instanceof LegajoConflictError) {
+        return NextResponse.json(
+          { error: e.message, field: "legajo" },
+          { status: 400 }
+        );
+      }
+      throw e;
+    }
 
     // El alta ya quedó persistida — una falla al suscribir al grupo no
     // debe romper el registro. Informamos el resultado para que la UI lo
