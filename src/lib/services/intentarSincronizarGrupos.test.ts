@@ -37,23 +37,26 @@ describe("intentarSincronizarGrupos", () => {
     mockMarcarGruposSyncFallido.mockResolvedValue(undefined);
   });
 
-  it("retorna false y limpia el flag cuando la sync funciona", async () => {
-    const result = await intentarSincronizarGrupos("juangarcia", comision);
+  it("limpia el flag cuando la sync funciona", async () => {
+    await expect(
+      intentarSincronizarGrupos("juangarcia", comision)
+    ).resolves.toBeUndefined();
 
-    expect(result).toBe(false);
-    expect(mockSincronizarGruposDelAlumno).toHaveBeenCalledWith("juangarcia", comision);
+    expect(mockSincronizarGruposDelAlumno).toHaveBeenCalledWith("juangarcia", comision, undefined);
     expect(mockMarcarGruposSyncOk).toHaveBeenCalledWith("juangarcia");
     expect(mockMarcarGruposSyncFallido).not.toHaveBeenCalled();
   });
 
-  it("retorna true, loguea y prende el flag cuando la sync throwea", async () => {
+  it("loguea, prende el flag y propaga cuando la sync throwea", async () => {
     const { logger } = await import("@/lib/logger");
     const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
-    mockSincronizarGruposDelAlumno.mockRejectedValue(new Error("Sheets caído"));
+    const syncError = new Error("Sheets caído");
+    mockSincronizarGruposDelAlumno.mockRejectedValue(syncError);
 
-    const result = await intentarSincronizarGrupos("juangarcia", comision);
+    await expect(
+      intentarSincronizarGrupos("juangarcia", comision)
+    ).rejects.toBe(syncError);
 
-    expect(result).toBe(true);
     expect(mockMarcarGruposSyncFallido).toHaveBeenCalledWith("juangarcia");
     expect(mockMarcarGruposSyncOk).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalled();
@@ -62,16 +65,47 @@ describe("intentarSincronizarGrupos", () => {
     errorSpy.mockRestore();
   });
 
-  it("no propaga el error: es un wrapper que absorbe para reportar por su return", async () => {
-    const errorSpy = vi
-      .spyOn((await import("@/lib/logger")).logger, "error")
-      .mockImplementation(() => {});
-    mockSincronizarGruposDelAlumno.mockRejectedValue(new Error("boom"));
+  it("si marcarGruposSyncFallido también falla, loguea ambos y propaga el error original de sync", async () => {
+    const { logger } = await import("@/lib/logger");
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+    const syncError = new Error("Sheets caído");
+    const flagError = new Error("DB hipada");
+    mockSincronizarGruposDelAlumno.mockRejectedValue(syncError);
+    mockMarcarGruposSyncFallido.mockRejectedValue(flagError);
 
     await expect(
       intentarSincronizarGrupos("juangarcia", comision)
-    ).resolves.toBe(true);
+    ).rejects.toBe(syncError);
 
+    // El error original (sync) se propaga; el de flag solo se loguea para
+    // diagnóstico — la causa real es la sync, y nunca queremos enmascararla.
+    expect(errorSpy).toHaveBeenCalledTimes(2);
     errorSpy.mockRestore();
+  });
+
+  it("si marcarGruposSyncOk falla tras una sync exitosa, propaga ese error", async () => {
+    const flagError = new Error("DB hipada al limpiar flag");
+    mockMarcarGruposSyncOk.mockRejectedValue(flagError);
+
+    await expect(
+      intentarSincronizarGrupos("juangarcia", comision)
+    ).rejects.toBe(flagError);
+
+    expect(mockSincronizarGruposDelAlumno).toHaveBeenCalled();
+    expect(mockMarcarGruposSyncFallido).not.toHaveBeenCalled();
+  });
+
+  it("forwardea asignacionesPrefetched al comando puro (resync masivo con lectura única)", async () => {
+    const prefetched = [
+      { githubUsername: "juangarcia", paradigma: "funcional" as const, nombreGrupo: "X" },
+    ];
+
+    await intentarSincronizarGrupos("juangarcia", comision, prefetched);
+
+    expect(mockSincronizarGruposDelAlumno).toHaveBeenCalledWith(
+      "juangarcia",
+      comision,
+      prefetched
+    );
   });
 });

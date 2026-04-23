@@ -137,7 +137,7 @@ export async function marcarGruposSyncOk(githubUsername: string): Promise<void> 
   // Solo flusheamos si había algo prendido — evita un UPDATE por cada sync
   // exitosa del happy path.
   if (!alumno || !alumno.gruposSyncFallidoEn) return;
-  alumno.gruposSyncFallidoEn = undefined;
+  alumno.gruposSyncFallidoEn = null;
   await em.flush();
 }
 

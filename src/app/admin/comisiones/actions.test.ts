@@ -9,6 +9,7 @@ const mockGetComision = vi.fn();
 const mockUpsertAlumnos = vi.fn();
 const mockRedirect = vi.fn();
 const mockGetAlumnos = vi.fn();
+const mockGetAsignacionesGrupos = vi.fn();
 const mockGetAlumnosConGruposSyncPendiente = vi.fn();
 const mockIntentarSincronizarGrupos = vi.fn();
 
@@ -48,6 +49,7 @@ vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
 
 vi.mock("@/lib/sheets", () => ({
   getAlumnos: (...args: unknown[]) => mockGetAlumnos(...args),
+  getAsignacionesGrupos: (...args: unknown[]) => mockGetAsignacionesGrupos(...args),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -284,7 +286,20 @@ describe("sincronizarAlumnos", () => {
 // ── sincronizarGruposDeLaComision ────────────────────────────
 
 describe("sincronizarGruposDeLaComision", () => {
-  const comision = { id: "c1", spreadsheetId: "sheet-xyz", columnConfig: {} };
+  const gruposConfig = {
+    sheetName: "Alumnos",
+    headerRows: 1,
+    githubUsername: 3,
+    nombreGrupoPorParadigma: { funcional: 5 },
+  };
+  const comision = {
+    id: "c1",
+    spreadsheetId: "sheet-xyz",
+    columnConfig: { grupos: gruposConfig },
+  };
+  const asignacionesFake = [
+    { githubUsername: "ana", paradigma: "funcional", nombreGrupo: "Los Lambdas" },
+  ];
 
   function makeFd(): FormData {
     const fd = new FormData();
@@ -297,7 +312,8 @@ describe("sincronizarGruposDeLaComision", () => {
     mockRequireAdmin.mockResolvedValue(undefined);
     mockGetComision.mockResolvedValue(comision);
     mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([]);
-    mockIntentarSincronizarGrupos.mockResolvedValue(false);
+    mockIntentarSincronizarGrupos.mockResolvedValue(undefined);
+    mockGetAsignacionesGrupos.mockResolvedValue(asignacionesFake);
   });
 
   it("devuelve error si la comisión no existe", async () => {
@@ -311,19 +327,52 @@ describe("sincronizarGruposDeLaComision", () => {
     const result = await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
     expect(result).toEqual({ status: "ok", sincronizados: 0, aunConError: 0 });
     expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+    // Sin pendientes no hace falta leer la hoja.
+    expect(mockGetAsignacionesGrupos).not.toHaveBeenCalled();
   });
 
-  it("reintenta la sync para cada alumno pendiente de la comisión", async () => {
+  it("lee la hoja de grupos una sola vez y reutiliza el resultado en cada alumno", async () => {
     mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([
       { githubUsername: "ana" },
       { githubUsername: "bruno" },
+      { githubUsername: "cintia" },
     ]);
 
     await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
 
-    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledTimes(2);
-    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith("ana", comision);
-    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith("bruno", comision);
+    expect(mockGetAsignacionesGrupos).toHaveBeenCalledTimes(1);
+    expect(mockGetAsignacionesGrupos).toHaveBeenCalledWith("sheet-xyz", gruposConfig);
+    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledTimes(3);
+    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith("ana", comision, asignacionesFake);
+    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith("bruno", comision, asignacionesFake);
+    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith("cintia", comision, asignacionesFake);
+  });
+
+  it("devuelve error y no sincroniza nada si la lectura única de la hoja falla", async () => {
+    mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([{ githubUsername: "ana" }]);
+    mockGetAsignacionesGrupos.mockRejectedValue(new Error("No se pudo leer la hoja de grupos: rate limited"));
+
+    const result = await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
+
+    expect(result).toEqual({
+      status: "error",
+      message: "No se pudo leer la hoja de grupos: rate limited",
+    });
+    expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+  });
+
+  it("no lee la hoja si la comisión no tiene config de grupos (no-op que limpia flags)", async () => {
+    mockGetComision.mockResolvedValue({ id: "c1", spreadsheetId: "sheet-xyz", columnConfig: {} });
+    mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([{ githubUsername: "ana" }]);
+
+    await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
+
+    expect(mockGetAsignacionesGrupos).not.toHaveBeenCalled();
+    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith(
+      "ana",
+      expect.objectContaining({ id: "c1" }),
+      undefined
+    );
   });
 
   it("cuenta cuántos se resolvieron y cuántos siguen con error", async () => {
@@ -333,9 +382,9 @@ describe("sincronizarGruposDeLaComision", () => {
       { githubUsername: "cintia" },
     ]);
     mockIntentarSincronizarGrupos
-      .mockResolvedValueOnce(false) // ana: ok
-      .mockResolvedValueOnce(true) // bruno: sigue fallando
-      .mockResolvedValueOnce(false); // cintia: ok
+      .mockResolvedValueOnce(undefined) // ana: ok
+      .mockRejectedValueOnce(new Error("sigue fallando")) // bruno
+      .mockResolvedValueOnce(undefined); // cintia: ok
 
     const result = await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
 

@@ -50,8 +50,8 @@ vi.mock("@/lib/googleGroups", () => ({
 }));
 
 // El handler llama al wrapper `intentarSincronizarGrupos`, que es quien se
-// encarga del logging, el flag persistente y el retorno booleano que el
-// handler usa para decidir si mete `gruposSync: "error"` en el body.
+// encarga del logging y de persistir el flag. Si throwea, el handler lo
+// captura y degrada la respuesta a `gruposSync: "error"`.
 vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
   intentarSincronizarGrupos: (...args: unknown[]) =>
     mockIntentarSincronizarGrupos(...args),
@@ -97,7 +97,7 @@ describe("POST /api/registro", () => {
     mockUpsertAlumno.mockResolvedValue(undefined);
     mockMarcarRegistroConfirmado.mockResolvedValue(undefined);
     mockAgregarMiembroAGrupo.mockResolvedValue({ status: "added" });
-    mockIntentarSincronizarGrupos.mockResolvedValue(false);
+    mockIntentarSincronizarGrupos.mockResolvedValue(undefined);
   });
 
   it("usa el githubUsername del usuario autenticado cuando coincide con el body", async () => {
@@ -299,15 +299,15 @@ describe("POST /api/registro", () => {
       );
     });
 
-    it("no incluye gruposSync en el body cuando el wrapper devuelve false (ok)", async () => {
+    it("no incluye gruposSync en el body cuando el wrapper completa sin throwear", async () => {
       const res = await POST(makeRequest(validBody));
       const json = await res.json();
       expect(res.status).toBe(200);
       expect(json.gruposSync).toBeUndefined();
     });
 
-    it("responde 200 con gruposSync='error' cuando el wrapper devuelve true (falló)", async () => {
-      mockIntentarSincronizarGrupos.mockResolvedValue(true);
+    it("responde 200 con gruposSync='error' cuando el wrapper throwea (el alta se preserva, el flag en DB dispara retry)", async () => {
+      mockIntentarSincronizarGrupos.mockRejectedValue(new Error("Sheets caído"));
 
       const res = await POST(makeRequest(validBody));
       const json = await res.json();

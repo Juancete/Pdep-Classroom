@@ -1,6 +1,6 @@
 import { getEM } from "@/lib/db";
 import { Alumno, GrupalAssignment, type Comision } from "@/domain/entities";
-import { getAsignacionesGrupos } from "@/lib/sheets";
+import { getAsignacionesGrupos, type AsignacionGrupoRow } from "@/lib/sheets";
 import { upsertGrupoConMiembro } from "@/lib/repositories";
 
 /**
@@ -14,17 +14,24 @@ import { upsertGrupoConMiembro } from "@/lib/repositories";
  * Limitación consciente: si todavía no existe el `GrupalAssignment` del paradigma,
  * el grupo no se materializa. Se resuelve la próxima vez que el alumno reingrese
  * al perfil, o por un comando de sincronización masiva (fuera de alcance acá).
+ *
+ * `asignacionesPrefetched` permite al caller reutilizar una lectura previa de la
+ * hoja cuando sincroniza a varios alumnos seguidos (resync masivo), evitando
+ * N lecturas a Sheets. Si se omite, la función lee la hoja por sí misma.
  */
 export async function sincronizarGruposDelAlumno(
   githubUsername: string,
-  comision: Comision
+  comision: Comision,
+  asignacionesPrefetched?: AsignacionGrupoRow[]
 ): Promise<void> {
   const gruposConfig = comision.columnConfig?.grupos;
   if (!gruposConfig) return;
 
   const ghNorm = githubUsername.toLowerCase().trim();
 
-  const asignaciones = await getAsignacionesGrupos(comision.spreadsheetId, gruposConfig);
+  const asignaciones =
+    asignacionesPrefetched ??
+    (await getAsignacionesGrupos(comision.spreadsheetId, gruposConfig));
 
   const deEsteAlumno = asignaciones.filter((a) => a.githubUsername === ghNorm);
   if (deEsteAlumno.length === 0) return;

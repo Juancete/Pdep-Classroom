@@ -17,12 +17,17 @@ export default async function PerfilPage() {
 
   // Si el alumno tiene sync de grupos pendiente, reintentamos al montar
   // el perfil. Si funciona, el flag se limpia acá mismo y el banner global
-  // desaparece en el próximo render. Si sigue fallando, el wrapper lo
-  // deja prendido y el banner sigue visible.
+  // desaparece en el próximo render. Si sigue fallando, el wrapper deja el
+  // flag prendido y el banner sigue visible — no queremos que la excepción
+  // rompa el render del perfil.
   if (alumno.gruposSyncFallidoEn) {
     const comisionActiva = await getComisionActiva();
     if (comisionActiva) {
-      await intentarSincronizarGrupos(githubUsername, comisionActiva);
+      try {
+        await intentarSincronizarGrupos(githubUsername, comisionActiva);
+      } catch {
+        // Flag persistente en DB se encarga del banner en este render.
+      }
     }
   }
 

@@ -31,10 +31,15 @@ export async function PATCH(req: Request) {
       );
     }
 
-    const gruposSyncFallida = await intentarSincronizarGrupos(
-      user.githubUsername,
-      resultado.comision
-    );
+    // Los datos del alumno ya se actualizaron. Si el sync falla, el wrapper
+    // marca el flag en DB para disparar el retry automático en /perfil —
+    // degradamos la respuesta a `gruposSync: "error"` para el warning inmediato.
+    let gruposSyncFallida = false;
+    try {
+      await intentarSincronizarGrupos(user.githubUsername, resultado.comision);
+    } catch {
+      gruposSyncFallida = true;
+    }
 
     return NextResponse.json({
       ok: true,

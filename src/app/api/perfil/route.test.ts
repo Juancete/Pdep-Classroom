@@ -89,7 +89,7 @@ describe("PATCH /api/perfil", () => {
     mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: true });
     mockUpsertAlumno.mockResolvedValue(undefined);
     mockMarcarRegistroConfirmado.mockResolvedValue(undefined);
-    mockIntentarSincronizarGrupos.mockResolvedValue(false);
+    mockIntentarSincronizarGrupos.mockResolvedValue(undefined);
   });
 
   it("actualiza Sheets y DB en un mismo request", async () => {
@@ -173,15 +173,15 @@ describe("PATCH /api/perfil", () => {
       );
     });
 
-    it("no incluye gruposSync en el body cuando el wrapper devuelve false (ok)", async () => {
+    it("no incluye gruposSync en el body cuando el wrapper completa sin throwear", async () => {
       const res = await PATCH(makeRequest(validBody));
       const json = await res.json();
       expect(res.status).toBe(200);
       expect(json.gruposSync).toBeUndefined();
     });
 
-    it("responde 200 con gruposSync='error' cuando el wrapper devuelve true (falló)", async () => {
-      mockIntentarSincronizarGrupos.mockResolvedValue(true);
+    it("responde 200 con gruposSync='error' cuando el wrapper throwea (el alta se preserva, el flag en DB dispara retry)", async () => {
+      mockIntentarSincronizarGrupos.mockRejectedValue(new Error("Sheets caído"));
 
       const res = await PATCH(makeRequest(validBody));
       const json = await res.json();
