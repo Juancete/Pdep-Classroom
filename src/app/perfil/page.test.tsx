@@ -137,7 +137,7 @@ describe("Perfil page", () => {
     beforeEach(() => {
       mockAuth.mockResolvedValue(makeSession("juangarcia"));
       mockGetComisionActiva.mockResolvedValue({ id: "c1" });
-      mockIntentarSincronizarGrupos.mockResolvedValue(false);
+      mockIntentarSincronizarGrupos.mockResolvedValue(undefined);
     });
 
     it("no reintenta la sync si el alumno no tiene el flag prendido", async () => {
@@ -164,6 +164,15 @@ describe("Perfil page", () => {
       mockGetComisionActiva.mockResolvedValue(null);
       await PerfilPage();
       expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+    });
+
+    it("no rompe el render si el wrapper throwea (el flag persistido en DB mantiene el banner)", async () => {
+      mockGetAlumnoByGithub.mockResolvedValue(
+        makeAlumno({ gruposSyncFallidoEn: new Date("2026-04-01") })
+      );
+      mockIntentarSincronizarGrupos.mockRejectedValue(new Error("Sheets caído"));
+
+      await expect(PerfilPage()).resolves.toBeDefined();
     });
   });
 });

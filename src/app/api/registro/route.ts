@@ -73,10 +73,16 @@ export async function POST(req: Request) {
       );
     }
 
-    const gruposSyncFallida = await intentarSincronizarGrupos(
-      body.githubUsername,
-      resultado.comision
-    );
+    // Hook accesorio: el alta ya está persistida. Si el sync falla, el wrapper
+    // marca el flag en DB para disparar el retry automático en /perfil — solo
+    // degradamos la respuesta a `gruposSync: "error"` para que el form muestre
+    // el warning inmediato.
+    let gruposSyncFallida = false;
+    try {
+      await intentarSincronizarGrupos(body.githubUsername, resultado.comision);
+    } catch {
+      gruposSyncFallida = true;
+    }
 
     return NextResponse.json({
       ok: true,

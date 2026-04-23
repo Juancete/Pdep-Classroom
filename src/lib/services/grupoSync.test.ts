@@ -157,6 +157,24 @@ describe("sincronizarGruposDelAlumno", () => {
     ).rejects.toThrow("DB conflict");
   });
 
+  it("reutiliza asignacionesPrefetched y no vuelve a leer la hoja", async () => {
+    const prefetched = [
+      { githubUsername: "juangarcia", paradigma: "funcional" as const, nombreGrupo: "Los Lambdas" },
+    ];
+    mockEmFind.mockResolvedValue([grupalAssignmentFake]);
+
+    await sincronizarGruposDelAlumno("juangarcia", comisionConGrupos, prefetched);
+
+    expect(mockGetAsignacionesGrupos).not.toHaveBeenCalled();
+    expect(mockUpsertGrupoConMiembro).toHaveBeenCalledTimes(1);
+    expect(mockUpsertGrupoConMiembro).toHaveBeenCalledWith({
+      nombreGrupo: "Los Lambdas",
+      paradigma: "funcional",
+      assignment: grupalAssignmentFake,
+      alumno: alumnoFake,
+    });
+  });
+
   it("no hace nada si el alumno no está en DB (edge: borrado entre confirm y sync)", async () => {
     mockGetAsignacionesGrupos.mockResolvedValue([
       { githubUsername: "juangarcia", paradigma: "funcional", nombreGrupo: "Los Lambdas" },

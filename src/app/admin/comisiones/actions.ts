@@ -9,7 +9,7 @@ import {
   LegajoConflictError,
   getAlumnosConGruposSyncPendiente,
 } from "@/lib/repositories";
-import { getAlumnos } from "@/lib/sheets";
+import { getAlumnos, getAsignacionesGrupos, type AsignacionGrupoRow } from "@/lib/sheets";
 import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -208,12 +208,31 @@ export async function sincronizarGruposDeLaComision(
   if (!comision) return { status: "error", message: "Comisión no encontrada" };
 
   const pendientes = await getAlumnosConGruposSyncPendiente(id);
+
+  // Lectura única de la hoja de grupos: con un solo pendiente el costo es el
+  // mismo que antes, pero con N evitamos N lecturas a Sheets (cada alumno
+  // releía la hoja entera). Si la lectura falla reportamos el error global y
+  // no tocamos los flags — ya estaban en fallido y un retry masivo sobre una
+  // hoja inaccesible no aporta información nueva.
+  let asignaciones: AsignacionGrupoRow[] | undefined;
+  const gruposConfig = comision.columnConfig?.grupos;
+  if (gruposConfig && pendientes.length > 0) {
+    try {
+      asignaciones = await getAsignacionesGrupos(comision.spreadsheetId, gruposConfig);
+    } catch (e) {
+      return { status: "error", message: (e as Error).message };
+    }
+  }
+
   let sincronizados = 0;
   let aunConError = 0;
   for (const alumno of pendientes) {
-    const fallo = await intentarSincronizarGrupos(alumno.githubUsername, comision);
-    if (fallo) aunConError++;
-    else sincronizados++;
+    try {
+      await intentarSincronizarGrupos(alumno.githubUsername, comision, asignaciones);
+      sincronizados++;
+    } catch {
+      aunConError++;
+    }
   }
 
   revalidatePath("/admin/comisiones");

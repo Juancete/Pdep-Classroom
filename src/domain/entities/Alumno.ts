@@ -35,7 +35,7 @@ export class Alumno {
   // cuando un reintento exitoso lo resuelve. Mientras esté prendido, el header
   // muestra un banner persistente y el perfil reintenta la sync al montar.
   @Property({ type: 'datetime', nullable: true })
-  gruposSyncFallidoEn?: Date;
+  gruposSyncFallidoEn: Date | null = null;
 
   get nombreCompleto(): string {
     return `${this.apellido}, ${this.nombre}`;
