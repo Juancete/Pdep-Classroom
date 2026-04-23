@@ -5,6 +5,7 @@ import {
   marcarRegistroConfirmado,
   LegajoConflictError,
 } from "@/lib/repositories";
+import { sincronizarGruposDelAlumno } from "@/lib/services/grupoSync";
 import { logger } from "@/lib/logger";
 
 /**
@@ -97,6 +98,23 @@ export async function confirmarDatosAlumno(
       "Sheets confirmado pero falló marcar registroConfirmadoEn en DB — alumno queda sin flag hasta que reintente"
     );
     throw error;
+  }
+
+  // Sincronización de grupos: best-effort. El registro del alumno ya está OK;
+  // si la hoja de grupos no existe, no se puede leer o el upsert falla, lo
+  // logueamos y seguimos — no queremos abortar un registro confirmado por
+  // un problema en una funcionalidad secundaria.
+  try {
+    await sincronizarGruposDelAlumno(input.githubUsername, comisionActiva);
+  } catch (error) {
+    logger.error(
+      {
+        err: error,
+        githubUsername: input.githubUsername,
+        comisionId: comisionActiva.id,
+      },
+      "Falló sincronización de grupos desde planilla — registro ya confirmado"
+    );
   }
 
   return { ok: true };

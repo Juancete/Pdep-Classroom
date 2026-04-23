@@ -43,6 +43,13 @@ vi.mock("@/lib/repositories", () => ({
   LegajoConflictError: FakeLegajoConflictError,
 }));
 
+// El hook de sync de grupos arrastra `@/lib/db` (reflect-metadata) si no se
+// mockea acá. Como el route test no verifica el comportamiento del hook (lo
+// hace `alumnoRegistro.test.ts`), basta con un stub no-op.
+vi.mock("@/lib/services/grupoSync", () => ({
+  sincronizarGruposDelAlumno: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { PATCH } from "./route";
 
 // ── Helpers ──────────────────────────────────────────────────
