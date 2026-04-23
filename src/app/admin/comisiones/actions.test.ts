@@ -9,6 +9,9 @@ const mockGetComision = vi.fn();
 const mockUpsertAlumnos = vi.fn();
 const mockRedirect = vi.fn();
 const mockGetAlumnos = vi.fn();
+const mockGetAsignacionesGrupos = vi.fn();
+const mockGetAlumnosConGruposSyncPendiente = vi.fn();
+const mockIntentarSincronizarGrupos = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
@@ -34,11 +37,19 @@ vi.mock("@/lib/repositories", () => ({
   updateComision: (...args: unknown[]) => mockUpdateComision(...args),
   getComision: (...args: unknown[]) => mockGetComision(...args),
   upsertAlumnos: (...args: unknown[]) => mockUpsertAlumnos(...args),
+  getAlumnosConGruposSyncPendiente: (...args: unknown[]) =>
+    mockGetAlumnosConGruposSyncPendiente(...args),
   LegajoConflictError: FakeLegajoConflictError,
+}));
+
+vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
+  intentarSincronizarGrupos: (...args: unknown[]) =>
+    mockIntentarSincronizarGrupos(...args),
 }));
 
 vi.mock("@/lib/sheets", () => ({
   getAlumnos: (...args: unknown[]) => mockGetAlumnos(...args),
+  getAsignacionesGrupos: (...args: unknown[]) => mockGetAsignacionesGrupos(...args),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -49,7 +60,12 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
 }));
 
-import { crearComision, actualizarComision, sincronizarAlumnos } from "./actions";
+import {
+  crearComision,
+  actualizarComision,
+  sincronizarAlumnos,
+  sincronizarGruposDeLaComision,
+} from "./actions";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -264,5 +280,121 @@ describe("sincronizarAlumnos", () => {
       status: "error",
       message: "El legajo 111 ya está registrado con el usuario @otra-persona. Verificá que sea el tuyo.",
     });
+  });
+});
+
+// ── sincronizarGruposDeLaComision ────────────────────────────
+
+describe("sincronizarGruposDeLaComision", () => {
+  const gruposConfig = {
+    sheetName: "Alumnos",
+    headerRows: 1,
+    githubUsername: 3,
+    nombreGrupoPorParadigma: { funcional: 5 },
+  };
+  const comision = {
+    id: "c1",
+    spreadsheetId: "sheet-xyz",
+    columnConfig: { grupos: gruposConfig },
+  };
+  const asignacionesFake = [
+    { githubUsername: "ana", paradigma: "funcional", nombreGrupo: "Los Lambdas" },
+  ];
+
+  function makeFd(): FormData {
+    const fd = new FormData();
+    fd.append("comisionId", "c1");
+    return fd;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequireAdmin.mockResolvedValue(undefined);
+    mockGetComision.mockResolvedValue(comision);
+    mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([]);
+    mockIntentarSincronizarGrupos.mockResolvedValue(undefined);
+    mockGetAsignacionesGrupos.mockResolvedValue(asignacionesFake);
+  });
+
+  it("devuelve error si la comisión no existe", async () => {
+    mockGetComision.mockResolvedValue(null);
+    const result = await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
+    expect(result).toEqual({ status: "error", message: "Comisión no encontrada" });
+    expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+  });
+
+  it("devuelve ok con 0 sincronizados cuando no hay alumnos pendientes", async () => {
+    const result = await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
+    expect(result).toEqual({ status: "ok", sincronizados: 0, aunConError: 0 });
+    expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+    // Sin pendientes no hace falta leer la hoja.
+    expect(mockGetAsignacionesGrupos).not.toHaveBeenCalled();
+  });
+
+  it("lee la hoja de grupos una sola vez y reutiliza el resultado en cada alumno", async () => {
+    mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([
+      { githubUsername: "ana" },
+      { githubUsername: "bruno" },
+      { githubUsername: "cintia" },
+    ]);
+
+    await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
+
+    expect(mockGetAsignacionesGrupos).toHaveBeenCalledTimes(1);
+    expect(mockGetAsignacionesGrupos).toHaveBeenCalledWith("sheet-xyz", gruposConfig);
+    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledTimes(3);
+    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith("ana", comision, asignacionesFake);
+    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith("bruno", comision, asignacionesFake);
+    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith("cintia", comision, asignacionesFake);
+  });
+
+  it("devuelve error y no sincroniza nada si la lectura única de la hoja falla", async () => {
+    mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([{ githubUsername: "ana" }]);
+    mockGetAsignacionesGrupos.mockRejectedValue(new Error("No se pudo leer la hoja de grupos: rate limited"));
+
+    const result = await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
+
+    expect(result).toEqual({
+      status: "error",
+      message: "No se pudo leer la hoja de grupos: rate limited",
+    });
+    expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+  });
+
+  it("no lee la hoja si la comisión no tiene config de grupos (no-op que limpia flags)", async () => {
+    mockGetComision.mockResolvedValue({ id: "c1", spreadsheetId: "sheet-xyz", columnConfig: {} });
+    mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([{ githubUsername: "ana" }]);
+
+    await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
+
+    expect(mockGetAsignacionesGrupos).not.toHaveBeenCalled();
+    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith(
+      "ana",
+      expect.objectContaining({ id: "c1" }),
+      undefined
+    );
+  });
+
+  it("cuenta cuántos se resolvieron y cuántos siguen con error", async () => {
+    mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([
+      { githubUsername: "ana" },
+      { githubUsername: "bruno" },
+      { githubUsername: "cintia" },
+    ]);
+    mockIntentarSincronizarGrupos
+      .mockResolvedValueOnce(undefined) // ana: ok
+      .mockRejectedValueOnce(new Error("sigue fallando")) // bruno
+      .mockResolvedValueOnce(undefined); // cintia: ok
+
+    const result = await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
+
+    expect(result).toEqual({ status: "ok", sincronizados: 2, aunConError: 1 });
+  });
+
+  it("requiere admin antes de ejecutar", async () => {
+    mockRequireAdmin.mockRejectedValue(new Error("forbidden"));
+    await expect(
+      sincronizarGruposDeLaComision({ status: "idle" }, makeFd())
+    ).rejects.toThrow("forbidden");
   });
 });

@@ -6,6 +6,9 @@ export {
   upsertAlumno,
   upsertAlumnos,
   marcarRegistroConfirmado,
+  marcarGruposSyncFallido,
+  marcarGruposSyncOk,
+  getAlumnosConGruposSyncPendiente,
   countAlumnos,
   LegajoConflictError,
 } from "./AlumnoRepository";

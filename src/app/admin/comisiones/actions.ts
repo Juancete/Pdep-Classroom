@@ -1,8 +1,16 @@
 "use server";
 
 import { requireAdmin } from "@/lib/session";
-import { createComision, updateComision, getComision, upsertAlumnos, LegajoConflictError } from "@/lib/repositories";
-import { getAlumnos } from "@/lib/sheets";
+import {
+  createComision,
+  updateComision,
+  getComision,
+  upsertAlumnos,
+  LegajoConflictError,
+  getAlumnosConGruposSyncPendiente,
+} from "@/lib/repositories";
+import { getAlumnos, getAsignacionesGrupos, type AsignacionGrupoRow } from "@/lib/sheets";
+import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -178,4 +186,56 @@ export async function sincronizarAlumnos(
 
   revalidatePath("/admin/comisiones");
   return { status: "ok", sincronizados };
+}
+
+export type SyncGruposState =
+  | { status: "idle" }
+  | { status: "ok"; sincronizados: number; aunConError: number }
+  | { status: "error"; message: string };
+
+// Reintenta `sincronizarGruposDelAlumno` para todos los alumnos de la comisión
+// con el flag `gruposSyncFallidoEn` prendido. El wrapper `intentarSincronizarGrupos`
+// se encarga del logging y de limpiar/mantener el flag por alumno; esta action
+// solo agrega un resumen para que el admin lo vea.
+export async function sincronizarGruposDeLaComision(
+  _prevState: SyncGruposState,
+  formData: FormData
+): Promise<SyncGruposState> {
+  await requireAdmin();
+
+  const id = formData.get("comisionId") as string;
+  const comision = await getComision(id);
+  if (!comision) return { status: "error", message: "Comisión no encontrada" };
+
+  const pendientes = await getAlumnosConGruposSyncPendiente(id);
+
+  // Lectura única de la hoja de grupos: con un solo pendiente el costo es el
+  // mismo que antes, pero con N evitamos N lecturas a Sheets (cada alumno
+  // releía la hoja entera). Si la lectura falla reportamos el error global y
+  // no tocamos los flags — ya estaban en fallido y un retry masivo sobre una
+  // hoja inaccesible no aporta información nueva.
+  let asignaciones: AsignacionGrupoRow[] | undefined;
+  const gruposConfig = comision.columnConfig?.grupos;
+  if (gruposConfig && pendientes.length > 0) {
+    try {
+      asignaciones = await getAsignacionesGrupos(comision.spreadsheetId, gruposConfig);
+    } catch (e) {
+      return { status: "error", message: (e as Error).message };
+    }
+  }
+
+  let sincronizados = 0;
+  let aunConError = 0;
+  for (const alumno of pendientes) {
+    try {
+      await intentarSincronizarGrupos(alumno.githubUsername, comision, asignaciones);
+      sincronizados++;
+    } catch {
+      aunConError++;
+    }
+  }
+
+  revalidatePath("/admin/comisiones");
+  revalidatePath(`/admin/comisiones/${id}/edit`);
+  return { status: "ok", sincronizados, aunConError };
 }

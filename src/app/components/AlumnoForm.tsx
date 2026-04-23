@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useApiCall } from "@/app/hooks/useApiCall";
 
@@ -38,9 +39,11 @@ export function AlumnoForm({
   submitLabel,
   successMessage,
 }: Props) {
+  const router = useRouter();
   const { loading, error, call } = useApiCall();
   const [success, setSuccess] = useState(false);
   const [groupWarning, setGroupWarning] = useState(false);
+  const [gruposSyncWarning, setGruposSyncWarning] = useState(false);
   const [fieldError, setFieldError] = useState<{ message: string; field: string } | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -68,12 +71,18 @@ export function AlumnoForm({
         throw new Error(json.error ?? "Error al guardar");
       }
       const hasGroupWarning = json.groupSubscription === "error";
+      const hasGruposSyncWarning = json.gruposSync === "error";
       setGroupWarning(hasGroupWarning);
+      setGruposSyncWarning(hasGruposSyncWarning);
       setSuccess(true);
-      // Damos más tiempo antes de redirigir si hay que mostrar el warning
+      // Revalidamos el árbol server para que el banner global
+      // `SyncPendingBanner` refleje el estado actualizado del flag
+      // (lo limpiamos si la sync funcionó, lo prendemos si falló).
+      router.refresh();
+      // Damos más tiempo antes de redirigir si hay que mostrar un warning
       // para que el alumno alcance a leerlo.
       if (onSuccessRedirect) {
-        const delay = hasGroupWarning ? 5000 : 1500;
+        const delay = hasGroupWarning || hasGruposSyncWarning ? 5000 : 1500;
         setTimeout(() => { window.location.href = onSuccessRedirect; }, delay);
       }
     });
@@ -91,6 +100,14 @@ export function AlumnoForm({
             className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-800"
           >
             No pudimos suscribirte al grupo del curso. Avisale a un docente para que te agregue manualmente.
+          </div>
+        )}
+        {gruposSyncWarning && (
+          <div
+            role="alert"
+            className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-800"
+          >
+            Tus datos quedaron guardados, pero no pudimos asignarte al grupo de TP. Guardá de nuevo para reintentar; si persiste, avisale a un docente.
           </div>
         )}
       </div>
