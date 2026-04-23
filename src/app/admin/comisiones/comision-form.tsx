@@ -1,6 +1,7 @@
 "use client";
 
 import { useFormState } from "react-dom";
+import { useState } from "react";
 import type { ComisionFormState } from "./actions";
 import { INPUT_CLASS, INPUT_ERROR_CLASS, FieldError, SubmitButton } from "../ui";
 import { DEFAULT_COLUMN_CONFIG, type ColumnConfig } from "@/types";
@@ -30,20 +31,23 @@ function ColSelect({
   label,
   defaultValue,
   error,
+  optional = false,
 }: {
   name: string;
   label: string;
-  defaultValue: number;
+  defaultValue: number | undefined;
   error?: string;
+  optional?: boolean;
 }) {
   return (
     <div>
       <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
       <select
         name={name}
-        defaultValue={defaultValue}
+        defaultValue={defaultValue ?? ""}
         className={`w-full rounded-md border px-2 py-1.5 text-sm font-mono ${error ? "border-red-400 bg-red-50" : "border-gray-300 bg-white"} focus:ring-2 focus:ring-pdep-500 focus:border-pdep-500 outline-none`}
       >
+        {optional && <option value="">(sin columna)</option>}
         {COL_OPTIONS.map(({ value, label: lbl }) => (
           <option key={value} value={value}>
             {lbl} (col {value + 1})
@@ -59,6 +63,8 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel }: Props)
   const [state, formAction] = useFormState(action, null);
   const errors = state?.errors ?? {};
   const cfg = defaultValues.columnConfig ?? DEFAULT_COLUMN_CONFIG;
+  const grupos = cfg.grupos;
+  const [gruposEnabled, setGruposEnabled] = useState(Boolean(grupos));
 
   return (
     <form action={formAction} className="space-y-5">
@@ -162,6 +168,95 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel }: Props)
           <ColSelect name="col_githubUsername" label="Usuario GitHub" defaultValue={cfg.githubUsername} error={errors.col_githubUsername?.[0]} />
           <ColSelect name="col_email" label="Email" defaultValue={cfg.email} error={errors.col_email?.[0]} />
         </div>
+      </fieldset>
+
+      {/* Configuración de hoja de grupos (opcional) */}
+      <fieldset className="border border-gray-200 rounded-lg p-4 space-y-4">
+        <legend className="text-sm font-semibold text-gray-700 px-1">
+          Hoja de grupos (opcional)
+        </legend>
+        <p className="text-xs text-gray-500">
+          Si la planilla tiene columnas con el nombre del grupo por paradigma, al
+          registrarse un alumno se materializan automáticamente los grupos en la DB
+          (uno por cada TP grupal ya creado del paradigma correspondiente).
+        </p>
+
+        <div className="flex items-center gap-3">
+          <input
+            id="grupos_enabled"
+            name="grupos_enabled"
+            type="checkbox"
+            checked={gruposEnabled}
+            onChange={(e) => setGruposEnabled(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-pdep-600 focus:ring-pdep-500"
+          />
+          <label htmlFor="grupos_enabled" className="text-sm font-medium text-gray-700">
+            Hay hoja de grupos en la planilla
+          </label>
+        </div>
+
+        {gruposEnabled && (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Nombre de la hoja (grupos)
+                </label>
+                <input
+                  name="grupos_sheetName"
+                  defaultValue={grupos?.sheetName ?? cfg.sheetName}
+                  placeholder="Alumnos"
+                  className={`${INPUT_CLASS} text-sm font-mono`}
+                />
+                <FieldError message={errors.grupos_sheetName?.[0]} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Filas de encabezado (grupos)
+                </label>
+                <input
+                  name="grupos_headerRows"
+                  type="number"
+                  min={0}
+                  max={10}
+                  defaultValue={grupos?.headerRows ?? cfg.headerRows}
+                  className={`${INPUT_CLASS} text-sm`}
+                />
+                <FieldError message={errors.grupos_headerRows?.[0]} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <ColSelect
+                name="grupos_col_githubUsername"
+                label="Usuario GitHub"
+                defaultValue={grupos?.githubUsername ?? cfg.githubUsername}
+                error={errors.grupos_col_githubUsername?.[0]}
+              />
+              <ColSelect
+                name="grupos_col_funcional"
+                label="Grupo funcional"
+                defaultValue={grupos?.nombreGrupoPorParadigma.funcional}
+                error={errors.grupos_col_funcional?.[0]}
+                optional
+              />
+              <ColSelect
+                name="grupos_col_logico"
+                label="Grupo lógico"
+                defaultValue={grupos?.nombreGrupoPorParadigma.logico}
+                error={errors.grupos_col_logico?.[0]}
+                optional
+              />
+              <ColSelect
+                name="grupos_col_objetos"
+                label="Grupo objetos"
+                defaultValue={grupos?.nombreGrupoPorParadigma.objetos}
+                error={errors.grupos_col_objetos?.[0]}
+                optional
+              />
+            </div>
+          </>
+        )}
       </fieldset>
 
       {/* Submit */}
