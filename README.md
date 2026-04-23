@@ -593,6 +593,7 @@ Reutilizamos la service account que ya está en `GOOGLE_SERVICE_ACCOUNT_KEY` —
 - [ ] Export de estado de entregas a Google Sheets (cerrar el loop con la planilla)
 - [x] Suscribir a los alumnos al grupo de Google Groups automáticamente
 - [ ] Observabilidad ([#18](https://github.com/Juancete/Pdep-Classroom/issues/18)) — tabla `error_log` + pantalla `/admin/errores` + badge en el header con no leídos (PR 2 del refactor de logging, hoy los 500 solo logguean por pino a Vercel)
+- [ ] Vista admin detallada de alumnos con `gruposSyncFallidoEn` pendiente ([#21](https://github.com/Juancete/Pdep-Classroom/issues/21)) — listar quiénes son, desde cuándo, y permitir reintento por alumno. Hoy hay un badge + botón "Resincronizar grupos" masivo en `/admin/comisiones/[id]/edit`, pero no se ve el detalle individual.
 
 ## Refactor en curso
 

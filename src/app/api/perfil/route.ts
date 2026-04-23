@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/session";
 import { type RegistroInput } from "@/lib/sheets";
 import { internalServerError } from "@/lib/api-errors";
 import { confirmarDatosAlumno } from "@/lib/services/alumnoRegistro";
+import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
 
 type PerfilInput = Omit<RegistroInput, "githubUsername">;
 
@@ -30,7 +31,20 @@ export async function PATCH(req: Request) {
       );
     }
 
-    return NextResponse.json({ ok: true });
+    // Los datos del alumno ya se actualizaron. Si el sync falla, el wrapper
+    // marca el flag en DB para disparar el retry automático en /perfil —
+    // degradamos la respuesta a `gruposSync: "error"` para el warning inmediato.
+    let gruposSyncFallida = false;
+    try {
+      await intentarSincronizarGrupos(user.githubUsername, resultado.comision);
+    } catch {
+      gruposSyncFallida = true;
+    }
+
+    return NextResponse.json({
+      ok: true,
+      ...(gruposSyncFallida && { gruposSync: "error" }),
+    });
   } catch (error) {
     return internalServerError("PATCH /api/perfil", error);
   }

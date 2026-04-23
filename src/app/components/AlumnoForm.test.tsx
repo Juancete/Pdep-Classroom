@@ -6,6 +6,11 @@ vi.mock("next-auth/react", () => ({
   signOut: (...args: unknown[]) => mockSignOut(...args),
 }));
 
+const mockRouterRefresh = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: mockRouterRefresh }),
+}));
+
 const DEFAULT_VALUES = {
   githubUsername: "juangarcia",
   legajo: "12345",
@@ -120,6 +125,13 @@ describe("AlumnoForm", () => {
       await waitFor(() => expect(screen.getByText("¡Datos actualizados!")).toBeInTheDocument());
       expect(screen.queryByRole("button")).not.toBeInTheDocument();
     });
+
+    it("llama a router.refresh() post-submit OK para re-renderizar el banner global", async () => {
+      mockRouterRefresh.mockClear();
+      renderForm();
+      fireEvent.submit(screen.getByRole("button").closest("form")!);
+      await waitFor(() => expect(mockRouterRefresh).toHaveBeenCalled());
+    });
   });
 
   describe("warning de suscripción al grupo", () => {
@@ -173,6 +185,45 @@ describe("AlumnoForm", () => {
       fireEvent.submit(screen.getByRole("button").closest("form")!);
       await waitFor(() => screen.getByText("Listo"));
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("warning de sincronización de grupos", () => {
+    function mockOkConBody(body: Record<string, unknown>) {
+      vi.mocked(fetch).mockResolvedValue(
+        new Response(JSON.stringify({ ok: true, ...body }), { status: 200 })
+      );
+    }
+
+    const SYNC_WARNING_PATTERN = /no pudimos asignarte al grupo de tp/i;
+
+    it("muestra el warning cuando gruposSync === 'error'", async () => {
+      mockOkConBody({ gruposSync: "error" });
+      renderForm();
+      fireEvent.submit(screen.getByRole("button").closest("form")!);
+      await waitFor(() =>
+        expect(screen.getByRole("alert")).toHaveTextContent(SYNC_WARNING_PATTERN)
+      );
+    });
+
+    it("no muestra el warning cuando el body no trae gruposSync", async () => {
+      mockOkConBody({});
+      renderForm({ successMessage: "Listo" });
+      fireEvent.submit(screen.getByRole("button").closest("form")!);
+      await waitFor(() => screen.getByText("Listo"));
+      expect(screen.queryByText(SYNC_WARNING_PATTERN)).not.toBeInTheDocument();
+    });
+
+    it("muestra ambos warnings cuando fallan Google Group y sync de grupos", async () => {
+      mockOkConBody({ groupSubscription: "error", gruposSync: "error" });
+      renderForm();
+      fireEvent.submit(screen.getByRole("button").closest("form")!);
+      await waitFor(() => {
+        const alerts = screen.getAllByRole("alert");
+        expect(alerts).toHaveLength(2);
+      });
+      expect(screen.getByText(/no pudimos suscribirte al grupo/i)).toBeInTheDocument();
+      expect(screen.getByText(SYNC_WARNING_PATTERN)).toBeInTheDocument();
     });
   });
 

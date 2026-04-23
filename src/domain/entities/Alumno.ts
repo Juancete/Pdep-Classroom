@@ -30,6 +30,13 @@ export class Alumno {
   @ManyToOne(() => Comision, { nullable: true })
   registroConfirmadoEn?: Comision;
 
+  // Timestamp del último fallo al sincronizar los grupos del alumno desde la
+  // planilla. Se prende cuando `sincronizarGruposDelAlumno` throwea y se limpia
+  // cuando un reintento exitoso lo resuelve. Mientras esté prendido, el header
+  // muestra un banner persistente y el perfil reintenta la sync al montar.
+  @Property({ type: 'datetime', nullable: true })
+  gruposSyncFallidoEn: Date | null = null;
+
   get nombreCompleto(): string {
     return `${this.apellido}, ${this.nombre}`;
   }
