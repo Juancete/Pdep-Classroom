@@ -3,7 +3,7 @@ import { Alumno } from "./Alumno";
 import {
   Assignment,
   type ParticipantesResueltos,
-  type TotalEsperadoCtx,
+  type FuentesDeConteo,
 } from "./Assignment";
 
 @Entity({ discriminatorValue: "individual" })
@@ -16,8 +16,8 @@ export class IndividualAssignment extends Assignment {
     return "Alumnos";
   }
 
-  async totalEsperado(ctx: TotalEsperadoCtx): Promise<number> {
-    return (await ctx.getAlumnosDelCurso()).length;
+  async totalEsperado(fuentes: FuentesDeConteo): Promise<number> {
+    return (await fuentes.getAlumnosDelCurso()).length;
   }
 
   async resolverParticipantesPara(user: {

@@ -179,7 +179,7 @@ describe("POST /api/assignments/[id]/accept", () => {
       return {
         id,
         nombre: "Los Lambdas",
-        alumnos: { getItems: () => githubUsernames.map((u) => ({ githubUsername: u })) },
+        alumnos: { getItems: () => githubUsernames.map((username) => ({ githubUsername: username })) },
       };
     }
 

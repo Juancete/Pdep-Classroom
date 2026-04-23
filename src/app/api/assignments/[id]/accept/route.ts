@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
 import { getAssignment, getEntregaDeUsuario, createEntrega, getGrupoDeAlumnoEnAssignment } from "@/lib/repositories";
-import { GrupoNoAsignadoError } from "@/domain/entities";
+import { GrupoNoAsignadoError, type ParticipantesResueltos } from "@/domain/entities";
 import { crearEntrega, repoExists } from "@/lib/github";
 import { buildRepoName } from "@/lib/naming";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -36,20 +36,19 @@ export async function POST(
     }
 
     // ── Determinar quiénes van al repo ───────────────────────
-    let usernames: string[];
-    let grupoId: string | undefined;
-
+    let participantes: ParticipantesResueltos;
     try {
-      ({ usernames, grupoId } = await assignment.resolverParticipantesPara(
+      participantes = await assignment.resolverParticipantesPara(
         user,
         getGrupoDeAlumnoEnAssignment
-      ));
-    } catch (e) {
-      if (e instanceof GrupoNoAsignadoError) {
-        return NextResponse.json({ error: e.message }, { status: 400 });
+      );
+    } catch (error) {
+      if (error instanceof GrupoNoAsignadoError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
       }
-      throw e;
+      throw error;
     }
+    const { usernames, grupoId } = participantes;
 
     // ── Extraer nombre del template (sin org) ────────────────
     const templateRepo = assignment.templateRepo.includes("/")
@@ -90,9 +89,9 @@ export async function POST(
     });
 
     return NextResponse.json(entrega);
-  } catch (e) {
-    console.error("Error aceptando assignment:", e);
-    const message = e instanceof Error ? e.message : "Error interno";
+  } catch (error) {
+    console.error("Error aceptando assignment:", error);
+    const message = error instanceof Error ? error.message : "Error interno";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
