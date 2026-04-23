@@ -28,14 +28,45 @@ export function NavMenu({ links, username, image, isAdmin }: Props) {
 
   useEffect(() => {
     if (!open) return;
+    const drawer = document.getElementById("mobile-drawer");
+    if (!drawer) return;
+
+    const previousActive = document.activeElement as HTMLElement | null;
+    const focusableSelector =
+      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const getFocusables = () =>
+      Array.from(drawer.querySelectorAll<HTMLElement>(focusableSelector));
+
+    getFocusables()[0]?.focus();
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const items = getFocusables();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
+
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
+      if (previousActive && document.contains(previousActive)) {
+        previousActive.focus();
+      }
     };
   }, [open]);
 
