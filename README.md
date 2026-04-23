@@ -596,7 +596,7 @@ Reutilizamos la service account que ya está en `GOOGLE_SERVICE_ACCOUNT_KEY` —
 ## Refactor en curso
 
 - [x] **Fase 4** ([#11](https://github.com/Juancete/Pdep-Classroom/issues/11)) — `upsertarAlumnoEnSheets` no debe quejarse al editar + coherencia legajo↔github
-- [ ] **Fase 2** ([#13](https://github.com/Juancete/Pdep-Classroom/issues/13)) — Validación de `githubUsername` en registro/perfil con error inline en el form
+- [x] **Fase 2** ([#13](https://github.com/Juancete/Pdep-Classroom/issues/13)) — Validación de `githubUsername` en registro/perfil con error inline en el form
 - [ ] **Fase 1** ([#9](https://github.com/Juancete/Pdep-Classroom/issues/9)) — Reificar polimorfismo de `Assignment` (individual/grupal) para eliminar los IFs
 - [ ] **Fase 3** ([#10](https://github.com/Juancete/Pdep-Classroom/issues/10)) — Unificar registro y perfil en un servicio común
 - [ ] **Fase 5** ([#14](https://github.com/Juancete/Pdep-Classroom/issues/14)) — Upsert de grupos desde planilla, modelado genérico (no atado a paradigma)
