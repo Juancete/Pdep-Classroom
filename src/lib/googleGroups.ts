@@ -72,10 +72,13 @@ export async function agregarMiembroAGrupo(
 
   try {
     const admin = getDirectoryClient();
-    await admin.members.insert({
-      groupKey: groupEmail,
-      requestBody: { email: memberEmail, role: "MEMBER" },
-    });
+    await admin.members.insert(
+      {
+        groupKey: groupEmail,
+        requestBody: { email: memberEmail, role: "MEMBER" },
+      },
+      { signal: AbortSignal.timeout(10_000) }
+    );
     return { status: "added" };
   } catch (e) {
     if (isDuplicateError(e)) return { status: "already_member" };

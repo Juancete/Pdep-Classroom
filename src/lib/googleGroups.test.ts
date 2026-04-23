@@ -74,10 +74,19 @@ describe("agregarMiembroAGrupo", () => {
   it("agrega el miembro al grupo con role MEMBER (happy path)", async () => {
     const result = await agregarMiembroAGrupo("juan@gmail.com");
     expect(result).toEqual({ status: "added" });
-    expect(mockMembersInsert).toHaveBeenCalledWith({
-      groupKey: "pdep@googlegroups.com",
-      requestBody: { email: "juan@gmail.com", role: "MEMBER" },
-    });
+    expect(mockMembersInsert).toHaveBeenCalledWith(
+      {
+        groupKey: "pdep@googlegroups.com",
+        requestBody: { email: "juan@gmail.com", role: "MEMBER" },
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
+  });
+
+  it("pasa un AbortSignal con timeout para que la llamada no se cuelgue", async () => {
+    await agregarMiembroAGrupo("juan@gmail.com");
+    const opts = mockMembersInsert.mock.calls[0][1];
+    expect(opts.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("impersona al admin del workspace (domain-wide delegation)", async () => {
