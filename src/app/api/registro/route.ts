@@ -25,6 +25,12 @@ export async function POST(req: Request) {
     // error con `field` para que el form lo pinte inline y pueda ofrecer el
     // cierre de sesión. Antes lo pisábamos silenciosamente — el alumno se
     // iba sin enterarse de que había usado una cuenta ajena.
+    if (body.githubUsername !== undefined && typeof body.githubUsername !== "string") {
+      return NextResponse.json(
+        { error: "El usuario de GitHub debe ser un texto", field: "githubUsername" },
+        { status: 400 }
+      );
+    }
     const githubDelForm = body.githubUsername?.trim().toLowerCase();
     if (githubDelForm && githubDelForm !== user.githubUsername.toLowerCase()) {
       return NextResponse.json(
