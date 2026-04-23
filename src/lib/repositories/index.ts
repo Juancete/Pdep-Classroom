@@ -5,6 +5,7 @@ export {
   createAlumno,
   upsertAlumno,
   upsertAlumnos,
+  marcarRegistroConfirmado,
   countAlumnos,
   LegajoConflictError,
 } from "./AlumnoRepository";
