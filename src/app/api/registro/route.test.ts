@@ -62,7 +62,7 @@ const validBody = {
   apellido: "García",
   nombre: "Juan",
   email: "juan@gmail.com",
-  githubUsername: "attacker", // se ignora — se reemplaza por el del user autenticado
+  githubUsername: "juangarcia", // debe coincidir con el user autenticado del mock
 };
 
 // ── Tests ────────────────────────────────────────────────────
@@ -86,10 +86,28 @@ describe("POST /api/registro", () => {
     mockAgregarMiembroAGrupo.mockResolvedValue({ status: "added" });
   });
 
-  it("fuerza el githubUsername del usuario autenticado (ignora el del body)", async () => {
+  it("usa el githubUsername del usuario autenticado cuando coincide con el body", async () => {
     const res = await POST(makeRequest(validBody));
     expect(res.status).toBe(200);
     const [inputPasado] = mockUpsertarAlumnoEnSheets.mock.calls[0];
+    expect(inputPasado.githubUsername).toBe("juangarcia");
+  });
+
+  it("devuelve 400 con field=githubUsername si el body trae un github distinto al de la sesión", async () => {
+    const res = await POST(makeRequest({ ...validBody, githubUsername: "attacker" }));
+    const json = await res.json();
+    expect(res.status).toBe(400);
+    expect(json.field).toBe("githubUsername");
+    expect(json.error).toContain("juangarcia");
+    expect(json.error).toContain("attacker");
+    expect(mockUpsertAlumno).not.toHaveBeenCalled();
+    expect(mockUpsertarAlumnoEnSheets).not.toHaveBeenCalled();
+  });
+
+  it("compara githubUsername case-insensitive (no rechaza JuanGarcia vs juangarcia)", async () => {
+    const res = await POST(makeRequest({ ...validBody, githubUsername: "JuanGarcia" }));
+    expect(res.status).toBe(200);
+    const [inputPasado] = mockUpsertAlumno.mock.calls[0];
     expect(inputPasado.githubUsername).toBe("juangarcia");
   });
 
