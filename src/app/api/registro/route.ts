@@ -3,6 +3,8 @@ import { requireUser } from "@/lib/session";
 import { upsertarAlumnoEnSheets, validateRegistro, type RegistroInput } from "@/lib/sheets";
 import { getComisionActiva, upsertAlumno, LegajoConflictError } from "@/lib/repositories";
 import { agregarMiembroAGrupo } from "@/lib/googleGroups";
+import { internalServerError } from "@/lib/api-errors";
+import { logger } from "@/lib/logger";
 
 // Enmascara la parte local del email para no escupir PII a los logs,
 // preservando dominio y primeras 2 letras para que un admin pueda
@@ -97,14 +99,18 @@ export async function POST(req: Request) {
     // muestre si corresponde y logueamos el detalle server-side.
     const groupSubscription = await agregarMiembroAGrupo(body.email);
     if (groupSubscription.status === "error") {
-      console.error(
-        `Error al suscribir al Google Group: github=${body.githubUsername} email=${maskEmail(body.email)} — ${groupSubscription.error}`
+      logger.error(
+        {
+          githubUsername: body.githubUsername,
+          maskedEmail: maskEmail(body.email),
+          err: groupSubscription.error,
+        },
+        "Error al suscribir al Google Group"
       );
     }
 
     return NextResponse.json({ ok: true, groupSubscription: groupSubscription.status });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error interno";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return internalServerError("POST /api/registro", e);
   }
 }
