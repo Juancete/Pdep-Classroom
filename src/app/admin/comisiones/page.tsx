@@ -58,7 +58,7 @@ export default async function AdminComisionesPage() {
                     <span className="text-xs text-gray-400">Inactiva</span>
                   )}
                 </DataCell>
-                <DataCell label="">
+                <DataCell label="Acciones">
                   <div className="flex items-center gap-3 flex-wrap">
                     <a
                       href={`/admin/comisiones/${c.id}/edit`}
