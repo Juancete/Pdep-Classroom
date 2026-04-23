@@ -163,6 +163,8 @@ export function validateRegistro(input: RegistroInput): string | null {
     return "El legajo debe tener entre 4 y 8 dígitos";
   if (!apellido.trim()) return "El apellido es obligatorio";
   if (!nombre.trim()) return "El nombre es obligatorio";
+  if (typeof githubUsername !== "string")
+    return "El usuario de GitHub debe ser un texto";
   if (!githubUsername.trim()) return "El usuario de GitHub es obligatorio";
   if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(githubUsername.trim()))
     return "El usuario de GitHub no tiene un formato válido";

@@ -21,7 +21,26 @@ export async function POST(req: Request) {
     const user = await requireUser();
     const body = (await req.json()) as RegistroInput;
 
-    // Forzar el githubUsername del usuario autenticado (no confiar en el body)
+    // Si el form envió un githubUsername distinto al de la sesión, devolvemos
+    // error con `field` para que el form lo pinte inline y pueda ofrecer el
+    // cierre de sesión. Antes lo pisábamos silenciosamente — el alumno se
+    // iba sin enterarse de que había usado una cuenta ajena.
+    if (body.githubUsername !== undefined && typeof body.githubUsername !== "string") {
+      return NextResponse.json(
+        { error: "El usuario de GitHub debe ser un texto", field: "githubUsername" },
+        { status: 400 }
+      );
+    }
+    const githubDelForm = body.githubUsername?.trim().toLowerCase();
+    if (githubDelForm && githubDelForm !== user.githubUsername.toLowerCase()) {
+      return NextResponse.json(
+        {
+          error: `Iniciaste sesión como @${user.githubUsername} pero completaste @${body.githubUsername}. Cerrá sesión y volvé a entrar con la cuenta correcta.`,
+          field: "githubUsername",
+        },
+        { status: 400 }
+      );
+    }
     body.githubUsername = user.githubUsername;
 
     const comisionActiva = await getComisionActiva();
