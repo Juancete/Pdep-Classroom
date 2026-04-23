@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
 import { getAssignment, getEntregaDeUsuario, createEntrega, getGrupoDeAlumnoEnAssignment } from "@/lib/repositories";
+import { GrupoNoAsignadoError } from "@/domain/entities";
 import { crearEntrega, repoExists } from "@/lib/github";
 import { buildRepoName } from "@/lib/naming";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -38,21 +39,16 @@ export async function POST(
     let usernames: string[];
     let grupoId: string | undefined;
 
-    if (assignment.tipo === "grupal") {
-      const grupo = await getGrupoDeAlumnoEnAssignment(assignment.id, user.githubUsername);
-      if (!grupo) {
-        return NextResponse.json(
-          {
-            error:
-              "No tenés grupo asignado para este TP. Contactá a tu docente.",
-          },
-          { status: 400 }
-        );
+    try {
+      ({ usernames, grupoId } = await assignment.resolverParticipantesPara(
+        user,
+        getGrupoDeAlumnoEnAssignment
+      ));
+    } catch (e) {
+      if (e instanceof GrupoNoAsignadoError) {
+        return NextResponse.json({ error: e.message }, { status: 400 });
       }
-      usernames = grupo.alumnos.getItems().map((a) => a.githubUsername);
-      grupoId = grupo.id;
-    } else {
-      usernames = [user.githubUsername];
+      throw e;
     }
 
     // ── Extraer nombre del template (sin org) ────────────────

@@ -21,16 +21,19 @@ export default async function AssignmentDetailPage({
   const assignment = await getAssignment(params.id);
   if (!assignment) redirect("/admin/assignments");
 
-  const [entregas, alumnos, gruposRef] = await Promise.all([
+  // `getAlumnos` se dispara una sola vez: Individual reutiliza la misma
+  // promise vía el thunk para calcular su total, y el map de nombres también
+  // consume el resultado. Grupal ignora el thunk y pide los grupos.
+  const alumnosPromise = getAlumnos();
+  const [entregas, alumnos, total] = await Promise.all([
     getEntregas(params.id),
-    getAlumnos(),
-    assignment.tipo === "grupal"
-      ? getGruposDeAssignment(params.id)
-      : Promise.resolve([]),
+    alumnosPromise,
+    assignment.totalEsperado({
+      getAlumnosDelCurso: () => alumnosPromise,
+      getGruposDeAssignment,
+    }),
   ]);
 
-  const total =
-    assignment.tipo === "individual" ? alumnos.length : gruposRef.length;
   const aceptadas = entregas.length;
   const pendientes = Math.max(0, total - aceptadas);
 
@@ -117,7 +120,7 @@ export default async function AssignmentDetailPage({
         <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
           <div className="text-3xl font-bold text-gray-600">{total}</div>
           <div className="text-sm text-gray-500 mt-1">
-            {assignment.tipo === "individual" ? "Alumnos" : "Grupos"} totales
+            {assignment.etiquetaTotales()} totales
           </div>
         </div>
       </div>
