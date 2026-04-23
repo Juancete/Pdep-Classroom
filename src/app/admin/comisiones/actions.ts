@@ -1,8 +1,16 @@
 "use server";
 
 import { requireAdmin } from "@/lib/session";
-import { createComision, updateComision, getComision, upsertAlumnos, LegajoConflictError } from "@/lib/repositories";
+import {
+  createComision,
+  updateComision,
+  getComision,
+  upsertAlumnos,
+  LegajoConflictError,
+  getAlumnosConGruposSyncPendiente,
+} from "@/lib/repositories";
 import { getAlumnos } from "@/lib/sheets";
+import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -178,4 +186,37 @@ export async function sincronizarAlumnos(
 
   revalidatePath("/admin/comisiones");
   return { status: "ok", sincronizados };
+}
+
+export type SyncGruposState =
+  | { status: "idle" }
+  | { status: "ok"; sincronizados: number; aunConError: number }
+  | { status: "error"; message: string };
+
+// Reintenta `sincronizarGruposDelAlumno` para todos los alumnos de la comisión
+// con el flag `gruposSyncFallidoEn` prendido. El wrapper `intentarSincronizarGrupos`
+// se encarga del logging y de limpiar/mantener el flag por alumno; esta action
+// solo agrega un resumen para que el admin lo vea.
+export async function sincronizarGruposDeLaComision(
+  _prevState: SyncGruposState,
+  formData: FormData
+): Promise<SyncGruposState> {
+  await requireAdmin();
+
+  const id = formData.get("comisionId") as string;
+  const comision = await getComision(id);
+  if (!comision) return { status: "error", message: "Comisión no encontrada" };
+
+  const pendientes = await getAlumnosConGruposSyncPendiente(id);
+  let sincronizados = 0;
+  let aunConError = 0;
+  for (const alumno of pendientes) {
+    const fallo = await intentarSincronizarGrupos(alumno.githubUsername, comision);
+    if (fallo) aunConError++;
+    else sincronizados++;
+  }
+
+  revalidatePath("/admin/comisiones");
+  revalidatePath(`/admin/comisiones/${id}/edit`);
+  return { status: "ok", sincronizados, aunConError };
 }

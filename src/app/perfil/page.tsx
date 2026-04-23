@@ -1,7 +1,8 @@
 import { auth } from "@/lib/auth";
-import { getAlumnoByGithub } from "@/lib/repositories";
+import { getAlumnoByGithub, getComisionActiva } from "@/lib/repositories";
 import { redirect } from "next/navigation";
 import { AlumnoForm } from "@/app/components/AlumnoForm";
+import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
 import type { PdepUser } from "@/types";
 
 export default async function PerfilPage() {
@@ -13,6 +14,17 @@ export default async function PerfilPage() {
 
   const alumno = await getAlumnoByGithub(githubUsername);
   if (!alumno) redirect("/registro");
+
+  // Si el alumno tiene sync de grupos pendiente, reintentamos al montar
+  // el perfil. Si funciona, el flag se limpia acá mismo y el banner global
+  // desaparece en el próximo render. Si sigue fallando, el wrapper lo
+  // deja prendido y el banner sigue visible.
+  if (alumno.gruposSyncFallidoEn) {
+    const comisionActiva = await getComisionActiva();
+    if (comisionActiva) {
+      await intentarSincronizarGrupos(githubUsername, comisionActiva);
+    }
+  }
 
   return (
     <div className="max-w-md mx-auto">

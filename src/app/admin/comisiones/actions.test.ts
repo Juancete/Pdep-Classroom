@@ -9,6 +9,8 @@ const mockGetComision = vi.fn();
 const mockUpsertAlumnos = vi.fn();
 const mockRedirect = vi.fn();
 const mockGetAlumnos = vi.fn();
+const mockGetAlumnosConGruposSyncPendiente = vi.fn();
+const mockIntentarSincronizarGrupos = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
@@ -34,7 +36,14 @@ vi.mock("@/lib/repositories", () => ({
   updateComision: (...args: unknown[]) => mockUpdateComision(...args),
   getComision: (...args: unknown[]) => mockGetComision(...args),
   upsertAlumnos: (...args: unknown[]) => mockUpsertAlumnos(...args),
+  getAlumnosConGruposSyncPendiente: (...args: unknown[]) =>
+    mockGetAlumnosConGruposSyncPendiente(...args),
   LegajoConflictError: FakeLegajoConflictError,
+}));
+
+vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
+  intentarSincronizarGrupos: (...args: unknown[]) =>
+    mockIntentarSincronizarGrupos(...args),
 }));
 
 vi.mock("@/lib/sheets", () => ({
@@ -49,7 +58,12 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
 }));
 
-import { crearComision, actualizarComision, sincronizarAlumnos } from "./actions";
+import {
+  crearComision,
+  actualizarComision,
+  sincronizarAlumnos,
+  sincronizarGruposDeLaComision,
+} from "./actions";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -264,5 +278,74 @@ describe("sincronizarAlumnos", () => {
       status: "error",
       message: "El legajo 111 ya está registrado con el usuario @otra-persona. Verificá que sea el tuyo.",
     });
+  });
+});
+
+// ── sincronizarGruposDeLaComision ────────────────────────────
+
+describe("sincronizarGruposDeLaComision", () => {
+  const comision = { id: "c1", spreadsheetId: "sheet-xyz", columnConfig: {} };
+
+  function makeFd(): FormData {
+    const fd = new FormData();
+    fd.append("comisionId", "c1");
+    return fd;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequireAdmin.mockResolvedValue(undefined);
+    mockGetComision.mockResolvedValue(comision);
+    mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([]);
+    mockIntentarSincronizarGrupos.mockResolvedValue(false);
+  });
+
+  it("devuelve error si la comisión no existe", async () => {
+    mockGetComision.mockResolvedValue(null);
+    const result = await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
+    expect(result).toEqual({ status: "error", message: "Comisión no encontrada" });
+    expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+  });
+
+  it("devuelve ok con 0 sincronizados cuando no hay alumnos pendientes", async () => {
+    const result = await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
+    expect(result).toEqual({ status: "ok", sincronizados: 0, aunConError: 0 });
+    expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+  });
+
+  it("reintenta la sync para cada alumno pendiente de la comisión", async () => {
+    mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([
+      { githubUsername: "ana" },
+      { githubUsername: "bruno" },
+    ]);
+
+    await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
+
+    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledTimes(2);
+    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith("ana", comision);
+    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith("bruno", comision);
+  });
+
+  it("cuenta cuántos se resolvieron y cuántos siguen con error", async () => {
+    mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([
+      { githubUsername: "ana" },
+      { githubUsername: "bruno" },
+      { githubUsername: "cintia" },
+    ]);
+    mockIntentarSincronizarGrupos
+      .mockResolvedValueOnce(false) // ana: ok
+      .mockResolvedValueOnce(true) // bruno: sigue fallando
+      .mockResolvedValueOnce(false); // cintia: ok
+
+    const result = await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
+
+    expect(result).toEqual({ status: "ok", sincronizados: 2, aunConError: 1 });
+  });
+
+  it("requiere admin antes de ejecutar", async () => {
+    mockRequireAdmin.mockRejectedValue(new Error("forbidden"));
+    await expect(
+      sincronizarGruposDeLaComision({ status: "idle" }, makeFd())
+    ).rejects.toThrow("forbidden");
   });
 });

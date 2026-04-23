@@ -7,6 +7,7 @@ const mockUpsertarAlumnoEnSheets = vi.fn();
 const mockGetComisionActiva = vi.fn();
 const mockUpsertAlumno = vi.fn();
 const mockMarcarRegistroConfirmado = vi.fn();
+const mockIntentarSincronizarGrupos = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireUser: () => mockRequireUser(),
@@ -43,11 +44,11 @@ vi.mock("@/lib/repositories", () => ({
   LegajoConflictError: FakeLegajoConflictError,
 }));
 
-// El hook de sync de grupos arrastra `@/lib/db` (reflect-metadata) si no se
-// mockea acá. Como el route test no verifica el comportamiento del hook (lo
-// hace `alumnoRegistro.test.ts`), basta con un stub no-op.
-vi.mock("@/lib/services/grupoSync", () => ({
-  sincronizarGruposDelAlumno: vi.fn().mockResolvedValue(undefined),
+// El handler llama al wrapper `intentarSincronizarGrupos`, que encapsula
+// log + flag persistente + retorno booleano para el handler.
+vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
+  intentarSincronizarGrupos: (...args: unknown[]) =>
+    mockIntentarSincronizarGrupos(...args),
 }));
 
 import { PATCH } from "./route";
@@ -88,6 +89,7 @@ describe("PATCH /api/perfil", () => {
     mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: true });
     mockUpsertAlumno.mockResolvedValue(undefined);
     mockMarcarRegistroConfirmado.mockResolvedValue(undefined);
+    mockIntentarSincronizarGrupos.mockResolvedValue(false);
   });
 
   it("actualiza Sheets y DB en un mismo request", async () => {
@@ -159,5 +161,40 @@ describe("PATCH /api/perfil", () => {
     mockUpsertarAlumnoEnSheets.mockRejectedValue(new Error("boom"));
     const res = await PATCH(makeRequest(validBody));
     expect(res.status).toBe(500);
+  });
+
+  describe("sincronización de grupos desde planilla", () => {
+    it("llama a intentarSincronizarGrupos con el github de la sesión y la comisión activa", async () => {
+      const comision = await mockGetComisionActiva();
+      await PATCH(makeRequest(validBody));
+      expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith(
+        "juangarcia",
+        comision
+      );
+    });
+
+    it("no incluye gruposSync en el body cuando el wrapper devuelve false (ok)", async () => {
+      const res = await PATCH(makeRequest(validBody));
+      const json = await res.json();
+      expect(res.status).toBe(200);
+      expect(json.gruposSync).toBeUndefined();
+    });
+
+    it("responde 200 con gruposSync='error' cuando el wrapper devuelve true (falló)", async () => {
+      mockIntentarSincronizarGrupos.mockResolvedValue(true);
+
+      const res = await PATCH(makeRequest(validBody));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.gruposSync).toBe("error");
+      expect(mockMarcarRegistroConfirmado).toHaveBeenCalledOnce();
+    });
+
+    it("no intenta sincronizar si la confirmación del perfil falla antes", async () => {
+      mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: false, error: "boom" });
+      await PATCH(makeRequest(validBody));
+      expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+    });
   });
 });

@@ -8,6 +8,7 @@ const mockGetComisionActiva = vi.fn();
 const mockUpsertAlumno = vi.fn();
 const mockMarcarRegistroConfirmado = vi.fn();
 const mockAgregarMiembroAGrupo = vi.fn();
+const mockIntentarSincronizarGrupos = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireUser: () => mockRequireUser(),
@@ -48,11 +49,12 @@ vi.mock("@/lib/googleGroups", () => ({
   agregarMiembroAGrupo: (...args: unknown[]) => mockAgregarMiembroAGrupo(...args),
 }));
 
-// El hook de sync de grupos arrastra `@/lib/db` (reflect-metadata) si no se
-// mockea acá. Como el route test no verifica el comportamiento del hook (lo
-// hace `alumnoRegistro.test.ts`), basta con un stub no-op.
-vi.mock("@/lib/services/grupoSync", () => ({
-  sincronizarGruposDelAlumno: vi.fn().mockResolvedValue(undefined),
+// El handler llama al wrapper `intentarSincronizarGrupos`, que es quien se
+// encarga del logging, el flag persistente y el retorno booleano que el
+// handler usa para decidir si mete `gruposSync: "error"` en el body.
+vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
+  intentarSincronizarGrupos: (...args: unknown[]) =>
+    mockIntentarSincronizarGrupos(...args),
 }));
 
 import { POST } from "./route";
@@ -95,6 +97,7 @@ describe("POST /api/registro", () => {
     mockUpsertAlumno.mockResolvedValue(undefined);
     mockMarcarRegistroConfirmado.mockResolvedValue(undefined);
     mockAgregarMiembroAGrupo.mockResolvedValue({ status: "added" });
+    mockIntentarSincronizarGrupos.mockResolvedValue(false);
   });
 
   it("usa el githubUsername del usuario autenticado cuando coincide con el body", async () => {
@@ -281,6 +284,44 @@ describe("POST /api/registro", () => {
       mockGetComisionActiva.mockResolvedValue(null);
       await POST(makeRequest(validBody));
       expect(mockAgregarMiembroAGrupo).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Sincronización de grupos desde planilla ────────────────
+
+  describe("sincronización de grupos desde planilla", () => {
+    it("llama a intentarSincronizarGrupos con el github y la comisión activa tras un registro exitoso", async () => {
+      const comision = await mockGetComisionActiva();
+      await POST(makeRequest(validBody));
+      expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith(
+        "juangarcia",
+        comision
+      );
+    });
+
+    it("no incluye gruposSync en el body cuando el wrapper devuelve false (ok)", async () => {
+      const res = await POST(makeRequest(validBody));
+      const json = await res.json();
+      expect(res.status).toBe(200);
+      expect(json.gruposSync).toBeUndefined();
+    });
+
+    it("responde 200 con gruposSync='error' cuando el wrapper devuelve true (falló)", async () => {
+      mockIntentarSincronizarGrupos.mockResolvedValue(true);
+
+      const res = await POST(makeRequest(validBody));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.gruposSync).toBe("error");
+      // El alta no se deshace por un fallo en el hook accesorio
+      expect(mockMarcarRegistroConfirmado).toHaveBeenCalledOnce();
+    });
+
+    it("no intenta sincronizar si el registro no se confirmó (ej. Sheets falló)", async () => {
+      mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: false, error: "boom" });
+      await POST(makeRequest(validBody));
+      expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
     });
   });
 });
