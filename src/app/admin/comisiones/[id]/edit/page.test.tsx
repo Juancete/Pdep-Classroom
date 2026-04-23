@@ -9,6 +9,7 @@ const mockGetComision = vi.fn();
 const mockCountAlumnos = vi.fn();
 const mockGetAlumnos = vi.fn();
 const mockRedirect = vi.fn();
+const mockGetAlumnosConGruposSyncPendiente = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
@@ -17,6 +18,8 @@ vi.mock("@/lib/session", () => ({
 vi.mock("@/lib/repositories", () => ({
   getComision: (id: string) => mockGetComision(id),
   countAlumnos: () => mockCountAlumnos(),
+  getAlumnosConGruposSyncPendiente: (...args: unknown[]) =>
+    mockGetAlumnosConGruposSyncPendiente(...args),
 }));
 
 vi.mock("@/lib/sheets", () => ({
@@ -34,11 +37,21 @@ vi.mock("next/navigation", () => ({
 vi.mock("../../actions", () => ({
   actualizarComision: vi.fn(),
   sincronizarAlumnos: vi.fn().mockResolvedValue({ status: "idle" }),
+  sincronizarGruposDeLaComision: vi.fn().mockResolvedValue({ status: "idle" }),
 }));
 
 vi.mock("../../sync-button", () => ({
   SyncButton: ({ comisionId }: { comisionId: string }) =>
     React.createElement("button", { "data-testid": "sync-button", "data-comision-id": comisionId }, "Sincronizar"),
+}));
+
+vi.mock("../../sync-grupos-button", () => ({
+  SyncGruposButton: ({ comisionId }: { comisionId: string }) =>
+    React.createElement(
+      "button",
+      { "data-testid": "sync-grupos-button", "data-comision-id": comisionId },
+      "Resincronizar grupos"
+    ),
 }));
 
 vi.mock("../../comision-form", () => ({
@@ -85,6 +98,7 @@ describe("Edit Comision page", () => {
     mockRequireAdmin.mockResolvedValue(undefined);
     mockGetAlumnos.mockResolvedValue([]);
     mockCountAlumnos.mockResolvedValue(0);
+    mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([]);
   });
 
   it("siempre llama a requireAdmin", async () => {
@@ -199,6 +213,44 @@ describe("Edit Comision page", () => {
         comision.spreadsheetId,
         comision.columnConfig
       );
+    });
+  });
+
+  describe("badge de alumnos con grupos pendientes", () => {
+    it("muestra el badge + SyncGruposButton cuando hay alumnos con flag prendido", async () => {
+      mockGetComision.mockResolvedValue(makeComision());
+      mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([
+        { githubUsername: "ana" },
+        { githubUsername: "bruno" },
+      ]);
+
+      const html = renderToStaticMarkup(
+        await EditComisionPage({ params: { id: "c1" } }) as React.ReactElement
+      );
+      expect(html).toContain("Grupos pendientes");
+      expect(html).toContain("2");
+      expect(html).toContain('data-testid="sync-grupos-button"');
+    });
+
+    it("no muestra el badge si no hay alumnos pendientes", async () => {
+      mockGetComision.mockResolvedValue(makeComision());
+      mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([]);
+
+      const html = renderToStaticMarkup(
+        await EditComisionPage({ params: { id: "c1" } }) as React.ReactElement
+      );
+      expect(html).not.toContain("Grupos pendientes");
+      expect(html).not.toContain('data-testid="sync-grupos-button"');
+    });
+
+    it("no rompe la página si la query de pendientes falla", async () => {
+      mockGetComision.mockResolvedValue(makeComision());
+      mockGetAlumnosConGruposSyncPendiente.mockRejectedValue(new Error("DB down"));
+
+      const html = renderToStaticMarkup(
+        await EditComisionPage({ params: { id: "c1" } }) as React.ReactElement
+      );
+      expect(html).not.toContain("Grupos pendientes");
     });
   });
 });

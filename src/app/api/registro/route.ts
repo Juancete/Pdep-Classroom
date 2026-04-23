@@ -4,6 +4,7 @@ import { type RegistroInput } from "@/lib/sheets";
 import { agregarMiembroAGrupo } from "@/lib/googleGroups";
 import { internalServerError } from "@/lib/api-errors";
 import { confirmarDatosAlumno } from "@/lib/services/alumnoRegistro";
+import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
 import { logger } from "@/lib/logger";
 
 // Enmascara la parte local del email para no escupir PII a los logs,
@@ -57,9 +58,9 @@ export async function POST(req: Request) {
       );
     }
 
-    // El alta ya quedó persistida — una falla al suscribir al grupo no
-    // debe romper el registro. Informamos el resultado para que la UI lo
-    // muestre si corresponde y logueamos el detalle server-side.
+    // Hooks accesorios: el alta ya está persistida. Cada uno puede fallar sin
+    // abortar el registro; la respuesta incluye un status por hook para que el
+    // form muestre el warning correspondiente.
     const groupSubscription = await agregarMiembroAGrupo(body.email);
     if (groupSubscription.status === "error") {
       logger.error(
@@ -72,7 +73,16 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({ ok: true, groupSubscription: groupSubscription.status });
+    const gruposSyncFallida = await intentarSincronizarGrupos(
+      body.githubUsername,
+      resultado.comision
+    );
+
+    return NextResponse.json({
+      ok: true,
+      groupSubscription: groupSubscription.status,
+      ...(gruposSyncFallida && { gruposSync: "error" }),
+    });
   } catch (error) {
     return internalServerError("POST /api/registro", error);
   }

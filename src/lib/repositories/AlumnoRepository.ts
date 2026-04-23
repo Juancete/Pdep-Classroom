@@ -119,6 +119,39 @@ export async function marcarRegistroConfirmado(
   await em.flush();
 }
 
+export async function marcarGruposSyncFallido(githubUsername: string): Promise<void> {
+  const em = await getEM();
+  const alumno = await em.findOne(Alumno, {
+    githubUsername: githubUsername.toLowerCase().trim(),
+  });
+  if (!alumno) return;
+  alumno.gruposSyncFallidoEn = new Date();
+  await em.flush();
+}
+
+export async function marcarGruposSyncOk(githubUsername: string): Promise<void> {
+  const em = await getEM();
+  const alumno = await em.findOne(Alumno, {
+    githubUsername: githubUsername.toLowerCase().trim(),
+  });
+  // Solo flusheamos si había algo prendido — evita un UPDATE por cada sync
+  // exitosa del happy path.
+  if (!alumno || !alumno.gruposSyncFallidoEn) return;
+  alumno.gruposSyncFallidoEn = undefined;
+  await em.flush();
+}
+
+export async function getAlumnosConGruposSyncPendiente(
+  comisionId: string
+): Promise<Alumno[]> {
+  const em = await getEM();
+  return em.find(
+    Alumno,
+    { comision: { id: comisionId }, gruposSyncFallidoEn: { $ne: null } },
+    { orderBy: { apellido: "ASC", nombre: "ASC" } }
+  );
+}
+
 /** Crea o actualiza múltiples alumnos en un solo flush. */
 export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
   if (dataList.length === 0) return 0;

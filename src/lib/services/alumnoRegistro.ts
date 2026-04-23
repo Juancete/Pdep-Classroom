@@ -5,15 +5,17 @@ import {
   marcarRegistroConfirmado,
   LegajoConflictError,
 } from "@/lib/repositories";
-import { sincronizarGruposDelAlumno } from "@/lib/services/grupoSync";
+import { Comision } from "@/domain/entities";
 import { logger } from "@/lib/logger";
 
 /**
  * Resultado de `confirmarDatosAlumno` — discriminated union con el status HTTP
- * sugerido y, cuando aplica, el `field` para que el form lo pinte inline.
+ * sugerido y, cuando aplica, el `field` para que el form lo pinte inline. En
+ * el caso OK devolvemos la `comision` para que el handler pueda encadenar
+ * acciones accesorias (sync de grupos, Google Groups) sin volver a consultarla.
  */
 export type ResultadoConfirmacion =
-  | { ok: true }
+  | { ok: true; comision: Comision }
   | {
       ok: false;
       status: 400 | 409;
@@ -28,7 +30,7 @@ export type ResultadoConfirmacion =
  *
  * El handler es quien agrega lo específico: registro hace la validación de
  * coherencia github↔sesión antes de llamar, y después de un resultado OK
- * dispara el hook de Google Groups.
+ * dispara los hooks accesorios (Google Groups, sync de grupos desde planilla).
  */
 export async function confirmarDatosAlumno(
   input: RegistroInput
@@ -100,22 +102,5 @@ export async function confirmarDatosAlumno(
     throw error;
   }
 
-  // Sincronización de grupos: best-effort. El registro del alumno ya está OK;
-  // si la hoja de grupos no existe, no se puede leer o el upsert falla, lo
-  // logueamos y seguimos — no queremos abortar un registro confirmado por
-  // un problema en una funcionalidad secundaria.
-  try {
-    await sincronizarGruposDelAlumno(input.githubUsername, comisionActiva);
-  } catch (error) {
-    logger.error(
-      {
-        err: error,
-        githubUsername: input.githubUsername,
-        comisionId: comisionActiva.id,
-      },
-      "Falló sincronización de grupos desde planilla — registro ya confirmado"
-    );
-  }
-
-  return { ok: true };
+  return { ok: true, comision: comisionActiva };
 }

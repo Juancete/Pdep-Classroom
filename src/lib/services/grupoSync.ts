@@ -1,5 +1,4 @@
 import { getEM } from "@/lib/db";
-import { logger } from "@/lib/logger";
 import { Alumno, GrupalAssignment, type Comision } from "@/domain/entities";
 import { getAsignacionesGrupos } from "@/lib/sheets";
 import { upsertGrupoConMiembro } from "@/lib/repositories";
@@ -9,9 +8,8 @@ import { upsertGrupoConMiembro } from "@/lib/repositories";
  * materializa en DB los grupos que le corresponden, uno por cada GrupalAssignment
  * del mismo paradigma que ya exista en la comisión.
  *
- * Es idempotente y best-effort: si no hay `columnConfig.grupos`, no hace nada;
- * si la lectura de Sheets falla, lo logueamos y devolvemos sin romper (el caller
- * —el registro— ya confirmó al alumno antes de llamarnos).
+ * Es idempotente. Comando puro: o cumple, o throwea — la decisión de qué mostrar
+ * al usuario ante una falla vive en el handler HTTP que orquesta el registro.
  *
  * Limitación consciente: si todavía no existe el `GrupalAssignment` del paradigma,
  * el grupo no se materializa. Se resuelve la próxima vez que el alumno reingrese
@@ -26,16 +24,7 @@ export async function sincronizarGruposDelAlumno(
 
   const ghNorm = githubUsername.toLowerCase().trim();
 
-  let asignaciones;
-  try {
-    asignaciones = await getAsignacionesGrupos(comision.spreadsheetId, gruposConfig);
-  } catch (error) {
-    logger.error(
-      { err: error, githubUsername: ghNorm, comisionId: comision.id },
-      "No se pudo leer la hoja de grupos — skip sincronización"
-    );
-    return;
-  }
+  const asignaciones = await getAsignacionesGrupos(comision.spreadsheetId, gruposConfig);
 
   const deEsteAlumno = asignaciones.filter((a) => a.githubUsername === ghNorm);
   if (deEsteAlumno.length === 0) return;
@@ -50,25 +39,12 @@ export async function sincronizarGruposDelAlumno(
       paradigma: asig.paradigma,
     });
     for (const assignment of grupales) {
-      try {
-        await upsertGrupoConMiembro({
-          nombreGrupo: asig.nombreGrupo,
-          paradigma: asig.paradigma,
-          assignment,
-          alumno,
-        });
-      } catch (error) {
-        logger.error(
-          {
-            err: error,
-            githubUsername: ghNorm,
-            assignmentId: assignment.id,
-            nombreGrupo: asig.nombreGrupo,
-            paradigma: asig.paradigma,
-          },
-          "No se pudo upsertar grupo desde planilla"
-        );
-      }
+      await upsertGrupoConMiembro({
+        nombreGrupo: asig.nombreGrupo,
+        paradigma: asig.paradigma,
+        assignment,
+        alumno,
+      });
     }
   }
 }

@@ -7,6 +7,8 @@ import type { Alumno } from "@/domain/entities";
 
 const mockAuth = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
+const mockGetComisionActiva = vi.fn();
+const mockIntentarSincronizarGrupos = vi.fn();
 const mockRedirect = vi.fn().mockImplementation((url: string) => {
   throw new Error(`REDIRECT:${url}`);
 });
@@ -17,6 +19,12 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/repositories", () => ({
   getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
+  getComisionActiva: () => mockGetComisionActiva(),
+}));
+
+vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
+  intentarSincronizarGrupos: (...args: unknown[]) =>
+    mockIntentarSincronizarGrupos(...args),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -95,6 +103,8 @@ describe("Perfil page", () => {
     beforeEach(() => {
       mockAuth.mockResolvedValue(makeSession("juangarcia"));
       mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
+      mockGetComisionActiva.mockResolvedValue({ id: "c1" });
+      mockIntentarSincronizarGrupos.mockResolvedValue(false);
     });
 
     it("muestra el título Mi perfil", async () => {
@@ -120,6 +130,40 @@ describe("Perfil page", () => {
     it("consulta getAlumnoByGithub de la DB con el username de la sesión", async () => {
       await PerfilPage();
       expect(mockGetAlumnoByGithub).toHaveBeenCalledWith("juangarcia");
+    });
+  });
+
+  describe("reintento de sincronización de grupos al montar", () => {
+    beforeEach(() => {
+      mockAuth.mockResolvedValue(makeSession("juangarcia"));
+      mockGetComisionActiva.mockResolvedValue({ id: "c1" });
+      mockIntentarSincronizarGrupos.mockResolvedValue(false);
+    });
+
+    it("no reintenta la sync si el alumno no tiene el flag prendido", async () => {
+      mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
+      await PerfilPage();
+      expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+    });
+
+    it("reintenta la sync al montar si el alumno tiene el flag prendido", async () => {
+      mockGetAlumnoByGithub.mockResolvedValue(
+        makeAlumno({ gruposSyncFallidoEn: new Date("2026-04-01") })
+      );
+      await PerfilPage();
+      expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith(
+        "juangarcia",
+        { id: "c1" }
+      );
+    });
+
+    it("no reintenta si tiene el flag pero no hay comisión activa (evita el crash)", async () => {
+      mockGetAlumnoByGithub.mockResolvedValue(
+        makeAlumno({ gruposSyncFallidoEn: new Date("2026-04-01") })
+      );
+      mockGetComisionActiva.mockResolvedValue(null);
+      await PerfilPage();
+      expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
     });
   });
 });

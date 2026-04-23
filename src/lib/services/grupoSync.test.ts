@@ -135,40 +135,26 @@ describe("sincronizarGruposDelAlumno", () => {
     expect(mockUpsertGrupoConMiembro).toHaveBeenCalledTimes(1);
   });
 
-  it("loguea y no throwea si getAsignacionesGrupos falla (evita abortar registro)", async () => {
-    const { logger } = await import("@/lib/logger");
-    const errorSpy = vi.spyOn(logger, "error").mockImplementation((() => {}) as never);
+  it("propaga el error si getAsignacionesGrupos falla (el caller decide qué mostrar)", async () => {
     mockGetAsignacionesGrupos.mockRejectedValue(new Error("Sheets caído"));
 
     await expect(
       sincronizarGruposDelAlumno("juangarcia", comisionConGrupos)
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow("Sheets caído");
 
-    expect(errorSpy).toHaveBeenCalledOnce();
     expect(mockUpsertGrupoConMiembro).not.toHaveBeenCalled();
-    errorSpy.mockRestore();
   });
 
-  it("loguea y sigue si un upsert falla, sin abortar los otros", async () => {
-    const { logger } = await import("@/lib/logger");
-    const errorSpy = vi.spyOn(logger, "error").mockImplementation((() => {}) as never);
-
+  it("propaga el error si un upsert falla (sin tragar)", async () => {
     mockGetAsignacionesGrupos.mockResolvedValue([
       { githubUsername: "juangarcia", paradigma: "funcional", nombreGrupo: "Los Lambdas" },
     ]);
-    mockEmFind.mockResolvedValue([
-      grupalAssignmentFake,
-      { ...grupalAssignmentFake, id: "asg2" },
-    ]);
-    mockUpsertGrupoConMiembro
-      .mockRejectedValueOnce(new Error("DB conflict"))
-      .mockResolvedValueOnce(undefined);
+    mockEmFind.mockResolvedValue([grupalAssignmentFake]);
+    mockUpsertGrupoConMiembro.mockRejectedValue(new Error("DB conflict"));
 
-    await sincronizarGruposDelAlumno("juangarcia", comisionConGrupos);
-
-    expect(mockUpsertGrupoConMiembro).toHaveBeenCalledTimes(2);
-    expect(errorSpy).toHaveBeenCalledOnce();
-    errorSpy.mockRestore();
+    await expect(
+      sincronizarGruposDelAlumno("juangarcia", comisionConGrupos)
+    ).rejects.toThrow("DB conflict");
   });
 
   it("no hace nada si el alumno no está en DB (edge: borrado entre confirm y sync)", async () => {

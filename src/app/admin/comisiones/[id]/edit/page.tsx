@@ -1,10 +1,15 @@
 import { requireAdmin } from "@/lib/session";
-import { getComision, countAlumnos } from "@/lib/repositories";
+import {
+  getComision,
+  countAlumnos,
+  getAlumnosConGruposSyncPendiente,
+} from "@/lib/repositories";
 import { getAlumnos } from "@/lib/sheets";
 import { redirect } from "next/navigation";
 import { ComisionForm } from "../../comision-form";
 import { actualizarComision } from "../../actions";
 import { SyncButton } from "../../sync-button";
+import { SyncGruposButton } from "../../sync-grupos-button";
 
 export default async function EditComisionPage({
   params,
@@ -17,19 +22,21 @@ export default async function EditComisionPage({
   if (!comision) redirect("/admin/comisiones");
 
   // Comparar counts en paralelo; si alguno falla no rompemos la página
-  const [countSheet, countDB] = await Promise.all([
+  const [countSheet, countDB, pendientesGrupos] = await Promise.all([
     getAlumnos(comision.spreadsheetId, comision.columnConfig)
       .then((a) => a.length)
       .catch(() => null),
     countAlumnos().catch(() => null),
+    getAlumnosConGruposSyncPendiente(comision.id).catch(() => [] as unknown[]),
   ]);
 
   const desynced =
     countSheet !== null && countDB !== null && countSheet !== countDB;
+  const cantPendientesGrupos = pendientesGrupos.length;
 
   return (
     <div className="max-w-xl">
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex flex-wrap items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold">Editar Comisión {comision.anio}</h1>
         {desynced && (
           <>
@@ -41,6 +48,18 @@ export default async function EditComisionPage({
               Desincronizado · {countSheet} en planilla / {countDB} en DB
             </span>
             <SyncButton comisionId={comision.id} />
+          </>
+        )}
+        {cantPendientesGrupos > 0 && (
+          <>
+            <span
+              title="Alumnos cuyo último intento de sincronizar grupos desde la planilla falló"
+              className="inline-flex items-center gap-1.5 text-xs font-medium bg-red-100 text-red-700 border border-red-200 px-2.5 py-1 rounded-full"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+              Grupos pendientes · {cantPendientesGrupos}
+            </span>
+            <SyncGruposButton comisionId={comision.id} />
           </>
         )}
       </div>
