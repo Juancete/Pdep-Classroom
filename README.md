@@ -592,6 +592,7 @@ Reutilizamos la service account que ya está en `GOOGLE_SERVICE_ACCOUNT_KEY` —
 - [ ] Autograding con GitHub Actions en los templates
 - [ ] Export de estado de entregas a Google Sheets (cerrar el loop con la planilla)
 - [x] Suscribir a los alumnos al grupo de Google Groups automáticamente
+- [ ] Observabilidad ([#18](https://github.com/Juancete/Pdep-Classroom/issues/18)) — tabla `error_log` + pantalla `/admin/errores` + badge en el header con no leídos (PR 2 del refactor de logging, hoy los 500 solo logguean por pino a Vercel)
 
 ## Refactor en curso
 

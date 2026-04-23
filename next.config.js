@@ -5,6 +5,8 @@ const nextConfig = {
       "@mikro-orm/core",
       "@mikro-orm/postgresql",
       "@mikro-orm/migrations",
+      "pino",
+      "pino-pretty",
     ],
     instrumentationHook: true,
   },

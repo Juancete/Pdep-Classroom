@@ -5,6 +5,7 @@ import { GrupoNoAsignadoError, type ParticipantesResueltos } from "@/domain/enti
 import { crearEntrega, repoExists } from "@/lib/github";
 import { buildRepoName } from "@/lib/naming";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { internalServerError } from "@/lib/api-errors";
 
 export async function POST(
   _req: Request,
@@ -90,8 +91,10 @@ export async function POST(
 
     return NextResponse.json(entrega);
   } catch (error) {
-    console.error("Error aceptando assignment:", error);
-    const message = error instanceof Error ? error.message : "Error interno";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return internalServerError(
+      "POST /api/assignments/[id]/accept",
+      error,
+      { assignmentId: params.id }
+    );
   }
 }
