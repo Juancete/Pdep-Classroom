@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
-import { upsertarAlumnoEnSheets, validateRegistro, type RegistroInput } from "@/lib/sheets";
-import { getComisionActiva, upsertAlumno, LegajoConflictError } from "@/lib/repositories";
+import { type RegistroInput } from "@/lib/sheets";
 import { agregarMiembroAGrupo } from "@/lib/googleGroups";
 import { internalServerError } from "@/lib/api-errors";
+import { confirmarDatosAlumno } from "@/lib/services/alumnoRegistro";
 import { logger } from "@/lib/logger";
 
 // Enmascara la parte local del email para no escupir PII a los logs,
@@ -47,52 +47,13 @@ export async function POST(req: Request) {
     }
     body.githubUsername = user.githubUsername;
 
-    const comisionActiva = await getComisionActiva();
-    if (!comisionActiva) {
+    const resultado = await confirmarDatosAlumno(body);
+    if (!resultado.ok) {
       return NextResponse.json(
-        { error: "No hay una comisión activa con planilla configurada. Pedile a un admin que configure una en /admin/comisiones." },
-        { status: 409 }
-      );
-    }
-
-    // Validar inputs antes de tocar DB o Sheets.
-    const validationError = validateRegistro(body);
-    if (validationError) {
-      return NextResponse.json({ error: validationError }, { status: 400 });
-    }
-
-    // DB primero: valida legajo↔github atómicamente. Si falla, Sheets no
-    // se toca — evita el TOCTOU del check previo contra Sheets.
-    try {
-      await upsertAlumno({
-        legajo: body.legajo,
-        nombre: body.nombre,
-        apellido: body.apellido,
-        githubUsername: body.githubUsername,
-        email: body.email,
-        comision: comisionActiva,
-        registroConfirmadoEn: comisionActiva,
-      });
-    } catch (e) {
-      if (e instanceof LegajoConflictError) {
-        return NextResponse.json(
-          { error: e.message, field: "legajo" },
-          { status: 400 }
-        );
-      }
-      throw e;
-    }
-
-    const result = await upsertarAlumnoEnSheets(
-      body,
-      comisionActiva.spreadsheetId,
-      comisionActiva.columnConfig
-    );
-
-    if (!result.ok) {
-      return NextResponse.json(
-        { error: result.error },
-        { status: 400 }
+        resultado.field
+          ? { error: resultado.error, field: resultado.field }
+          : { error: resultado.error },
+        { status: resultado.status }
       );
     }
 
@@ -112,7 +73,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ ok: true, groupSubscription: groupSubscription.status });
-  } catch (e) {
-    return internalServerError("POST /api/registro", e);
+  } catch (error) {
+    return internalServerError("POST /api/registro", error);
   }
 }
