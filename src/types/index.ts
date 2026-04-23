@@ -1,4 +1,20 @@
+// ── Paradigmas ──────────────────────────────────────────────
+export type Paradigma = "funcional" | "logico" | "objetos";
+
+export const PARADIGMAS: Paradigma[] = ["funcional", "logico", "objetos"];
+
 // ── Configuración de columnas del spreadsheet ───────────────
+
+// Configuración opcional para leer grupos desde la planilla.
+// Se modela con una columna por paradigma porque la planilla típica tiene
+// headers tipo "Nombre grupo funcional", "Nombre grupo lógico", etc. Si sólo
+// hay grupos para un paradigma, se completa solo esa entrada.
+export interface GruposColumnConfig {
+  sheetName: string;
+  headerRows: number;
+  githubUsername: number;
+  nombreGrupoPorParadigma: Partial<Record<Paradigma, number>>;
+}
 
 export interface ColumnConfig {
   sheetName: string;   // nombre de la hoja, ej: "Alumnos"
@@ -8,6 +24,7 @@ export interface ColumnConfig {
   nombre: number;           // default 2 (C)
   githubUsername: number;   // default 3 (D)
   email: number;            // default 4 (E)
+  grupos?: GruposColumnConfig;  // opcional: hoja de grupos
 }
 
 export const DEFAULT_COLUMN_CONFIG: ColumnConfig = {
@@ -19,11 +36,6 @@ export const DEFAULT_COLUMN_CONFIG: ColumnConfig = {
   githubUsername: 3,
   email: 4,
 };
-
-// ── Paradigmas ──────────────────────────────────────────────
-export type Paradigma = "funcional" | "logico" | "objetos";
-
-export const PARADIGMAS: Paradigma[] = ["funcional", "logico", "objetos"];
 
 // ── Assignment ──────────────────────────────────────────────
 

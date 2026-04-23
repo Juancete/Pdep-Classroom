@@ -33,6 +33,7 @@ export {
   getGrupos,
   getGruposDeAssignment,
   getGrupoDeAlumnoEnAssignment,
+  upsertGrupoConMiembro,
 } from "./GrupoRepository";
 
 export {

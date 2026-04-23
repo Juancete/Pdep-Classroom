@@ -6,6 +6,7 @@ const mockGetComisionActiva = vi.fn();
 const mockUpsertAlumno = vi.fn();
 const mockMarcarRegistroConfirmado = vi.fn();
 const mockUpsertarAlumnoEnSheets = vi.fn();
+const mockSincronizarGruposDelAlumno = vi.fn();
 
 const { FakeLegajoConflictError } = vi.hoisted(() => {
   class FakeLegajoConflictError extends Error {
@@ -40,6 +41,11 @@ vi.mock("@/lib/sheets", async () => {
       mockUpsertarAlumnoEnSheets(...args),
   };
 });
+
+vi.mock("@/lib/services/grupoSync", () => ({
+  sincronizarGruposDelAlumno: (...args: unknown[]) =>
+    mockSincronizarGruposDelAlumno(...args),
+}));
 
 import { confirmarDatosAlumno } from "./alumnoRegistro";
 
@@ -76,6 +82,7 @@ describe("confirmarDatosAlumno", () => {
     mockUpsertAlumno.mockResolvedValue(undefined);
     mockMarcarRegistroConfirmado.mockResolvedValue(undefined);
     mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: true });
+    mockSincronizarGruposDelAlumno.mockResolvedValue(undefined);
   });
 
   it("devuelve { ok: true } cuando todo el flujo funciona", async () => {
@@ -225,5 +232,40 @@ describe("confirmarDatosAlumno", () => {
   it("deja propagar errores inesperados del upsert en DB (no-LegajoConflictError)", async () => {
     mockUpsertAlumno.mockRejectedValue(new Error("conexión caída"));
     await expect(confirmarDatosAlumno(validInput)).rejects.toThrow("conexión caída");
+  });
+
+  describe("hook de sincronización de grupos", () => {
+    it("llama a sincronizarGruposDelAlumno con el github y la comisión, después de marcar registroConfirmadoEn", async () => {
+      await confirmarDatosAlumno(validInput);
+      expect(mockSincronizarGruposDelAlumno).toHaveBeenCalledWith(
+        validInput.githubUsername,
+        comisionActiva
+      );
+      const ordenLlamadas = [
+        mockMarcarRegistroConfirmado.mock.invocationCallOrder[0],
+        mockSincronizarGruposDelAlumno.mock.invocationCallOrder[0],
+      ];
+      expect(ordenLlamadas[0]).toBeLessThan(ordenLlamadas[1]);
+    });
+
+    it("devuelve { ok: true } aunque la sincronización de grupos falle (best-effort)", async () => {
+      const { logger } = await import("@/lib/logger");
+      const errorSpy = vi.spyOn(logger, "error").mockImplementation((() => {}) as never);
+      mockSincronizarGruposDelAlumno.mockRejectedValue(new Error("algo falló"));
+
+      const resultado = await confirmarDatosAlumno(validInput);
+
+      expect(resultado).toEqual({ ok: true });
+      expect(errorSpy).toHaveBeenCalled();
+      errorSpy.mockRestore();
+    });
+
+    it("no se llama si el registro falla antes (ej. conflicto de legajo)", async () => {
+      mockUpsertAlumno.mockRejectedValue(
+        new FakeLegajoConflictError("12345", "otro-alumno")
+      );
+      await confirmarDatosAlumno(validInput);
+      expect(mockSincronizarGruposDelAlumno).not.toHaveBeenCalled();
+    });
   });
 });
