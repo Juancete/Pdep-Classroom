@@ -1,5 +1,11 @@
 import { upsertarAlumnoEnSheets, validateRegistro, type RegistroInput } from "@/lib/sheets";
-import { getComisionActiva, upsertAlumno, LegajoConflictError } from "@/lib/repositories";
+import {
+  getComisionActiva,
+  upsertAlumno,
+  marcarRegistroConfirmado,
+  LegajoConflictError,
+} from "@/lib/repositories";
+import { logger } from "@/lib/logger";
 
 /**
  * Resultado de `confirmarDatosAlumno` — discriminated union con el status HTTP
@@ -43,6 +49,11 @@ export async function confirmarDatosAlumno(
 
   // DB primero: valida legajo↔github atómicamente. Si falla, Sheets no se
   // toca — evita el TOCTOU del check previo contra Sheets.
+  //
+  // El alumno se persiste SIN `registroConfirmadoEn`: ese flag se escribe
+  // recién cuando Sheets confirmó la escritura (ver `marcarRegistroConfirmado`
+  // más abajo). Así evitamos dejar la DB marcada como confirmada si la
+  // planilla falla a mitad de camino.
   try {
     await upsertAlumno({
       legajo: input.legajo,
@@ -51,7 +62,6 @@ export async function confirmarDatosAlumno(
       githubUsername: input.githubUsername,
       email: input.email,
       comision: comisionActiva,
-      registroConfirmadoEn: comisionActiva,
     });
   } catch (error) {
     if (error instanceof LegajoConflictError) {
@@ -68,6 +78,25 @@ export async function confirmarDatosAlumno(
 
   if (!resultadoSheets.ok) {
     return { ok: false, status: 400, error: resultadoSheets.error };
+  }
+
+  try {
+    await marcarRegistroConfirmado(input.githubUsername, comisionActiva);
+  } catch (error) {
+    // Caso raro: Sheets ya confirmó pero el UPDATE local falló. El registro
+    // queda "a medias" — alumno en DB sin flag, fila en la planilla — y el
+    // próximo reintento del alumno reconvergea (upsertAlumno y Sheets son
+    // idempotentes). Lo logueamos específicamente para que el admin lo vea
+    // distinto de un 500 común.
+    logger.error(
+      {
+        err: error,
+        githubUsername: input.githubUsername,
+        comisionId: comisionActiva.id,
+      },
+      "Sheets confirmado pero falló marcar registroConfirmadoEn en DB — alumno queda sin flag hasta que reintente"
+    );
+    throw error;
   }
 
   return { ok: true };

@@ -9,10 +9,16 @@ type PerfilInput = Omit<RegistroInput, "githubUsername">;
 export async function PATCH(req: Request) {
   try {
     const user = await requireUser();
-    const body = (await req.json()) as PerfilInput;
+    const body = await req.json();
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json(
+        { error: "No pudimos leer los datos enviados. Volvé a intentar." },
+        { status: 400 }
+      );
+    }
 
     const resultado = await confirmarDatosAlumno({
-      ...body,
+      ...(body as PerfilInput),
       githubUsername: user.githubUsername,
     });
     if (!resultado.ok) {

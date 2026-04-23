@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockGetComisionActiva = vi.fn();
 const mockUpsertAlumno = vi.fn();
+const mockMarcarRegistroConfirmado = vi.fn();
 const mockUpsertarAlumnoEnSheets = vi.fn();
 
 const { FakeLegajoConflictError } = vi.hoisted(() => {
@@ -24,6 +25,8 @@ const { FakeLegajoConflictError } = vi.hoisted(() => {
 vi.mock("@/lib/repositories", () => ({
   getComisionActiva: () => mockGetComisionActiva(),
   upsertAlumno: (data: unknown) => mockUpsertAlumno(data),
+  marcarRegistroConfirmado: (...args: unknown[]) =>
+    mockMarcarRegistroConfirmado(...args),
   LegajoConflictError: FakeLegajoConflictError,
 }));
 
@@ -71,6 +74,7 @@ describe("confirmarDatosAlumno", () => {
     vi.clearAllMocks();
     mockGetComisionActiva.mockResolvedValue(comisionActiva);
     mockUpsertAlumno.mockResolvedValue(undefined);
+    mockMarcarRegistroConfirmado.mockResolvedValue(undefined);
     mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: true });
   });
 
@@ -88,14 +92,50 @@ describe("confirmarDatosAlumno", () => {
     expect(ordenLlamadas[0]).toBeLessThan(ordenLlamadas[1]);
   });
 
-  it("pasa la comisión activa como comision y registroConfirmadoEn a upsertAlumno", async () => {
+  it("pasa la comisión activa como comision a upsertAlumno, sin marcar registroConfirmadoEn todavía", async () => {
     await confirmarDatosAlumno(validInput);
-    expect(mockUpsertAlumno).toHaveBeenCalledWith(
-      expect.objectContaining({
-        comision: comisionActiva,
-        registroConfirmadoEn: comisionActiva,
-      })
+    const [dataPasada] = mockUpsertAlumno.mock.calls[0];
+    expect(dataPasada).toMatchObject({ comision: comisionActiva });
+    expect(dataPasada.registroConfirmadoEn).toBeUndefined();
+  });
+
+  it("marca registroConfirmadoEn recién después de que Sheets confirmó la escritura", async () => {
+    await confirmarDatosAlumno(validInput);
+    expect(mockMarcarRegistroConfirmado).toHaveBeenCalledWith(
+      validInput.githubUsername,
+      comisionActiva
     );
+    const ordenLlamadas = [
+      mockUpsertarAlumnoEnSheets.mock.invocationCallOrder[0],
+      mockMarcarRegistroConfirmado.mock.invocationCallOrder[0],
+    ];
+    expect(ordenLlamadas[0]).toBeLessThan(ordenLlamadas[1]);
+  });
+
+  it("no marca registroConfirmadoEn si Sheets falla (evita commit parcial)", async () => {
+    mockUpsertarAlumnoEnSheets.mockResolvedValue({
+      ok: false,
+      error: "No se pudo escribir en la planilla",
+    });
+    await confirmarDatosAlumno(validInput);
+    expect(mockMarcarRegistroConfirmado).not.toHaveBeenCalled();
+  });
+
+  it("loguea el caso raro en que Sheets confirmó pero marcar registroConfirmadoEn falló", async () => {
+    const { logger } = await import("@/lib/logger");
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation((() => {}) as never);
+    mockMarcarRegistroConfirmado.mockRejectedValue(new Error("DB caída"));
+
+    await expect(confirmarDatosAlumno(validInput)).rejects.toThrow("DB caída");
+
+    expect(errorSpy).toHaveBeenCalledOnce();
+    const [context, message] = errorSpy.mock.calls[0];
+    expect(context).toMatchObject({
+      githubUsername: validInput.githubUsername,
+      comisionId: comisionActiva.id,
+    });
+    expect(message).toContain("Sheets confirmado");
+    errorSpy.mockRestore();
   });
 
   it("pasa a Sheets el spreadsheetId y columnConfig de la comisión activa", async () => {
