@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
   parseAlumnosRows,
+  parseAsignacionesGrupos,
   validateRegistro,
   colLetter,
   isValidEmail,
   upsertarAlumnoEnSheets,
 } from "./sheets";
+import type { GruposColumnConfig } from "@/types";
 
 // ── parseAlumnosRows ────────────────────────────────────────
 
@@ -77,6 +79,89 @@ describe("parseAlumnosRows", () => {
   it("maneja valores numéricos (legajo como number)", () => {
     const rows = [[12345, "A", "B", "user", "a@b.com", "c"]];
     expect(parseAlumnosRows(rows)[0].legajo).toBe("12345");
+  });
+});
+
+// ── parseAsignacionesGrupos ─────────────────────────────────
+
+describe("parseAsignacionesGrupos", () => {
+  // Hoja típica: A..E columnas de alumno, F=grupo funcional, G=grupo lógico, H=grupo objetos
+  const config: GruposColumnConfig = {
+    sheetName: "Alumnos",
+    headerRows: 1,
+    githubUsername: 3,
+    nombreGrupoPorParadigma: {
+      funcional: 5,
+      logico: 6,
+      objetos: 7,
+    },
+  };
+
+  it("genera una asignación por paradigma en el que el alumno tiene grupo", () => {
+    const rows = [
+      ["12345", "García", "Juan", "juangarcia", "j@m.com", "Los Lambdas", "Prolog Pros", "OO Masters"],
+    ];
+    const result = parseAsignacionesGrupos(rows, config);
+    expect(result).toEqual([
+      { githubUsername: "juangarcia", paradigma: "funcional", nombreGrupo: "Los Lambdas" },
+      { githubUsername: "juangarcia", paradigma: "logico", nombreGrupo: "Prolog Pros" },
+      { githubUsername: "juangarcia", paradigma: "objetos", nombreGrupo: "OO Masters" },
+    ]);
+  });
+
+  it("ignora paradigmas con celda vacía", () => {
+    const rows = [
+      ["12345", "García", "Juan", "juangarcia", "j@m.com", "Los Lambdas", "", ""],
+    ];
+    const result = parseAsignacionesGrupos(rows, config);
+    expect(result).toEqual([
+      { githubUsername: "juangarcia", paradigma: "funcional", nombreGrupo: "Los Lambdas" },
+    ]);
+  });
+
+  it("descarta filas sin github username", () => {
+    const rows = [
+      ["12345", "García", "Juan", "", "j@m.com", "Los Lambdas", "", ""],
+      ["67890", "Pérez", "María", "mariaperez", "m@m.com", "Otro", "", ""],
+    ];
+    const result = parseAsignacionesGrupos(rows, config);
+    expect(result).toHaveLength(1);
+    expect(result[0].githubUsername).toBe("mariaperez");
+  });
+
+  it("normaliza el github username (lowercase + sin @)", () => {
+    const rows = [
+      ["12345", "García", "Juan", "@JuanGarcia", "j@m.com", "Los Lambdas", "", ""],
+    ];
+    const result = parseAsignacionesGrupos(rows, config);
+    expect(result[0].githubUsername).toBe("juangarcia");
+  });
+
+  it("solo mapea los paradigmas presentes en la config", () => {
+    const configSoloFuncional: GruposColumnConfig = {
+      sheetName: "Alumnos",
+      headerRows: 1,
+      githubUsername: 3,
+      nombreGrupoPorParadigma: { funcional: 5 },
+    };
+    const rows = [
+      ["12345", "García", "Juan", "juangarcia", "j@m.com", "Los Lambdas", "Prolog Pros", "OO Masters"],
+    ];
+    const result = parseAsignacionesGrupos(rows, configSoloFuncional);
+    expect(result).toEqual([
+      { githubUsername: "juangarcia", paradigma: "funcional", nombreGrupo: "Los Lambdas" },
+    ]);
+  });
+
+  it("maneja filas más cortas que las columnas configuradas", () => {
+    const rows = [
+      ["12345", "García", "Juan", "juangarcia", "j@m.com"],
+    ];
+    expect(parseAsignacionesGrupos(rows, config)).toEqual([]);
+  });
+
+  it("devuelve vacío para filas vacías", () => {
+    expect(parseAsignacionesGrupos([], config)).toEqual([]);
   });
 });
 

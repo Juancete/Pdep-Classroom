@@ -21,34 +21,37 @@ export default async function AssignmentDetailPage({
   const assignment = await getAssignment(params.id);
   if (!assignment) redirect("/admin/assignments");
 
-  const [entregas, alumnos, gruposRef] = await Promise.all([
+  // `getAlumnos` se dispara una sola vez: Individual reutiliza la misma
+  // promise vía el thunk para calcular su total, y el map de nombres también
+  // consume el resultado. Grupal ignora el thunk y pide los grupos.
+  const alumnosPromise = getAlumnos();
+  const [entregas, alumnos, total] = await Promise.all([
     getEntregas(params.id),
-    getAlumnos(),
-    assignment.tipo === "grupal"
-      ? getGruposDeAssignment(params.id)
-      : Promise.resolve([]),
+    alumnosPromise,
+    assignment.totalEsperado({
+      getAlumnosDelCurso: () => alumnosPromise,
+      getGruposDeAssignment,
+    }),
   ]);
 
-  const total =
-    assignment.tipo === "individual" ? alumnos.length : gruposRef.length;
   const aceptadas = entregas.length;
   const pendientes = Math.max(0, total - aceptadas);
 
   const alumnosPorUsername = new Map<string, Alumno>(
-    alumnos.map((a) => [a.githubUsername.toLowerCase(), a])
+    alumnos.map((alumno) => [alumno.githubUsername.toLowerCase(), alumno])
   );
 
-  const entregaRows = entregas.map((e) => ({
-    id: e.id,
-    githubUsernames: e.githubUsernames,
-    repoName: e.repoName,
-    repoUrl: e.repoUrl,
-    repoDeleted: e.repoDeleted,
-    createdAt: new Date(e.createdAt).toLocaleDateString("es-AR"),
-    nombreCompleto: e.githubUsernames
-      .map((u) => {
-        const a = alumnosPorUsername.get(u.toLowerCase());
-        return a ? `${a.apellido}, ${a.nombre}` : "—";
+  const entregaRows = entregas.map((entrega) => ({
+    id: entrega.id,
+    githubUsernames: entrega.githubUsernames,
+    repoName: entrega.repoName,
+    repoUrl: entrega.repoUrl,
+    repoDeleted: entrega.repoDeleted,
+    createdAt: new Date(entrega.createdAt).toLocaleDateString("es-AR"),
+    nombreCompleto: entrega.githubUsernames
+      .map((username) => {
+        const alumno = alumnosPorUsername.get(username.toLowerCase());
+        return alumno ? `${alumno.apellido}, ${alumno.nombre}` : "—";
       })
       .join(" / "),
   }));
@@ -69,7 +72,7 @@ export default async function AssignmentDetailPage({
         <div className="flex items-center gap-3">
           <DeleteReposButton
             assignmentId={assignment.id}
-            activeRepoCount={entregas.filter((e) => e.repoName && !e.repoDeleted).length}
+            activeRepoCount={entregas.filter((entrega) => entrega.repoName && !entrega.repoDeleted).length}
           />
           <Link
             href={`/admin/assignments/${assignment.id}/edit`}
@@ -117,7 +120,7 @@ export default async function AssignmentDetailPage({
         <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
           <div className="text-3xl font-bold text-gray-600">{total}</div>
           <div className="text-sm text-gray-500 mt-1">
-            {assignment.tipo === "individual" ? "Alumnos" : "Grupos"} totales
+            {assignment.etiquetaTotales()} totales
           </div>
         </div>
       </div>

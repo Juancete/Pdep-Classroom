@@ -6,7 +6,9 @@ const mockRequireUser = vi.fn();
 const mockUpsertarAlumnoEnSheets = vi.fn();
 const mockGetComisionActiva = vi.fn();
 const mockUpsertAlumno = vi.fn();
+const mockMarcarRegistroConfirmado = vi.fn();
 const mockAgregarMiembroAGrupo = vi.fn();
+const mockIntentarSincronizarGrupos = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireUser: () => mockRequireUser(),
@@ -38,11 +40,21 @@ const { FakeLegajoConflictError } = vi.hoisted(() => {
 vi.mock("@/lib/repositories", () => ({
   getComisionActiva: () => mockGetComisionActiva(),
   upsertAlumno: (data: unknown) => mockUpsertAlumno(data),
+  marcarRegistroConfirmado: (...args: unknown[]) =>
+    mockMarcarRegistroConfirmado(...args),
   LegajoConflictError: FakeLegajoConflictError,
 }));
 
 vi.mock("@/lib/googleGroups", () => ({
   agregarMiembroAGrupo: (...args: unknown[]) => mockAgregarMiembroAGrupo(...args),
+}));
+
+// El handler llama al wrapper `intentarSincronizarGrupos`, que es quien se
+// encarga del logging y de persistir el flag. Si throwea, el handler lo
+// captura y degrada la respuesta a `gruposSync: "error"`.
+vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
+  intentarSincronizarGrupos: (...args: unknown[]) =>
+    mockIntentarSincronizarGrupos(...args),
 }));
 
 import { POST } from "./route";
@@ -62,7 +74,7 @@ const validBody = {
   apellido: "García",
   nombre: "Juan",
   email: "juan@gmail.com",
-  githubUsername: "attacker", // se ignora — se reemplaza por el del user autenticado
+  githubUsername: "juangarcia", // debe coincidir con el user autenticado del mock
 };
 
 // ── Tests ────────────────────────────────────────────────────
@@ -83,13 +95,33 @@ describe("POST /api/registro", () => {
     });
     mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: true });
     mockUpsertAlumno.mockResolvedValue(undefined);
+    mockMarcarRegistroConfirmado.mockResolvedValue(undefined);
     mockAgregarMiembroAGrupo.mockResolvedValue({ status: "added" });
+    mockIntentarSincronizarGrupos.mockResolvedValue(undefined);
   });
 
-  it("fuerza el githubUsername del usuario autenticado (ignora el del body)", async () => {
+  it("usa el githubUsername del usuario autenticado cuando coincide con el body", async () => {
     const res = await POST(makeRequest(validBody));
     expect(res.status).toBe(200);
     const [inputPasado] = mockUpsertarAlumnoEnSheets.mock.calls[0];
+    expect(inputPasado.githubUsername).toBe("juangarcia");
+  });
+
+  it("devuelve 400 con field=githubUsername si el body trae un github distinto al de la sesión", async () => {
+    const res = await POST(makeRequest({ ...validBody, githubUsername: "attacker" }));
+    const json = await res.json();
+    expect(res.status).toBe(400);
+    expect(json.field).toBe("githubUsername");
+    expect(json.error).toContain("juangarcia");
+    expect(json.error).toContain("attacker");
+    expect(mockUpsertAlumno).not.toHaveBeenCalled();
+    expect(mockUpsertarAlumnoEnSheets).not.toHaveBeenCalled();
+  });
+
+  it("compara githubUsername case-insensitive (no rechaza JuanGarcia vs juangarcia)", async () => {
+    const res = await POST(makeRequest({ ...validBody, githubUsername: "JuanGarcia" }));
+    expect(res.status).toBe(200);
+    const [inputPasado] = mockUpsertAlumno.mock.calls[0];
     expect(inputPasado.githubUsername).toBe("juangarcia");
   });
 
@@ -103,7 +135,7 @@ describe("POST /api/registro", () => {
     );
   });
 
-  it("llama a upsertAlumno con comision y registroConfirmadoEn = comisión activa", async () => {
+  it("llama a upsertAlumno con comision pero sin registroConfirmadoEn (se marca recién después de Sheets)", async () => {
     const comision = await mockGetComisionActiva();
     await POST(makeRequest(validBody));
     expect(mockUpsertAlumno).toHaveBeenCalledWith(
@@ -112,9 +144,27 @@ describe("POST /api/registro", () => {
         githubUsername: "juangarcia",
         email: "juan@gmail.com",
         comision,
-        registroConfirmadoEn: comision,
       })
     );
+    const [dataPasada] = mockUpsertAlumno.mock.calls[0];
+    expect(dataPasada.registroConfirmadoEn).toBeUndefined();
+  });
+
+  it("marca registroConfirmadoEn después de que Sheets confirmó la escritura", async () => {
+    const comision = await mockGetComisionActiva();
+    await POST(makeRequest(validBody));
+    expect(mockMarcarRegistroConfirmado).toHaveBeenCalledWith("juangarcia", comision);
+    const ordenLlamadas = [
+      mockUpsertarAlumnoEnSheets.mock.invocationCallOrder[0],
+      mockMarcarRegistroConfirmado.mock.invocationCallOrder[0],
+    ];
+    expect(ordenLlamadas[0]).toBeLessThan(ordenLlamadas[1]);
+  });
+
+  it("no marca registroConfirmadoEn si Sheets falla (evita commit parcial)", async () => {
+    mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: false, error: "boom" });
+    await POST(makeRequest(validBody));
+    expect(mockMarcarRegistroConfirmado).not.toHaveBeenCalled();
   });
 
   it("no toca Sheets si el upsert en DB falla con LegajoConflictError", async () => {
@@ -157,7 +207,9 @@ describe("POST /api/registro", () => {
     const res = await POST(makeRequest(validBody));
     expect(res.status).toBe(500);
     const json = await res.json();
-    expect(json.error).toBe("boom");
+    // El mensaje del error interno no debe filtrarse al cliente.
+    expect(json.error).toBe("Error interno del servidor");
+    expect(json.error).not.toContain("boom");
   });
 
   // ── Suscripción al Google Group ────────────────────────────
@@ -206,18 +258,19 @@ describe("POST /api/registro", () => {
     });
 
     it("enmascara el email en el log de error para no exponer PII", async () => {
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const { logger } = await import("@/lib/logger");
+      const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
       mockAgregarMiembroAGrupo.mockResolvedValue({
         status: "error",
         error: "Sin permisos",
       });
       await POST(makeRequest(validBody));
-      const loggedLines = errorSpy.mock.calls.flat().join(" ");
+      const loggedPayload = JSON.stringify(errorSpy.mock.calls);
       // El email completo no debe aparecer, pero sí el dominio y un
       // identificador útil para el admin (githubUsername).
-      expect(loggedLines).not.toContain("juan@gmail.com");
-      expect(loggedLines).toContain("@gmail.com");
-      expect(loggedLines).toContain("juangarcia");
+      expect(loggedPayload).not.toContain("juan@gmail.com");
+      expect(loggedPayload).toContain("@gmail.com");
+      expect(loggedPayload).toContain("juangarcia");
       errorSpy.mockRestore();
     });
 
@@ -231,6 +284,44 @@ describe("POST /api/registro", () => {
       mockGetComisionActiva.mockResolvedValue(null);
       await POST(makeRequest(validBody));
       expect(mockAgregarMiembroAGrupo).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Sincronización de grupos desde planilla ────────────────
+
+  describe("sincronización de grupos desde planilla", () => {
+    it("llama a intentarSincronizarGrupos con el github y la comisión activa tras un registro exitoso", async () => {
+      const comision = await mockGetComisionActiva();
+      await POST(makeRequest(validBody));
+      expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith(
+        "juangarcia",
+        comision
+      );
+    });
+
+    it("no incluye gruposSync en el body cuando el wrapper completa sin throwear", async () => {
+      const res = await POST(makeRequest(validBody));
+      const json = await res.json();
+      expect(res.status).toBe(200);
+      expect(json.gruposSync).toBeUndefined();
+    });
+
+    it("responde 200 con gruposSync='error' cuando el wrapper throwea (el alta se preserva, el flag en DB dispara retry)", async () => {
+      mockIntentarSincronizarGrupos.mockRejectedValue(new Error("Sheets caído"));
+
+      const res = await POST(makeRequest(validBody));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.gruposSync).toBe("error");
+      // El alta no se deshace por un fallo en el hook accesorio
+      expect(mockMarcarRegistroConfirmado).toHaveBeenCalledOnce();
+    });
+
+    it("no intenta sincronizar si el registro no se confirmó (ej. Sheets falló)", async () => {
+      mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: false, error: "boom" });
+      await POST(makeRequest(validBody));
+      expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
     });
   });
 });

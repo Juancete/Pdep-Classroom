@@ -1,0 +1,94 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { Alumno } from "@/domain/entities";
+
+// ── Mocks ────────────────────────────────────────────────────
+
+const mockGetCurrentUser = vi.fn();
+const mockGetAlumnoByGithub = vi.fn();
+
+vi.mock("@/lib/session", () => ({
+  getCurrentUser: () => mockGetCurrentUser(),
+}));
+
+vi.mock("@/lib/repositories", () => ({
+  getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
+}));
+
+import { SyncPendingBanner } from "./SyncPendingBanner";
+
+// ── Helpers ──────────────────────────────────────────────────
+
+function makeAlumno(overrides: Partial<Alumno> = {}): Alumno {
+  return {
+    id: "uuid-1",
+    legajo: "12345",
+    nombre: "Juan",
+    apellido: "Garcia",
+    githubUsername: "juangarcia",
+    email: "juan@example.com",
+    ...overrides,
+  } as Alumno;
+}
+
+// ── Tests ────────────────────────────────────────────────────
+
+describe("SyncPendingBanner", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("no renderiza nada si no hay usuario logueado", async () => {
+    mockGetCurrentUser.mockResolvedValue(null);
+    const el = await SyncPendingBanner();
+    expect(el).toBeNull();
+    expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
+  });
+
+  it("no renderiza nada si el usuario es admin (no aplica)", async () => {
+    mockGetCurrentUser.mockResolvedValue({
+      githubUsername: "juangarcia",
+      isAdmin: true,
+    });
+    const el = await SyncPendingBanner();
+    expect(el).toBeNull();
+    expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
+  });
+
+  it("no renderiza nada si el alumno no existe en DB", async () => {
+    mockGetCurrentUser.mockResolvedValue({
+      githubUsername: "juangarcia",
+      isAdmin: false,
+    });
+    mockGetAlumnoByGithub.mockResolvedValue(null);
+    const el = await SyncPendingBanner();
+    expect(el).toBeNull();
+  });
+
+  it("no renderiza nada si el alumno no tiene el flag prendido", async () => {
+    mockGetCurrentUser.mockResolvedValue({
+      githubUsername: "juangarcia",
+      isAdmin: false,
+    });
+    mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
+    const el = await SyncPendingBanner();
+    expect(el).toBeNull();
+  });
+
+  it("renderiza el banner cuando el alumno tiene el flag prendido", async () => {
+    mockGetCurrentUser.mockResolvedValue({
+      githubUsername: "juangarcia",
+      isAdmin: false,
+    });
+    mockGetAlumnoByGithub.mockResolvedValue(
+      makeAlumno({ gruposSyncFallidoEn: new Date("2026-04-01") })
+    );
+
+    const el = await SyncPendingBanner();
+    const html = renderToStaticMarkup(el as React.ReactElement);
+
+    expect(html).toContain("No pudimos asignarte a tu grupo de TP");
+    expect(html).toContain('href="/perfil"');
+    expect(html).toContain("Reintentar");
+  });
+});

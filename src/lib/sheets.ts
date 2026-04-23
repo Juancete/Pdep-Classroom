@@ -1,6 +1,12 @@
 import { google } from "googleapis";
 import { Alumno } from "@/domain/entities";
-import { type ColumnConfig, DEFAULT_COLUMN_CONFIG } from "@/types";
+import {
+  type ColumnConfig,
+  DEFAULT_COLUMN_CONFIG,
+  type GruposColumnConfig,
+  type Paradigma,
+  PARADIGMAS,
+} from "@/types";
 
 // ── Auth con service account ────────────────────────────────
 
@@ -163,6 +169,8 @@ export function validateRegistro(input: RegistroInput): string | null {
     return "El legajo debe tener entre 4 y 8 dígitos";
   if (!apellido.trim()) return "El apellido es obligatorio";
   if (!nombre.trim()) return "El nombre es obligatorio";
+  if (typeof githubUsername !== "string")
+    return "El usuario de GitHub debe ser un texto";
   if (!githubUsername.trim()) return "El usuario de GitHub es obligatorio";
   if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(githubUsername.trim()))
     return "El usuario de GitHub no tiene un formato válido";
@@ -242,6 +250,61 @@ export async function upsertarAlumnoEnSheets(
     requestBody: { values: [existingRow] },
   });
   return { ok: true };
+}
+
+// ── Hoja de grupos ──────────────────────────────────────────
+
+// Una fila parseada de la hoja de grupos: alumno + paradigma + nombre del grupo.
+// Un mismo alumno puede aparecer en varias asignaciones (una por paradigma).
+export interface AsignacionGrupoRow {
+  githubUsername: string;
+  paradigma: Paradigma;
+  nombreGrupo: string;
+}
+
+function buildGruposReadRange(config: GruposColumnConfig): string {
+  const gruposCols = PARADIGMAS
+    .map((p) => config.nombreGrupoPorParadigma[p])
+    .filter((v): v is number => typeof v === "number");
+  const maxCol = Math.max(config.githubUsername, ...gruposCols);
+  const startRow = config.headerRows + 1;
+  return `${config.sheetName}!A${startRow}:${colLetter(maxCol)}500`;
+}
+
+export function parseAsignacionesGrupos(
+  rows: unknown[][],
+  config: GruposColumnConfig
+): AsignacionGrupoRow[] {
+  const result: AsignacionGrupoRow[] = [];
+  for (const row of rows) {
+    const github = norm(row[config.githubUsername]).replace("@", "").toLowerCase();
+    if (!github) continue;
+    for (const paradigma of PARADIGMAS) {
+      const colIndex = config.nombreGrupoPorParadigma[paradigma];
+      if (colIndex === undefined) continue;
+      const nombreGrupo = norm(row[colIndex]);
+      if (!nombreGrupo) continue;
+      result.push({ githubUsername: github, paradigma, nombreGrupo });
+    }
+  }
+  return result;
+}
+
+export async function getAsignacionesGrupos(
+  spreadsheetId: string,
+  config: GruposColumnConfig
+): Promise<AsignacionGrupoRow[]> {
+  const id = resolveSpreadsheetId(spreadsheetId);
+  try {
+    const sheets = getSheetsClient();
+    const { data } = await sheets.spreadsheets.values.get({
+      spreadsheetId: id,
+      range: buildGruposReadRange(config),
+    });
+    return parseAsignacionesGrupos(data.values ?? [], config);
+  } catch (e) {
+    throw new Error(`No se pudo leer la hoja de grupos: ${(e as Error).message}`);
+  }
 }
 
 // ── Helpers ─────────────────────────────────────────────────

@@ -6,6 +6,8 @@ const mockRequireUser = vi.fn();
 const mockUpsertarAlumnoEnSheets = vi.fn();
 const mockGetComisionActiva = vi.fn();
 const mockUpsertAlumno = vi.fn();
+const mockMarcarRegistroConfirmado = vi.fn();
+const mockIntentarSincronizarGrupos = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireUser: () => mockRequireUser(),
@@ -37,7 +39,16 @@ const { FakeLegajoConflictError } = vi.hoisted(() => {
 vi.mock("@/lib/repositories", () => ({
   getComisionActiva: () => mockGetComisionActiva(),
   upsertAlumno: (data: unknown) => mockUpsertAlumno(data),
+  marcarRegistroConfirmado: (...args: unknown[]) =>
+    mockMarcarRegistroConfirmado(...args),
   LegajoConflictError: FakeLegajoConflictError,
+}));
+
+// El handler llama al wrapper `intentarSincronizarGrupos`, que encapsula
+// log + flag persistente + retorno booleano para el handler.
+vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
+  intentarSincronizarGrupos: (...args: unknown[]) =>
+    mockIntentarSincronizarGrupos(...args),
 }));
 
 import { PATCH } from "./route";
@@ -77,6 +88,8 @@ describe("PATCH /api/perfil", () => {
     });
     mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: true });
     mockUpsertAlumno.mockResolvedValue(undefined);
+    mockMarcarRegistroConfirmado.mockResolvedValue(undefined);
+    mockIntentarSincronizarGrupos.mockResolvedValue(undefined);
   });
 
   it("actualiza Sheets y DB en un mismo request", async () => {
@@ -92,12 +105,21 @@ describe("PATCH /api/perfil", () => {
     expect(inputPasado.githubUsername).toBe("juangarcia");
   });
 
-  it("vuelve a setear registroConfirmadoEn a la comisión activa (mantiene consistencia)", async () => {
+  it("marca registroConfirmadoEn recién después de que Sheets confirmó", async () => {
     const comision = await mockGetComisionActiva();
     await PATCH(makeRequest(validBody));
-    expect(mockUpsertAlumno).toHaveBeenCalledWith(
-      expect.objectContaining({ registroConfirmadoEn: comision })
-    );
+    expect(mockMarcarRegistroConfirmado).toHaveBeenCalledWith("juangarcia", comision);
+    const [dataPasada] = mockUpsertAlumno.mock.calls[0];
+    expect(dataPasada.registroConfirmadoEn).toBeUndefined();
+  });
+
+  it("no marca registroConfirmadoEn si Sheets falla", async () => {
+    mockUpsertarAlumnoEnSheets.mockResolvedValue({
+      ok: false,
+      error: "sheets error",
+    });
+    await PATCH(makeRequest(validBody));
+    expect(mockMarcarRegistroConfirmado).not.toHaveBeenCalled();
   });
 
   it("no toca Sheets si el upsert en DB falla con LegajoConflictError", async () => {
@@ -139,5 +161,40 @@ describe("PATCH /api/perfil", () => {
     mockUpsertarAlumnoEnSheets.mockRejectedValue(new Error("boom"));
     const res = await PATCH(makeRequest(validBody));
     expect(res.status).toBe(500);
+  });
+
+  describe("sincronización de grupos desde planilla", () => {
+    it("llama a intentarSincronizarGrupos con el github de la sesión y la comisión activa", async () => {
+      const comision = await mockGetComisionActiva();
+      await PATCH(makeRequest(validBody));
+      expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith(
+        "juangarcia",
+        comision
+      );
+    });
+
+    it("no incluye gruposSync en el body cuando el wrapper completa sin throwear", async () => {
+      const res = await PATCH(makeRequest(validBody));
+      const json = await res.json();
+      expect(res.status).toBe(200);
+      expect(json.gruposSync).toBeUndefined();
+    });
+
+    it("responde 200 con gruposSync='error' cuando el wrapper throwea (el alta se preserva, el flag en DB dispara retry)", async () => {
+      mockIntentarSincronizarGrupos.mockRejectedValue(new Error("Sheets caído"));
+
+      const res = await PATCH(makeRequest(validBody));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.gruposSync).toBe("error");
+      expect(mockMarcarRegistroConfirmado).toHaveBeenCalledOnce();
+    });
+
+    it("no intenta sincronizar si la confirmación del perfil falla antes", async () => {
+      mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: false, error: "boom" });
+      await PATCH(makeRequest(validBody));
+      expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+    });
   });
 });
