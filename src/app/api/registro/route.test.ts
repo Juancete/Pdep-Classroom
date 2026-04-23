@@ -6,6 +6,7 @@ const mockRequireUser = vi.fn();
 const mockUpsertarAlumnoEnSheets = vi.fn();
 const mockGetComisionActiva = vi.fn();
 const mockUpsertAlumno = vi.fn();
+const mockMarcarRegistroConfirmado = vi.fn();
 const mockAgregarMiembroAGrupo = vi.fn();
 
 vi.mock("@/lib/session", () => ({
@@ -38,6 +39,8 @@ const { FakeLegajoConflictError } = vi.hoisted(() => {
 vi.mock("@/lib/repositories", () => ({
   getComisionActiva: () => mockGetComisionActiva(),
   upsertAlumno: (data: unknown) => mockUpsertAlumno(data),
+  marcarRegistroConfirmado: (...args: unknown[]) =>
+    mockMarcarRegistroConfirmado(...args),
   LegajoConflictError: FakeLegajoConflictError,
 }));
 
@@ -83,6 +86,7 @@ describe("POST /api/registro", () => {
     });
     mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: true });
     mockUpsertAlumno.mockResolvedValue(undefined);
+    mockMarcarRegistroConfirmado.mockResolvedValue(undefined);
     mockAgregarMiembroAGrupo.mockResolvedValue({ status: "added" });
   });
 
@@ -121,7 +125,7 @@ describe("POST /api/registro", () => {
     );
   });
 
-  it("llama a upsertAlumno con comision y registroConfirmadoEn = comisión activa", async () => {
+  it("llama a upsertAlumno con comision pero sin registroConfirmadoEn (se marca recién después de Sheets)", async () => {
     const comision = await mockGetComisionActiva();
     await POST(makeRequest(validBody));
     expect(mockUpsertAlumno).toHaveBeenCalledWith(
@@ -130,9 +134,27 @@ describe("POST /api/registro", () => {
         githubUsername: "juangarcia",
         email: "juan@gmail.com",
         comision,
-        registroConfirmadoEn: comision,
       })
     );
+    const [dataPasada] = mockUpsertAlumno.mock.calls[0];
+    expect(dataPasada.registroConfirmadoEn).toBeUndefined();
+  });
+
+  it("marca registroConfirmadoEn después de que Sheets confirmó la escritura", async () => {
+    const comision = await mockGetComisionActiva();
+    await POST(makeRequest(validBody));
+    expect(mockMarcarRegistroConfirmado).toHaveBeenCalledWith("juangarcia", comision);
+    const ordenLlamadas = [
+      mockUpsertarAlumnoEnSheets.mock.invocationCallOrder[0],
+      mockMarcarRegistroConfirmado.mock.invocationCallOrder[0],
+    ];
+    expect(ordenLlamadas[0]).toBeLessThan(ordenLlamadas[1]);
+  });
+
+  it("no marca registroConfirmadoEn si Sheets falla (evita commit parcial)", async () => {
+    mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: false, error: "boom" });
+    await POST(makeRequest(validBody));
+    expect(mockMarcarRegistroConfirmado).not.toHaveBeenCalled();
   });
 
   it("no toca Sheets si el upsert en DB falla con LegajoConflictError", async () => {

@@ -102,6 +102,23 @@ export async function upsertAlumno(data: AlumnoData): Promise<Alumno> {
   return createAlumno(data);
 }
 
+// Marca al alumno como registrado en `comision`. Se usa como segundo paso
+// de `confirmarDatosAlumno` — upsertAlumno persiste los datos sin confirmar
+// y recién después de que Sheets aceptó la escritura se corre esto, para
+// evitar dejar la DB confirmada cuando la planilla quedó desactualizada.
+export async function marcarRegistroConfirmado(
+  githubUsername: string,
+  comision: Comision
+): Promise<void> {
+  const em = await getEM();
+  const alumno = await em.findOne(Alumno, {
+    githubUsername: githubUsername.toLowerCase().trim(),
+  });
+  if (!alumno) return;
+  alumno.registroConfirmadoEn = comision;
+  await em.flush();
+}
+
 /** Crea o actualiza múltiples alumnos en un solo flush. */
 export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
   if (dataList.length === 0) return 0;
