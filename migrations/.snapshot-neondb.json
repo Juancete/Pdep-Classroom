@@ -117,6 +117,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "uuid"
+        },
+        "registro_confirmado_en_id": {
+          "name": "registro_confirmado_en_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
         }
       },
       "name": "alumno",
@@ -160,6 +176,19 @@
             "comision_id"
           ],
           "constraintName": "alumno_comision_id_foreign",
+          "localTableName": "public.alumno",
+          "referencedTableName": "public.comision",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "set null"
+        },
+        "alumno_registro_confirmado_en_id_foreign": {
+          "columnNames": [
+            "registro_confirmado_en_id"
+          ],
+          "constraintName": "alumno_registro_confirmado_en_id_foreign",
           "localTableName": "public.alumno",
           "referencedTableName": "public.comision",
           "referencedColumnNames": [
@@ -555,7 +584,7 @@
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": true,
+          "nullable": false,
           "unique": false,
           "length": null,
           "precision": null,

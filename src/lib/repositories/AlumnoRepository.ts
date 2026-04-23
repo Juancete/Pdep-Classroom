@@ -60,17 +60,26 @@ export interface AlumnoData {
   registroConfirmadoEn?: Comision;
 }
 
-export async function createAlumno(data: AlumnoData): Promise<Alumno> {
-  await assertLegajoLibreOPropio(data.legajo, data.githubUsername);
-  const em = await getEM();
-  const alumno = new Alumno();
+// Copia los campos de `data` sobre `alumno`. Para `registroConfirmadoEn`
+// se ignora `undefined` para no pisar un valor ya confirmado cuando el caller
+// (ej. sync desde Sheets) no trae ese dato.
+function applyAlumnoData(alumno: Alumno, data: AlumnoData): void {
   alumno.legajo = data.legajo.trim();
   alumno.nombre = data.nombre.trim();
   alumno.apellido = data.apellido.trim();
   alumno.githubUsername = data.githubUsername.toLowerCase().trim();
   alumno.email = data.email.toLowerCase().trim();
   alumno.comision = data.comision;
-  alumno.registroConfirmadoEn = data.registroConfirmadoEn;
+  if (data.registroConfirmadoEn !== undefined) {
+    alumno.registroConfirmadoEn = data.registroConfirmadoEn;
+  }
+}
+
+export async function createAlumno(data: AlumnoData): Promise<Alumno> {
+  await assertLegajoLibreOPropio(data.legajo, data.githubUsername);
+  const em = await getEM();
+  const alumno = new Alumno();
+  applyAlumnoData(alumno, data);
   em.persist(alumno);
   await em.flush();
   return alumno;
@@ -85,14 +94,7 @@ export async function upsertAlumno(data: AlumnoData): Promise<Alumno> {
   });
 
   if (existing) {
-    existing.legajo = data.legajo.trim();
-    existing.nombre = data.nombre.trim();
-    existing.apellido = data.apellido.trim();
-    existing.email = data.email.toLowerCase().trim();
-    existing.comision = data.comision;
-    if (data.registroConfirmadoEn !== undefined) {
-      existing.registroConfirmadoEn = data.registroConfirmadoEn;
-    }
+    applyAlumnoData(existing, data);
     await em.flush();
     return existing;
   }
@@ -136,19 +138,10 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
     const key = data.githubUsername.toLowerCase().trim();
     const existing = existentesPorGithub.get(key);
     if (existing) {
-      existing.legajo = data.legajo.trim();
-      existing.nombre = data.nombre.trim();
-      existing.apellido = data.apellido.trim();
-      existing.email = data.email.toLowerCase().trim();
-      existing.comision = data.comision;
+      applyAlumnoData(existing, data);
     } else {
       const alumno = new Alumno();
-      alumno.legajo = data.legajo.trim();
-      alumno.nombre = data.nombre.trim();
-      alumno.apellido = data.apellido.trim();
-      alumno.githubUsername = key;
-      alumno.email = data.email.toLowerCase().trim();
-      alumno.comision = data.comision;
+      applyAlumnoData(alumno, data);
       em.persist(alumno);
       // Si el batch trae otra fila con el mismo github (typo o fila duplicada
       // en la planilla), debe reutilizar esta instancia — sin esto, el UNIQUE
