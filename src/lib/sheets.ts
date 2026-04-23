@@ -177,8 +177,12 @@ export function validateRegistro(input: RegistroInput): string | null {
 
 export type UpsertAlumnoResult =
   | { ok: true }
-  | { ok: false; error: string; field?: "legajo" | "githubUsername" };
+  | { ok: false; error: string };
 
+// La coherencia legajo↔github la garantiza la DB (upsertAlumno →
+// LegajoConflictError). Este upsert solo refleja en Sheets lo que ya
+// validó y persistió la DB; el caller debe invocarlo después del upsert
+// en DB para evitar escribir Sheets si hay conflicto.
 export async function upsertarAlumnoEnSheets(
   input: RegistroInput,
   spreadsheetId?: string,
@@ -190,17 +194,6 @@ export async function upsertarAlumnoEnSheets(
   const id = resolveSpreadsheetId(spreadsheetId);
   const cfg = resolveConfig(config);
   const githubNormalizado = input.githubUsername.trim().toLowerCase();
-
-  // El legajo debe pertenecer al mismo github o a nadie — si ya es de otro
-  // alumno es conflicto, tanto al insertar como al editar.
-  const porLegajo = await getAlumnoByLegajo(input.legajo, id, cfg);
-  if (porLegajo && porLegajo.githubUsername.toLowerCase() !== githubNormalizado) {
-    return {
-      ok: false,
-      error: `El legajo ${input.legajo} ya está registrado con el usuario @${porLegajo.githubUsername}. Verificá que sea el tuyo.`,
-      field: "legajo",
-    };
-  }
 
   const rowNumber = await findAlumnoRowIndex(githubNormalizado, id, cfg);
   const sheets = getSheetsClient(false);

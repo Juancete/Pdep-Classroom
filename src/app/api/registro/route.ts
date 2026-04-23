@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
-import { upsertarAlumnoEnSheets, type RegistroInput } from "@/lib/sheets";
+import { upsertarAlumnoEnSheets, validateRegistro, type RegistroInput } from "@/lib/sheets";
 import { getComisionActiva, upsertAlumno, LegajoConflictError } from "@/lib/repositories";
 import { agregarMiembroAGrupo } from "@/lib/googleGroups";
 
@@ -32,19 +32,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await upsertarAlumnoEnSheets(
-      body,
-      comisionActiva.spreadsheetId,
-      comisionActiva.columnConfig
-    );
-
-    if (!result.ok) {
-      return NextResponse.json(
-        { error: result.error, field: result.field },
-        { status: 400 }
-      );
+    // Validar inputs antes de tocar DB o Sheets.
+    const validationError = validateRegistro(body);
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 });
     }
 
+    // DB primero: valida legajo↔github atómicamente. Si falla, Sheets no
+    // se toca — evita el TOCTOU del check previo contra Sheets.
     try {
       await upsertAlumno({
         legajo: body.legajo,
@@ -63,6 +58,19 @@ export async function POST(req: Request) {
         );
       }
       throw e;
+    }
+
+    const result = await upsertarAlumnoEnSheets(
+      body,
+      comisionActiva.spreadsheetId,
+      comisionActiva.columnConfig
+    );
+
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: result.error },
+        { status: 400 }
+      );
     }
 
     // El alta ya quedó persistida — una falla al suscribir al grupo no

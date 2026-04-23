@@ -11,9 +11,13 @@ vi.mock("@/lib/session", () => ({
   requireUser: () => mockRequireUser(),
 }));
 
-vi.mock("@/lib/sheets", () => ({
-  upsertarAlumnoEnSheets: (...args: unknown[]) => mockUpsertarAlumnoEnSheets(...args),
-}));
+vi.mock("@/lib/sheets", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/sheets")>("@/lib/sheets");
+  return {
+    upsertarAlumnoEnSheets: (...args: unknown[]) => mockUpsertarAlumnoEnSheets(...args),
+    validateRegistro: actual.validateRegistro,
+  };
+});
 
 const { FakeLegajoConflictError } = vi.hoisted(() => {
   class FakeLegajoConflictError extends Error {
@@ -84,7 +88,7 @@ describe("PATCH /api/perfil", () => {
 
   it("usa el githubUsername del usuario autenticado (no del body)", async () => {
     await PATCH(makeRequest({ ...validBody, githubUsername: "attacker" }));
-    const [inputPasado] = mockUpsertarAlumnoEnSheets.mock.calls[0];
+    const [inputPasado] = mockUpsertAlumno.mock.calls[0];
     expect(inputPasado.githubUsername).toBe("juangarcia");
   });
 
@@ -96,23 +100,13 @@ describe("PATCH /api/perfil", () => {
     );
   });
 
-  it("no llama a upsertAlumno si la escritura en Sheets falla", async () => {
-    mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: false, error: "email inválido" });
+  it("no toca Sheets si el upsert en DB falla con LegajoConflictError", async () => {
+    mockUpsertAlumno.mockRejectedValue(
+      new FakeLegajoConflictError("12345", "otro-alumno")
+    );
     const res = await PATCH(makeRequest(validBody));
     expect(res.status).toBe(400);
-    expect(mockUpsertAlumno).not.toHaveBeenCalled();
-  });
-
-  it("propaga el field de Sheets en la respuesta (ej: legajo ya pertenece a otro github)", async () => {
-    mockUpsertarAlumnoEnSheets.mockResolvedValue({
-      ok: false,
-      error: "El legajo 12345 ya está registrado con el usuario @otro. Verificá que sea el tuyo.",
-      field: "legajo",
-    });
-    const res = await PATCH(makeRequest(validBody));
-    const json = await res.json();
-    expect(res.status).toBe(400);
-    expect(json.field).toBe("legajo");
+    expect(mockUpsertarAlumnoEnSheets).not.toHaveBeenCalled();
   });
 
   it("devuelve 400 con field=legajo si el upsert en DB detecta conflicto de legajo", async () => {
@@ -124,6 +118,13 @@ describe("PATCH /api/perfil", () => {
     expect(res.status).toBe(400);
     expect(json.field).toBe("legajo");
     expect(json.error).toContain("otro-alumno");
+  });
+
+  it("devuelve 400 si la validación de inputs falla sin tocar DB ni Sheets", async () => {
+    const res = await PATCH(makeRequest({ ...validBody, email: "no-es-email" }));
+    expect(res.status).toBe(400);
+    expect(mockUpsertAlumno).not.toHaveBeenCalled();
+    expect(mockUpsertarAlumnoEnSheets).not.toHaveBeenCalled();
   });
 
   it("devuelve 409 sin tocar Sheets ni DB si no hay comisión activa", async () => {

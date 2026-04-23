@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
-import { upsertarAlumnoEnSheets, type RegistroInput } from "@/lib/sheets";
+import { upsertarAlumnoEnSheets, validateRegistro, type RegistroInput } from "@/lib/sheets";
 import { getComisionActiva, upsertAlumno, LegajoConflictError } from "@/lib/repositories";
 
 type PerfilInput = Omit<RegistroInput, "githubUsername">;
@@ -23,17 +23,9 @@ export async function PATCH(req: Request) {
       );
     }
 
-    const result = await upsertarAlumnoEnSheets(
-      input,
-      comisionActiva.spreadsheetId,
-      comisionActiva.columnConfig
-    );
-
-    if (!result.ok) {
-      return NextResponse.json(
-        { error: result.error, field: result.field },
-        { status: 400 }
-      );
+    const validationError = validateRegistro(input);
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 });
     }
 
     try {
@@ -54,6 +46,19 @@ export async function PATCH(req: Request) {
         );
       }
       throw e;
+    }
+
+    const result = await upsertarAlumnoEnSheets(
+      input,
+      comisionActiva.spreadsheetId,
+      comisionActiva.columnConfig
+    );
+
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: result.error },
+        { status: 400 }
+      );
     }
 
     return NextResponse.json({ ok: true });

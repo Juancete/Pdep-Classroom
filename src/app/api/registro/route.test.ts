@@ -12,9 +12,13 @@ vi.mock("@/lib/session", () => ({
   requireUser: () => mockRequireUser(),
 }));
 
-vi.mock("@/lib/sheets", () => ({
-  upsertarAlumnoEnSheets: (...args: unknown[]) => mockUpsertarAlumnoEnSheets(...args),
-}));
+vi.mock("@/lib/sheets", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/sheets")>("@/lib/sheets");
+  return {
+    upsertarAlumnoEnSheets: (...args: unknown[]) => mockUpsertarAlumnoEnSheets(...args),
+    validateRegistro: actual.validateRegistro,
+  };
+});
 
 const { FakeLegajoConflictError } = vi.hoisted(() => {
   class FakeLegajoConflictError extends Error {
@@ -113,25 +117,13 @@ describe("POST /api/registro", () => {
     );
   });
 
-  it("no llama a upsertAlumno si la escritura en Sheets falla", async () => {
-    mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: false, error: "Legajo duplicado" });
+  it("no toca Sheets si el upsert en DB falla con LegajoConflictError", async () => {
+    mockUpsertAlumno.mockRejectedValue(
+      new FakeLegajoConflictError("12345", "otro-alumno")
+    );
     const res = await POST(makeRequest(validBody));
     expect(res.status).toBe(400);
-    const json = await res.json();
-    expect(json.error).toBe("Legajo duplicado");
-    expect(mockUpsertAlumno).not.toHaveBeenCalled();
-  });
-
-  it("propaga el field de Sheets en la respuesta para que el form lo pinte inline", async () => {
-    mockUpsertarAlumnoEnSheets.mockResolvedValue({
-      ok: false,
-      error: "El legajo 12345 ya está registrado con el usuario @otro. Verificá que sea el tuyo.",
-      field: "legajo",
-    });
-    const res = await POST(makeRequest(validBody));
-    const json = await res.json();
-    expect(res.status).toBe(400);
-    expect(json.field).toBe("legajo");
+    expect(mockUpsertarAlumnoEnSheets).not.toHaveBeenCalled();
   });
 
   it("devuelve 400 con field=legajo si el upsert en DB detecta que el legajo pertenece a otro github", async () => {
@@ -143,6 +135,13 @@ describe("POST /api/registro", () => {
     expect(res.status).toBe(400);
     expect(json.field).toBe("legajo");
     expect(json.error).toContain("otro-alumno");
+  });
+
+  it("devuelve 400 si la validación de inputs falla sin tocar DB ni Sheets", async () => {
+    const res = await POST(makeRequest({ ...validBody, email: "no-es-email" }));
+    expect(res.status).toBe(400);
+    expect(mockUpsertAlumno).not.toHaveBeenCalled();
+    expect(mockUpsertarAlumnoEnSheets).not.toHaveBeenCalled();
   });
 
   it("devuelve 409 sin tocar Sheets ni DB si no hay comisión activa", async () => {
