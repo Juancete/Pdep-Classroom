@@ -69,12 +69,12 @@ describe("Admin Alumnos page", () => {
   });
 
   describe("con alumnos", () => {
-    it("muestra la tabla cuando hay alumnos", async () => {
+    it("no muestra el estado vacío cuando hay alumnos", async () => {
       mockGetAlumnos.mockResolvedValue([makeAlumno()]);
 
       const element = await AdminAlumnosPage();
       const html = renderToStaticMarkup(element);
-      expect(html).toContain("<table");
+      expect(html).not.toContain("No hay alumnos ingresados");
     });
 
     it("muestra la cantidad de alumnos en el subtítulo", async () => {

@@ -526,6 +526,56 @@ El flujo de registro reemplaza la carga manual en la planilla:
 
 La planilla sigue siendo la fuente de verdad — la app solo escribe ahí.
 
+## Suscripción automática a Google Group
+
+Al completarse el alta de un alumno, lo suscribimos al Google Group de la materia — así el docente no tiene que agregarlo a mano y el alumno empieza a recibir los mails del grupo desde el primer día.
+
+El feature es **opcional**: si las variables de entorno no están configuradas, el endpoint de registro no hace nada con Groups. Si están configuradas y la suscripción falla (permisos, red, etc.), el alta del alumno **igual se completa** y se le muestra un aviso al alumno para que avise al docente. El detalle del error queda en los logs del server.
+
+Si un alumno ya era miembro del grupo (por ejemplo, se registró, lo dieron de baja y se vuelve a registrar), la API de Google responde 409 y tratamos ese caso como éxito silencioso — la UI no le muestra nada especial.
+
+### Variables de entorno
+
+| Variable | Rol |
+|---|---|
+| `GOOGLE_GROUP_EMAIL` | Email del grupo al que suscribimos a los alumnos (ej: `pdep-2026@googlegroups.com`). Dejalo vacío para desactivar el feature. |
+| `GOOGLE_WORKSPACE_ADMIN_EMAIL` | Usuario admin del Workspace que la service account impersona para poder agregar miembros al grupo. Obligatorio si `GOOGLE_GROUP_EMAIL` está seteada. |
+
+Si seteás `GOOGLE_GROUP_EMAIL` sin `GOOGLE_WORKSPACE_ADMIN_EMAIL`, el server falla al arrancar (ver [`src/instrumentation.ts`](src/instrumentation.ts)) — preferimos romper el boot antes que dejar que la misconfig le caiga al alumno en la cara.
+
+### Setup en Google (primera vez)
+
+Reutilizamos la service account que ya está en `GOOGLE_SERVICE_ACCOUNT_KEY` — no hace falta crear una nueva. Lo que sí hay que hacer:
+
+1. **Habilitar la Admin SDK API** en el proyecto de Google Cloud donde vive la service account.
+   - Google Cloud Console → APIs & Services → Library → "Admin SDK API" → Enable.
+
+2. **Habilitar Domain-Wide Delegation** para la service account.
+   - Google Cloud Console → IAM & Admin → Service Accounts → click en la SA → pestaña "Details" → "Show domain-wide delegation" → habilitar → copiar el **Client ID** numérico que aparece.
+
+3. **Autorizar el scope en el Workspace**.
+   - Google Admin Console (`admin.google.com`) → Security → API controls → Domain-wide Delegation → Add new.
+   - Pegar el Client ID de la service account.
+   - Scope: `https://www.googleapis.com/auth/admin.directory.group.member`.
+   - Authorize.
+
+4. **Elegir el admin a impersonar**.
+   - Cualquier usuario del Workspace con permisos para administrar el grupo (típicamente un docente con rol de admin). Ese email va en `GOOGLE_WORKSPACE_ADMIN_EMAIL`.
+
+5. **Setear las env vars** en `.env.local` (desarrollo) y en el panel de Vercel (producción):
+   ```bash
+   GOOGLE_GROUP_EMAIL=pdep-2026@googlegroups.com
+   GOOGLE_WORKSPACE_ADMIN_EMAIL=docente-admin@utn.edu.ar
+   ```
+
+6. **Reiniciar el server**. Si la config quedó bien, el boot pasa sin ruido y el próximo registro va a suscribir al alumno.
+
+### Troubleshooting
+
+- **El server no arranca con error "GOOGLE_WORKSPACE_ADMIN_EMAIL no está configurada"** → setea la variable o vacía `GOOGLE_GROUP_EMAIL` para desactivar el feature.
+- **El registro completa OK pero el alumno ve el aviso ámbar** → buscá el log con el prefijo `Error al suscribir al Google Group` **en Vercel → Project → Deployments → el deploy activo → Runtime Logs** (en local, aparece en la terminal donde corrés `next dev`). El log incluye `github=<handle>` del alumno y el detalle devuelto por la API. Causas típicas: falta habilitar la Admin SDK API, el scope no está autorizado, o el admin impersonado no tiene permiso sobre el grupo.
+- **La API devuelve 403 "Not Authorized to access this resource/api"** → típicamente el scope no está autorizado en el Workspace, o la Domain-Wide Delegation quedó con el Client ID equivocado.
+
 ## TODOs sugeridos
 
 - [x] Migrar persistencia de JSON a PostgreSQL + MikroORM
@@ -537,10 +587,20 @@ La planilla sigue siendo la fuente de verdad — la app solo escribe ahí.
 - [x] Sincronización de alumnos desde Sheets a la DB por comisión
 - [x] Configuración de columnas de la planilla por comisión
 - [x] Eliminar repos de un assignment desde el panel admin
+- [ ] Cuando elimina repos de un assignment dar la posibilidad de hacer un backup y descargar un zip
 - [ ] Notificaciones por mail cuando se publica un assignment
 - [ ] Autograding con GitHub Actions en los templates
 - [ ] Export de estado de entregas a Google Sheets (cerrar el loop con la planilla)
-- [ ] Suscribir a los alumnos al grupo de Google Groups automáticamente
+- [x] Suscribir a los alumnos al grupo de Google Groups automáticamente
+
+## Refactor en curso
+
+- [x] **Fase 4** ([#11](https://github.com/Juancete/Pdep-Classroom/issues/11)) — `upsertarAlumnoEnSheets` no debe quejarse al editar + coherencia legajo↔github
+- [ ] **Fase 2** ([#13](https://github.com/Juancete/Pdep-Classroom/issues/13)) — Validación de `githubUsername` en registro/perfil con error inline en el form
+- [ ] **Fase 1** ([#9](https://github.com/Juancete/Pdep-Classroom/issues/9)) — Reificar polimorfismo de `Assignment` (individual/grupal) para eliminar los IFs
+- [ ] **Fase 3** ([#10](https://github.com/Juancete/Pdep-Classroom/issues/10)) — Unificar registro y perfil en un servicio común
+- [ ] **Fase 5** ([#14](https://github.com/Juancete/Pdep-Classroom/issues/14)) — Upsert de grupos desde planilla, modelado genérico (no atado a paradigma)
+- [ ] **Fase 6** ([#12](https://github.com/Juancete/Pdep-Classroom/issues/12)) — Renombrar/comentar `DEFAULT_COLUMN_CONFIG` como sugerencia de UX
 
 ## API de GitHub — Estabilidad
 

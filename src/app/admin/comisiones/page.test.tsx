@@ -64,20 +64,20 @@ describe("Admin Comisiones page", () => {
       expect(html).toContain("No hay comisiones todavía");
     });
 
-    it("no muestra la tabla cuando no hay comisiones", async () => {
+    it("no muestra ninguna fila cuando no hay comisiones", async () => {
       mockGetComisiones.mockResolvedValue([]);
       const element = await AdminComisionesPage();
       const html = renderToStaticMarkup(element);
-      expect(html).not.toContain("<table");
+      expect(html).not.toContain("Editar");
     });
   });
 
   describe("con comisiones", () => {
-    it("muestra la tabla cuando hay comisiones", async () => {
+    it("no muestra el estado vacío cuando hay comisiones", async () => {
       mockGetComisiones.mockResolvedValue([makeComision()]);
       const element = await AdminComisionesPage();
       const html = renderToStaticMarkup(element);
-      expect(html).toContain("<table");
+      expect(html).not.toContain("No hay comisiones todavía");
     });
 
     it("muestra el año de la comisión", async () => {

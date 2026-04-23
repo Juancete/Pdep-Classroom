@@ -25,6 +25,11 @@ export class Alumno {
   @ManyToOne(() => Comision, { nullable: true })
   comision?: Comision;
 
+  // Marca la comisión en la que el alumno confirmó sus datos por última vez.
+  // Si no coincide con la comisión activa, se le pide re-confirmar en /registro.
+  @ManyToOne(() => Comision, { nullable: true })
+  registroConfirmadoEn?: Comision;
+
   get nombreCompleto(): string {
     return `${this.apellido}, ${this.nombre}`;
   }

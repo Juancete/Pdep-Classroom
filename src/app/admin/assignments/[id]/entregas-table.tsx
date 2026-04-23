@@ -1,6 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import {
+  DataTable,
+  DataHeader,
+  DataHeaderCell,
+  DataBody,
+  DataRow,
+  DataCell,
+} from "@/app/components/DataTable";
 
 export type EntregaRow = {
   id: string;
@@ -28,7 +36,7 @@ export function EntregasTable({ entregas }: { entregas: EntregaRow[] }) {
 
   return (
     <div>
-      <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between gap-4">
+      <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h2 className="font-medium text-gray-700 shrink-0">
           Entregas aceptadas
         </h2>
@@ -38,7 +46,7 @@ export function EntregasTable({ entregas }: { entregas: EntregaRow[] }) {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Buscar por usuario o repo..."
-          className="border border-gray-300 rounded-md px-3 py-1 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-pdep-400"
+          className="border border-gray-300 rounded-md px-3 py-1 text-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-pdep-400"
         />
       </div>
 
@@ -49,35 +57,29 @@ export function EntregasTable({ entregas }: { entregas: EntregaRow[] }) {
             : "No hay entregas todavía."}
         </div>
       ) : (
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">
-                Usuario(s)
-              </th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">
-                Nombre completo
-              </th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">
-                Repositorio
-              </th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">
-                Fecha
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
+        <DataTable columns="1.5fr 1.2fr 1.5fr 120px" bare>
+          <DataHeader>
+            <DataHeaderCell>Nombre completo</DataHeaderCell>
+            <DataHeaderCell>Usuario(s)</DataHeaderCell>
+            <DataHeaderCell>Repositorio</DataHeaderCell>
+            <DataHeaderCell>Fecha</DataHeaderCell>
+          </DataHeader>
+          <DataBody>
             {filtradas.map((e) => (
-              <tr key={e.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-mono text-xs">
-                  {e.githubUsernames.join(", ")}
-                </td>
-                <td className="px-4 py-3 text-xs text-gray-700">
+              <DataRow key={e.id}>
+                <DataCell label="Nombre completo" heading>
                   {e.nombreCompleto}
-                </td>
-                <td className="px-4 py-3">
+                </DataCell>
+                <DataCell label="Usuario(s)">
+                  <span className="font-mono text-xs break-all">
+                    {e.githubUsernames.join(", ")}
+                  </span>
+                </DataCell>
+                <DataCell label="Repositorio">
                   {e.repoDeleted ? (
-                    <span className="text-red-400 text-xs">Repositorio borrado</span>
+                    <span className="text-red-400 text-xs">
+                      Repositorio borrado
+                    </span>
                   ) : e.repoUrl ? (
                     <a
                       href={e.repoUrl}
@@ -103,14 +105,14 @@ export function EntregasTable({ entregas }: { entregas: EntregaRow[] }) {
                   ) : (
                     <span className="text-gray-400 text-xs">Sin repo</span>
                   )}
-                </td>
-                <td className="px-4 py-3 text-gray-500 text-xs">
-                  {e.createdAt}
-                </td>
-              </tr>
+                </DataCell>
+                <DataCell label="Fecha">
+                  <span className="text-gray-500 text-xs">{e.createdAt}</span>
+                </DataCell>
+              </DataRow>
             ))}
-          </tbody>
-        </table>
+          </DataBody>
+        </DataTable>
       )}
     </div>
   );

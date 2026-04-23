@@ -2,6 +2,15 @@ import { requireAdmin } from "@/lib/session";
 import { getAlumnos } from "@/lib/sheets";
 import { getComisionActiva } from "@/lib/repositories";
 import Link from "next/link";
+import {
+  DataTable,
+  DataHeader,
+  DataHeaderCell,
+  DataBody,
+  DataRow,
+  DataCell,
+  DataEmpty,
+} from "@/app/components/DataTable";
 
 export default async function AdminAlumnosPage() {
   await requireAdmin();
@@ -33,55 +42,43 @@ export default async function AdminAlumnosPage() {
       </p>
 
       {alumnos.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-lg p-8 text-center text-gray-500">
-          No hay alumnos ingresados.
-        </div>
+        <DataEmpty>No hay alumnos ingresados.</DataEmpty>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">
-                  Legajo
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">
-                  Nombre
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">
-                  GitHub
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">
-                  Email
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {alumnos.map((a) => (
-                <tr key={a.legajo} className="hover:bg-gray-50">
-                  <td className="px-4 py-2.5 font-mono text-xs">
-                    {a.legajo}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {a.apellido}, {a.nombre}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <a
-                      href={`https://github.com/${a.githubUsername}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-mono text-xs text-pdep-600 hover:underline"
-                    >
-                      {a.githubUsername}
-                    </a>
-                  </td>
-                  <td className="px-4 py-2.5 text-gray-500 text-xs">
+        <DataTable columns="1.5fr 100px 1.2fr 2fr">
+          <DataHeader>
+            <DataHeaderCell>Nombre</DataHeaderCell>
+            <DataHeaderCell>Legajo</DataHeaderCell>
+            <DataHeaderCell>GitHub</DataHeaderCell>
+            <DataHeaderCell>Email</DataHeaderCell>
+          </DataHeader>
+          <DataBody>
+            {alumnos.map((a) => (
+              <DataRow key={a.legajo}>
+                <DataCell label="Nombre" heading>
+                  {a.apellido}, {a.nombre}
+                </DataCell>
+                <DataCell label="Legajo">
+                  <span className="font-mono text-xs">{a.legajo}</span>
+                </DataCell>
+                <DataCell label="GitHub">
+                  <a
+                    href={`https://github.com/${a.githubUsername}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-xs text-pdep-600 hover:underline break-all"
+                  >
+                    {a.githubUsername}
+                  </a>
+                </DataCell>
+                <DataCell label="Email">
+                  <span className="text-gray-500 text-xs break-all">
                     {a.email}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </span>
+                </DataCell>
+              </DataRow>
+            ))}
+          </DataBody>
+        </DataTable>
       )}
     </div>
   );
