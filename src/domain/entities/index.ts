@@ -2,9 +2,9 @@ export { Alumno } from "./Alumno";
 export { Comision } from "./Comision";
 export { Assignment } from "./Assignment";
 export type {
-  TotalEsperadoCtx,
+  FuentesDeConteo,
   ParticipantesResueltos,
-  BuscarGrupoDelAlumno,
+  BuscadorDeGrupoDelAlumno,
 } from "./Assignment";
 export { IndividualAssignment } from "./IndividualAssignment";
 export { GrupalAssignment, GrupoNoAsignadoError } from "./GrupalAssignment";

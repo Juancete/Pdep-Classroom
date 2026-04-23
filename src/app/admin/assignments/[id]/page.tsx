@@ -38,20 +38,20 @@ export default async function AssignmentDetailPage({
   const pendientes = Math.max(0, total - aceptadas);
 
   const alumnosPorUsername = new Map<string, Alumno>(
-    alumnos.map((a) => [a.githubUsername.toLowerCase(), a])
+    alumnos.map((alumno) => [alumno.githubUsername.toLowerCase(), alumno])
   );
 
-  const entregaRows = entregas.map((e) => ({
-    id: e.id,
-    githubUsernames: e.githubUsernames,
-    repoName: e.repoName,
-    repoUrl: e.repoUrl,
-    repoDeleted: e.repoDeleted,
-    createdAt: new Date(e.createdAt).toLocaleDateString("es-AR"),
-    nombreCompleto: e.githubUsernames
-      .map((u) => {
-        const a = alumnosPorUsername.get(u.toLowerCase());
-        return a ? `${a.apellido}, ${a.nombre}` : "—";
+  const entregaRows = entregas.map((entrega) => ({
+    id: entrega.id,
+    githubUsernames: entrega.githubUsernames,
+    repoName: entrega.repoName,
+    repoUrl: entrega.repoUrl,
+    repoDeleted: entrega.repoDeleted,
+    createdAt: new Date(entrega.createdAt).toLocaleDateString("es-AR"),
+    nombreCompleto: entrega.githubUsernames
+      .map((username) => {
+        const alumno = alumnosPorUsername.get(username.toLowerCase());
+        return alumno ? `${alumno.apellido}, ${alumno.nombre}` : "—";
       })
       .join(" / "),
   }));
@@ -72,7 +72,7 @@ export default async function AssignmentDetailPage({
         <div className="flex items-center gap-3">
           <DeleteReposButton
             assignmentId={assignment.id}
-            activeRepoCount={entregas.filter((e) => e.repoName && !e.repoDeleted).length}
+            activeRepoCount={entregas.filter((entrega) => entrega.repoName && !entrega.repoDeleted).length}
           />
           <Link
             href={`/admin/assignments/${assignment.id}/edit`}

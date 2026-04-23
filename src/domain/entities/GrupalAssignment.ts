@@ -1,9 +1,9 @@
 import { Collection, Entity, OneToMany, Property } from "@mikro-orm/core";
 import {
   Assignment,
-  type BuscarGrupoDelAlumno,
+  type BuscadorDeGrupoDelAlumno,
   type ParticipantesResueltos,
-  type TotalEsperadoCtx,
+  type FuentesDeConteo,
 } from "./Assignment";
 import type { Grupo } from "./Grupo";
 
@@ -32,20 +32,20 @@ export class GrupalAssignment extends Assignment {
     return "Grupos";
   }
 
-  async totalEsperado(ctx: TotalEsperadoCtx): Promise<number> {
-    return (await ctx.getGruposDeAssignment(this.id)).length;
+  async totalEsperado(fuentes: FuentesDeConteo): Promise<number> {
+    return (await fuentes.getGruposDeAssignment(this.id)).length;
   }
 
   async resolverParticipantesPara(
     user: { githubUsername: string },
-    buscarGrupoDelAlumno: BuscarGrupoDelAlumno
+    buscarGrupoDelAlumno: BuscadorDeGrupoDelAlumno
   ): Promise<ParticipantesResueltos> {
     const grupo = await buscarGrupoDelAlumno(this.id, user.githubUsername);
     if (!grupo) {
       throw new GrupoNoAsignadoError(this.id, user.githubUsername);
     }
     return {
-      usernames: grupo.alumnos.getItems().map((a) => a.githubUsername),
+      usernames: grupo.alumnos.getItems().map((alumno) => alumno.githubUsername),
       grupoId: grupo.id,
     };
   }

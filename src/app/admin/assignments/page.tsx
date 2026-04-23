@@ -57,55 +57,55 @@ export default async function AdminAssignmentsPage() {
             <DataHeaderCell>Acciones</DataHeaderCell>
           </DataHeader>
           <DataBody>
-            {sorted.map((a) => (
-              <DataRow key={a.id}>
+            {sorted.map((assignment) => (
+              <DataRow key={assignment.id}>
                 <DataCell label="Título" heading>
-                  {a.titulo}
+                  {assignment.titulo}
                 </DataCell>
                 <DataCell label="Paradigma">
                   <span className="text-xs bg-pdep-100 text-pdep-700 px-2 py-0.5 rounded-full">
-                    {a.paradigma}
+                    {assignment.paradigma}
                   </span>
                 </DataCell>
                 <DataCell label="Tipo">
-                  <span className="text-gray-500">{a.tipo}</span>
+                  <span className="text-gray-500">{assignment.tipo}</span>
                 </DataCell>
                 <DataCell label="Template">
                   <span className="font-mono text-xs text-gray-500 break-all">
-                    {a.templateRepo}
+                    {assignment.templateRepo}
                   </span>
                 </DataCell>
                 <DataCell label="Entregas">
                   <span className="font-mono">
-                    {entregasCounts.get(a.id) ?? 0}
+                    {entregasCounts.get(assignment.id) ?? 0}
                   </span>
                 </DataCell>
                 <DataCell label="Deadline">
                   <span className="text-gray-500">
-                    {a.deadline
-                      ? new Date(a.deadline).toLocaleDateString("es-AR")
+                    {assignment.deadline
+                      ? new Date(assignment.deadline).toLocaleDateString("es-AR")
                       : "—"}
                   </span>
                 </DataCell>
                 <DataCell label="">
                   <div className="flex items-center gap-3 flex-wrap">
                     <Link
-                      href={`/admin/assignments/${a.id}`}
+                      href={`/admin/assignments/${assignment.id}`}
                       className="text-gray-500 hover:text-gray-700 text-xs font-medium"
                     >
                       Ver
                     </Link>
                     <Link
-                      href={`/admin/assignments/${a.id}/edit`}
+                      href={`/admin/assignments/${assignment.id}/edit`}
                       className="text-pdep-600 hover:text-pdep-800 text-xs font-medium"
                     >
                       Editar
                     </Link>
                     <DeleteReposButton
-                      assignmentId={a.id}
-                      activeRepoCount={activeRepoCounts.get(a.id) ?? 0}
+                      assignmentId={assignment.id}
+                      activeRepoCount={activeRepoCounts.get(assignment.id) ?? 0}
                     />
-                    <DeleteAssignmentButton id={a.id} titulo={a.titulo} />
+                    <DeleteAssignmentButton id={assignment.id} titulo={assignment.titulo} />
                   </div>
                 </DataCell>
               </DataRow>

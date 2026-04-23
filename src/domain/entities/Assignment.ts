@@ -18,14 +18,14 @@ import type { Paradigma, TipoAssignment } from "@/types";
 // `getAlumnosDelCurso` es un thunk, no la lista ya cargada: el caller puede
 // querer arrancar la query en paralelo con otras y pasarle la misma promise
 // para que Individual la reutilice sin disparar un segundo fetch.
-export interface TotalEsperadoCtx {
+export interface FuentesDeConteo {
   getAlumnosDelCurso: () => Promise<Alumno[]>;
   getGruposDeAssignment: (assignmentId: string) => Promise<Grupo[]>;
 }
 
 // Lambda con la firma mínima que necesita `GrupalAssignment.resolverParticipantesPara`.
 // Individual la ignora. Declararla como tipo evita acoplar la entidad al repo.
-export type BuscarGrupoDelAlumno = (
+export type BuscadorDeGrupoDelAlumno = (
   assignmentId: string,
   githubUsername: string
 ) => Promise<Grupo | null>;
@@ -76,7 +76,7 @@ export abstract class Assignment {
    * Cardinalidad del total esperado para el contador del admin. Individual
    * usa el padrón del curso; Grupal usa los grupos del assignment.
    */
-  abstract totalEsperado(ctx: TotalEsperadoCtx): Promise<number>;
+  abstract totalEsperado(fuentes: FuentesDeConteo): Promise<number>;
 
   /**
    * Resuelve a qué github users darles acceso al repo cuando un alumno acepta
@@ -86,6 +86,6 @@ export abstract class Assignment {
    */
   abstract resolverParticipantesPara(
     user: { githubUsername: string },
-    buscarGrupoDelAlumno: BuscarGrupoDelAlumno
+    buscarGrupoDelAlumno: BuscadorDeGrupoDelAlumno
   ): Promise<ParticipantesResueltos>;
 }
