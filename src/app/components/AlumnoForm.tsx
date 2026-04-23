@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { useApiCall } from "@/app/hooks/useApiCall";
 
 const INPUT_CLASS =
@@ -37,12 +39,16 @@ export function AlumnoForm({
   submitLabel,
   successMessage,
 }: Props) {
+  const router = useRouter();
   const { loading, error, call } = useApiCall();
   const [success, setSuccess] = useState(false);
   const [groupWarning, setGroupWarning] = useState(false);
+  const [gruposSyncWarning, setGruposSyncWarning] = useState(false);
+  const [fieldError, setFieldError] = useState<{ message: string; field: string } | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setFieldError(null);
     const form = new FormData(e.currentTarget);
     await call(async () => {
       const body = {
@@ -58,14 +64,25 @@ export function AlumnoForm({
         body: JSON.stringify(body),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Error al guardar");
+      if (!res.ok) {
+        if (typeof json.field === "string") {
+          setFieldError({ message: json.error, field: json.field });
+        }
+        throw new Error(json.error ?? "Error al guardar");
+      }
       const hasGroupWarning = json.groupSubscription === "error";
+      const hasGruposSyncWarning = json.gruposSync === "error";
       setGroupWarning(hasGroupWarning);
+      setGruposSyncWarning(hasGruposSyncWarning);
       setSuccess(true);
-      // Damos más tiempo antes de redirigir si hay que mostrar el warning
+      // Revalidamos el árbol server para que el banner global
+      // `SyncPendingBanner` refleje el estado actualizado del flag
+      // (lo limpiamos si la sync funcionó, lo prendemos si falló).
+      router.refresh();
+      // Damos más tiempo antes de redirigir si hay que mostrar un warning
       // para que el alumno alcance a leerlo.
       if (onSuccessRedirect) {
-        const delay = hasGroupWarning ? 5000 : 1500;
+        const delay = hasGroupWarning || hasGruposSyncWarning ? 5000 : 1500;
         setTimeout(() => { window.location.href = onSuccessRedirect; }, delay);
       }
     });
@@ -85,6 +102,14 @@ export function AlumnoForm({
             No pudimos suscribirte al grupo del curso. Avisale a un docente para que te agregue manualmente.
           </div>
         )}
+        {gruposSyncWarning && (
+          <div
+            role="alert"
+            className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-800"
+          >
+            Tus datos quedaron guardados, pero no pudimos asignarte al grupo de TP. Guardá de nuevo para reintentar; si persiste, avisale a un docente.
+          </div>
+        )}
       </div>
     );
   }
@@ -96,6 +121,18 @@ export function AlumnoForm({
           Usuario de GitHub
         </label>
         <input value={defaultValues.githubUsername} disabled className={READONLY_CLASS} />
+        {fieldError?.field === "githubUsername" && (
+          <div className="mt-1 text-xs text-red-700 space-y-1">
+            <p role="alert">{fieldError.message}</p>
+            <button
+              type="button"
+              onClick={() => signOut({ callbackUrl: "/" })}
+              className="underline font-medium hover:text-red-900"
+            >
+              Cerrar sesión y entrar con otra cuenta
+            </button>
+          </div>
+        )}
       </div>
 
       <div>
@@ -111,6 +148,11 @@ export function AlumnoForm({
           defaultValue={defaultValues.legajo}
           className={INPUT_CLASS}
         />
+        {fieldError?.field === "legajo" && (
+          <p role="alert" className="mt-1 text-xs text-red-700">
+            {fieldError.message}
+          </p>
+        )}
       </div>
 
       <div>
@@ -156,7 +198,7 @@ export function AlumnoForm({
         </p>
       </div>
 
-      {error && (
+      {error && !fieldError && (
         <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">
           {error}
         </div>

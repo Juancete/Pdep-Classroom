@@ -20,19 +20,19 @@ export type EntregaRow = {
   nombreCompleto: string;
 };
 
-export function filterEntregas(entregas: EntregaRow[], q: string): EntregaRow[] {
-  const query = q.toLowerCase().trim();
+export function filterEntregas(entregas: EntregaRow[], rawQuery: string): EntregaRow[] {
+  const query = rawQuery.toLowerCase().trim();
   if (!query) return entregas;
   return entregas.filter(
-    (e) =>
-      e.githubUsernames.some((u) => u.toLowerCase().includes(query)) ||
-      (e.repoName ?? "").toLowerCase().includes(query)
+    (entrega) =>
+      entrega.githubUsernames.some((username) => username.toLowerCase().includes(query)) ||
+      (entrega.repoName ?? "").toLowerCase().includes(query)
   );
 }
 
 export function EntregasTable({ entregas }: { entregas: EntregaRow[] }) {
-  const [q, setQ] = useState("");
-  const filtradas = filterEntregas(entregas, q);
+  const [query, setQuery] = useState("");
+  const filtradas = filterEntregas(entregas, query);
 
   return (
     <div>
@@ -43,8 +43,8 @@ export function EntregasTable({ entregas }: { entregas: EntregaRow[] }) {
         <input
           type="search"
           autoComplete="new-password"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
           placeholder="Buscar por usuario o repo..."
           className="border border-gray-300 rounded-md px-3 py-1 text-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-pdep-400"
         />
@@ -52,8 +52,8 @@ export function EntregasTable({ entregas }: { entregas: EntregaRow[] }) {
 
       {filtradas.length === 0 ? (
         <div className="p-8 text-center text-gray-500">
-          {q
-            ? `No se encontraron entregas para "${q}".`
+          {query
+            ? `No se encontraron entregas para "${query}".`
             : "No hay entregas todavía."}
         </div>
       ) : (
@@ -65,24 +65,24 @@ export function EntregasTable({ entregas }: { entregas: EntregaRow[] }) {
             <DataHeaderCell>Fecha</DataHeaderCell>
           </DataHeader>
           <DataBody>
-            {filtradas.map((e) => (
-              <DataRow key={e.id}>
+            {filtradas.map((entrega) => (
+              <DataRow key={entrega.id}>
                 <DataCell label="Nombre completo" heading>
-                  {e.nombreCompleto}
+                  {entrega.nombreCompleto}
                 </DataCell>
                 <DataCell label="Usuario(s)">
                   <span className="font-mono text-xs break-all">
-                    {e.githubUsernames.join(", ")}
+                    {entrega.githubUsernames.join(", ")}
                   </span>
                 </DataCell>
                 <DataCell label="Repositorio">
-                  {e.repoDeleted ? (
+                  {entrega.repoDeleted ? (
                     <span className="text-red-400 text-xs">
                       Repositorio borrado
                     </span>
-                  ) : e.repoUrl ? (
+                  ) : entrega.repoUrl ? (
                     <a
-                      href={e.repoUrl}
+                      href={entrega.repoUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 text-sm bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg font-medium hover:bg-green-100 transition-colors"
@@ -107,7 +107,7 @@ export function EntregasTable({ entregas }: { entregas: EntregaRow[] }) {
                   )}
                 </DataCell>
                 <DataCell label="Fecha">
-                  <span className="text-gray-500 text-xs">{e.createdAt}</span>
+                  <span className="text-gray-500 text-xs">{entrega.createdAt}</span>
                 </DataCell>
               </DataRow>
             ))}

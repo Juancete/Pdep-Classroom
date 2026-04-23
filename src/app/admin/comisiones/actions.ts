@@ -1,12 +1,20 @@
 "use server";
 
 import { requireAdmin } from "@/lib/session";
-import { createComision, updateComision, getComision, upsertAlumnos, LegajoConflictError } from "@/lib/repositories";
-import { getAlumnos } from "@/lib/sheets";
+import {
+  createComision,
+  updateComision,
+  getComision,
+  upsertAlumnos,
+  LegajoConflictError,
+  getAlumnosConGruposSyncPendiente,
+} from "@/lib/repositories";
+import { getAlumnos, getAsignacionesGrupos, type AsignacionGrupoRow } from "@/lib/sheets";
+import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { DEFAULT_COLUMN_CONFIG } from "@/types";
+import { DEFAULT_COLUMN_CONFIG, type GruposColumnConfig } from "@/types";
 
 export type ComisionFormState =
   | { ok: false; errors: Record<string, string[] | undefined> }
@@ -17,6 +25,13 @@ const ColumnIndexSchema = z.coerce
   .int()
   .min(0, "Columna inválida")
   .max(25, "Columna inválida");
+
+// "" → undefined para columnas opcionales de grupos: la UI envía string vacío
+// cuando el admin elige "(sin columna)".
+const OptionalColumnIndexSchema = z.preprocess(
+  (v) => (v === "" || v === undefined || v === null ? undefined : v),
+  ColumnIndexSchema.optional()
+);
 
 const ComisionSchema = z.object({
   anio: z.coerce
@@ -33,6 +48,13 @@ const ComisionSchema = z.object({
   col_nombre: ColumnIndexSchema,
   col_githubUsername: ColumnIndexSchema,
   col_email: ColumnIndexSchema,
+  grupos_enabled: z.coerce.boolean().optional().transform((v) => v ?? false),
+  grupos_sheetName: z.string().optional(),
+  grupos_headerRows: z.coerce.number().int().min(0).max(10).optional(),
+  grupos_col_githubUsername: OptionalColumnIndexSchema,
+  grupos_col_funcional: OptionalColumnIndexSchema,
+  grupos_col_logico: OptionalColumnIndexSchema,
+  grupos_col_objetos: OptionalColumnIndexSchema,
 });
 
 function parseFormData(formData: FormData) {
@@ -47,11 +69,18 @@ function parseFormData(formData: FormData) {
     col_nombre: formData.get("col_nombre") ?? DEFAULT_COLUMN_CONFIG.nombre,
     col_githubUsername: formData.get("col_githubUsername") ?? DEFAULT_COLUMN_CONFIG.githubUsername,
     col_email: formData.get("col_email") ?? DEFAULT_COLUMN_CONFIG.email,
+    grupos_enabled: formData.get("grupos_enabled") === "on",
+    grupos_sheetName: (formData.get("grupos_sheetName") as string) ?? undefined,
+    grupos_headerRows: formData.get("grupos_headerRows") ?? undefined,
+    grupos_col_githubUsername: formData.get("grupos_col_githubUsername") ?? undefined,
+    grupos_col_funcional: formData.get("grupos_col_funcional") ?? undefined,
+    grupos_col_logico: formData.get("grupos_col_logico") ?? undefined,
+    grupos_col_objetos: formData.get("grupos_col_objetos") ?? undefined,
   };
 }
 
 function toColumnConfig(data: z.infer<typeof ComisionSchema>) {
-  return {
+  const base = {
     sheetName: data.sheetName,
     headerRows: data.headerRows,
     legajo: data.col_legajo,
@@ -60,6 +89,30 @@ function toColumnConfig(data: z.infer<typeof ComisionSchema>) {
     githubUsername: data.col_githubUsername,
     email: data.col_email,
   };
+
+  if (!data.grupos_enabled) return base;
+
+  // Si el admin activó la sección de grupos pero no completó los campos mínimos,
+  // guardamos igual los defaults para no perder intención: sheetName cae a
+  // "Alumnos" y githubUsername al de la hoja de alumnos.
+  const nombreGrupoPorParadigma: GruposColumnConfig["nombreGrupoPorParadigma"] = {};
+  if (data.grupos_col_funcional !== undefined) nombreGrupoPorParadigma.funcional = data.grupos_col_funcional;
+  if (data.grupos_col_logico !== undefined) nombreGrupoPorParadigma.logico = data.grupos_col_logico;
+  if (data.grupos_col_objetos !== undefined) nombreGrupoPorParadigma.objetos = data.grupos_col_objetos;
+
+  // Si el admin activó la sección pero no mapeó ninguna columna de grupo, la
+  // config es inútil — la omitimos para que la sync sea no-op, igual que si
+  // no hubiera activado nada.
+  if (Object.keys(nombreGrupoPorParadigma).length === 0) return base;
+
+  const grupos: GruposColumnConfig = {
+    sheetName: data.grupos_sheetName || data.sheetName,
+    headerRows: data.grupos_headerRows ?? data.headerRows,
+    githubUsername: data.grupos_col_githubUsername ?? data.col_githubUsername,
+    nombreGrupoPorParadigma,
+  };
+
+  return { ...base, grupos };
 }
 
 export async function crearComision(
@@ -133,4 +186,56 @@ export async function sincronizarAlumnos(
 
   revalidatePath("/admin/comisiones");
   return { status: "ok", sincronizados };
+}
+
+export type SyncGruposState =
+  | { status: "idle" }
+  | { status: "ok"; sincronizados: number; aunConError: number }
+  | { status: "error"; message: string };
+
+// Reintenta `sincronizarGruposDelAlumno` para todos los alumnos de la comisión
+// con el flag `gruposSyncFallidoEn` prendido. El wrapper `intentarSincronizarGrupos`
+// se encarga del logging y de limpiar/mantener el flag por alumno; esta action
+// solo agrega un resumen para que el admin lo vea.
+export async function sincronizarGruposDeLaComision(
+  _prevState: SyncGruposState,
+  formData: FormData
+): Promise<SyncGruposState> {
+  await requireAdmin();
+
+  const id = formData.get("comisionId") as string;
+  const comision = await getComision(id);
+  if (!comision) return { status: "error", message: "Comisión no encontrada" };
+
+  const pendientes = await getAlumnosConGruposSyncPendiente(id);
+
+  // Lectura única de la hoja de grupos: con un solo pendiente el costo es el
+  // mismo que antes, pero con N evitamos N lecturas a Sheets (cada alumno
+  // releía la hoja entera). Si la lectura falla reportamos el error global y
+  // no tocamos los flags — ya estaban en fallido y un retry masivo sobre una
+  // hoja inaccesible no aporta información nueva.
+  let asignaciones: AsignacionGrupoRow[] | undefined;
+  const gruposConfig = comision.columnConfig?.grupos;
+  if (gruposConfig && pendientes.length > 0) {
+    try {
+      asignaciones = await getAsignacionesGrupos(comision.spreadsheetId, gruposConfig);
+    } catch (e) {
+      return { status: "error", message: (e as Error).message };
+    }
+  }
+
+  let sincronizados = 0;
+  let aunConError = 0;
+  for (const alumno of pendientes) {
+    try {
+      await intentarSincronizarGrupos(alumno.githubUsername, comision, asignaciones);
+      sincronizados++;
+    } catch {
+      aunConError++;
+    }
+  }
+
+  revalidatePath("/admin/comisiones");
+  revalidatePath(`/admin/comisiones/${id}/edit`);
+  return { status: "ok", sincronizados, aunConError };
 }

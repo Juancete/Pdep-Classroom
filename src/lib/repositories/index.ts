@@ -5,6 +5,10 @@ export {
   createAlumno,
   upsertAlumno,
   upsertAlumnos,
+  marcarRegistroConfirmado,
+  marcarGruposSyncFallido,
+  marcarGruposSyncOk,
+  getAlumnosConGruposSyncPendiente,
   countAlumnos,
   LegajoConflictError,
 } from "./AlumnoRepository";
@@ -32,6 +36,7 @@ export {
   getGrupos,
   getGruposDeAssignment,
   getGrupoDeAlumnoEnAssignment,
+  upsertGrupoConMiembro,
 } from "./GrupoRepository";
 
 export {
