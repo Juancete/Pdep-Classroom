@@ -17,7 +17,7 @@ export function internalServerError(
   error: unknown,
   context?: Record<string, unknown>
 ): NextResponse {
-  logger.error({ err: error, route, ...context }, "handler error");
+  logger.error({ ...context, err: error, route }, "handler error");
   return NextResponse.json(
     { error: "Error interno del servidor" },
     { status: 500 }
