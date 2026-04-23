@@ -150,6 +150,10 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
       alumno.email = data.email.toLowerCase().trim();
       alumno.comision = data.comision;
       em.persist(alumno);
+      // Si el batch trae otra fila con el mismo github (typo o fila duplicada
+      // en la planilla), debe reutilizar esta instancia — sin esto, el UNIQUE
+      // de githubUsername explota en el flush con un error genérico.
+      existentesPorGithub.set(key, alumno);
     }
   }
 
