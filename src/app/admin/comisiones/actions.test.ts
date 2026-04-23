@@ -6,7 +6,7 @@ const mockRequireAdmin = vi.fn();
 const mockCreateComision = vi.fn();
 const mockUpdateComision = vi.fn();
 const mockGetComision = vi.fn();
-const mockUpsertAlumno = vi.fn();
+const mockUpsertAlumnos = vi.fn();
 const mockRedirect = vi.fn();
 const mockGetAlumnos = vi.fn();
 
@@ -14,11 +14,27 @@ vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
+const { FakeLegajoConflictError } = vi.hoisted(() => {
+  class FakeLegajoConflictError extends Error {
+    constructor(
+      public readonly legajo: string,
+      public readonly otroGithubUsername: string
+    ) {
+      super(
+        `El legajo ${legajo} ya está registrado con el usuario @${otroGithubUsername}. Verificá que sea el tuyo.`
+      );
+      this.name = "LegajoConflictError";
+    }
+  }
+  return { FakeLegajoConflictError };
+});
+
 vi.mock("@/lib/repositories", () => ({
   createComision: (...args: unknown[]) => mockCreateComision(...args),
   updateComision: (...args: unknown[]) => mockUpdateComision(...args),
   getComision: (...args: unknown[]) => mockGetComision(...args),
-  upsertAlumno: (...args: unknown[]) => mockUpsertAlumno(...args),
+  upsertAlumnos: (...args: unknown[]) => mockUpsertAlumnos(...args),
+  LegajoConflictError: FakeLegajoConflictError,
 }));
 
 vi.mock("@/lib/sheets", () => ({
@@ -182,7 +198,7 @@ describe("sincronizarAlumnos", () => {
     mockRequireAdmin.mockResolvedValue(undefined);
     mockGetComision.mockResolvedValue(comisionMock);
     mockGetAlumnos.mockResolvedValue([]);
-    mockUpsertAlumno.mockResolvedValue(undefined);
+    mockUpsertAlumnos.mockResolvedValue(0);
   });
 
   it("siempre llama a requireAdmin", async () => {
@@ -212,25 +228,41 @@ describe("sincronizarAlumnos", () => {
       { legajo: "222", nombre: "Beto", apellido: "Ruiz", githubUsername: "beto", email: "b@b.com" },
     ];
     mockGetAlumnos.mockResolvedValue(alumnos);
+    mockUpsertAlumnos.mockResolvedValue(2);
 
     const result = await sincronizarAlumnos({ status: "idle" }, makeSync());
 
     expect(result).toEqual({ status: "ok", sincronizados: 2 });
-    expect(mockUpsertAlumno).toHaveBeenCalledTimes(2);
+    expect(mockUpsertAlumnos).toHaveBeenCalledOnce();
   });
 
-  it("llama a upsertAlumno con la comisión incluida", async () => {
+  it("llama a upsertAlumnos con la comisión incluida en cada alumno", async () => {
     const alumno = { legajo: "111", nombre: "Ana", apellido: "López", githubUsername: "ana", email: "a@b.com" };
     mockGetAlumnos.mockResolvedValue([alumno]);
+    mockUpsertAlumnos.mockResolvedValue(1);
 
     await sincronizarAlumnos({ status: "idle" }, makeSync());
 
-    expect(mockUpsertAlumno).toHaveBeenCalledWith({ ...alumno, comision: comisionMock });
+    expect(mockUpsertAlumnos).toHaveBeenCalledWith([{ ...alumno, comision: comisionMock }]);
   });
 
   it("retorna 0 sincronizados si la planilla está vacía", async () => {
     mockGetAlumnos.mockResolvedValue([]);
     const result = await sincronizarAlumnos({ status: "idle" }, makeSync());
     expect(result).toEqual({ status: "ok", sincronizados: 0 });
+  });
+
+  it("retorna error controlado si upsertAlumnos lanza LegajoConflictError", async () => {
+    mockGetAlumnos.mockResolvedValue([
+      { legajo: "111", nombre: "Ana", apellido: "López", githubUsername: "ana", email: "a@b.com" },
+    ]);
+    mockUpsertAlumnos.mockRejectedValue(new FakeLegajoConflictError("111", "otra-persona"));
+
+    const result = await sincronizarAlumnos({ status: "idle" }, makeSync());
+
+    expect(result).toEqual({
+      status: "error",
+      message: "El legajo 111 ya está registrado con el usuario @otra-persona. Verificá que sea el tuyo.",
+    });
   });
 });

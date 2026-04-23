@@ -21,7 +21,6 @@ export const DEFAULT_COLUMN_CONFIG: ColumnConfig = {
 };
 
 // ── Paradigmas ──────────────────────────────────────────────
-
 export type Paradigma = "funcional" | "logico" | "objetos";
 
 export const PARADIGMAS: Paradigma[] = ["funcional", "logico", "objetos"];

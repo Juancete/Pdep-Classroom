@@ -23,7 +23,7 @@ export class Comision {
   @Property({ type: 'boolean', default: false })
   activa: boolean = false;
 
-  @Property({ type: "json", nullable: true })
+  @Property({ type: "json" })
   columnConfig: ColumnConfig = { ...DEFAULT_COLUMN_CONFIG };
 
   @OneToMany("Assignment", "comision")

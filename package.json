@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "vercel-build": "npm run db:migration:up && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",

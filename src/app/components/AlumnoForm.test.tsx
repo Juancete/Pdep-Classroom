@@ -61,6 +61,21 @@ describe("AlumnoForm", () => {
       renderForm({ submitLabel: "Registrarme" });
       expect(screen.getByRole("button", { name: "Registrarme" })).toBeInTheDocument();
     });
+
+    it("muestra la explicación sobre el email leído asiduamente", () => {
+      renderForm();
+      expect(
+        screen.getByText(/email que leas asiduamente/i)
+      ).toBeInTheDocument();
+    });
+
+    it("el input de email tiene pattern RFC-lite para validar en el cliente", () => {
+      renderForm();
+      const emailInput = screen.getByDisplayValue("juan@example.com");
+      expect(emailInput).toHaveAttribute("pattern", "[^\\s@]+@[^\\s@]+\\.[^\\s@]+");
+      expect(emailInput).toHaveAttribute("type", "email");
+      expect(emailInput).toBeRequired();
+    });
   });
 
   describe("submit exitoso", () => {
@@ -99,6 +114,60 @@ describe("AlumnoForm", () => {
       fireEvent.submit(screen.getByRole("button").closest("form")!);
       await waitFor(() => expect(screen.getByText("¡Datos actualizados!")).toBeInTheDocument());
       expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("warning de suscripción al grupo", () => {
+    function mockRegistroOk(groupSubscription?: string) {
+      const body = groupSubscription
+        ? { ok: true, groupSubscription }
+        : { ok: true };
+      vi.mocked(fetch).mockResolvedValue(
+        new Response(JSON.stringify(body), { status: 200 })
+      );
+    }
+
+    const WARNING_PATTERN = /no pudimos suscribirte al grupo/i;
+
+    it("muestra el warning cuando groupSubscription === 'error'", async () => {
+      mockRegistroOk("error");
+      renderForm();
+      fireEvent.submit(screen.getByRole("button").closest("form")!);
+      await waitFor(() =>
+        expect(screen.getByRole("alert")).toHaveTextContent(WARNING_PATTERN)
+      );
+    });
+
+    it("no muestra el warning cuando groupSubscription === 'added'", async () => {
+      mockRegistroOk("added");
+      renderForm({ successMessage: "Listo" });
+      fireEvent.submit(screen.getByRole("button").closest("form")!);
+      await waitFor(() => screen.getByText("Listo"));
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("no muestra el warning cuando groupSubscription === 'already_member'", async () => {
+      mockRegistroOk("already_member");
+      renderForm({ successMessage: "Listo" });
+      fireEvent.submit(screen.getByRole("button").closest("form")!);
+      await waitFor(() => screen.getByText("Listo"));
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("no muestra el warning cuando groupSubscription === 'skipped'", async () => {
+      mockRegistroOk("skipped");
+      renderForm({ successMessage: "Listo" });
+      fireEvent.submit(screen.getByRole("button").closest("form")!);
+      await waitFor(() => screen.getByText("Listo"));
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("no muestra el warning cuando la respuesta no trae groupSubscription (ej. /api/perfil)", async () => {
+      mockRegistroOk();
+      renderForm({ successMessage: "Listo" });
+      fireEvent.submit(screen.getByRole("button").closest("form")!);
+      await waitFor(() => screen.getByText("Listo"));
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
   });
 

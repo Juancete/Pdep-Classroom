@@ -80,14 +80,14 @@ describe("EntregasTable", () => {
     expect(html).toContain("No hay entregas todavía");
   });
 
-  it("no muestra la tabla cuando no hay entregas", () => {
+  it("no muestra filas cuando no hay entregas", () => {
     const html = renderToStaticMarkup(<EntregasTable entregas={[]} />);
-    expect(html).not.toContain("<table");
+    expect(html).not.toContain("data-cols");
   });
 
-  it("muestra la tabla cuando hay entregas", () => {
+  it("muestra filas cuando hay entregas", () => {
     const html = renderToStaticMarkup(<EntregasTable entregas={[makeRow()]} />);
-    expect(html).toContain("<table");
+    expect(html).toContain("García, Juan");
   });
 
   it("muestra las cabeceras de la tabla", () => {
