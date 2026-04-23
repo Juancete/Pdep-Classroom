@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
 import { upsertarAlumnoEnSheets, validateRegistro, type RegistroInput } from "@/lib/sheets";
 import { getComisionActiva, upsertAlumno, LegajoConflictError } from "@/lib/repositories";
+import { internalServerError } from "@/lib/api-errors";
 
 type PerfilInput = Omit<RegistroInput, "githubUsername">;
 
@@ -63,7 +64,6 @@ export async function PATCH(req: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error interno";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return internalServerError("PATCH /api/perfil", e);
   }
 }

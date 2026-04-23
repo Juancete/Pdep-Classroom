@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PdepUser } from "@/types";
-import { IndividualAssignment, Entrega } from "@/domain/entities";
+import {
+  IndividualAssignment,
+  GrupalAssignment,
+  Entrega,
+  type Assignment,
+} from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -49,13 +54,17 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
   };
 }
 
-function makeAssignment(overrides?: Partial<IndividualAssignment>): IndividualAssignment {
-  const a = new IndividualAssignment();
+type AssignmentOverrides = Partial<IndividualAssignment & GrupalAssignment>;
+
+function makeAssignment(overrides?: AssignmentOverrides): Assignment {
+  const a: Assignment =
+    overrides?.tipo === "grupal"
+      ? Object.assign(new GrupalAssignment(), { maxIntegrantes: 4 })
+      : new IndividualAssignment();
   a.id = "a1";
   a.titulo = "Kata Funcional";
   a.descripcion = "";
   a.templateRepo = "kata-template";
-  a.tipo = "individual";
   a.paradigma = "funcional";
   a.slug = "kata-funcional";
   a.createdAt = new Date("2026-01-01");
@@ -170,7 +179,7 @@ describe("POST /api/assignments/[id]/accept", () => {
       return {
         id,
         nombre: "Los Lambdas",
-        alumnos: { getItems: () => githubUsernames.map((u) => ({ githubUsername: u })) },
+        alumnos: { getItems: () => githubUsernames.map((username) => ({ githubUsername: username })) },
       };
     }
 

@@ -175,7 +175,9 @@ describe("POST /api/registro", () => {
     const res = await POST(makeRequest(validBody));
     expect(res.status).toBe(500);
     const json = await res.json();
-    expect(json.error).toBe("boom");
+    // El mensaje del error interno no debe filtrarse al cliente.
+    expect(json.error).toBe("Error interno del servidor");
+    expect(json.error).not.toContain("boom");
   });
 
   // ── Suscripción al Google Group ────────────────────────────
@@ -224,18 +226,19 @@ describe("POST /api/registro", () => {
     });
 
     it("enmascara el email en el log de error para no exponer PII", async () => {
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const { logger } = await import("@/lib/logger");
+      const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
       mockAgregarMiembroAGrupo.mockResolvedValue({
         status: "error",
         error: "Sin permisos",
       });
       await POST(makeRequest(validBody));
-      const loggedLines = errorSpy.mock.calls.flat().join(" ");
+      const loggedPayload = JSON.stringify(errorSpy.mock.calls);
       // El email completo no debe aparecer, pero sí el dominio y un
       // identificador útil para el admin (githubUsername).
-      expect(loggedLines).not.toContain("juan@gmail.com");
-      expect(loggedLines).toContain("@gmail.com");
-      expect(loggedLines).toContain("juangarcia");
+      expect(loggedPayload).not.toContain("juan@gmail.com");
+      expect(loggedPayload).toContain("@gmail.com");
+      expect(loggedPayload).toContain("juangarcia");
       errorSpy.mockRestore();
     });
 

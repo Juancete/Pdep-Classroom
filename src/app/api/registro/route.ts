@@ -3,17 +3,21 @@ import { requireUser } from "@/lib/session";
 import { upsertarAlumnoEnSheets, validateRegistro, type RegistroInput } from "@/lib/sheets";
 import { getComisionActiva, upsertAlumno, LegajoConflictError } from "@/lib/repositories";
 import { agregarMiembroAGrupo } from "@/lib/googleGroups";
+import { internalServerError } from "@/lib/api-errors";
+import { logger } from "@/lib/logger";
 
 // Enmascara la parte local del email para no escupir PII a los logs,
 // preservando dominio y primeras 2 letras para que un admin pueda
 // reconocer al alumno (combinado con el githubUsername del log).
-function maskEmail(email: string): string {
-  const at = email.indexOf("@");
-  if (at <= 0) return "***";
-  const user = email.slice(0, at);
-  const domain = email.slice(at);
-  const visible = user.slice(0, 2);
-  return `${visible}${"*".repeat(Math.max(user.length - 2, 1))}${domain}`;
+function maskEmail(correo: string): string {
+  return correo.replace(/^([^@]{1,2})([^@]*)(@.+)$/, "$1xxxxxx$3");
+}
+
+// Enmascara cualquier email embebido en un texto libre (p. ej. el
+// `message` de un error de googleapis, que suele citar el email del
+// miembro que se intentó agregar).
+function maskEmailsEnTexto(texto: string): string {
+  return texto.replace(/([\w.+-]{1,2})([\w.+-]*)(@[\w.-]+\.\w+)/g, "$1xxxxxx$3");
 }
 
 export async function POST(req: Request) {
@@ -97,14 +101,18 @@ export async function POST(req: Request) {
     // muestre si corresponde y logueamos el detalle server-side.
     const groupSubscription = await agregarMiembroAGrupo(body.email);
     if (groupSubscription.status === "error") {
-      console.error(
-        `Error al suscribir al Google Group: github=${body.githubUsername} email=${maskEmail(body.email)} — ${groupSubscription.error}`
+      logger.error(
+        {
+          githubUsername: body.githubUsername,
+          maskedEmail: maskEmail(body.email),
+          err: maskEmailsEnTexto(groupSubscription.error),
+        },
+        "Error al suscribir al Google Group"
       );
     }
 
     return NextResponse.json({ ok: true, groupSubscription: groupSubscription.status });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error interno";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return internalServerError("POST /api/registro", e);
   }
 }
