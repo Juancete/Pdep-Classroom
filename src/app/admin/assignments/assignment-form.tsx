@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useFormState } from "react-dom";
 import { PARADIGMAS } from "@/types";
+import { GRUPAL_MIN_MAX_INTEGRANTES } from "@/domain/entities/domain-constants";
 import type { AssignmentFormState } from "@/lib/assignment-schema";
 import { slugify } from "@/lib/naming";
 import { INPUT_CLASS, INPUT_ERROR_CLASS, FieldError, SubmitButton } from "../ui";
@@ -280,7 +281,7 @@ export function AssignmentForm({
           <input
             name="maxIntegrantes"
             type="number"
-            min={2}
+            min={GRUPAL_MIN_MAX_INTEGRANTES}
             defaultValue={defaultValues.maxIntegrantes}
             placeholder="Ej: 3"
             className={errors.maxIntegrantes ? INPUT_ERROR_CLASS : INPUT_CLASS}

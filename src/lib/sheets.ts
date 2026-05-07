@@ -73,7 +73,7 @@ export function parseAlumnosRows(
       alumno.legajo = norm(row[config.legajo]);
       alumno.apellido = norm(row[config.apellido]);
       alumno.nombre = norm(row[config.nombre]);
-      alumno.githubUsername = norm(row[config.githubUsername]).replace("@", "").toLowerCase();
+      alumno.githubUsername = Alumno.normalizarUsername(row[config.githubUsername]);
       alumno.email = norm(row[config.email]);
       return alumno;
     });
@@ -107,7 +107,7 @@ export async function getAlumnoByGithub(
 ): Promise<Alumno | undefined> {
   const all = await getAlumnos(spreadsheetId, config);
   return all.find(
-    (alumno) => alumno.githubUsername.toLowerCase() === username.toLowerCase()
+    (alumno) => alumno.usernameCanonico === Alumno.normalizarUsername(username)
   );
 }
 
@@ -135,8 +135,8 @@ async function findAlumnoRowIndex(
   const rows = data.values ?? [];
   const rowIndex = rows.findIndex(
     (row) =>
-      norm(row[config.githubUsername]).replace("@", "").toLowerCase() ===
-      githubUsername.toLowerCase()
+      Alumno.normalizarUsername(row[config.githubUsername]) ===
+      Alumno.normalizarUsername(githubUsername)
   );
   if (rowIndex === -1) return null;
   return config.headerRows + 1 + rowIndex;
@@ -163,7 +163,7 @@ export function isValidEmail(email: string): boolean {
 export function validateRegistro(input: RegistroInput): string | null {
   const { legajo, apellido, nombre, githubUsername, email } = input;
 
-  if (!legajo || !/^\d{4,8}$/.test(legajo.trim()))
+  if (!legajo || !new RegExp(`^${Alumno.LEGAJO_PATTERN}$`).test(legajo.trim()))
     return "El legajo debe tener entre 4 y 8 dígitos";
   if (!apellido.trim()) return "El apellido es obligatorio";
   if (!nombre.trim()) return "El nombre es obligatorio";
@@ -199,7 +199,7 @@ export async function upsertarAlumnoEnSheets(
 
   const id = resolveSpreadsheetId(spreadsheetId);
   const columnConfig = resolveConfig(config);
-  const githubNormalizado = input.githubUsername.trim().toLowerCase();
+  const githubNormalizado = Alumno.normalizarUsername(input.githubUsername);
 
   const rowNumber = await findAlumnoRowIndex(githubNormalizado, id, columnConfig);
   const sheets = getSheetsClient(false);
@@ -214,7 +214,7 @@ export async function upsertarAlumnoEnSheets(
     row[columnConfig.apellido] = input.apellido.trim();
     row[columnConfig.nombre] = input.nombre.trim();
     row[columnConfig.githubUsername] = githubNormalizado;
-    row[columnConfig.email] = input.email.trim().toLowerCase();
+    row[columnConfig.email] = Alumno.normalizarEmail(input.email);
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: id,
@@ -236,7 +236,7 @@ export async function upsertarAlumnoEnSheets(
   existingRow[columnConfig.legajo] = input.legajo.trim();
   existingRow[columnConfig.apellido] = input.apellido.trim();
   existingRow[columnConfig.nombre] = input.nombre.trim();
-  existingRow[columnConfig.email] = input.email.trim().toLowerCase();
+  existingRow[columnConfig.email] = Alumno.normalizarEmail(input.email);
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: id,
@@ -272,7 +272,7 @@ export function parseAsignacionesGrupos(
 ): AsignacionGrupoRow[] {
   const result: AsignacionGrupoRow[] = [];
   for (const row of rows) {
-    const github = norm(row[config.githubUsername]).replace("@", "").toLowerCase();
+    const github = Alumno.normalizarUsername(row[config.githubUsername]);
     if (!github) continue;
     for (const paradigma of PARADIGMAS) {
       const colIndex = config.nombreGrupoPorParadigma[paradigma];

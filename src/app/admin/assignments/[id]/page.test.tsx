@@ -145,7 +145,18 @@ function makeGrupo(overrides?: Partial<Grupo>): Grupo {
   grupo.paradigma = "objetos";
   grupo.maxIntegrantes = 3;
   grupo.creadoPor = "usuario1";
-  return Object.assign(grupo, overrides);
+  const miembros: string[] = [];
+  const fakeMethods = {
+    isOpen: () => true,
+    estaLleno: () => false,
+    etiquetaCupo: () => `${miembros.length}/${grupo.maxIntegrantes} integrantes`,
+    usernamesDeMiembros: () => miembros,
+    usernamesCanonicos: () => miembros.map((username) => username.toLowerCase()),
+    alumnos: {
+      getItems: () => [] as ReturnType<typeof makeAlumno>[],
+    },
+  };
+  return Object.assign(grupo, fakeMethods, overrides);
 }
 
 // ── Tests ────────────────────────────────────────────────────
@@ -392,6 +403,7 @@ describe("Admin Assignment Detail Page", () => {
         makeAlumno({ id: "al2", githubUsername: "usuario2" }),
         makeAlumno({ id: "al3", githubUsername: "usuario3" }),
       ]);
+      const miembros = ["usuario1"];
       const grupoConMiembro = {
         id: "g1",
         nombre: "Grupo 1",
@@ -399,8 +411,12 @@ describe("Admin Assignment Detail Page", () => {
         maxIntegrantes: 3,
         creadoPor: "usuario1",
         isOpen: () => true,
+        estaLleno: () => false,
+        etiquetaCupo: () => `${miembros.length}/3 integrantes`,
+        usernamesDeMiembros: () => miembros,
+        usernamesCanonicos: () => miembros.map((username) => username.toLowerCase()),
         alumnos: {
-          getItems: () => [makeAlumno({ id: "al1", githubUsername: "usuario1" })],
+          getItems: () => miembros.map((username) => makeAlumno({ githubUsername: username })),
         },
       };
       mockGetGruposDeAssignment.mockResolvedValue([grupoConMiembro]);

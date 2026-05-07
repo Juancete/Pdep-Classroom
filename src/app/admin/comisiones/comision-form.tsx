@@ -6,6 +6,7 @@ import type { ComisionFormState } from "./actions";
 import { fetchSheetNames } from "./actions";
 import { INPUT_CLASS, INPUT_ERROR_CLASS, FieldError, SubmitButton } from "../ui";
 import { DEFAULT_COLUMN_CONFIG, type ColumnConfig } from "@/types";
+import { COMISION_ANIO_MIN, COMISION_ANIO_MAX } from "@/domain/entities/domain-constants";
 
 // A=0, B=1, … Z=25
 const COL_OPTIONS = Array.from({ length: 26 }, (_, colIndex) => ({
@@ -159,8 +160,8 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel, initialS
         <input
           name="anio"
           type="number"
-          min={2020}
-          max={2100}
+          min={COMISION_ANIO_MIN}
+          max={COMISION_ANIO_MAX}
           required
           defaultValue={defaultValues.anio ?? new Date().getFullYear()}
           className={errors.anio ? INPUT_ERROR_CLASS : INPUT_CLASS}

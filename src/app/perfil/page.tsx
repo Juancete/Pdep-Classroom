@@ -20,13 +20,13 @@ export default async function PerfilPage() {
   // el alumno probablemente entró acá específicamente para resolverlo.
   // Las dos llamadas son independientes y se invocan solo si su flag está activo.
   // Protegemos defensivamente: una excepción inesperada no debe romper el render.
-  if (alumno.alumnoSyncFallidoEn || alumno.gruposSyncFallidoEn) {
+  if (alumno.tieneSyncPendiente()) {
     try {
       const comisionActiva = await getComisionActiva();
       if (comisionActiva) {
         const tareas: Promise<unknown>[] = [];
-        if (alumno.alumnoSyncFallidoEn) tareas.push(verificarConsistenciaAlumno(githubUsername, comisionActiva));
-        if (alumno.gruposSyncFallidoEn) tareas.push(intentarSincronizarGrupos(githubUsername, comisionActiva));
+        if (alumno.tieneSyncDeAlumnoFallido()) tareas.push(verificarConsistenciaAlumno(githubUsername, comisionActiva));
+        if (alumno.tieneSyncDeGruposFallido()) tareas.push(intentarSincronizarGrupos(githubUsername, comisionActiva));
         await Promise.allSettled(tareas);
       }
     } catch {

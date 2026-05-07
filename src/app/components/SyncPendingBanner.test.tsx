@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { Alumno } from "@/domain/entities";
+import { Alumno } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -20,15 +20,17 @@ import { SyncPendingBanner } from "./SyncPendingBanner";
 // ── Helpers ──────────────────────────────────────────────────
 
 function makeAlumno(overrides: Partial<Alumno> = {}): Alumno {
-  return {
+  return Object.assign(new Alumno(), {
     id: "uuid-1",
     legajo: "12345",
     nombre: "Juan",
     apellido: "Garcia",
     githubUsername: "juangarcia",
     email: "juan@example.com",
+    gruposSyncFallidoEn: null,
+    alumnoSyncFallidoEn: null,
     ...overrides,
-  } as Alumno;
+  });
 }
 
 // ── Tests ────────────────────────────────────────────────────

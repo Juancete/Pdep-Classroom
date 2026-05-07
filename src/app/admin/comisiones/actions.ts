@@ -225,7 +225,7 @@ export async function sincronizarGruposDeLaComision(
   // Sheets (cada alumno releía la hoja entera). Si la lectura falla reportamos
   // el error global y no modificamos los flags.
   let asignaciones: AsignacionGrupoRow[] | undefined;
-  const gruposConfig = comision.columnConfig?.grupos;
+  const gruposConfig = comision.gruposConfig();
   if (gruposConfig && alumnos.length > 0) {
     try {
       asignaciones = await getAsignacionesGrupos(comision.spreadsheetId, gruposConfig);

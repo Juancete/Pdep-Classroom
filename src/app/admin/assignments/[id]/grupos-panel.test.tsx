@@ -20,6 +20,7 @@ function makeGrupo(overrides: Partial<GrupoAdminResumen> = {}): GrupoAdminResume
     nombre: "Los Lambdas",
     maxIntegrantes: 3,
     estaLleno: false,
+    etiquetaCupo: "2/3 integrantes",
     miembros: [
       { username: "ana", nombreCompleto: "García, Ana" },
       { username: "bob", nombreCompleto: "Smith, Bob" },
@@ -213,11 +214,11 @@ describe("GruposPanel", () => {
         <GruposPanel
           assignmentId="a1"
           inscripcionesCerradas={false}
-          grupos={[makeGrupo({ estaLleno: true, maxIntegrantes: 2 })]}
+          grupos={[makeGrupo({ estaLleno: true, maxIntegrantes: 2, etiquetaCupo: "Completo (2/2)" })]}
           alumnosSinGrupo={[]}
         />
       );
-      expect(screen.getByText(/Completo/)).toBeInTheDocument();
+      expect(screen.getByText("Completo (2/2)")).toBeInTheDocument();
     });
   });
 

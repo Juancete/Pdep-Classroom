@@ -24,7 +24,7 @@ async function assertLegajoLibreOPropio(
 ): Promise<void> {
   const entityManager = await getEM();
   const otro = await entityManager.findOne(Alumno, { legajo: legajo.trim() });
-  if (otro && otro.githubUsername.toLowerCase() !== githubUsername.toLowerCase().trim()) {
+  if (otro && otro.usernameCanonico !== Alumno.normalizarUsername(githubUsername)) {
     throw new LegajoConflictError(legajo.trim(), otro.githubUsername);
   }
 }
@@ -39,7 +39,7 @@ export async function getAlumnoByGithub(
 ): Promise<Alumno | null> {
   const entityManager = await getEM();
   return entityManager.findOne(Alumno, {
-    githubUsername: githubUsername.toLowerCase(),
+    githubUsername: Alumno.normalizarUsername(githubUsername),
   });
 }
 
@@ -67,8 +67,8 @@ function applyAlumnoData(alumno: Alumno, data: AlumnoData): void {
   alumno.legajo = data.legajo.trim();
   alumno.nombre = data.nombre.trim();
   alumno.apellido = data.apellido.trim();
-  alumno.githubUsername = data.githubUsername.toLowerCase().trim();
-  alumno.email = data.email.toLowerCase().trim();
+  alumno.githubUsername = Alumno.normalizarUsername(data.githubUsername);
+  alumno.email = Alumno.normalizarEmail(data.email);
   alumno.comision = data.comision;
   if (data.registroConfirmadoEn !== undefined) {
     alumno.registroConfirmadoEn = data.registroConfirmadoEn;
@@ -90,7 +90,7 @@ export async function upsertAlumno(data: AlumnoData): Promise<Alumno> {
   await assertLegajoLibreOPropio(data.legajo, data.githubUsername);
   const entityManager = await getEM();
   const existing = await entityManager.findOne(Alumno, {
-    githubUsername: data.githubUsername.toLowerCase().trim(),
+    githubUsername: Alumno.normalizarUsername(data.githubUsername),
   });
 
   if (existing) {
@@ -112,7 +112,7 @@ export async function marcarRegistroConfirmado(
 ): Promise<void> {
   const entityManager = await getEM();
   const alumno = await entityManager.findOne(Alumno, {
-    githubUsername: githubUsername.toLowerCase().trim(),
+    githubUsername: Alumno.normalizarUsername(githubUsername),
   });
   if (!alumno) return;
   alumno.registroConfirmadoEn = comision;
@@ -122,7 +122,7 @@ export async function marcarRegistroConfirmado(
 export async function marcarGruposSyncFallido(githubUsername: string): Promise<void> {
   const entityManager = await getEM();
   const alumno = await entityManager.findOne(Alumno, {
-    githubUsername: githubUsername.toLowerCase().trim(),
+    githubUsername: Alumno.normalizarUsername(githubUsername),
   });
   if (!alumno) return;
   alumno.gruposSyncFallidoEn = new Date();
@@ -132,7 +132,7 @@ export async function marcarGruposSyncFallido(githubUsername: string): Promise<v
 export async function marcarGruposSyncOk(githubUsername: string): Promise<void> {
   const entityManager = await getEM();
   const alumno = await entityManager.findOne(Alumno, {
-    githubUsername: githubUsername.toLowerCase().trim(),
+    githubUsername: Alumno.normalizarUsername(githubUsername),
   });
   // Solo flusheamos si había algo prendido — evita un UPDATE por cada sync
   // exitosa del happy path.
@@ -144,7 +144,7 @@ export async function marcarGruposSyncOk(githubUsername: string): Promise<void> 
 export async function marcarAlumnoSyncFallido(githubUsername: string): Promise<void> {
   const entityManager = await getEM();
   const alumno = await entityManager.findOne(Alumno, {
-    githubUsername: githubUsername.toLowerCase().trim(),
+    githubUsername: Alumno.normalizarUsername(githubUsername),
   });
   if (!alumno) return;
   alumno.alumnoSyncFallidoEn = new Date();
@@ -154,7 +154,7 @@ export async function marcarAlumnoSyncFallido(githubUsername: string): Promise<v
 export async function marcarAlumnoSyncOk(githubUsername: string): Promise<void> {
   const entityManager = await getEM();
   const alumno = await entityManager.findOne(Alumno, {
-    githubUsername: githubUsername.toLowerCase().trim(),
+    githubUsername: Alumno.normalizarUsername(githubUsername),
   });
   if (!alumno || !alumno.alumnoSyncFallidoEn) return;
   alumno.alumnoSyncFallidoEn = null;
@@ -195,7 +195,7 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
   const githubPorLegajo = new Map<string, string>();
   for (const data of dataList) {
     const legajo = data.legajo.trim();
-    const github = data.githubUsername.toLowerCase().trim();
+    const github = Alumno.normalizarUsername(data.githubUsername);
     const prev = githubPorLegajo.get(legajo);
     if (prev && prev !== github) {
       throw new LegajoConflictError(legajo, prev);
@@ -206,7 +206,7 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
   const alumnosConLegajoTomado = await entityManager.find(Alumno, { legajo: { $in: legajos } });
   for (const alumno of alumnosConLegajoTomado) {
     const incomingGithub = githubPorLegajo.get(alumno.legajo)!;
-    if (alumno.githubUsername.toLowerCase() !== incomingGithub) {
+    if (alumno.usernameCanonico !== incomingGithub) {
       throw new LegajoConflictError(alumno.legajo, alumno.githubUsername);
     }
   }
@@ -216,7 +216,7 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
   const existentesPorGithub = new Map(existentes.map((alumno) => [alumno.githubUsername, alumno]));
 
   for (const data of dataList) {
-    const key = data.githubUsername.toLowerCase().trim();
+    const key = Alumno.normalizarUsername(data.githubUsername);
     const existing = existentesPorGithub.get(key);
     if (existing) {
       applyAlumnoData(existing, data);

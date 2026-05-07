@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useApiCall } from "@/app/hooks/useApiCall";
+import { ALUMNO_LEGAJO_PATTERN, ALUMNO_EMAIL_PATTERN } from "@/domain/entities/domain-constants";
 
 const INPUT_CLASS =
   "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pdep-500 focus:border-pdep-500 outline-none";
@@ -142,7 +143,7 @@ export function AlumnoForm({
         <input
           name="legajo"
           required
-          pattern="\d{4,8}"
+          pattern={ALUMNO_LEGAJO_PATTERN}
           inputMode="numeric"
           placeholder="12345678"
           defaultValue={defaultValues.legajo}
@@ -187,7 +188,7 @@ export function AlumnoForm({
           name="email"
           type="email"
           required
-          pattern="[^\s@]+@[^\s@]+\.[^\s@]+"
+          pattern={ALUMNO_EMAIL_PATTERN}
           title="Ingresá un email con formato válido (usuario@dominio.com)"
           defaultValue={defaultValues.email}
           className={INPUT_CLASS}

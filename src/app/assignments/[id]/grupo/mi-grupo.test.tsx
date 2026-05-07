@@ -12,15 +12,17 @@ vi.mock("@/app/dashboard/accept-button", () => ({
 }));
 
 function makeGrupo(overrides: Partial<GrupoResumen> = {}): GrupoResumen {
-  return {
+  const base: GrupoResumen = {
     id: "g1",
     nombre: "Los Lambdas",
     paradigma: "objetos",
     maxIntegrantes: 3,
     estaLleno: false,
+    etiquetaCupo: "2/3 integrantes",
     miembros: ["ana", "bob"],
     ...overrides,
   };
+  return base;
 }
 
 describe("MiGrupo", () => {
@@ -38,23 +40,23 @@ describe("MiGrupo", () => {
   it("muestra el contador de integrantes cuando el grupo no está lleno", () => {
     render(
       <MiGrupo
-        grupo={makeGrupo({ miembros: ["ana", "bob"], maxIntegrantes: 3, estaLleno: false })}
+        grupo={makeGrupo({ estaLleno: false, etiquetaCupo: "2/3 integrantes" })}
         assignmentId="a1"
         tieneEntrega={false}
       />
     );
-    expect(screen.getByText(/2\/3 integrantes/)).toBeInTheDocument();
+    expect(screen.getByText("2/3 integrantes")).toBeInTheDocument();
   });
 
   it("muestra 'Completo' cuando el grupo está lleno", () => {
     render(
       <MiGrupo
-        grupo={makeGrupo({ estaLleno: true, maxIntegrantes: 2 })}
+        grupo={makeGrupo({ estaLleno: true, etiquetaCupo: "Completo (2/2)" })}
         assignmentId="a1"
         tieneEntrega={false}
       />
     );
-    expect(screen.getByText(/completo/i)).toBeInTheDocument();
+    expect(screen.getByText("Completo (2/2)")).toBeInTheDocument();
   });
 
   it("muestra AcceptButton cuando no tiene entrega", () => {

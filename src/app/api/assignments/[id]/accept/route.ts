@@ -51,10 +51,7 @@ export async function POST(
     }
     const { usernames, grupoId } = participantes;
 
-    // ── Extraer nombre del template (sin org) ────────────────
-    const templateRepo = assignment.templateRepo.includes("/")
-      ? assignment.templateRepo.split("/").pop()!
-      : assignment.templateRepo;
+    const templateRepo = assignment.nombreDelTemplate();
 
     // ── Nombre del repo ──────────────────────────────────────
     const candidateRepoName = buildRepoName({ slug: assignment.slug, usernames, grupoId });

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PdepUser } from "@/types";
-import { IndividualAssignment, GrupalAssignment, Entrega } from "@/domain/entities";
+import { Alumno, IndividualAssignment, GrupalAssignment, Entrega } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -42,6 +42,18 @@ vi.mock("./accept-button", () => ({
 import DashboardPage from "./page";
 
 // ── Helpers ──────────────────────────────────────────────────
+
+function makeAlumno(overrides: Partial<Alumno> = {}): Alumno {
+  const alumno = new Alumno();
+  alumno.githubUsername = "testuser";
+  alumno.legajo = "12345";
+  alumno.nombre = "Test";
+  alumno.apellido = "User";
+  alumno.email = "test@example.com";
+  alumno.gruposSyncFallidoEn = null;
+  alumno.alumnoSyncFallidoEn = null;
+  return Object.assign(alumno, overrides);
+}
 
 function makeUser(overrides?: Partial<PdepUser>): PdepUser {
   return {
@@ -117,42 +129,27 @@ describe("Dashboard page", () => {
     it("redirige a /registro si el alumno confirmó en otra comisión (recursante)", async () => {
       mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
       mockGetComisionActiva.mockResolvedValue({ id: "c2" });
-      mockGetAlumnoByGithub.mockResolvedValue({
-        legajo: "12345",
-        nombre: "Test",
-        apellido: "User",
-        githubUsername: "testuser",
-        email: "test@example.com",
-        registroConfirmadoEn: { id: "c1" },
-      });
+      mockGetAlumnoByGithub.mockResolvedValue(
+        makeAlumno({ registroConfirmadoEn: { id: "c1" } as any })
+      );
 
       await expect(DashboardPage()).rejects.toThrow("REDIRECT:/registro");
     });
 
     it("redirige a /registro si el alumno nunca confirmó (registroConfirmadoEn null)", async () => {
       mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
-      mockGetAlumnoByGithub.mockResolvedValue({
-        legajo: "12345",
-        nombre: "Test",
-        apellido: "User",
-        githubUsername: "testuser",
-        email: "test@example.com",
-        registroConfirmadoEn: null,
-      });
+      mockGetAlumnoByGithub.mockResolvedValue(
+        makeAlumno({ registroConfirmadoEn: undefined })
+      );
 
       await expect(DashboardPage()).rejects.toThrow("REDIRECT:/registro");
     });
 
     it("no redirige si el alumno confirmó para la comisión activa", async () => {
       mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
-      mockGetAlumnoByGithub.mockResolvedValue({
-        legajo: "12345",
-        nombre: "Test",
-        apellido: "User",
-        githubUsername: "testuser",
-        email: "test@example.com",
-        registroConfirmadoEn: { id: "c1" },
-      });
+      mockGetAlumnoByGithub.mockResolvedValue(
+        makeAlumno({ registroConfirmadoEn: { id: "c1" } as any })
+      );
 
       const element = await DashboardPage();
       expect(element).toBeDefined();
@@ -328,10 +325,9 @@ describe("Dashboard page", () => {
   describe("assignments grupales", () => {
     beforeEach(() => {
       mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
-      mockGetAlumnoByGithub.mockResolvedValue({
-        githubUsername: "testuser",
-        registroConfirmadoEn: { id: "c1" },
-      });
+      mockGetAlumnoByGithub.mockResolvedValue(
+        makeAlumno({ registroConfirmadoEn: { id: "c1" } as any })
+      );
     });
 
     it("muestra 'Elegir grupo' cuando es grupal y el alumno no tiene grupo", async () => {

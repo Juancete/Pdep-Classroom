@@ -296,6 +296,7 @@ describe("sincronizarGruposDeLaComision", () => {
     id: "c1",
     spreadsheetId: "sheet-xyz",
     columnConfig: { grupos: gruposConfig },
+    gruposConfig: () => gruposConfig,
   };
   const asignacionesFake = [
     { githubUsername: "ana", paradigma: "funcional", nombreGrupo: "Los Lambdas" },
@@ -374,7 +375,7 @@ describe("sincronizarGruposDeLaComision", () => {
   });
 
   it("no lee la hoja si la comisión no tiene config de grupos", async () => {
-    mockGetComision.mockResolvedValue({ id: "c1", spreadsheetId: "sheet-xyz", columnConfig: {} });
+    mockGetComision.mockResolvedValue({ id: "c1", spreadsheetId: "sheet-xyz", columnConfig: {}, gruposConfig: () => undefined });
     mockGetAlumnosByComision.mockResolvedValue([{ githubUsername: "ana" }]);
 
     await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
