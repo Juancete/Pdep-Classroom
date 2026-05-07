@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
 import { getAssignment, getEntregaDeUsuario, createEntrega, getGrupoDeAlumnoEnAssignment } from "@/lib/repositories";
 import { GrupoNoAsignadoError, type ParticipantesResueltos } from "@/domain/entities";
-import { crearEntrega, repoExists } from "@/lib/github";
+import { crearEntrega, repoExists, addCollaborators } from "@/lib/github";
 import { buildRepoName } from "@/lib/naming";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { internalServerError } from "@/lib/api-errors";
@@ -59,8 +59,12 @@ export async function POST(
     // ── Nombre del repo ──────────────────────────────────────
     const candidateRepoName = buildRepoName({ slug: assignment.slug, usernames, grupoId });
 
-    // Verificar que no exista ya (por si otro miembro del grupo aceptó)
+    // Verificar que no exista ya (por si otro miembro del grupo aceptó primero)
     if (await repoExists(candidateRepoName)) {
+      // El repo fue creado por otro miembro: agregar al usuario actual como
+      // colaborador y registrar la entrega. Sin este addCollaborators el
+      // alumno quedaría sin acceso al repo que ya existe en GitHub.
+      await addCollaborators(candidateRepoName, [user.githubUsername]);
       const org = process.env.GITHUB_ORG ?? "pdep-mn-utn";
       const entrega = await createEntrega({
         assignmentId: assignment.id,

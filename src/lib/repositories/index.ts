@@ -8,6 +8,9 @@ export {
   marcarRegistroConfirmado,
   marcarGruposSyncFallido,
   marcarGruposSyncOk,
+  marcarAlumnoSyncFallido,
+  marcarAlumnoSyncOk,
+  getAlumnosByComision,
   getAlumnosConGruposSyncPendiente,
   countAlumnos,
   LegajoConflictError,
@@ -20,6 +23,7 @@ export {
   createAssignment,
   updateAssignment,
   deleteAssignment,
+  setInscripcionesCerradas,
 } from "./AssignmentRepository";
 
 export {
@@ -34,8 +38,11 @@ export {
 
 export {
   getGrupos,
+  getGruposDeAlumno,
   getGruposDeAssignment,
   getGrupoDeAlumnoEnAssignment,
+  crearGrupo,
+  unirseAGrupo,
   upsertGrupoConMiembro,
 } from "./GrupoRepository";
 

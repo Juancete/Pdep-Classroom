@@ -37,6 +37,11 @@ export class Alumno {
   @Property({ type: 'datetime', nullable: true })
   gruposSyncFallidoEn: Date | null = null;
 
+  // Análogo a gruposSyncFallidoEn pero para la dirección DB → planilla del
+  // alta del alumno: se prende si re-upsertar la fila en Sheets falla.
+  @Property({ type: 'datetime', nullable: true })
+  alumnoSyncFallidoEn: Date | null = null;
+
   get nombreCompleto(): string {
     return `${this.apellido}, ${this.nombre}`;
   }

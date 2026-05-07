@@ -65,7 +65,7 @@ describe("SyncPendingBanner", () => {
     expect(el).toBeNull();
   });
 
-  it("no renderiza nada si el alumno no tiene el flag prendido", async () => {
+  it("no renderiza nada si ningún flag está prendido", async () => {
     mockGetCurrentUser.mockResolvedValue({
       githubUsername: "juangarcia",
       isAdmin: false,
@@ -75,7 +75,7 @@ describe("SyncPendingBanner", () => {
     expect(el).toBeNull();
   });
 
-  it("renderiza el banner cuando el alumno tiene el flag prendido", async () => {
+  it("renderiza el banner cuando gruposSyncFallidoEn está prendido", async () => {
     mockGetCurrentUser.mockResolvedValue({
       githubUsername: "juangarcia",
       isAdmin: false,
@@ -90,5 +90,39 @@ describe("SyncPendingBanner", () => {
     expect(html).toContain("No pudimos asignarte a tu grupo de TP");
     expect(html).toContain('href="/perfil"');
     expect(html).toContain("Reintentar");
+  });
+
+  it("renderiza el banner cuando alumnoSyncFallidoEn está prendido", async () => {
+    mockGetCurrentUser.mockResolvedValue({
+      githubUsername: "juangarcia",
+      isAdmin: false,
+    });
+    mockGetAlumnoByGithub.mockResolvedValue(
+      makeAlumno({ alumnoSyncFallidoEn: new Date("2026-04-01") })
+    );
+
+    const el = await SyncPendingBanner();
+    const html = renderToStaticMarkup(el as React.ReactElement);
+
+    expect(html).toContain("No pudimos reflejar tus datos de alumno");
+  });
+
+  it("renderiza mensaje combinado cuando ambos flags están prendidos", async () => {
+    mockGetCurrentUser.mockResolvedValue({
+      githubUsername: "juangarcia",
+      isAdmin: false,
+    });
+    mockGetAlumnoByGithub.mockResolvedValue(
+      makeAlumno({
+        gruposSyncFallidoEn: new Date("2026-04-01"),
+        alumnoSyncFallidoEn: new Date("2026-04-01"),
+      })
+    );
+
+    const el = await SyncPendingBanner();
+    const html = renderToStaticMarkup(el as React.ReactElement);
+
+    expect(html).toContain("tus datos");
+    expect(html).toContain("grupo de TP");
   });
 });

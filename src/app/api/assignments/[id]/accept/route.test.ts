@@ -16,6 +16,7 @@ const mockGetEntregaDeUsuario = vi.fn();
 const mockCreateEntrega = vi.fn();
 const mockCrearEntrega = vi.fn();
 const mockRepoExists = vi.fn();
+const mockAddCollaborators = vi.fn();
 const mockGetGrupoDeAlumno = vi.fn();
 
 vi.mock("@/lib/session", () => ({
@@ -38,6 +39,7 @@ vi.mock("@/lib/repositories", () => ({
 vi.mock("@/lib/github", () => ({
   crearEntrega: (opts: unknown) => mockCrearEntrega(opts),
   repoExists: (name: string) => mockRepoExists(name),
+  addCollaborators: (repoName: string, usernames: string[]) => mockAddCollaborators(repoName, usernames),
 }));
 
 import { POST } from "./route";
@@ -234,12 +236,24 @@ describe("POST /api/assignments/[id]/accept", () => {
   });
 
   describe("repo ya existe", () => {
-    it("registra la entrega sin crear un nuevo repo si ya existe", async () => {
+    beforeEach(() => {
       mockRepoExists.mockResolvedValue(true);
+      mockAddCollaborators.mockResolvedValue(undefined);
+    });
+
+    it("registra la entrega sin crear un nuevo repo si ya existe", async () => {
       const res = await POST(makeRequest(), { params: { id: "a1" } });
       expect(res.status).toBe(200);
       expect(mockCrearEntrega).not.toHaveBeenCalled();
       expect(mockCreateEntrega).toHaveBeenCalled();
+    });
+
+    it("agrega al usuario como colaborador del repo existente", async () => {
+      await POST(makeRequest(), { params: { id: "a1" } });
+      expect(mockAddCollaborators).toHaveBeenCalledWith(
+        expect.any(String),
+        ["juangarcia"]
+      );
     });
   });
 });

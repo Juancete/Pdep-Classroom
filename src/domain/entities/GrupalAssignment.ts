@@ -25,11 +25,22 @@ export class GrupalAssignment extends Assignment {
   @Property({ type: 'integer' })
   maxIntegrantes!: number;
 
+  // Cerrado por el docente cuando los grupos ya están trabajando y no quiere
+  // que se sumen alumnos despistados. Independiente de si los grupos están
+  // llenos o no — un grupo con cupo libre tampoco recibe nuevos miembros si
+  // este flag está prendido.
+  @Property({ type: 'boolean', default: false })
+  inscripcionesCerradas: boolean = false;
+
   @OneToMany("Grupo", "assignment")
   grupos = new Collection<Grupo>(this);
 
   etiquetaTotales(): string {
     return "Grupos";
+  }
+
+  aceptaNuevasInscripciones(): boolean {
+    return !this.inscripcionesCerradas;
   }
 
   async totalEsperado(fuentes: FuentesDeConteo): Promise<number> {

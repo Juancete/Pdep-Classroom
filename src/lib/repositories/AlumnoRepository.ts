@@ -141,6 +141,37 @@ export async function marcarGruposSyncOk(githubUsername: string): Promise<void> 
   await em.flush();
 }
 
+export async function marcarAlumnoSyncFallido(githubUsername: string): Promise<void> {
+  const em = await getEM();
+  const alumno = await em.findOne(Alumno, {
+    githubUsername: githubUsername.toLowerCase().trim(),
+  });
+  if (!alumno) return;
+  alumno.alumnoSyncFallidoEn = new Date();
+  await em.flush();
+}
+
+export async function marcarAlumnoSyncOk(githubUsername: string): Promise<void> {
+  const em = await getEM();
+  const alumno = await em.findOne(Alumno, {
+    githubUsername: githubUsername.toLowerCase().trim(),
+  });
+  if (!alumno || !alumno.alumnoSyncFallidoEn) return;
+  alumno.alumnoSyncFallidoEn = null;
+  await em.flush();
+}
+
+export async function getAlumnosByComision(
+  comisionId: string
+): Promise<Alumno[]> {
+  const em = await getEM();
+  return em.find(
+    Alumno,
+    { comision: { id: comisionId } },
+    { orderBy: { apellido: "ASC", nombre: "ASC" } }
+  );
+}
+
 export async function getAlumnosConGruposSyncPendiente(
   comisionId: string
 ): Promise<Alumno[]> {

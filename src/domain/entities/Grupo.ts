@@ -12,6 +12,44 @@ import { Alumno } from "./Alumno";
 import type { GrupalAssignment } from "./GrupalAssignment";
 import type { Paradigma } from "@/types";
 
+// Errores de negocio del flujo self-serve de inscripción a grupos. El handler
+// HTTP los traduce a 400/409 con mensajes amigables. Análogos a
+// `GrupoNoAsignadoError`: tipados para que el caller pueda discriminar.
+
+export class InscripcionesCerradasError extends Error {
+  constructor(public readonly assignmentId: string) {
+    super("Las inscripciones a grupos están cerradas para este TP.");
+    this.name = "InscripcionesCerradasError";
+  }
+}
+
+export class AlumnoYaEnGrupoDelAssignmentError extends Error {
+  constructor(
+    public readonly assignmentId: string,
+    public readonly githubUsername: string
+  ) {
+    super("Ya estás en un grupo para este TP.");
+    this.name = "AlumnoYaEnGrupoDelAssignmentError";
+  }
+}
+
+export class GrupoLlenoError extends Error {
+  constructor(
+    public readonly grupoId: string,
+    public readonly maxIntegrantes: number
+  ) {
+    super(`El grupo está completo (${maxIntegrantes} integrantes).`);
+    this.name = "GrupoLlenoError";
+  }
+}
+
+export class AssignmentNoGrupalError extends Error {
+  constructor(public readonly assignmentId: string) {
+    super("Este TP no es grupal.");
+    this.name = "AssignmentNoGrupalError";
+  }
+}
+
 @Entity()
 export class Grupo {
   @PrimaryKey({ type: "uuid" })
@@ -44,12 +82,11 @@ export class Grupo {
   }
 
   addMember(alumno: Alumno): void {
-    if (!this.canJoin(alumno)) {
-      throw new Error(
-        this.alumnos.contains(alumno)
-          ? `${alumno.githubUsername} ya es miembro del grupo`
-          : `El grupo está completo (${this.maxIntegrantes} integrantes)`
-      );
+    if (this.alumnos.contains(alumno)) {
+      throw new Error(`${alumno.githubUsername} ya es miembro del grupo`);
+    }
+    if (!this.isOpen()) {
+      throw new GrupoLlenoError(this.id, this.maxIntegrantes);
     }
     this.alumnos.add(alumno);
   }
