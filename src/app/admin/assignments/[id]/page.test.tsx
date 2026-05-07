@@ -89,63 +89,63 @@ import AssignmentDetailPage from "./page";
 function makeIndividualAssignment(
   overrides?: Partial<IndividualAssignment>
 ): IndividualAssignment {
-  const a = new IndividualAssignment();
-  a.id = "a1";
-  a.titulo = "Kata Funcional";
-  a.descripcion = "Descripción de la kata";
-  a.templateRepo = "kata-template";
-  a.tipo = "individual";
-  a.paradigma = "funcional";
-  a.slug = "kata-funcional";
-  a.createdAt = new Date("2026-01-01");
-  return Object.assign(a, overrides);
+  const assignment = new IndividualAssignment();
+  assignment.id = "a1";
+  assignment.titulo = "Kata Funcional";
+  assignment.descripcion = "Descripción de la kata";
+  assignment.templateRepo = "kata-template";
+  assignment.tipo = "individual";
+  assignment.paradigma = "funcional";
+  assignment.slug = "kata-funcional";
+  assignment.createdAt = new Date("2026-01-01");
+  return Object.assign(assignment, overrides);
 }
 
 function makeGrupalAssignment(
   overrides?: Partial<GrupalAssignment>
 ): GrupalAssignment {
-  const a = new GrupalAssignment();
-  a.id = "a2";
-  a.titulo = "TP Objetos";
-  a.descripcion = "Trabajo práctico grupal";
-  a.templateRepo = "tp-objetos-template";
-  a.tipo = "grupal";
-  a.paradigma = "objetos";
-  a.slug = "tp-objetos";
-  a.createdAt = new Date("2026-01-01");
-  a.maxIntegrantes = 3;
-  return Object.assign(a, overrides);
+  const assignment = new GrupalAssignment();
+  assignment.id = "a2";
+  assignment.titulo = "TP Objetos";
+  assignment.descripcion = "Trabajo práctico grupal";
+  assignment.templateRepo = "tp-objetos-template";
+  assignment.tipo = "grupal";
+  assignment.paradigma = "objetos";
+  assignment.slug = "tp-objetos";
+  assignment.createdAt = new Date("2026-01-01");
+  assignment.maxIntegrantes = 3;
+  return Object.assign(assignment, overrides);
 }
 
 function makeEntrega(overrides?: Partial<Entrega>): Entrega {
-  const e = new Entrega();
-  e.id = "e1";
-  e.githubUsernames = ["usuario1"];
-  e.repoName = "kata-funcional-usuario1";
-  e.repoUrl = "https://github.com/org/kata-funcional-usuario1";
-  e.createdAt = new Date("2026-01-02");
-  return Object.assign(e, overrides);
+  const entrega = new Entrega();
+  entrega.id = "e1";
+  entrega.githubUsernames = ["usuario1"];
+  entrega.repoName = "kata-funcional-usuario1";
+  entrega.repoUrl = "https://github.com/org/kata-funcional-usuario1";
+  entrega.createdAt = new Date("2026-01-02");
+  return Object.assign(entrega, overrides);
 }
 
 function makeAlumno(overrides?: Partial<Alumno>): Alumno {
-  const a = new Alumno();
-  a.id = "al1";
-  a.legajo = "12345";
-  a.nombre = "Juan";
-  a.apellido = "García";
-  a.githubUsername = "usuario1";
-  a.email = "juan@test.com";
-  return Object.assign(a, overrides);
+  const alumno = new Alumno();
+  alumno.id = "al1";
+  alumno.legajo = "12345";
+  alumno.nombre = "Juan";
+  alumno.apellido = "García";
+  alumno.githubUsername = "usuario1";
+  alumno.email = "juan@test.com";
+  return Object.assign(alumno, overrides);
 }
 
 function makeGrupo(overrides?: Partial<Grupo>): Grupo {
-  const g = new Grupo();
-  g.id = "g1";
-  g.nombre = "Grupo 1";
-  g.paradigma = "objetos";
-  g.maxIntegrantes = 3;
-  g.creadoPor = "usuario1";
-  return Object.assign(g, overrides);
+  const grupo = new Grupo();
+  grupo.id = "g1";
+  grupo.nombre = "Grupo 1";
+  grupo.paradigma = "objetos";
+  grupo.maxIntegrantes = 3;
+  grupo.creadoPor = "usuario1";
+  return Object.assign(grupo, overrides);
 }
 
 // ── Tests ────────────────────────────────────────────────────

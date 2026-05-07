@@ -16,7 +16,7 @@ export async function DELETE(
   }
 
   const entregas = await getEntregas(params.id);
-  const repoNames = entregas.map((e) => e.repoName).filter(Boolean) as string[];
+  const repoNames = entregas.map((entrega) => entrega.repoName).filter(Boolean) as string[];
 
   if (repoNames.length === 0) {
     return NextResponse.json({ ok: true, deleted: 0 });

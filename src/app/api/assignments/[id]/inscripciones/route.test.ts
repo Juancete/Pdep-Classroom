@@ -48,8 +48,8 @@ describe("PATCH /api/assignments/[id]/inscripciones", () => {
     mockGuardAdmin.mockResolvedValue(
       NextResponse.json({ error: "No autorizado" }, { status: 401 })
     );
-    const res = await PATCH(makeRequest({ cerrada: true }), { params: { id: "a1" } });
-    expect(res.status).toBe(401);
+    const response = await PATCH(makeRequest({ cerrada: true }), { params: { id: "a1" } });
+    expect(response.status).toBe(401);
     expect(mockSetInscripcionesCerradas).not.toHaveBeenCalled();
   });
 
@@ -57,9 +57,9 @@ describe("PATCH /api/assignments/[id]/inscripciones", () => {
     mockSetInscripcionesCerradas.mockResolvedValue(
       makeAssignment({ inscripcionesCerradas: true })
     );
-    const res = await PATCH(makeRequest({ cerrada: true }), { params: { id: "a1" } });
-    expect(res.status).toBe(200);
-    const data = await res.json();
+    const response = await PATCH(makeRequest({ cerrada: true }), { params: { id: "a1" } });
+    expect(response.status).toBe(200);
+    const data = await response.json();
     expect(data.inscripcionesCerradas).toBe(true);
     expect(mockSetInscripcionesCerradas).toHaveBeenCalledWith("a1", true);
   });
@@ -68,28 +68,28 @@ describe("PATCH /api/assignments/[id]/inscripciones", () => {
     mockSetInscripcionesCerradas.mockResolvedValue(
       makeAssignment({ inscripcionesCerradas: false })
     );
-    const res = await PATCH(makeRequest({ cerrada: false }), { params: { id: "a1" } });
-    expect(res.status).toBe(200);
-    const data = await res.json();
+    const response = await PATCH(makeRequest({ cerrada: false }), { params: { id: "a1" } });
+    expect(response.status).toBe(200);
+    const data = await response.json();
     expect(data.inscripcionesCerradas).toBe(false);
     expect(mockSetInscripcionesCerradas).toHaveBeenCalledWith("a1", false);
   });
 
   it("devuelve 400 si el body no tiene el campo cerrada", async () => {
-    const res = await PATCH(makeRequest({}), { params: { id: "a1" } });
-    expect(res.status).toBe(400);
+    const response = await PATCH(makeRequest({}), { params: { id: "a1" } });
+    expect(response.status).toBe(400);
     expect(mockSetInscripcionesCerradas).not.toHaveBeenCalled();
   });
 
   it("devuelve 404 si el assignment grupal no existe", async () => {
     mockSetInscripcionesCerradas.mockResolvedValue(null);
-    const res = await PATCH(makeRequest({ cerrada: true }), { params: { id: "no-existe" } });
-    expect(res.status).toBe(404);
+    const response = await PATCH(makeRequest({ cerrada: true }), { params: { id: "no-existe" } });
+    expect(response.status).toBe(404);
   });
 
   it("devuelve 500 para errores inesperados", async () => {
     mockSetInscripcionesCerradas.mockRejectedValue(new Error("DB exploded"));
-    const res = await PATCH(makeRequest({ cerrada: true }), { params: { id: "a1" } });
-    expect(res.status).toBe(500);
+    const response = await PATCH(makeRequest({ cerrada: true }), { params: { id: "a1" } });
+    expect(response.status).toBe(500);
   });
 });

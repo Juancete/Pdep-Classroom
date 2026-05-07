@@ -19,14 +19,14 @@ export function DeleteButton({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(endpoint, { method: "DELETE" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `Error ${res.status}`);
+      const response = await fetch(endpoint, { method: "DELETE" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error ?? `Error ${response.status}`);
       }
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Error desconocido");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Error desconocido");
     } finally {
       setLoading(false);
     }

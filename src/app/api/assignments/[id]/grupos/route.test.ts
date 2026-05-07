@@ -71,9 +71,9 @@ describe("GET /api/assignments/[id]/grupos", () => {
   });
 
   it("devuelve 200 con la lista de grupos serializados", async () => {
-    const res = await GET(makeRequest(undefined, "GET"), { params: { id: "a1" } });
-    expect(res.status).toBe(200);
-    const data = await res.json();
+    const response = await GET(makeRequest(undefined, "GET"), { params: { id: "a1" } });
+    expect(response.status).toBe(200);
+    const data = await response.json();
     expect(data).toHaveLength(1);
     expect(data[0]).toMatchObject({
       id: "g1",
@@ -86,16 +86,16 @@ describe("GET /api/assignments/[id]/grupos", () => {
 
   it("devuelve lista vacía si no hay grupos", async () => {
     mockGetGruposDeAssignment.mockResolvedValue([]);
-    const res = await GET(makeRequest(undefined, "GET"), { params: { id: "a1" } });
-    expect(res.status).toBe(200);
-    const data = await res.json();
+    const response = await GET(makeRequest(undefined, "GET"), { params: { id: "a1" } });
+    expect(response.status).toBe(200);
+    const data = await response.json();
     expect(data).toEqual([]);
   });
 
   it("devuelve 500 si el usuario no está autenticado", async () => {
     mockRequireUser.mockRejectedValue(new Error("redirect"));
-    const res = await GET(makeRequest(undefined, "GET"), { params: { id: "a1" } });
-    expect(res.status).toBe(500);
+    const response = await GET(makeRequest(undefined, "GET"), { params: { id: "a1" } });
+    expect(response.status).toBe(500);
   });
 });
 
@@ -108,9 +108,9 @@ describe("POST /api/assignments/[id]/grupos", () => {
   });
 
   it("crea el grupo y devuelve 201 con el grupo serializado", async () => {
-    const res = await POST(makeRequest({ nombre: "Los Lambdas" }), { params: { id: "a1" } });
-    expect(res.status).toBe(201);
-    const data = await res.json();
+    const response = await POST(makeRequest({ nombre: "Los Lambdas" }), { params: { id: "a1" } });
+    expect(response.status).toBe(201);
+    const data = await response.json();
     expect(data.nombre).toBe("Los Lambdas");
     expect(data.miembros).toContain("ana");
   });
@@ -125,38 +125,38 @@ describe("POST /api/assignments/[id]/grupos", () => {
   });
 
   it("devuelve 400 si el body no tiene nombre", async () => {
-    const res = await POST(makeRequest({}), { params: { id: "a1" } });
-    expect(res.status).toBe(400);
+    const response = await POST(makeRequest({}), { params: { id: "a1" } });
+    expect(response.status).toBe(400);
   });
 
   it("devuelve 404 si el alumno no está registrado", async () => {
     mockGetAlumnoByGithub.mockResolvedValue(null);
-    const res = await POST(makeRequest({ nombre: "x" }), { params: { id: "a1" } });
-    expect(res.status).toBe(404);
+    const response = await POST(makeRequest({ nombre: "x" }), { params: { id: "a1" } });
+    expect(response.status).toBe(404);
     expect(mockCrearGrupo).not.toHaveBeenCalled();
   });
 
   it("devuelve 400 si el assignment no es grupal", async () => {
     mockCrearGrupo.mockRejectedValue(new AssignmentNoGrupalError("a1"));
-    const res = await POST(makeRequest({ nombre: "x" }), { params: { id: "a1" } });
-    expect(res.status).toBe(400);
+    const response = await POST(makeRequest({ nombre: "x" }), { params: { id: "a1" } });
+    expect(response.status).toBe(400);
   });
 
   it("devuelve 409 si las inscripciones están cerradas", async () => {
     mockCrearGrupo.mockRejectedValue(new InscripcionesCerradasError("a1"));
-    const res = await POST(makeRequest({ nombre: "x" }), { params: { id: "a1" } });
-    expect(res.status).toBe(409);
+    const response = await POST(makeRequest({ nombre: "x" }), { params: { id: "a1" } });
+    expect(response.status).toBe(409);
   });
 
   it("devuelve 409 si el alumno ya está en otro grupo del assignment", async () => {
     mockCrearGrupo.mockRejectedValue(new AlumnoYaEnGrupoDelAssignmentError("a1", "ana"));
-    const res = await POST(makeRequest({ nombre: "x" }), { params: { id: "a1" } });
-    expect(res.status).toBe(409);
+    const response = await POST(makeRequest({ nombre: "x" }), { params: { id: "a1" } });
+    expect(response.status).toBe(409);
   });
 
   it("devuelve 500 para errores inesperados", async () => {
     mockCrearGrupo.mockRejectedValue(new Error("DB exploded"));
-    const res = await POST(makeRequest({ nombre: "x" }), { params: { id: "a1" } });
-    expect(res.status).toBe(500);
+    const response = await POST(makeRequest({ nombre: "x" }), { params: { id: "a1" } });
+    expect(response.status).toBe(500);
   });
 });

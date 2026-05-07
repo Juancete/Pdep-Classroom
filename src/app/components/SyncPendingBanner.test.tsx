@@ -40,8 +40,8 @@ describe("SyncPendingBanner", () => {
 
   it("no renderiza nada si no hay usuario logueado", async () => {
     mockGetCurrentUser.mockResolvedValue(null);
-    const el = await SyncPendingBanner();
-    expect(el).toBeNull();
+    const banner = await SyncPendingBanner();
+    expect(banner).toBeNull();
     expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
   });
 
@@ -50,8 +50,8 @@ describe("SyncPendingBanner", () => {
       githubUsername: "juangarcia",
       isAdmin: true,
     });
-    const el = await SyncPendingBanner();
-    expect(el).toBeNull();
+    const banner = await SyncPendingBanner();
+    expect(banner).toBeNull();
     expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
   });
 
@@ -61,8 +61,8 @@ describe("SyncPendingBanner", () => {
       isAdmin: false,
     });
     mockGetAlumnoByGithub.mockResolvedValue(null);
-    const el = await SyncPendingBanner();
-    expect(el).toBeNull();
+    const banner = await SyncPendingBanner();
+    expect(banner).toBeNull();
   });
 
   it("no renderiza nada si ningún flag está prendido", async () => {
@@ -71,8 +71,8 @@ describe("SyncPendingBanner", () => {
       isAdmin: false,
     });
     mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
-    const el = await SyncPendingBanner();
-    expect(el).toBeNull();
+    const banner = await SyncPendingBanner();
+    expect(banner).toBeNull();
   });
 
   it("renderiza el banner cuando gruposSyncFallidoEn está prendido", async () => {
@@ -84,8 +84,8 @@ describe("SyncPendingBanner", () => {
       makeAlumno({ gruposSyncFallidoEn: new Date("2026-04-01") })
     );
 
-    const el = await SyncPendingBanner();
-    const html = renderToStaticMarkup(el as React.ReactElement);
+    const banner = await SyncPendingBanner();
+    const html = renderToStaticMarkup(banner as React.ReactElement);
 
     expect(html).toContain("No pudimos asignarte a tu grupo de TP");
     expect(html).toContain('href="/perfil"');
@@ -101,8 +101,8 @@ describe("SyncPendingBanner", () => {
       makeAlumno({ alumnoSyncFallidoEn: new Date("2026-04-01") })
     );
 
-    const el = await SyncPendingBanner();
-    const html = renderToStaticMarkup(el as React.ReactElement);
+    const banner = await SyncPendingBanner();
+    const html = renderToStaticMarkup(banner as React.ReactElement);
 
     expect(html).toContain("No pudimos reflejar tus datos de alumno");
   });
@@ -119,8 +119,8 @@ describe("SyncPendingBanner", () => {
       })
     );
 
-    const el = await SyncPendingBanner();
-    const html = renderToStaticMarkup(el as React.ReactElement);
+    const banner = await SyncPendingBanner();
+    const html = renderToStaticMarkup(banner as React.ReactElement);
 
     expect(html).toContain("tus datos");
     expect(html).toContain("grupo de TP");

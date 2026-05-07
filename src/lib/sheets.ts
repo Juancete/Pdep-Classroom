@@ -52,11 +52,11 @@ function buildReadRange(config: ColumnConfig): string {
 // Convierte índice 0-based a letra de columna (0→A, 25→Z, 26→AA…)
 export function colLetter(index: number): string {
   let result = "";
-  let n = index;
+  let remaining = index;
   do {
-    result = String.fromCharCode(65 + (n % 26)) + result;
-    n = Math.floor(n / 26) - 1;
-  } while (n >= 0);
+    result = String.fromCharCode(65 + (remaining % 26)) + result;
+    remaining = Math.floor(remaining / 26) - 1;
+  } while (remaining >= 0);
   return result;
 }
 
@@ -69,14 +69,13 @@ export function parseAlumnosRows(
   return rows
     .filter((row) => row[config.legajo] && row[config.githubUsername])
     .map((row) => {
-      const a = new Alumno();
-      a.legajo = norm(row[config.legajo]);
-      a.apellido = norm(row[config.apellido]);
-      a.nombre = norm(row[config.nombre]);
-      a.githubUsername = norm(row[config.githubUsername]).replace("@", "").toLowerCase();
-      a.email = norm(row[config.email]);
-      // comision es una relación ManyToOne — no se puede resolver desde la planilla
-      return a;
+      const alumno = new Alumno();
+      alumno.legajo = norm(row[config.legajo]);
+      alumno.apellido = norm(row[config.apellido]);
+      alumno.nombre = norm(row[config.nombre]);
+      alumno.githubUsername = norm(row[config.githubUsername]).replace("@", "").toLowerCase();
+      alumno.email = norm(row[config.email]);
+      return alumno;
     });
 }
 
@@ -87,17 +86,17 @@ export async function getAlumnos(
   config?: Partial<ColumnConfig>
 ): Promise<Alumno[]> {
   const id = resolveSpreadsheetId(spreadsheetId);
-  const cfg = resolveConfig(config);
+  const columnConfig = resolveConfig(config);
 
   try {
     const sheets = getSheetsClient();
     const { data } = await sheets.spreadsheets.values.get({
       spreadsheetId: id,
-      range: buildReadRange(cfg),
+      range: buildReadRange(columnConfig),
     });
-    return parseAlumnosRows(data.values ?? [], cfg);
-  } catch (e) {
-    throw new Error(`No se pudo leer la planilla de alumnos: ${(e as Error).message}`);
+    return parseAlumnosRows(data.values ?? [], columnConfig);
+  } catch (error) {
+    throw new Error(`No se pudo leer la planilla de alumnos: ${(error as Error).message}`);
   }
 }
 
@@ -108,7 +107,7 @@ export async function getAlumnoByGithub(
 ): Promise<Alumno | undefined> {
   const all = await getAlumnos(spreadsheetId, config);
   return all.find(
-    (a) => a.githubUsername.toLowerCase() === username.toLowerCase()
+    (alumno) => alumno.githubUsername.toLowerCase() === username.toLowerCase()
   );
 }
 
@@ -118,7 +117,7 @@ export async function getAlumnoByLegajo(
   config?: Partial<ColumnConfig>
 ): Promise<Alumno | undefined> {
   const all = await getAlumnos(spreadsheetId, config);
-  return all.find((a) => a.legajo === legajo.trim());
+  return all.find((alumno) => alumno.legajo === legajo.trim());
 }
 
 // ── Encontrar el número de fila de un alumno (1-based, incluyendo header) ──
@@ -134,14 +133,13 @@ async function findAlumnoRowIndex(
     range: buildReadRange(config),
   });
   const rows = data.values ?? [];
-  const idx = rows.findIndex(
+  const rowIndex = rows.findIndex(
     (row) =>
       norm(row[config.githubUsername]).replace("@", "").toLowerCase() ===
       githubUsername.toLowerCase()
   );
-  if (idx === -1) return null;
-  // idx es 0-based dentro de los datos; la fila real = headerRows + 1 + idx
-  return config.headerRows + 1 + idx;
+  if (rowIndex === -1) return null;
+  return config.headerRows + 1 + rowIndex;
 }
 
 // ── Registro de alumno ──────────────────────────────────────
@@ -200,36 +198,34 @@ export async function upsertarAlumnoEnSheets(
   if (validationError) return { ok: false, error: validationError };
 
   const id = resolveSpreadsheetId(spreadsheetId);
-  const cfg = resolveConfig(config);
+  const columnConfig = resolveConfig(config);
   const githubNormalizado = input.githubUsername.trim().toLowerCase();
 
-  const rowNumber = await findAlumnoRowIndex(githubNormalizado, id, cfg);
+  const rowNumber = await findAlumnoRowIndex(githubNormalizado, id, columnConfig);
   const sheets = getSheetsClient(false);
   const maxCol = Math.max(
-    cfg.legajo, cfg.apellido, cfg.nombre,
-    cfg.githubUsername, cfg.email
+    columnConfig.legajo, columnConfig.apellido, columnConfig.nombre,
+    columnConfig.githubUsername, columnConfig.email
   );
 
   if (rowNumber === null) {
     const row = new Array(maxCol + 1).fill("");
-    row[cfg.legajo] = input.legajo.trim();
-    row[cfg.apellido] = input.apellido.trim();
-    row[cfg.nombre] = input.nombre.trim();
-    row[cfg.githubUsername] = githubNormalizado;
-    row[cfg.email] = input.email.trim().toLowerCase();
+    row[columnConfig.legajo] = input.legajo.trim();
+    row[columnConfig.apellido] = input.apellido.trim();
+    row[columnConfig.nombre] = input.nombre.trim();
+    row[columnConfig.githubUsername] = githubNormalizado;
+    row[columnConfig.email] = input.email.trim().toLowerCase();
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: id,
-      range: `${cfg.sheetName}!A:${colLetter(maxCol)}`,
+      range: `${columnConfig.sheetName}!A:${colLetter(maxCol)}`,
       valueInputOption: "USER_ENTERED",
       requestBody: { values: [row] },
     });
     return { ok: true };
   }
 
-  // Leemos la fila completa para no pisar columnas desconocidas que el admin
-  // pueda tener (notas, observaciones, etc).
-  const range = `${cfg.sheetName}!A${rowNumber}:${colLetter(maxCol)}${rowNumber}`;
+  const range = `${columnConfig.sheetName}!A${rowNumber}:${colLetter(maxCol)}${rowNumber}`;
   const { data: existing } = await sheets.spreadsheets.values.get({
     spreadsheetId: id,
     range,
@@ -237,11 +233,10 @@ export async function upsertarAlumnoEnSheets(
   const existingRow: unknown[] = existing.values?.[0] ?? [];
   while (existingRow.length <= maxCol) existingRow.push("");
 
-  existingRow[cfg.legajo] = input.legajo.trim();
-  existingRow[cfg.apellido] = input.apellido.trim();
-  existingRow[cfg.nombre] = input.nombre.trim();
-  existingRow[cfg.email] = input.email.trim().toLowerCase();
-  // githubUsername NO se sobrescribe: la fila se identifica por él.
+  existingRow[columnConfig.legajo] = input.legajo.trim();
+  existingRow[columnConfig.apellido] = input.apellido.trim();
+  existingRow[columnConfig.nombre] = input.nombre.trim();
+  existingRow[columnConfig.email] = input.email.trim().toLowerCase();
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: id,
@@ -264,8 +259,8 @@ export interface AsignacionGrupoRow {
 
 function buildGruposReadRange(config: GruposColumnConfig): string {
   const gruposCols = PARADIGMAS
-    .map((p) => config.nombreGrupoPorParadigma[p])
-    .filter((v): v is number => typeof v === "number");
+    .map((paradigma) => config.nombreGrupoPorParadigma[paradigma])
+    .filter((value): value is number => typeof value === "number");
   const maxCol = Math.max(config.githubUsername, ...gruposCols);
   const startRow = config.headerRows + 1;
   return `${config.sheetName}!A${startRow}:${colLetter(maxCol)}500`;
@@ -302,8 +297,8 @@ export async function getAsignacionesGrupos(
       range: buildGruposReadRange(config),
     });
     return parseAsignacionesGrupos(data.values ?? [], config);
-  } catch (e) {
-    throw new Error(`No se pudo leer la hoja de grupos: ${(e as Error).message}`);
+  } catch (error) {
+    throw new Error(`No se pudo leer la hoja de grupos: ${(error as Error).message}`);
   }
 }
 

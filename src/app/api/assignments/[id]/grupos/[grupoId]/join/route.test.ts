@@ -69,9 +69,9 @@ describe("POST /api/assignments/[id]/grupos/[grupoId]/join", () => {
   });
 
   it("devuelve 200 con el grupo actualizado", async () => {
-    const res = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
-    expect(res.status).toBe(200);
-    const data = await res.json();
+    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    expect(response.status).toBe(200);
+    const data = await response.json();
     expect(data.id).toBe("g1");
     expect(data.miembros).toContain("ana");
   });
@@ -86,34 +86,34 @@ describe("POST /api/assignments/[id]/grupos/[grupoId]/join", () => {
 
   it("devuelve 404 si el alumno no está registrado", async () => {
     mockGetAlumnoByGithub.mockResolvedValue(null);
-    const res = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
-    expect(res.status).toBe(404);
+    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    expect(response.status).toBe(404);
     expect(mockUnirseAGrupo).not.toHaveBeenCalled();
   });
 
   it("devuelve 409 si las inscripciones están cerradas", async () => {
     mockUnirseAGrupo.mockRejectedValue(new InscripcionesCerradasError("a1"));
-    const res = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
-    expect(res.status).toBe(409);
+    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    expect(response.status).toBe(409);
   });
 
   it("devuelve 409 si el alumno ya está en otro grupo del assignment", async () => {
     mockUnirseAGrupo.mockRejectedValue(
       new AlumnoYaEnGrupoDelAssignmentError("a1", "ana")
     );
-    const res = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
-    expect(res.status).toBe(409);
+    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    expect(response.status).toBe(409);
   });
 
   it("devuelve 409 si el grupo está lleno", async () => {
     mockUnirseAGrupo.mockRejectedValue(new GrupoLlenoError("g1", 3));
-    const res = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
-    expect(res.status).toBe(409);
+    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    expect(response.status).toBe(409);
   });
 
   it("devuelve 500 para errores inesperados", async () => {
     mockUnirseAGrupo.mockRejectedValue(new Error("DB exploded"));
-    const res = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
-    expect(res.status).toBe(500);
+    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    expect(response.status).toBe(500);
   });
 });

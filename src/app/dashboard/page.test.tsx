@@ -54,40 +54,40 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
 }
 
 function makeAssignment(overrides?: Partial<IndividualAssignment>): IndividualAssignment {
-  const a = new IndividualAssignment();
-  a.id = "a1";
-  a.titulo = "Kata Funcional";
-  a.descripcion = "";
-  a.templateRepo = "kata-template";
-  a.tipo = "individual";
-  a.paradigma = "funcional";
-  a.slug = "kata-funcional";
-  a.createdAt = new Date();
-  return Object.assign(a, overrides);
+  const assignment = new IndividualAssignment();
+  assignment.id = "a1";
+  assignment.titulo = "Kata Funcional";
+  assignment.descripcion = "";
+  assignment.templateRepo = "kata-template";
+  assignment.tipo = "individual";
+  assignment.paradigma = "funcional";
+  assignment.slug = "kata-funcional";
+  assignment.createdAt = new Date();
+  return Object.assign(assignment, overrides);
 }
 
 function makeGrupalAssignment(overrides?: Partial<GrupalAssignment>): GrupalAssignment {
-  const a = new GrupalAssignment();
-  a.id = "a-grupal";
-  a.titulo = "TP Grupal";
-  a.descripcion = "";
-  a.templateRepo = "tp-template";
-  a.tipo = "grupal";
-  a.paradigma = "objetos";
-  a.slug = "tp-grupal";
-  a.maxIntegrantes = 3;
-  a.createdAt = new Date();
-  return Object.assign(a, overrides);
+  const assignment = new GrupalAssignment();
+  assignment.id = "a-grupal";
+  assignment.titulo = "TP Grupal";
+  assignment.descripcion = "";
+  assignment.templateRepo = "tp-template";
+  assignment.tipo = "grupal";
+  assignment.paradigma = "objetos";
+  assignment.slug = "tp-grupal";
+  assignment.maxIntegrantes = 3;
+  assignment.createdAt = new Date();
+  return Object.assign(assignment, overrides);
 }
 
 function makeEntrega(overrides?: Partial<Entrega>): Entrega {
-  const e = new Entrega();
-  e.id = "e1";
-  e.repoName = "kata-funcional-testuser";
-  e.repoUrl = "https://github.com/pdep-mn-utn/kata-funcional-testuser";
-  e.githubUsernames = ["testuser"];
-  e.createdAt = new Date();
-  return Object.assign(e, overrides);
+  const entrega = new Entrega();
+  entrega.id = "e1";
+  entrega.repoName = "kata-funcional-testuser";
+  entrega.repoUrl = "https://github.com/pdep-mn-utn/kata-funcional-testuser";
+  entrega.githubUsernames = ["testuser"];
+  entrega.createdAt = new Date();
+  return Object.assign(entrega, overrides);
 }
 
 // ── Tests ────────────────────────────────────────────────────

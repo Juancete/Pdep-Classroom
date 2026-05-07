@@ -4,7 +4,7 @@ import type { PdepUser } from "@/types";
 
 const adminUsernames = (process.env.ADMIN_GITHUB_USERNAMES ?? "")
   .split(",")
-  .map((u) => u.trim().toLowerCase())
+  .map((username) => username.trim().toLowerCase())
   .filter(Boolean);
 
 export const authConfig: NextAuthConfig = {
