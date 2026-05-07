@@ -25,7 +25,7 @@ function serializarGrupo(grupo: Grupo) {
     paradigma: grupo.paradigma,
     maxIntegrantes: grupo.maxIntegrantes,
     estaLleno: !grupo.isOpen(),
-    miembros: grupo.alumnos.getItems().map((alumno) => alumno.githubUsername),
+    miembros: grupo.usernamesDeMiembros(),
   };
 }
 

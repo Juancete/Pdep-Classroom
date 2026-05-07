@@ -9,6 +9,7 @@ export type GrupoAdminResumen = {
   nombre: string;
   maxIntegrantes: number;
   estaLleno: boolean;
+  etiquetaCupo: string;
   miembros: { username: string; nombreCompleto: string }[];
 };
 
@@ -99,9 +100,7 @@ export function GruposPanel({
                         : "bg-green-100 text-green-700"
                     }`}
                   >
-                    {grupo.estaLleno
-                      ? `Completo (${grupo.maxIntegrantes}/${grupo.maxIntegrantes})`
-                      : `${grupo.miembros.length}/${grupo.maxIntegrantes}`}
+                    {grupo.etiquetaCupo}
                   </span>
                 </div>
                 <ul className="space-y-0.5">

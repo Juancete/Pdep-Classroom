@@ -19,11 +19,7 @@ export default async function RegistroPage() {
   const alumnoDB = await getAlumnoDeDB(githubUsername);
 
   // Si ya confirmó los datos para esta comisión, no tiene nada que hacer acá.
-  if (
-    alumnoDB &&
-    comisionActiva &&
-    alumnoDB.registroConfirmadoEn?.id === comisionActiva.id
-  ) {
+  if (alumnoDB && alumnoDB.confirmoRegistroEn(comisionActiva)) {
     redirect("/dashboard");
   }
 

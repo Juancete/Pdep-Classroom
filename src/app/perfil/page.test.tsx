@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PdepUser } from "@/types";
-import type { Alumno } from "@/domain/entities";
+import { Alumno } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -66,16 +66,16 @@ function makeSession(githubUsername: string) {
 }
 
 function makeAlumno(overrides: Partial<Alumno> = {}): Alumno {
-  return {
-    id: "uuid-1",
-    legajo: "12345",
-    nombre: "Juan",
-    apellido: "Garcia",
-    githubUsername: "juangarcia",
-    email: "juan@example.com",
-    comision: undefined,
-    ...overrides,
-  } as Alumno;
+  const alumno = new Alumno();
+  alumno.id = "uuid-1";
+  alumno.legajo = "12345";
+  alumno.nombre = "Juan";
+  alumno.apellido = "Garcia";
+  alumno.githubUsername = "juangarcia";
+  alumno.email = "juan@example.com";
+  alumno.gruposSyncFallidoEn = null;
+  alumno.alumnoSyncFallidoEn = null;
+  return Object.assign(alumno, overrides);
 }
 
 const comisionActiva = { id: "c1", spreadsheetId: "sheet-xyz" };

@@ -6,6 +6,7 @@ export type GrupoResumen = {
   paradigma: string;
   maxIntegrantes: number;
   estaLleno: boolean;
+  etiquetaCupo: string;
   miembros: string[];
 };
 
@@ -29,9 +30,7 @@ export function MiGrupo({
               : "bg-green-50 text-green-700"
           }`}
         >
-          {grupo.estaLleno
-            ? `Completo (${grupo.maxIntegrantes}/${grupo.maxIntegrantes})`
-            : `${grupo.miembros.length}/${grupo.maxIntegrantes} integrantes`}
+          {grupo.etiquetaCupo}
         </span>
       </div>
 

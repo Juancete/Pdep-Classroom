@@ -49,6 +49,7 @@ function makeGrupoEntity(overrides = {}) {
     maxIntegrantes: 3,
     isOpen: () => true,
     alumnos: { getItems: () => [{ githubUsername: "ana" }] },
+    usernamesDeMiembros: () => ["ana"],
     ...overrides,
   };
 }

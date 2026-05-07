@@ -24,10 +24,10 @@ export async function sincronizarGruposDelAlumno(
   comision: Comision,
   asignacionesPrefetched?: AsignacionGrupoRow[]
 ): Promise<void> {
-  const gruposConfig = comision.columnConfig?.grupos;
+  const gruposConfig = comision.gruposConfig();
   if (!gruposConfig) return;
 
-  const ghNorm = githubUsername.toLowerCase().trim();
+  const ghNorm = Alumno.normalizarUsername(githubUsername);
 
   const asignaciones =
     asignacionesPrefetched ??

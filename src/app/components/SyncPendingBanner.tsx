@@ -19,14 +19,9 @@ export async function SyncPendingBanner() {
   const alumno = await getAlumnoByGithub(user.githubUsername);
   if (!alumno) return null;
 
-  if (!alumno.gruposSyncFallidoEn && !alumno.alumnoSyncFallidoEn) return null;
+  if (!alumno.tieneSyncPendiente()) return null;
 
-  const mensaje =
-    alumno.gruposSyncFallidoEn && alumno.alumnoSyncFallidoEn
-      ? "No pudimos sincronizar tus datos ni asignarte a tu grupo de TP desde la planilla."
-      : alumno.gruposSyncFallidoEn
-        ? "No pudimos asignarte a tu grupo de TP desde la planilla."
-        : "No pudimos reflejar tus datos de alumno en la planilla.";
+  const mensaje = alumno.mensajeDeSyncPendiente();
 
   return (
     <div

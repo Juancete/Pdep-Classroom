@@ -182,6 +182,7 @@ describe("POST /api/assignments/[id]/accept", () => {
         id,
         nombre: "Los Lambdas",
         alumnos: { getItems: () => githubUsernames.map((username) => ({ githubUsername: username })) },
+        usernamesDeMiembros: () => githubUsernames,
       };
     }
 

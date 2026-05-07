@@ -81,12 +81,19 @@ function makeGrupo(
   maxIntegrantes = 3,
   nombre = `grupo-${id}`
 ) {
+  const lleno = miembros.length >= maxIntegrantes;
   return {
     id,
     nombre,
     paradigma: "objetos",
     maxIntegrantes,
-    isOpen: () => miembros.length < maxIntegrantes,
+    isOpen: () => !lleno,
+    estaLleno: () => lleno,
+    etiquetaCupo: () => lleno
+      ? `Completo (${maxIntegrantes}/${maxIntegrantes})`
+      : `${miembros.length}/${maxIntegrantes} integrantes`,
+    contieneA: (username: string) => miembros.some((member) => member.toLowerCase() === username.toLowerCase()),
+    usernamesDeMiembros: () => miembros,
     alumnos: {
       getItems: () => miembros.map((username) => ({ githubUsername: username })),
     },

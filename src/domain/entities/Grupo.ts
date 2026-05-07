@@ -77,6 +77,36 @@ export class Grupo {
     return this.alumnos.length < this.maxIntegrantes;
   }
 
+  estaLleno(): boolean {
+    return !this.isOpen();
+  }
+
+  cantidadMiembros(): number {
+    return this.alumnos.length;
+  }
+
+  etiquetaCupo(): string {
+    if (this.estaLleno()) {
+      return `Completo (${this.maxIntegrantes}/${this.maxIntegrantes})`;
+    }
+    return `${this.cantidadMiembros()}/${this.maxIntegrantes} integrantes`;
+  }
+
+  contieneA(githubUsername: string): boolean {
+    const canonico = Alumno.normalizarUsername(githubUsername);
+    return this.alumnos
+      .getItems()
+      .some((alumno) => alumno.usernameCanonico === canonico);
+  }
+
+  usernamesDeMiembros(): string[] {
+    return this.alumnos.getItems().map((alumno) => alumno.githubUsername);
+  }
+
+  usernamesCanonicos(): string[] {
+    return this.alumnos.getItems().map((alumno) => alumno.usernameCanonico);
+  }
+
   canJoin(alumno: Alumno): boolean {
     return this.isOpen() && !this.alumnos.contains(alumno);
   }

@@ -26,15 +26,7 @@ export default async function GrupoPage({
     notFound();
   }
 
-  const miGrupo = grupos.find((grupo) =>
-    grupo.alumnos
-      .getItems()
-      .some(
-        (alumno) =>
-          alumno.githubUsername.toLowerCase() ===
-          user.githubUsername.toLowerCase()
-      )
-  );
+  const miGrupo = grupos.find((grupo) => grupo.contieneA(user.githubUsername));
 
   const entrega = miGrupo
     ? await getEntregaDeUsuario(assignment.id, user.githubUsername)
@@ -46,8 +38,9 @@ export default async function GrupoPage({
       nombre: grupo.nombre,
       paradigma: grupo.paradigma,
       maxIntegrantes: grupo.maxIntegrantes,
-      estaLleno: !grupo.isOpen(),
-      miembros: grupo.alumnos.getItems().map((alumno) => alumno.githubUsername),
+      estaLleno: grupo.estaLleno(),
+      etiquetaCupo: grupo.etiquetaCupo(),
+      miembros: grupo.usernamesDeMiembros(),
     };
   }
 

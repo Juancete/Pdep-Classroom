@@ -55,7 +55,7 @@ export default async function AdminAlumnosPage() {
             {alumnos.map((alumno) => (
               <DataRow key={alumno.legajo}>
                 <DataCell label="Nombre" heading>
-                  {alumno.apellido}, {alumno.nombre}
+                  {alumno.nombreCompleto}
                 </DataCell>
                 <DataCell label="Legajo">
                   <span className="font-mono text-xs">{alumno.legajo}</span>

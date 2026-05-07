@@ -76,12 +76,12 @@ export default async function AdminGruposPage({
                 {grupo.assignment.titulo}
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {grupo.alumnos.getItems().map((alumno) => (
+                {grupo.usernamesDeMiembros().map((username) => (
                   <span
-                    key={alumno.githubUsername}
+                    key={username}
                     className="text-xs font-mono bg-gray-100 text-gray-700 px-2 py-1 rounded"
                   >
-                    {alumno.githubUsername}
+                    {username}
                   </span>
                 ))}
               </div>

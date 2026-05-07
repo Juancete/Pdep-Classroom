@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
 import { type RegistroInput } from "@/lib/sheets";
+import { Alumno } from "@/domain/entities";
+import { usernameCanonicoDe } from "@/types";
 import { agregarMiembroAGrupo } from "@/lib/googleGroups";
 import { internalServerError } from "@/lib/api-errors";
 import { confirmarDatosAlumno } from "@/lib/services/alumnoRegistro";
@@ -36,8 +38,8 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    const githubDelForm = body.githubUsername?.trim().toLowerCase();
-    if (githubDelForm && githubDelForm !== user.githubUsername.toLowerCase()) {
+    const githubDelForm = Alumno.normalizarUsername(body.githubUsername ?? "");
+    if (githubDelForm && githubDelForm !== usernameCanonicoDe(user)) {
       return NextResponse.json(
         {
           error: `Iniciaste sesión como @${user.githubUsername} pero completaste @${body.githubUsername}. Cerrá sesión y volvé a entrar con la cuenta correcta.`,
