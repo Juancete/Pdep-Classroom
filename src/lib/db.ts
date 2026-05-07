@@ -27,11 +27,27 @@ export async function getOrm(): Promise<MikroORM> {
 
   // Evita que múltiples requests simultáneos en dev inicien varias conexiones
   if (!global.__mikro_orm_init__) {
-    global.__mikro_orm_init__ = MikroORM.init(config).then((orm) => {
-      global.__mikro_orm__ = orm;
-      global.__mikro_orm_init__ = undefined;
-      return orm;
-    });
+    global.__mikro_orm_init__ = MikroORM.init(config)
+      .then((orm) => {
+        global.__mikro_orm__ = orm;
+        global.__mikro_orm_init__ = undefined;
+        return orm;
+      })
+      .catch((cause: unknown) => {
+        global.__mikro_orm_init__ = undefined;
+        const isConnectionError =
+          cause instanceof Error &&
+          (cause.message.includes("ECONNREFUSED") ||
+            cause.message.includes("ENOTFOUND") ||
+            (cause as NodeJS.ErrnoException).code === "ECONNREFUSED");
+        if (isConnectionError || (cause instanceof AggregateError)) {
+          throw new Error(
+            `No se pudo conectar a la base de datos (${process.env.DATABASE_URL?.replace(/:[^:@]+@/, ":***@") ?? "sin URL configurada"}). Verificá que el servidor esté disponible.`,
+            { cause }
+          );
+        }
+        throw cause;
+      });
   }
 
   return global.__mikro_orm_init__;

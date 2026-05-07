@@ -7,9 +7,9 @@ import {
   getComision,
   upsertAlumnos,
   LegajoConflictError,
-  getAlumnosConGruposSyncPendiente,
+  getAlumnosByComision,
 } from "@/lib/repositories";
-import { getAlumnos, getAsignacionesGrupos, type AsignacionGrupoRow } from "@/lib/sheets";
+import { getAlumnos, getAsignacionesGrupos, getSheetNames, type AsignacionGrupoRow } from "@/lib/sheets";
 import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -19,6 +19,18 @@ import { DEFAULT_COLUMN_CONFIG, type GruposColumnConfig } from "@/types";
 export type ComisionFormState =
   | { ok: false; errors: Record<string, string[] | undefined> }
   | null;
+
+export async function fetchSheetNames(
+  spreadsheetId: string
+): Promise<string[] | { error: string }> {
+  await requireAdmin();
+  if (!spreadsheetId.trim()) return { error: "Ingresá el ID de la planilla primero" };
+  try {
+    return await getSheetNames(spreadsheetId);
+  } catch (error) {
+    return { error: (error as Error).message };
+  }
+}
 
 const ColumnIndexSchema = z.coerce
   .number({ invalid_type_error: "Debe ser un número de columna" })
@@ -193,10 +205,10 @@ export type SyncGruposState =
   | { status: "ok"; sincronizados: number; aunConError: number }
   | { status: "error"; message: string };
 
-// Reintenta `sincronizarGruposDelAlumno` para todos los alumnos de la comisión
-// con el flag `gruposSyncFallidoEn` prendido. El wrapper `intentarSincronizarGrupos`
-// se encarga del logging y de limpiar/mantener el flag por alumno; esta action
-// solo agrega un resumen para que el admin lo vea.
+// Importa los grupos desde la planilla para todos los alumnos de la comisión.
+// Útil para bootstrapping cuando la cursada ya está en marcha al desplegar.
+// El wrapper `intentarSincronizarGrupos` se encarga del logging y de actualizar
+// el flag por alumno; esta action solo agrega un resumen para que el admin lo vea.
 export async function sincronizarGruposDeLaComision(
   _prevState: SyncGruposState,
   formData: FormData
@@ -207,16 +219,14 @@ export async function sincronizarGruposDeLaComision(
   const comision = await getComision(id);
   if (!comision) return { status: "error", message: "Comisión no encontrada" };
 
-  const pendientes = await getAlumnosConGruposSyncPendiente(id);
+  const alumnos = await getAlumnosByComision(id);
 
-  // Lectura única de la hoja de grupos: con un solo pendiente el costo es el
-  // mismo que antes, pero con N evitamos N lecturas a Sheets (cada alumno
-  // releía la hoja entera). Si la lectura falla reportamos el error global y
-  // no tocamos los flags — ya estaban en fallido y un retry masivo sobre una
-  // hoja inaccesible no aporta información nueva.
+  // Lectura única de la hoja de grupos: con N alumnos evitamos N lecturas a
+  // Sheets (cada alumno releía la hoja entera). Si la lectura falla reportamos
+  // el error global y no modificamos los flags.
   let asignaciones: AsignacionGrupoRow[] | undefined;
   const gruposConfig = comision.columnConfig?.grupos;
-  if (gruposConfig && pendientes.length > 0) {
+  if (gruposConfig && alumnos.length > 0) {
     try {
       asignaciones = await getAsignacionesGrupos(comision.spreadsheetId, gruposConfig);
     } catch (e) {
@@ -226,7 +236,7 @@ export async function sincronizarGruposDeLaComision(
 
   let sincronizados = 0;
   let aunConError = 0;
-  for (const alumno of pendientes) {
+  for (const alumno of alumnos) {
     try {
       await intentarSincronizarGrupos(alumno.githubUsername, comision, asignaciones);
       sincronizados++;

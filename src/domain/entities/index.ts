@@ -8,5 +8,11 @@ export type {
 } from "./Assignment";
 export { IndividualAssignment } from "./IndividualAssignment";
 export { GrupalAssignment, GrupoNoAsignadoError } from "./GrupalAssignment";
-export { Grupo } from "./Grupo";
+export {
+  Grupo,
+  InscripcionesCerradasError,
+  AlumnoYaEnGrupoDelAssignmentError,
+  GrupoLlenoError,
+  AssignmentNoGrupalError,
+} from "./Grupo";
 export { Entrega } from "./Entrega";

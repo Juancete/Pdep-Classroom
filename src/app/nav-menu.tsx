@@ -122,7 +122,7 @@ export function NavMenu({ links, username, image, isAdmin }: Props) {
         role="dialog"
         aria-modal="true"
         aria-label="Menú de navegación"
-        inert={!open}
+        inert={!open ? "" : undefined}
         className={`md:hidden fixed right-0 top-0 bottom-0 w-72 max-w-[85vw] bg-pdep-900 z-50 shadow-xl transform transition-transform ${
           open ? "translate-x-0" : "translate-x-full"
         }`}

@@ -75,3 +75,15 @@ export async function updateAssignment(
 export async function deleteAssignment(id: string): Promise<void> {
   await deleteEntity(Assignment, id);
 }
+
+export async function setInscripcionesCerradas(
+  assignmentId: string,
+  cerradas: boolean
+): Promise<GrupalAssignment | null> {
+  const em = await getEM();
+  const assignment = await em.findOne(GrupalAssignment, { id: assignmentId });
+  if (!assignment) return null;
+  assignment.inscripcionesCerradas = cerradas;
+  await em.flush();
+  return assignment;
+}

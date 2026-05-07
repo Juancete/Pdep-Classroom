@@ -9,7 +9,10 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { EntregasTable } from "./entregas-table";
 import { DeleteReposButton } from "../delete-repos-button";
-import type { Alumno } from "@/domain/entities";
+import { GruposPanel } from "./grupos-panel";
+import type { GrupoAdminResumen, AlumnoSinGrupoResumen } from "./grupos-panel";
+import { GrupalAssignment } from "@/domain/entities";
+import type { Alumno, Grupo } from "@/domain/entities";
 
 export default async function AssignmentDetailPage({
   params,
@@ -21,16 +24,18 @@ export default async function AssignmentDetailPage({
   const assignment = await getAssignment(params.id);
   if (!assignment) redirect("/admin/assignments");
 
-  // `getAlumnos` se dispara una sola vez: Individual reutiliza la misma
-  // promise vía el thunk para calcular su total, y el map de nombres también
-  // consume el resultado. Grupal ignora el thunk y pide los grupos.
+  const gruposPromise: Promise<Grupo[]> = assignment instanceof GrupalAssignment
+    ? getGruposDeAssignment(params.id)
+    : Promise.resolve([]);
+
   const alumnosPromise = getAlumnos();
-  const [entregas, alumnos, total] = await Promise.all([
+  const [entregas, alumnos, grupos, total] = await Promise.all([
     getEntregas(params.id),
     alumnosPromise,
+    gruposPromise,
     assignment.totalEsperado({
       getAlumnosDelCurso: () => alumnosPromise,
-      getGruposDeAssignment,
+      getGruposDeAssignment: (_assignmentId: string) => gruposPromise,
     }),
   ]);
 
@@ -40,6 +45,44 @@ export default async function AssignmentDetailPage({
   const alumnosPorUsername = new Map<string, Alumno>(
     alumnos.map((alumno) => [alumno.githubUsername.toLowerCase(), alumno])
   );
+
+  let gruposPanel: React.ReactNode = null;
+  if (assignment instanceof GrupalAssignment) {
+    const alumnosConGrupoSet = new Set(
+      grupos.flatMap((grupo) =>
+        grupo.alumnos.getItems().map((alumno) => alumno.githubUsername.toLowerCase())
+      )
+    );
+
+    const gruposSerializados: GrupoAdminResumen[] = grupos.map((grupo) => ({
+      id: grupo.id,
+      nombre: grupo.nombre,
+      maxIntegrantes: grupo.maxIntegrantes,
+      estaLleno: !grupo.isOpen(),
+      miembros: grupo.alumnos.getItems().map((alumno) => ({
+        username: alumno.githubUsername,
+        nombreCompleto:
+          alumnosPorUsername.get(alumno.githubUsername.toLowerCase())
+            ?.nombreCompleto ?? alumno.githubUsername,
+      })),
+    }));
+
+    const alumnosSinGrupoSerializados: AlumnoSinGrupoResumen[] = alumnos
+      .filter((alumno) => !alumnosConGrupoSet.has(alumno.githubUsername.toLowerCase()))
+      .map((alumno) => ({
+        username: alumno.githubUsername,
+        nombreCompleto: alumno.nombreCompleto,
+      }));
+
+    gruposPanel = (
+      <GruposPanel
+        assignmentId={params.id}
+        inscripcionesCerradas={assignment.inscripcionesCerradas}
+        grupos={gruposSerializados}
+        alumnosSinGrupo={alumnosSinGrupoSerializados}
+      />
+    );
+  }
 
   const entregaRows = entregas.map((entrega) => ({
     id: entrega.id,
@@ -129,6 +172,8 @@ export default async function AssignmentDetailPage({
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <EntregasTable entregas={entregaRows} />
       </div>
+
+      {gruposPanel}
     </div>
   );
 }

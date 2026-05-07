@@ -1,15 +1,16 @@
 "use client";
 
 import { useFormState } from "react-dom";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import type { ComisionFormState } from "./actions";
+import { fetchSheetNames } from "./actions";
 import { INPUT_CLASS, INPUT_ERROR_CLASS, FieldError, SubmitButton } from "../ui";
 import { DEFAULT_COLUMN_CONFIG, type ColumnConfig } from "@/types";
 
 // A=0, B=1, … Z=25
-const COL_OPTIONS = Array.from({ length: 26 }, (_, i) => ({
-  value: i,
-  label: String.fromCharCode(65 + i),
+const COL_OPTIONS = Array.from({ length: 26 }, (_, colIndex) => ({
+  value: colIndex,
+  label: String.fromCharCode(65 + colIndex),
 }));
 
 type DefaultValues = {
@@ -24,6 +25,7 @@ type Props = {
   action: (prevState: ComisionFormState, formData: FormData) => Promise<ComisionFormState>;
   defaultValues?: DefaultValues;
   submitLabel: string;
+  initialSheetNames?: string[];
 };
 
 function ColSelect({
@@ -59,12 +61,88 @@ function ColSelect({
   );
 }
 
-export function ComisionForm({ action, defaultValues = {}, submitLabel }: Props) {
+function SheetNameSelect({
+  name,
+  label,
+  defaultValue,
+  error,
+  sheetNames,
+}: {
+  name: string;
+  label: string;
+  defaultValue: string | undefined;
+  error?: string;
+  sheetNames: string[] | null;
+}) {
+  if (sheetNames === null) {
+    return (
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+        <input
+          name={name}
+          defaultValue={defaultValue}
+          placeholder="Alumnos"
+          className={`${error ? INPUT_ERROR_CLASS : INPUT_CLASS} text-sm font-mono`}
+        />
+        <FieldError message={error} />
+      </div>
+    );
+  }
+
+  // Si el valor guardado no está en la lista (hoja renombrada), lo incluimos para no perderlo
+  const options =
+    defaultValue && !sheetNames.includes(defaultValue)
+      ? [defaultValue, ...sheetNames]
+      : sheetNames;
+
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <select
+        name={name}
+        defaultValue={defaultValue}
+        className={`w-full rounded-md border px-2 py-1.5 text-sm font-mono ${
+          error ? "border-red-400 bg-red-50" : "border-gray-300 bg-white"
+        } focus:ring-2 focus:ring-pdep-500 focus:border-pdep-500 outline-none`}
+      >
+        {options.map((sheetName) => (
+          <option key={sheetName} value={sheetName}>
+            {sheetName}
+          </option>
+        ))}
+      </select>
+      <FieldError message={error} />
+    </div>
+  );
+}
+
+export function ComisionForm({ action, defaultValues = {}, submitLabel, initialSheetNames }: Props) {
   const [state, formAction] = useFormState(action, null);
   const errors = state?.errors ?? {};
   const cfg = defaultValues.columnConfig ?? DEFAULT_COLUMN_CONFIG;
   const grupos = cfg.grupos;
   const [gruposEnabled, setGruposEnabled] = useState(Boolean(grupos));
+  const [sheetNames, setSheetNames] = useState<string[] | null>(initialSheetNames ?? null);
+  const [loadingSheets, setLoadingSheets] = useState(false);
+  const [loadSheetsError, setLoadSheetsError] = useState<string | null>(null);
+  const spreadsheetIdRef = useRef<HTMLInputElement>(null);
+
+  async function handleLoadSheets() {
+    const spreadsheetId = spreadsheetIdRef.current?.value ?? "";
+    if (!spreadsheetId.trim()) {
+      setLoadSheetsError("Ingresá el ID de la planilla primero");
+      return;
+    }
+    setLoadingSheets(true);
+    setLoadSheetsError(null);
+    const result = await fetchSheetNames(spreadsheetId);
+    setLoadingSheets(false);
+    if ("error" in result) {
+      setLoadSheetsError(result.error);
+    } else {
+      setSheetNames(result);
+    }
+  }
 
   return (
     <form action={formAction} className="space-y-5">
@@ -90,16 +168,30 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel }: Props)
         <label className="block text-sm font-medium text-gray-700 mb-1">
           ID de la planilla de Google Sheets *
         </label>
-        <input
-          name="spreadsheetId"
-          required
-          defaultValue={defaultValues.spreadsheetId}
-          placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
-          className={`${errors.spreadsheetId ? INPUT_ERROR_CLASS : INPUT_CLASS} font-mono text-xs`}
-        />
+        <div className="flex gap-2">
+          <input
+            ref={spreadsheetIdRef}
+            name="spreadsheetId"
+            required
+            defaultValue={defaultValues.spreadsheetId}
+            placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
+            className={`flex-1 ${errors.spreadsheetId ? INPUT_ERROR_CLASS : INPUT_CLASS} font-mono text-xs`}
+          />
+          <button
+            type="button"
+            onClick={handleLoadSheets}
+            disabled={loadingSheets}
+            className="shrink-0 px-3 py-2 text-xs font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            {loadingSheets ? "Cargando…" : sheetNames ? "Recargar hojas" : "Cargar hojas"}
+          </button>
+        </div>
         <p className="text-gray-400 text-xs mt-1">
           Se encuentra en la URL: docs.google.com/spreadsheets/d/<strong>ID</strong>/edit
         </p>
+        {loadSheetsError && (
+          <p className="text-red-500 text-xs mt-1">{loadSheetsError}</p>
+        )}
         <FieldError message={errors.spreadsheetId?.[0]} />
       </div>
 
@@ -132,18 +224,13 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel }: Props)
 
         {/* Nombre de la hoja y filas de encabezado */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Nombre de la hoja
-            </label>
-            <input
-              name="sheetName"
-              defaultValue={cfg.sheetName}
-              placeholder="Alumnos"
-              className={`${INPUT_CLASS} text-sm font-mono`}
-            />
-            <FieldError message={errors.sheetName?.[0]} />
-          </div>
+          <SheetNameSelect
+            name="sheetName"
+            label="Nombre de la hoja"
+            defaultValue={cfg.sheetName}
+            error={errors.sheetName?.[0]}
+            sheetNames={sheetNames}
+          />
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
               Filas de encabezado
@@ -187,7 +274,7 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel }: Props)
             name="grupos_enabled"
             type="checkbox"
             checked={gruposEnabled}
-            onChange={(e) => setGruposEnabled(e.target.checked)}
+            onChange={(changeEvent) => setGruposEnabled(changeEvent.target.checked)}
             className="h-4 w-4 rounded border-gray-300 text-pdep-600 focus:ring-pdep-500"
           />
           <label htmlFor="grupos_enabled" className="text-sm font-medium text-gray-700">
@@ -198,18 +285,13 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel }: Props)
         {gruposEnabled && (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Nombre de la hoja (grupos)
-                </label>
-                <input
-                  name="grupos_sheetName"
-                  defaultValue={grupos?.sheetName ?? cfg.sheetName}
-                  placeholder="Alumnos"
-                  className={`${INPUT_CLASS} text-sm font-mono`}
-                />
-                <FieldError message={errors.grupos_sheetName?.[0]} />
-              </div>
+              <SheetNameSelect
+                name="grupos_sheetName"
+                label="Nombre de la hoja (grupos)"
+                defaultValue={grupos?.sheetName ?? cfg.sheetName}
+                error={errors.grupos_sheetName?.[0]}
+                sheetNames={sheetNames}
+              />
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   Filas de encabezado (grupos)

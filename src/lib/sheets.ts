@@ -307,6 +307,19 @@ export async function getAsignacionesGrupos(
   }
 }
 
+// ── Nombres de hojas del spreadsheet ────────────────────────
+
+export async function getSheetNames(spreadsheetId: string): Promise<string[]> {
+  const sheets = getSheetsClient();
+  const { data } = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: "sheets.properties.title",
+  });
+  return (data.sheets ?? [])
+    .map((sheet) => sheet.properties?.title ?? "")
+    .filter(Boolean);
+}
+
 // ── Helpers ─────────────────────────────────────────────────
 
 function norm(value: unknown): string {
