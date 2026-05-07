@@ -118,7 +118,7 @@ export default async function DashboardPage() {
                     </svg>
                     Ir al repo
                   </a>
-                ) : assignment.tipo === "grupal" && !grupo ? (
+                ) : assignment.tipo === "grupal" && !grupo && !user.isAdmin ? (
                   <a
                     href={`/assignments/${assignment.id}/grupo`}
                     className="inline-flex items-center justify-center gap-1.5 text-sm bg-pdep-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-pdep-700 transition-colors w-full sm:w-auto"

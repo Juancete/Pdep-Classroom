@@ -24,12 +24,10 @@ export default async function PerfilPage() {
     try {
       const comisionActiva = await getComisionActiva();
       if (comisionActiva) {
-        if (alumno.alumnoSyncFallidoEn) {
-          await verificarConsistenciaAlumno(githubUsername, comisionActiva);
-        }
-        if (alumno.gruposSyncFallidoEn) {
-          await intentarSincronizarGrupos(githubUsername, comisionActiva);
-        }
+        const tareas: Promise<unknown>[] = [];
+        if (alumno.alumnoSyncFallidoEn) tareas.push(verificarConsistenciaAlumno(githubUsername, comisionActiva));
+        if (alumno.gruposSyncFallidoEn) tareas.push(intentarSincronizarGrupos(githubUsername, comisionActiva));
+        await Promise.allSettled(tareas);
       }
     } catch {
       // Flags persistentes en DB se encargan del banner.

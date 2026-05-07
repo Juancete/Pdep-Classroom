@@ -82,21 +82,36 @@ export async function addCollaborators(
   permission: "push" | "admin" = "push"
 ): Promise<void> {
   const octokit = getOctokit();
+  const MAX_ATTEMPTS = 4;
+  const INITIAL_DELAY_MS = 500;
+  const MAX_DELAY_MS = 8000;
+  let lastError: unknown;
 
-  try {
-    await Promise.all(
-      usernames.map((username) =>
-        octokit.repos.addCollaborator({
-          owner: ORG,
-          repo: repoName,
-          username,
-          permission,
-        })
-      )
-    );
-  } catch (error) {
-    handleOctokitError(error);
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      await Promise.all(
+        usernames.map((username) =>
+          octokit.repos.addCollaborator({
+            owner: ORG,
+            repo: repoName,
+            username,
+            permission,
+          })
+        )
+      );
+      return;
+    } catch (error) {
+      lastError = error;
+      const isTransient = isRequestError(error) && (error.status === 404 || error.status === 422);
+      if (!isTransient || attempt >= MAX_ATTEMPTS - 1) break;
+      const delay = Math.min(
+        INITIAL_DELAY_MS * 2 ** attempt + Math.random() * INITIAL_DELAY_MS,
+        MAX_DELAY_MS
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
   }
+  handleOctokitError(lastError);
 }
 
 // ── Crear repo + dar acceso en una sola operación ───────────
@@ -123,9 +138,6 @@ export async function crearEntrega(opts: {
     description: opts.descripcion,
     isPrivate: true,
   });
-
-  // Pequeña pausa para que GitHub procese la creación
-  await new Promise((resolve) => setTimeout(resolve, 1500));
 
   await addCollaborators(repoName, opts.usernames);
 

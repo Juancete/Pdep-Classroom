@@ -135,12 +135,17 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel, initialS
     }
     setLoadingSheets(true);
     setLoadSheetsError(null);
-    const result = await fetchSheetNames(spreadsheetId);
-    setLoadingSheets(false);
-    if ("error" in result) {
-      setLoadSheetsError(result.error);
-    } else {
-      setSheetNames(result);
+    try {
+      const result = await fetchSheetNames(spreadsheetId);
+      if ("error" in result) {
+        setLoadSheetsError(result.error);
+      } else {
+        setSheetNames(result);
+      }
+    } catch (error) {
+      setLoadSheetsError(String(error));
+    } finally {
+      setLoadingSheets(false);
     }
   }
 
