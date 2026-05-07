@@ -30,7 +30,7 @@ const mockTx: MockTx = {
 
 const mockEm = {
   ...mockTx,
-  transactional: vi.fn(async (cb: (tx: MockTx) => Promise<unknown>) => cb(mockTx)),
+  transactional: vi.fn(async (callback: (transaction: MockTx) => Promise<unknown>) => callback(mockTx)),
 };
 
 vi.mock("@/lib/db", () => ({
@@ -117,7 +117,7 @@ afterAll(async () => {
 beforeEach(() => {
   vi.clearAllMocks();
   mockEm.transactional.mockImplementation(
-    async (cb: (tx: MockTx) => Promise<unknown>) => cb(mockTx)
+    async (callback: (transaction: MockTx) => Promise<unknown>) => callback(mockTx)
   );
 });
 

@@ -33,8 +33,8 @@ function getOctokit(): Octokit {
       // Fallback: PAT clásico (para desarrollo rápido)
       _octokit = new Octokit({ auth: process.env.GITHUB_PAT });
     }
-  } catch (e) {
-    handleOctokitError(e);
+  } catch (error) {
+    handleOctokitError(error);
   }
 
   return _octokit!;
@@ -69,8 +69,8 @@ export async function createRepoFromTemplate(
       repoUrl: data.html_url,
       repoFullName: data.full_name,
     };
-  } catch (e) {
-    handleOctokitError(e);
+  } catch (error) {
+    handleOctokitError(error);
   }
 }
 
@@ -94,8 +94,8 @@ export async function addCollaborators(
         })
       )
     );
-  } catch (e) {
-    handleOctokitError(e);
+  } catch (error) {
+    handleOctokitError(error);
   }
 }
 
@@ -125,7 +125,7 @@ export async function crearEntrega(opts: {
   });
 
   // Pequeña pausa para que GitHub procese la creación
-  await new Promise((r) => setTimeout(r, 1500));
+  await new Promise((resolve) => setTimeout(resolve, 1500));
 
   await addCollaborators(repoName, opts.usernames);
 
@@ -148,14 +148,14 @@ export async function listarReposDeAssignment(
     });
 
     return data
-      .filter((r) => r.name.startsWith(`${slug}-`))
-      .map((r) => ({
-        name: r.name,
-        url: r.html_url,
-        updatedAt: r.updated_at ?? "",
+      .filter((repo) => repo.name.startsWith(`${slug}-`))
+      .map((repo) => ({
+        name: repo.name,
+        url: repo.html_url,
+        updatedAt: repo.updated_at ?? "",
       }));
-  } catch (e) {
-    handleOctokitError(e);
+  } catch (error) {
+    handleOctokitError(error);
   }
 }
 
@@ -165,10 +165,9 @@ export async function deleteRepo(repoName: string): Promise<void> {
   const octokit = getOctokit();
   try {
     await octokit.repos.delete({ owner: ORG, repo: repoName });
-  } catch (e) {
-    // 404 = el repo ya no existe → resultado idempotente, no es un error
-    if (isRequestError(e) && e.status === 404) return;
-    handleOctokitError(e);
+  } catch (error) {
+    if (isRequestError(error) && error.status === 404) return;
+    handleOctokitError(error);
   }
 }
 
@@ -199,13 +198,13 @@ export async function listarTemplates(): Promise<
     });
 
     return data
-      .filter((r) => r.is_template)
-      .map((r) => ({
-        name: r.name,
-        fullName: r.full_name,
-        description: r.description ?? "",
+      .filter((repo) => repo.is_template)
+      .map((repo) => ({
+        name: repo.name,
+        fullName: repo.full_name,
+        description: repo.description ?? "",
       }));
-  } catch (e) {
-    handleOctokitError(e);
+  } catch (error) {
+    handleOctokitError(error);
   }
 }

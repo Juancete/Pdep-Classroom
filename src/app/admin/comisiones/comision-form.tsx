@@ -119,8 +119,8 @@ function SheetNameSelect({
 export function ComisionForm({ action, defaultValues = {}, submitLabel, initialSheetNames }: Props) {
   const [state, formAction] = useFormState(action, null);
   const errors = state?.errors ?? {};
-  const cfg = defaultValues.columnConfig ?? DEFAULT_COLUMN_CONFIG;
-  const grupos = cfg.grupos;
+  const config = defaultValues.columnConfig ?? DEFAULT_COLUMN_CONFIG;
+  const grupos = config.grupos;
   const [gruposEnabled, setGruposEnabled] = useState(Boolean(grupos));
   const [sheetNames, setSheetNames] = useState<string[] | null>(initialSheetNames ?? null);
   const [loadingSheets, setLoadingSheets] = useState(false);
@@ -227,7 +227,7 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel, initialS
           <SheetNameSelect
             name="sheetName"
             label="Nombre de la hoja"
-            defaultValue={cfg.sheetName}
+            defaultValue={config.sheetName}
             error={errors.sheetName?.[0]}
             sheetNames={sheetNames}
           />
@@ -240,7 +240,7 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel, initialS
               type="number"
               min={0}
               max={10}
-              defaultValue={cfg.headerRows}
+              defaultValue={config.headerRows}
               className={`${INPUT_CLASS} text-sm`}
             />
             <FieldError message={errors.headerRows?.[0]} />
@@ -249,11 +249,11 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel, initialS
 
         {/* Selectores de columna */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <ColSelect name="col_legajo" label="Legajo" defaultValue={cfg.legajo} error={errors.col_legajo?.[0]} />
-          <ColSelect name="col_apellido" label="Apellido" defaultValue={cfg.apellido} error={errors.col_apellido?.[0]} />
-          <ColSelect name="col_nombre" label="Nombre" defaultValue={cfg.nombre} error={errors.col_nombre?.[0]} />
-          <ColSelect name="col_githubUsername" label="Usuario GitHub" defaultValue={cfg.githubUsername} error={errors.col_githubUsername?.[0]} />
-          <ColSelect name="col_email" label="Email" defaultValue={cfg.email} error={errors.col_email?.[0]} />
+          <ColSelect name="col_legajo" label="Legajo" defaultValue={config.legajo} error={errors.col_legajo?.[0]} />
+          <ColSelect name="col_apellido" label="Apellido" defaultValue={config.apellido} error={errors.col_apellido?.[0]} />
+          <ColSelect name="col_nombre" label="Nombre" defaultValue={config.nombre} error={errors.col_nombre?.[0]} />
+          <ColSelect name="col_githubUsername" label="Usuario GitHub" defaultValue={config.githubUsername} error={errors.col_githubUsername?.[0]} />
+          <ColSelect name="col_email" label="Email" defaultValue={config.email} error={errors.col_email?.[0]} />
         </div>
       </fieldset>
 
@@ -288,7 +288,7 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel, initialS
               <SheetNameSelect
                 name="grupos_sheetName"
                 label="Nombre de la hoja (grupos)"
-                defaultValue={grupos?.sheetName ?? cfg.sheetName}
+                defaultValue={grupos?.sheetName ?? config.sheetName}
                 error={errors.grupos_sheetName?.[0]}
                 sheetNames={sheetNames}
               />
@@ -301,7 +301,7 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel, initialS
                   type="number"
                   min={0}
                   max={10}
-                  defaultValue={grupos?.headerRows ?? cfg.headerRows}
+                  defaultValue={grupos?.headerRows ?? config.headerRows}
                   className={`${INPUT_CLASS} text-sm`}
                 />
                 <FieldError message={errors.grupos_headerRows?.[0]} />
@@ -312,7 +312,7 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel, initialS
               <ColSelect
                 name="grupos_col_githubUsername"
                 label="Usuario GitHub"
-                defaultValue={grupos?.githubUsername ?? cfg.githubUsername}
+                defaultValue={grupos?.githubUsername ?? config.githubUsername}
                 error={errors.grupos_col_githubUsername?.[0]}
               />
               <ColSelect

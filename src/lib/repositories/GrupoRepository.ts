@@ -13,8 +13,8 @@ import type { Paradigma } from "@/types";
 export async function getGruposDeAlumno(
   githubUsername: string
 ): Promise<Map<string, Grupo>> {
-  const em = await getEM();
-  const grupos = await em.find(
+  const entityManager = await getEM();
+  const grupos = await entityManager.find(
     Grupo,
     { alumnos: { githubUsername: { $ilike: githubUsername } } },
     { populate: ["assignment", "alumnos"] }
@@ -23,14 +23,14 @@ export async function getGruposDeAlumno(
 }
 
 export async function getGrupos(paradigma?: Paradigma): Promise<Grupo[]> {
-  const em = await getEM();
+  const entityManager = await getEM();
   const where = paradigma ? { paradigma } : {};
-  return em.find(Grupo, where, { populate: ["assignment", "alumnos"] });
+  return entityManager.find(Grupo, where, { populate: ["assignment", "alumnos"] });
 }
 
 export async function getGruposDeAssignment(assignmentId: string): Promise<Grupo[]> {
-  const em = await getEM();
-  return em.find(
+  const entityManager = await getEM();
+  return entityManager.find(
     Grupo,
     { assignment: { id: assignmentId } },
     { populate: ["alumnos"] }
@@ -41,8 +41,8 @@ export async function getGrupoDeAlumnoEnAssignment(
   assignmentId: string,
   githubUsername: string
 ): Promise<Grupo | null> {
-  const em = await getEM();
-  return em.findOne(
+  const entityManager = await getEM();
+  return entityManager.findOne(
     Grupo,
     {
       assignment: { id: assignmentId },
@@ -63,10 +63,10 @@ export async function crearGrupo(params: {
   nombre: string;
 }): Promise<Grupo> {
   const { assignmentId, alumnoId, nombre } = params;
-  const em = await getEM();
+  const entityManager = await getEM();
 
-  return em.transactional(async (tx) => {
-    const assignment = await tx.findOne(Assignment, { id: assignmentId });
+  return entityManager.transactional(async (transaction) => {
+    const assignment = await transaction.findOne(Assignment, { id: assignmentId });
     if (!assignment || !(assignment instanceof GrupalAssignment)) {
       throw new AssignmentNoGrupalError(assignmentId);
     }
@@ -74,9 +74,9 @@ export async function crearGrupo(params: {
       throw new InscripcionesCerradasError(assignmentId);
     }
 
-    const alumno = await tx.findOneOrFail(Alumno, { id: alumnoId });
+    const alumno = await transaction.findOneOrFail(Alumno, { id: alumnoId });
 
-    const yaEnGrupo = await tx.findOne(Grupo, {
+    const yaEnGrupo = await transaction.findOne(Grupo, {
       assignment: { id: assignmentId },
       alumnos: { id: alumno.id },
     });
@@ -91,9 +91,9 @@ export async function crearGrupo(params: {
     grupo.maxIntegrantes = assignment.maxIntegrantes;
     grupo.creadoPor = alumno.githubUsername;
     grupo.alumnos.add(alumno);
-    tx.persist(grupo);
+    transaction.persist(grupo);
 
-    await tx.flush();
+    await transaction.flush();
     return grupo;
   });
 }
@@ -107,10 +107,10 @@ export async function unirseAGrupo(params: {
   alumnoId: string;
 }): Promise<Grupo> {
   const { grupoId, alumnoId } = params;
-  const em = await getEM();
+  const entityManager = await getEM();
 
-  return em.transactional(async (tx) => {
-    const grupo = await tx.findOneOrFail(
+  return entityManager.transactional(async (transaction) => {
+    const grupo = await transaction.findOneOrFail(
       Grupo,
       { id: grupoId },
       { populate: ["alumnos", "assignment"] }
@@ -120,13 +120,13 @@ export async function unirseAGrupo(params: {
       throw new InscripcionesCerradasError(assignment.id);
     }
 
-    const alumno = await tx.findOneOrFail(Alumno, { id: alumnoId });
+    const alumno = await transaction.findOneOrFail(Alumno, { id: alumnoId });
 
     if (grupo.alumnos.contains(alumno)) {
       return grupo;
     }
 
-    const enOtroGrupo = await tx.findOne(Grupo, {
+    const enOtroGrupo = await transaction.findOne(Grupo, {
       assignment: { id: assignment.id },
       alumnos: { id: alumno.id },
     });
@@ -139,7 +139,7 @@ export async function unirseAGrupo(params: {
 
     grupo.addMember(alumno);
 
-    await tx.flush();
+    await transaction.flush();
     return grupo;
   });
 }
@@ -154,9 +154,9 @@ export async function upsertGrupoConMiembro(params: {
   alumno: Alumno;
 }): Promise<Grupo> {
   const { nombreGrupo, paradigma, assignment, alumno } = params;
-  const em = await getEM();
+  const entityManager = await getEM();
 
-  const existente = await em.findOne(
+  const existente = await entityManager.findOne(
     Grupo,
     {
       nombre: nombreGrupo,
@@ -176,13 +176,13 @@ export async function upsertGrupoConMiembro(params: {
     grupo.assignment = assignment;
     grupo.maxIntegrantes = assignment.maxIntegrantes;
     grupo.creadoPor = "sheets-sync";
-    em.persist(grupo);
+    entityManager.persist(grupo);
   }
 
   if (!grupo.alumnos.contains(alumno)) {
     grupo.alumnos.add(alumno);
   }
 
-  await em.flush();
+  await entityManager.flush();
   return grupo;
 }

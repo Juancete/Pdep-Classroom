@@ -46,10 +46,10 @@ export function AlumnoForm({
   const [gruposSyncWarning, setGruposSyncWarning] = useState(false);
   const [fieldError, setFieldError] = useState<{ message: string; field: string } | null>(null);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setFieldError(null);
-    const form = new FormData(e.currentTarget);
+    const form = new FormData(event.currentTarget);
     await call(async () => {
       const body = {
         legajo: form.get("legajo") as string,
@@ -58,13 +58,13 @@ export function AlumnoForm({
         email: form.get("email") as string,
         ...extraBody,
       };
-      const res = await fetch(apiEndpoint, {
+      const response = await fetch(apiEndpoint, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const json = await res.json();
-      if (!res.ok) {
+      const json = await response.json();
+      if (!response.ok) {
         if (typeof json.field === "string") {
           setFieldError({ message: json.error, field: json.field });
         }

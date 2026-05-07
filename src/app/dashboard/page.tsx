@@ -37,7 +37,7 @@ export default async function DashboardPage() {
   ]);
 
   const assignmentsConEntrega = assignments
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .sort((prev, next) => new Date(next.createdAt).getTime() - new Date(prev.createdAt).getTime())
     .map((assignment) => ({
       assignment,
       entrega: entregasMap.get(assignment.id) ?? null,

@@ -52,27 +52,27 @@ export default async function AdminAlumnosPage() {
             <DataHeaderCell>Email</DataHeaderCell>
           </DataHeader>
           <DataBody>
-            {alumnos.map((a) => (
-              <DataRow key={a.legajo}>
+            {alumnos.map((alumno) => (
+              <DataRow key={alumno.legajo}>
                 <DataCell label="Nombre" heading>
-                  {a.apellido}, {a.nombre}
+                  {alumno.apellido}, {alumno.nombre}
                 </DataCell>
                 <DataCell label="Legajo">
-                  <span className="font-mono text-xs">{a.legajo}</span>
+                  <span className="font-mono text-xs">{alumno.legajo}</span>
                 </DataCell>
                 <DataCell label="GitHub">
                   <a
-                    href={`https://github.com/${a.githubUsername}`}
+                    href={`https://github.com/${alumno.githubUsername}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-mono text-xs text-pdep-600 hover:underline break-all"
                   >
-                    {a.githubUsername}
+                    {alumno.githubUsername}
                   </a>
                 </DataCell>
                 <DataCell label="Email">
                   <span className="text-gray-500 text-xs break-all">
-                    {a.email}
+                    {alumno.email}
                   </span>
                 </DataCell>
               </DataRow>

@@ -34,13 +34,13 @@ export function GruposPanel({
 
   async function handleToggle() {
     await call(async () => {
-      const res = await fetch(`/api/assignments/${assignmentId}/inscripciones`, {
+      const response = await fetch(`/api/assignments/${assignmentId}/inscripciones`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cerrada: !cerradas }),
       });
-      if (!res.ok) {
-        const data = await res.json();
+      if (!response.ok) {
+        const data = await response.json();
         throw new Error(data.error ?? "Error al cambiar el estado");
       }
       setCerradas((current) => !current);

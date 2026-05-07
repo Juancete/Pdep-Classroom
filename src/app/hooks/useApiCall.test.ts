@@ -22,7 +22,7 @@ describe("useApiCall", () => {
   it("pone loading=true mientras ejecuta y false al terminar", async () => {
     const { result } = renderHook(() => useApiCall());
     let resolveFn!: () => void;
-    const deferred = new Promise<void>((r) => { resolveFn = r; });
+    const deferred = new Promise<void>((resolve) => { resolveFn = resolve; });
 
     // inicia el call sin await
     act(() => { result.current.call(() => deferred); });

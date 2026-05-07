@@ -93,8 +93,8 @@ describe("PATCH /api/perfil", () => {
   });
 
   it("actualiza Sheets y DB en un mismo request", async () => {
-    const res = await PATCH(makeRequest(validBody));
-    expect(res.status).toBe(200);
+    const response = await PATCH(makeRequest(validBody));
+    expect(response.status).toBe(200);
     expect(mockUpsertarAlumnoEnSheets).toHaveBeenCalledTimes(1);
     expect(mockUpsertAlumno).toHaveBeenCalledTimes(1);
   });
@@ -126,8 +126,8 @@ describe("PATCH /api/perfil", () => {
     mockUpsertAlumno.mockRejectedValue(
       new FakeLegajoConflictError("12345", "otro-alumno")
     );
-    const res = await PATCH(makeRequest(validBody));
-    expect(res.status).toBe(400);
+    const response = await PATCH(makeRequest(validBody));
+    expect(response.status).toBe(400);
     expect(mockUpsertarAlumnoEnSheets).not.toHaveBeenCalled();
   });
 
@@ -135,32 +135,32 @@ describe("PATCH /api/perfil", () => {
     mockUpsertAlumno.mockRejectedValue(
       new FakeLegajoConflictError("12345", "otro-alumno")
     );
-    const res = await PATCH(makeRequest(validBody));
-    const json = await res.json();
-    expect(res.status).toBe(400);
+    const response = await PATCH(makeRequest(validBody));
+    const json = await response.json();
+    expect(response.status).toBe(400);
     expect(json.field).toBe("legajo");
     expect(json.error).toContain("otro-alumno");
   });
 
   it("devuelve 400 si la validación de inputs falla sin tocar DB ni Sheets", async () => {
-    const res = await PATCH(makeRequest({ ...validBody, email: "no-es-email" }));
-    expect(res.status).toBe(400);
+    const response = await PATCH(makeRequest({ ...validBody, email: "no-es-email" }));
+    expect(response.status).toBe(400);
     expect(mockUpsertAlumno).not.toHaveBeenCalled();
     expect(mockUpsertarAlumnoEnSheets).not.toHaveBeenCalled();
   });
 
   it("devuelve 409 sin tocar Sheets ni DB si no hay comisión activa", async () => {
     mockGetComisionActiva.mockResolvedValue(null);
-    const res = await PATCH(makeRequest(validBody));
-    expect(res.status).toBe(409);
+    const response = await PATCH(makeRequest(validBody));
+    expect(response.status).toBe(409);
     expect(mockUpsertarAlumnoEnSheets).not.toHaveBeenCalled();
     expect(mockUpsertAlumno).not.toHaveBeenCalled();
   });
 
   it("devuelve 500 si algo tira un error inesperado", async () => {
     mockUpsertarAlumnoEnSheets.mockRejectedValue(new Error("boom"));
-    const res = await PATCH(makeRequest(validBody));
-    expect(res.status).toBe(500);
+    const response = await PATCH(makeRequest(validBody));
+    expect(response.status).toBe(500);
   });
 
   describe("sincronización de grupos desde planilla", () => {
@@ -174,19 +174,19 @@ describe("PATCH /api/perfil", () => {
     });
 
     it("no incluye gruposSync en el body cuando el wrapper completa sin throwear", async () => {
-      const res = await PATCH(makeRequest(validBody));
-      const json = await res.json();
-      expect(res.status).toBe(200);
+      const response = await PATCH(makeRequest(validBody));
+      const json = await response.json();
+      expect(response.status).toBe(200);
       expect(json.gruposSync).toBeUndefined();
     });
 
     it("responde 200 con gruposSync='error' cuando el wrapper throwea (el alta se preserva, el flag en DB dispara retry)", async () => {
       mockIntentarSincronizarGrupos.mockRejectedValue(new Error("Sheets caído"));
 
-      const res = await PATCH(makeRequest(validBody));
-      const json = await res.json();
+      const response = await PATCH(makeRequest(validBody));
+      const json = await response.json();
 
-      expect(res.status).toBe(200);
+      expect(response.status).toBe(200);
       expect(json.gruposSync).toBe("error");
       expect(mockMarcarRegistroConfirmado).toHaveBeenCalledOnce();
     });

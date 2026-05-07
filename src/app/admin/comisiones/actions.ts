@@ -41,7 +41,7 @@ const ColumnIndexSchema = z.coerce
 // "" → undefined para columnas opcionales de grupos: la UI envía string vacío
 // cuando el admin elige "(sin columna)".
 const OptionalColumnIndexSchema = z.preprocess(
-  (v) => (v === "" || v === undefined || v === null ? undefined : v),
+  (value) => (value === "" || value === undefined || value === null ? undefined : value),
   ColumnIndexSchema.optional()
 );
 
@@ -52,7 +52,7 @@ const ComisionSchema = z.object({
     .min(2020, "Año inválido")
     .max(2100, "Año inválido"),
   spreadsheetId: z.string().min(1, "El ID de la planilla es obligatorio"),
-  activa: z.coerce.boolean().optional().transform((v) => v ?? false),
+  activa: z.coerce.boolean().optional().transform((value) => value ?? false),
   sheetName: z.string().min(1, "El nombre de la hoja es obligatorio"),
   headerRows: z.coerce.number().int().min(0).max(10),
   col_legajo: ColumnIndexSchema,
@@ -60,7 +60,7 @@ const ComisionSchema = z.object({
   col_nombre: ColumnIndexSchema,
   col_githubUsername: ColumnIndexSchema,
   col_email: ColumnIndexSchema,
-  grupos_enabled: z.coerce.boolean().optional().transform((v) => v ?? false),
+  grupos_enabled: z.coerce.boolean().optional().transform((value) => value ?? false),
   grupos_sheetName: z.string().optional(),
   grupos_headerRows: z.coerce.number().int().min(0).max(10).optional(),
   grupos_col_githubUsername: OptionalColumnIndexSchema,
@@ -182,18 +182,18 @@ export async function sincronizarAlumnos(
   let alumnos;
   try {
     alumnos = await getAlumnos(comision.spreadsheetId, comision.columnConfig);
-  } catch (e) {
-    return { status: "error", message: `No se pudo leer la planilla: ${(e as Error).message}` };
+  } catch (error) {
+    return { status: "error", message: `No se pudo leer la planilla: ${(error as Error).message}` };
   }
 
   let sincronizados: number;
   try {
     sincronizados = await upsertAlumnos(alumnos.map((alumno) => ({ ...alumno, comision })));
-  } catch (e) {
-    if (e instanceof LegajoConflictError) {
-      return { status: "error", message: e.message };
+  } catch (error) {
+    if (error instanceof LegajoConflictError) {
+      return { status: "error", message: error.message };
     }
-    throw e;
+    throw error;
   }
 
   revalidatePath("/admin/comisiones");
@@ -229,8 +229,8 @@ export async function sincronizarGruposDeLaComision(
   if (gruposConfig && alumnos.length > 0) {
     try {
       asignaciones = await getAsignacionesGrupos(comision.spreadsheetId, gruposConfig);
-    } catch (e) {
-      return { status: "error", message: (e as Error).message };
+    } catch (error) {
+      return { status: "error", message: (error as Error).message };
     }
   }
 

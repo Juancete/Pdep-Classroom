@@ -33,15 +33,15 @@ export async function sincronizarGruposDelAlumno(
     asignacionesPrefetched ??
     (await getAsignacionesGrupos(comision.spreadsheetId, gruposConfig));
 
-  const deEsteAlumno = asignaciones.filter((a) => a.githubUsername === ghNorm);
+  const deEsteAlumno = asignaciones.filter((asignacion) => asignacion.githubUsername === ghNorm);
   if (deEsteAlumno.length === 0) return;
 
-  const em = await getEM();
-  const alumno = await em.findOne(Alumno, { githubUsername: ghNorm });
+  const entityManager = await getEM();
+  const alumno = await entityManager.findOne(Alumno, { githubUsername: ghNorm });
   if (!alumno) return;
 
   for (const asig of deEsteAlumno) {
-    const grupales = await em.find(GrupalAssignment, {
+    const grupales = await entityManager.find(GrupalAssignment, {
       comision: { id: comision.id },
       paradigma: asig.paradigma,
     });

@@ -22,13 +22,13 @@ export function GrupoSelector({
   async function handleCrear(event: React.FormEvent) {
     event.preventDefault();
     await call(async () => {
-      const res = await fetch(`/api/assignments/${assignmentId}/grupos`, {
+      const response = await fetch(`/api/assignments/${assignmentId}/grupos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nombre: nombreNuevoGrupo }),
       });
-      if (!res.ok) {
-        const data = await res.json();
+      if (!response.ok) {
+        const data = await response.json();
         throw new Error(data.error ?? "Error al crear el grupo");
       }
       router.refresh();
@@ -38,12 +38,12 @@ export function GrupoSelector({
   async function handleUnirse(grupoId: string) {
     setGrupoJoiningId(grupoId);
     await call(async () => {
-      const res = await fetch(
+      const response = await fetch(
         `/api/assignments/${assignmentId}/grupos/${grupoId}/join`,
         { method: "POST" }
       );
-      if (!res.ok) {
-        const data = await res.json();
+      if (!response.ok) {
+        const data = await response.json();
         throw new Error(data.error ?? "Error al unirse al grupo");
       }
       router.refresh();

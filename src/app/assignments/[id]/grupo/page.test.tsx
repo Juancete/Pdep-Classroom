@@ -65,14 +65,14 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
 }
 
 function makeGrupalAssignment(overrides = {}): GrupalAssignment {
-  const a = new GrupalAssignment();
-  a.id = "a1";
-  a.titulo = "TP Grupal";
-  a.paradigma = "objetos";
-  a.slug = "tp-grupal";
-  a.maxIntegrantes = 3;
-  a.inscripcionesCerradas = false;
-  return Object.assign(a, overrides);
+  const assignment = new GrupalAssignment();
+  assignment.id = "a1";
+  assignment.titulo = "TP Grupal";
+  assignment.paradigma = "objetos";
+  assignment.slug = "tp-grupal";
+  assignment.maxIntegrantes = 3;
+  assignment.inscripcionesCerradas = false;
+  return Object.assign(assignment, overrides);
 }
 
 function makeGrupo(

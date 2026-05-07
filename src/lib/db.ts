@@ -65,10 +65,10 @@ export async function deleteEntity<T extends object>(
   EntityClass: abstract new (...args: never[]) => T,
   id: string
 ): Promise<void> {
-  const em = await getEM();
-  const entity = await em.findOne(EntityClass, { id } as never);
+  const entityManager = await getEM();
+  const entity = await entityManager.findOne(EntityClass, { id } as never);
   if (entity) {
-    em.remove(entity);
-    await em.flush();
+    entityManager.remove(entity);
+    await entityManager.flush();
   }
 }
