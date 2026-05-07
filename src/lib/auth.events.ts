@@ -11,9 +11,9 @@ import { verificarConsistenciaAlumno } from "./services/verificarConsistenciaAlu
  * el setup completo de NextAuth.
  */
 export async function onSignIn(profile: unknown): Promise<void> {
-  const githubUsername = (profile as { login?: string } | null | undefined)
+  const githubUsername = (profile as { login?: unknown } | null | undefined)
     ?.login;
-  if (!githubUsername) return;
+  if (typeof githubUsername !== "string" || !githubUsername) return;
 
   const comisionActiva = await getComisionActiva().catch((error) => {
     logger.error(

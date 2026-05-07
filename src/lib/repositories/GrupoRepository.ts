@@ -116,14 +116,14 @@ export async function unirseAGrupo(params: {
       { populate: ["alumnos", "assignment"] }
     );
     const assignment = grupo.assignment;
-    if (!assignment.aceptaNuevasInscripciones()) {
-      throw new InscripcionesCerradasError(assignment.id);
-    }
-
     const alumno = await transaction.findOneOrFail(Alumno, { id: alumnoId });
 
     if (grupo.alumnos.contains(alumno)) {
       return grupo;
+    }
+
+    if (!assignment.aceptaNuevasInscripciones()) {
+      throw new InscripcionesCerradasError(assignment.id);
     }
 
     const enOtroGrupo = await transaction.findOne(Grupo, {

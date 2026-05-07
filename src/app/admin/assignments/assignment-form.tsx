@@ -299,7 +299,7 @@ export function AssignmentForm({
           type="date"
           defaultValue={defaultValues.deadline}
           className={INPUT_CLASS}
-          onChange={(event) => event.target.blur()}
+
         />
       </div>
 

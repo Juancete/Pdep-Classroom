@@ -31,6 +31,7 @@ export function GrupoSelector({
         const data = await response.json();
         throw new Error(data.error ?? "Error al crear el grupo");
       }
+      setNombreNuevoGrupo("");
       router.refresh();
     });
   }
