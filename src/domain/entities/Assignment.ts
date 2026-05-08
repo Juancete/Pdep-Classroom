@@ -88,4 +88,37 @@ export abstract class Assignment {
     user: { githubUsername: string },
     buscarGrupoDelAlumno: BuscadorDeGrupoDelAlumno
   ): Promise<ParticipantesResueltos>;
+
+  /**
+   * `true` cuando el alumno debe elegir un grupo antes de poder aceptar el TP.
+   * Individual: siempre `false`. Grupal: `true` cuando no es admin y no tiene grupo.
+   */
+  abstract requiereSeleccionDeGrupo(user: { isAdmin: boolean }, grupo: Grupo | null): boolean;
+
+  /**
+   * Alumnos del curso que todavía no están en ningún grupo de este assignment.
+   * Individual: siempre `[]`. Grupal: filtra `alumnos` excluyendo los que aparecen en algún grupo.
+   */
+  abstract alumnosSinGrupo(alumnos: Alumno[], grupos: Grupo[]): Alumno[];
+
+  /**
+   * Campos extra del formulario de assignment específicos del subtipo.
+   * Individual: `{}`. Grupal: `{ maxIntegrantes }`.
+   */
+  abstract extraFormDefaults(): Partial<{ maxIntegrantes: number }>;
+
+  /** Nombre del repo template sin el prefijo de organización (ej. "org/repo" → "repo"). */
+  nombreDelTemplate(): string {
+    return this.templateRepo.includes("/")
+      ? this.templateRepo.split("/").pop()!
+      : this.templateRepo;
+  }
+
+  /**
+   * Carga los grupos asociados delegando en `loader`. Individual devuelve `[]`;
+   * Grupal invoca `loader(this.id)`. Evita `instanceof GrupalAssignment` en las pages.
+   */
+  abstract cargarGruposCon(
+    loader: (assignmentId: string) => Promise<Grupo[]>
+  ): Promise<Grupo[]>;
 }

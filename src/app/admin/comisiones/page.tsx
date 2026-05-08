@@ -38,18 +38,18 @@ export default async function AdminComisionesPage() {
             <DataHeaderCell>Acciones</DataHeaderCell>
           </DataHeader>
           <DataBody>
-            {comisiones.map((c) => (
-              <DataRow key={c.id}>
+            {comisiones.map((comision) => (
+              <DataRow key={comision.id}>
                 <DataCell label="Año" heading>
-                  {c.anio}
+                  {comision.anio}
                 </DataCell>
                 <DataCell label="Planilla">
                   <span className="font-mono text-xs text-gray-500 break-all md:truncate md:block">
-                    {c.spreadsheetId}
+                    {comision.spreadsheetId}
                   </span>
                 </DataCell>
                 <DataCell label="Estado">
-                  {c.activa ? (
+                  {comision.activa ? (
                     <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
                       <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
                       Activa
@@ -61,12 +61,12 @@ export default async function AdminComisionesPage() {
                 <DataCell label="Acciones">
                   <div className="flex items-center gap-3 flex-wrap">
                     <a
-                      href={`/admin/comisiones/${c.id}/edit`}
+                      href={`/admin/comisiones/${comision.id}/edit`}
                       className="text-pdep-600 hover:text-pdep-800 text-xs font-medium"
                     >
                       Editar
                     </a>
-                    <DeleteComisionButton id={c.id} anio={c.anio} />
+                    <DeleteComisionButton id={comision.id} anio={comision.anio} />
                   </div>
                 </DataCell>
               </DataRow>

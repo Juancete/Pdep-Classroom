@@ -22,32 +22,32 @@ async function assertLegajoLibreOPropio(
   legajo: string,
   githubUsername: string
 ): Promise<void> {
-  const em = await getEM();
-  const otro = await em.findOne(Alumno, { legajo: legajo.trim() });
-  if (otro && otro.githubUsername.toLowerCase() !== githubUsername.toLowerCase().trim()) {
+  const entityManager = await getEM();
+  const otro = await entityManager.findOne(Alumno, { legajo: legajo.trim() });
+  if (otro && otro.usernameCanonico !== Alumno.normalizarUsername(githubUsername)) {
     throw new LegajoConflictError(legajo.trim(), otro.githubUsername);
   }
 }
 
 export async function getAlumnos(): Promise<Alumno[]> {
-  const em = await getEM();
-  return em.find(Alumno, {}, { orderBy: { apellido: "ASC", nombre: "ASC" } });
+  const entityManager = await getEM();
+  return entityManager.find(Alumno, {}, { orderBy: { apellido: "ASC", nombre: "ASC" } });
 }
 
 export async function getAlumnoByGithub(
   githubUsername: string
 ): Promise<Alumno | null> {
-  const em = await getEM();
-  return em.findOne(Alumno, {
-    githubUsername: githubUsername.toLowerCase(),
+  const entityManager = await getEM();
+  return entityManager.findOne(Alumno, {
+    githubUsername: Alumno.normalizarUsername(githubUsername),
   });
 }
 
 export async function getAlumnoByLegajo(
   legajo: string
 ): Promise<Alumno | null> {
-  const em = await getEM();
-  return em.findOne(Alumno, { legajo: legajo.trim() });
+  const entityManager = await getEM();
+  return entityManager.findOne(Alumno, { legajo: legajo.trim() });
 }
 
 export interface AlumnoData {
@@ -67,8 +67,8 @@ function applyAlumnoData(alumno: Alumno, data: AlumnoData): void {
   alumno.legajo = data.legajo.trim();
   alumno.nombre = data.nombre.trim();
   alumno.apellido = data.apellido.trim();
-  alumno.githubUsername = data.githubUsername.toLowerCase().trim();
-  alumno.email = data.email.toLowerCase().trim();
+  alumno.githubUsername = Alumno.normalizarUsername(data.githubUsername);
+  alumno.email = Alumno.normalizarEmail(data.email);
   alumno.comision = data.comision;
   if (data.registroConfirmadoEn !== undefined) {
     alumno.registroConfirmadoEn = data.registroConfirmadoEn;
@@ -77,25 +77,25 @@ function applyAlumnoData(alumno: Alumno, data: AlumnoData): void {
 
 export async function createAlumno(data: AlumnoData): Promise<Alumno> {
   await assertLegajoLibreOPropio(data.legajo, data.githubUsername);
-  const em = await getEM();
+  const entityManager = await getEM();
   const alumno = new Alumno();
   applyAlumnoData(alumno, data);
-  em.persist(alumno);
-  await em.flush();
+  entityManager.persist(alumno);
+  await entityManager.flush();
   return alumno;
 }
 
 /** Crea o actualiza el Alumno en la DB a partir de los datos de la planilla. */
 export async function upsertAlumno(data: AlumnoData): Promise<Alumno> {
   await assertLegajoLibreOPropio(data.legajo, data.githubUsername);
-  const em = await getEM();
-  const existing = await em.findOne(Alumno, {
-    githubUsername: data.githubUsername.toLowerCase().trim(),
+  const entityManager = await getEM();
+  const existing = await entityManager.findOne(Alumno, {
+    githubUsername: Alumno.normalizarUsername(data.githubUsername),
   });
 
   if (existing) {
     applyAlumnoData(existing, data);
-    await em.flush();
+    await entityManager.flush();
     return existing;
   }
 
@@ -110,42 +110,73 @@ export async function marcarRegistroConfirmado(
   githubUsername: string,
   comision: Comision
 ): Promise<void> {
-  const em = await getEM();
-  const alumno = await em.findOne(Alumno, {
-    githubUsername: githubUsername.toLowerCase().trim(),
+  const entityManager = await getEM();
+  const alumno = await entityManager.findOne(Alumno, {
+    githubUsername: Alumno.normalizarUsername(githubUsername),
   });
   if (!alumno) return;
   alumno.registroConfirmadoEn = comision;
-  await em.flush();
+  await entityManager.flush();
 }
 
 export async function marcarGruposSyncFallido(githubUsername: string): Promise<void> {
-  const em = await getEM();
-  const alumno = await em.findOne(Alumno, {
-    githubUsername: githubUsername.toLowerCase().trim(),
+  const entityManager = await getEM();
+  const alumno = await entityManager.findOne(Alumno, {
+    githubUsername: Alumno.normalizarUsername(githubUsername),
   });
   if (!alumno) return;
   alumno.gruposSyncFallidoEn = new Date();
-  await em.flush();
+  await entityManager.flush();
 }
 
 export async function marcarGruposSyncOk(githubUsername: string): Promise<void> {
-  const em = await getEM();
-  const alumno = await em.findOne(Alumno, {
-    githubUsername: githubUsername.toLowerCase().trim(),
+  const entityManager = await getEM();
+  const alumno = await entityManager.findOne(Alumno, {
+    githubUsername: Alumno.normalizarUsername(githubUsername),
   });
   // Solo flusheamos si había algo prendido — evita un UPDATE por cada sync
   // exitosa del happy path.
   if (!alumno || !alumno.gruposSyncFallidoEn) return;
   alumno.gruposSyncFallidoEn = null;
-  await em.flush();
+  await entityManager.flush();
+}
+
+export async function marcarAlumnoSyncFallido(githubUsername: string): Promise<void> {
+  const entityManager = await getEM();
+  const alumno = await entityManager.findOne(Alumno, {
+    githubUsername: Alumno.normalizarUsername(githubUsername),
+  });
+  if (!alumno) return;
+  alumno.alumnoSyncFallidoEn = new Date();
+  await entityManager.flush();
+}
+
+export async function marcarAlumnoSyncOk(githubUsername: string): Promise<void> {
+  const entityManager = await getEM();
+  const alumno = await entityManager.findOne(Alumno, {
+    githubUsername: Alumno.normalizarUsername(githubUsername),
+  });
+  if (!alumno || !alumno.alumnoSyncFallidoEn) return;
+  alumno.alumnoSyncFallidoEn = null;
+  await entityManager.flush();
+}
+
+export async function getAlumnosByComision(
+  comisionId: string
+): Promise<Alumno[]> {
+  const entityManager = await getEM();
+  return entityManager.find(
+    Alumno,
+    { comision: { id: comisionId } },
+    { orderBy: { apellido: "ASC", nombre: "ASC" } }
+  );
 }
 
 export async function getAlumnosConGruposSyncPendiente(
   comisionId: string
 ): Promise<Alumno[]> {
-  const em = await getEM();
-  return em.find(
+  const entityManager = await getEM();
+  return entityManager.find(
     Alumno,
     { comision: { id: comisionId }, gruposSyncFallidoEn: { $ne: null } },
     { orderBy: { apellido: "ASC", nombre: "ASC" } }
@@ -156,7 +187,7 @@ export async function getAlumnosConGruposSyncPendiente(
 export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
   if (dataList.length === 0) return 0;
 
-  const em = await getEM();
+  const entityManager = await getEM();
 
   // Validar coherencia legajo↔github antes de persistir: el UNIQUE de la DB
   // dispararía un error genérico del driver. Así surfaceamos LegajoConflictError
@@ -164,7 +195,7 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
   const githubPorLegajo = new Map<string, string>();
   for (const data of dataList) {
     const legajo = data.legajo.trim();
-    const github = data.githubUsername.toLowerCase().trim();
+    const github = Alumno.normalizarUsername(data.githubUsername);
     const prev = githubPorLegajo.get(legajo);
     if (prev && prev !== github) {
       throw new LegajoConflictError(legajo, prev);
@@ -172,27 +203,27 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
     githubPorLegajo.set(legajo, github);
   }
   const legajos = [...githubPorLegajo.keys()];
-  const alumnosConLegajoTomado = await em.find(Alumno, { legajo: { $in: legajos } });
+  const alumnosConLegajoTomado = await entityManager.find(Alumno, { legajo: { $in: legajos } });
   for (const alumno of alumnosConLegajoTomado) {
     const incomingGithub = githubPorLegajo.get(alumno.legajo)!;
-    if (alumno.githubUsername.toLowerCase() !== incomingGithub) {
+    if (alumno.usernameCanonico !== incomingGithub) {
       throw new LegajoConflictError(alumno.legajo, alumno.githubUsername);
     }
   }
 
   const githubUsernames = [...githubPorLegajo.values()];
-  const existentes = await em.find(Alumno, { githubUsername: { $in: githubUsernames } });
-  const existentesPorGithub = new Map(existentes.map((a) => [a.githubUsername, a]));
+  const existentes = await entityManager.find(Alumno, { githubUsername: { $in: githubUsernames } });
+  const existentesPorGithub = new Map(existentes.map((alumno) => [alumno.githubUsername, alumno]));
 
   for (const data of dataList) {
-    const key = data.githubUsername.toLowerCase().trim();
+    const key = Alumno.normalizarUsername(data.githubUsername);
     const existing = existentesPorGithub.get(key);
     if (existing) {
       applyAlumnoData(existing, data);
     } else {
       const alumno = new Alumno();
       applyAlumnoData(alumno, data);
-      em.persist(alumno);
+      entityManager.persist(alumno);
       // Si el batch trae otra fila con el mismo github (typo o fila duplicada
       // en la planilla), debe reutilizar esta instancia — sin esto, el UNIQUE
       // de githubUsername explota en el flush con un error genérico.
@@ -200,11 +231,11 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
     }
   }
 
-  await em.flush();
+  await entityManager.flush();
   return dataList.length;
 }
 
 export async function countAlumnos(): Promise<number> {
-  const em = await getEM();
-  return em.count(Alumno, {});
+  const entityManager = await getEM();
+  return entityManager.count(Alumno, {});
 }

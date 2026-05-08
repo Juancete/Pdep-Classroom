@@ -7,11 +7,11 @@ export function AcceptButton({ assignmentId }: { assignmentId: string }) {
 
   async function handleAccept() {
     await call(async () => {
-      const res = await fetch(`/api/assignments/${assignmentId}/accept`, {
+      const response = await fetch(`/api/assignments/${assignmentId}/accept`, {
         method: "POST",
       });
-      if (!res.ok) {
-        const data = await res.json();
+      if (!response.ok) {
+        const data = await response.json();
         throw new Error(data.error ?? "Error al crear el repo");
       }
       window.location.reload();

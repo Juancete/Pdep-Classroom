@@ -4,40 +4,41 @@ import {
   getEntregasDeUsuario,
   getAlumnoByGithub,
   getComisionActiva,
+  getGruposDeAlumno,
 } from "@/lib/repositories";
 import { AcceptButton } from "./accept-button";
 import { redirect } from "next/navigation";
+import type { Grupo } from "@/domain/entities";
 
 export default async function DashboardPage() {
   const user = await requireUser();
 
-  // Los admins no pasan por el gate de registro; pueden entrar sin estar como alumnos.
   if (!user.isAdmin) {
     const [alumno, comisionActiva] = await Promise.all([
       getAlumnoByGithub(user.githubUsername),
       getComisionActiva(),
     ]);
-    // Sin comisión activa no podemos pedirle nada — se deja pasar.
-    // Con comisión activa, bloquear hasta que el alumno la haya confirmado.
-    if (
-      comisionActiva &&
-      alumno?.registroConfirmadoEn?.id !== comisionActiva.id
-    ) {
+    if (comisionActiva && (!alumno || alumno.necesitaConfirmarRegistroPara(comisionActiva))) {
       redirect("/registro");
     }
   }
 
-  // Dos queries paralelas: assignments + todas las entregas del usuario
-  const [assignments, entregasMap] = await Promise.all([
+  const gruposPromise: Promise<Map<string, Grupo>> = user.isAdmin
+    ? Promise.resolve(new Map())
+    : getGruposDeAlumno(user.githubUsername);
+
+  const [assignments, entregasMap, gruposMap] = await Promise.all([
     getAssignments(),
     getEntregasDeUsuario(user.githubUsername),
+    gruposPromise,
   ]);
 
   const assignmentsConEntrega = assignments
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .sort((prev, next) => new Date(next.createdAt).getTime() - new Date(prev.createdAt).getTime())
     .map((assignment) => ({
       assignment,
       entrega: entregasMap.get(assignment.id) ?? null,
+      grupo: gruposMap.get(assignment.id) ?? null,
     }));
 
   return (
@@ -54,7 +55,7 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {assignmentsConEntrega.map(({ assignment, entrega }) => (
+          {assignmentsConEntrega.map(({ assignment, entrega, grupo }) => (
             <div
               key={assignment.id}
               className="bg-white border border-gray-200 rounded-lg p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
@@ -84,6 +85,11 @@ export default async function DashboardPage() {
                     })}
                   </p>
                 )}
+                {grupo && !entrega && (
+                  <p className="text-xs text-blue-600 mt-1">
+                    Grupo: <span className="font-medium">{grupo.nombre}</span>
+                  </p>
+                )}
               </div>
 
               <div className="flex-shrink-0 w-full sm:w-auto">
@@ -108,6 +114,14 @@ export default async function DashboardPage() {
                       />
                     </svg>
                     Ir al repo
+                  </a>
+                ) : assignment.requiereSeleccionDeGrupo(user, grupo) ? (
+                  <a
+                    href={`/assignments/${assignment.id}/grupo`}
+                    className="inline-flex items-center justify-center gap-1.5 text-sm bg-pdep-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-pdep-700 transition-colors w-full sm:w-auto"
+                    data-testid="elegir-grupo-link"
+                  >
+                    Elegir grupo
                   </a>
                 ) : (
                   <AcceptButton assignmentId={assignment.id} />

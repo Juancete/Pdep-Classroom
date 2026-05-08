@@ -6,13 +6,13 @@ export function useApiCall() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function call<T>(fn: () => Promise<T>): Promise<T | undefined> {
+  async function call<T>(apiCall: () => Promise<T>): Promise<T | undefined> {
     setLoading(true);
     setError(null);
     try {
-      return await fn();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Error desconocido");
+      return await apiCall();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Error desconocido");
     } finally {
       setLoading(false);
     }

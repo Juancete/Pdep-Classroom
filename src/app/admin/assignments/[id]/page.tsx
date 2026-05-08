@@ -9,7 +9,10 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { EntregasTable } from "./entregas-table";
 import { DeleteReposButton } from "../delete-repos-button";
-import type { Alumno } from "@/domain/entities";
+import { GruposPanel } from "./grupos-panel";
+import type { GrupoAdminResumen, AlumnoSinGrupoResumen } from "./grupos-panel";
+import { GrupalAssignment, Alumno } from "@/domain/entities";
+import type { Grupo } from "@/domain/entities";
 
 export default async function AssignmentDetailPage({
   params,
@@ -21,16 +24,16 @@ export default async function AssignmentDetailPage({
   const assignment = await getAssignment(params.id);
   if (!assignment) redirect("/admin/assignments");
 
-  // `getAlumnos` se dispara una sola vez: Individual reutiliza la misma
-  // promise vía el thunk para calcular su total, y el map de nombres también
-  // consume el resultado. Grupal ignora el thunk y pide los grupos.
+  const gruposPromise = assignment.cargarGruposCon(getGruposDeAssignment);
+
   const alumnosPromise = getAlumnos();
-  const [entregas, alumnos, total] = await Promise.all([
+  const [entregas, alumnos, grupos, total] = await Promise.all([
     getEntregas(params.id),
     alumnosPromise,
+    gruposPromise,
     assignment.totalEsperado({
       getAlumnosDelCurso: () => alumnosPromise,
-      getGruposDeAssignment,
+      getGruposDeAssignment: (_assignmentId: string) => gruposPromise,
     }),
   ]);
 
@@ -38,8 +41,40 @@ export default async function AssignmentDetailPage({
   const pendientes = Math.max(0, total - aceptadas);
 
   const alumnosPorUsername = new Map<string, Alumno>(
-    alumnos.map((alumno) => [alumno.githubUsername.toLowerCase(), alumno])
+    alumnos.map((alumno) => [alumno.usernameCanonico, alumno])
   );
+
+  let gruposPanel: React.ReactNode = null;
+  if (assignment instanceof GrupalAssignment) {
+    const gruposSerializados: GrupoAdminResumen[] = grupos.map((grupo) => ({
+      id: grupo.id,
+      nombre: grupo.nombre,
+      maxIntegrantes: grupo.maxIntegrantes,
+      estaLleno: grupo.estaLleno(),
+      etiquetaCupo: grupo.etiquetaCupo(),
+      miembros: grupo.usernamesDeMiembros().map((username) => ({
+        username,
+        nombreCompleto:
+          alumnosPorUsername.get(Alumno.normalizarUsername(username))?.nombreCompleto ?? username,
+      })),
+    }));
+
+    const alumnosSinGrupoSerializados: AlumnoSinGrupoResumen[] = assignment
+      .alumnosSinGrupo(alumnos, grupos)
+      .map((alumno) => ({
+        username: alumno.githubUsername,
+        nombreCompleto: alumno.nombreCompleto,
+      }));
+
+    gruposPanel = (
+      <GruposPanel
+        assignmentId={params.id}
+        inscripcionesCerradas={assignment.inscripcionesCerradas}
+        grupos={gruposSerializados}
+        alumnosSinGrupo={alumnosSinGrupoSerializados}
+      />
+    );
+  }
 
   const entregaRows = entregas.map((entrega) => ({
     id: entrega.id,
@@ -47,11 +82,12 @@ export default async function AssignmentDetailPage({
     repoName: entrega.repoName,
     repoUrl: entrega.repoUrl,
     repoDeleted: entrega.repoDeleted,
+    estadoRepo: entrega.estadoRepo(),
     createdAt: new Date(entrega.createdAt).toLocaleDateString("es-AR"),
     nombreCompleto: entrega.githubUsernames
       .map((username) => {
-        const alumno = alumnosPorUsername.get(username.toLowerCase());
-        return alumno ? `${alumno.apellido}, ${alumno.nombre}` : "—";
+        const alumno = alumnosPorUsername.get(Alumno.normalizarUsername(username));
+        return alumno ? alumno.nombreCompleto : "—";
       })
       .join(" / "),
   }));
@@ -72,7 +108,7 @@ export default async function AssignmentDetailPage({
         <div className="flex items-center gap-3">
           <DeleteReposButton
             assignmentId={assignment.id}
-            activeRepoCount={entregas.filter((entrega) => entrega.repoName && !entrega.repoDeleted).length}
+            activeRepoCount={entregas.filter((entrega) => entrega.hasRepo()).length}
           />
           <Link
             href={`/admin/assignments/${assignment.id}/edit`}
@@ -129,6 +165,8 @@ export default async function AssignmentDetailPage({
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <EntregasTable entregas={entregaRows} />
       </div>
+
+      {gruposPanel}
     </div>
   );
 }
