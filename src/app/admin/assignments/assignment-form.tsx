@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useFormState } from "react-dom";
 import { PARADIGMAS } from "@/types";
+import { GRUPAL_MIN_MAX_INTEGRANTES } from "@/domain/entities/domain-constants";
 import type { AssignmentFormState } from "@/lib/assignment-schema";
 import { slugify } from "@/lib/naming";
 import { INPUT_CLASS, INPUT_ERROR_CLASS, FieldError, SubmitButton } from "../ui";
@@ -46,9 +47,9 @@ function TemplateRepoCombobox({
   const [open, setOpen] = useState(false);
 
   const filtered = query
-    ? templates.filter((t) =>
-        t.name.toLowerCase().includes(query.toLowerCase()) ||
-        t.description.toLowerCase().includes(query.toLowerCase())
+    ? templates.filter((template) =>
+        template.name.toLowerCase().includes(query.toLowerCase()) ||
+        template.description.toLowerCase().includes(query.toLowerCase())
       )
     : templates;
 
@@ -58,10 +59,10 @@ function TemplateRepoCombobox({
     setOpen(false);
   }
 
-  function handleBlur(e: React.FocusEvent<HTMLDivElement>) {
-    if (!e.currentTarget.contains(e.relatedTarget)) {
+  function handleBlur(event: React.FocusEvent<HTMLDivElement>) {
+    if (!event.currentTarget.contains(event.relatedTarget)) {
       setOpen(false);
-      if (!templates.find((t) => t.name === query)) {
+      if (!templates.find((template) => template.name === query)) {
         setQuery(selected);
       }
     }
@@ -79,8 +80,8 @@ function TemplateRepoCombobox({
       <input
         type="text"
         value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
+        onChange={(event) => {
+          setQuery(event.target.value);
           setSelected("");
           setOpen(true);
         }}
@@ -92,20 +93,20 @@ function TemplateRepoCombobox({
 
       {open && filtered.length > 0 && (
         <ul className="absolute z-10 mt-1 w-full max-h-56 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg text-sm">
-          {filtered.map((t) => (
+          {filtered.map((template) => (
             <li
-              key={t.name}
-              onMouseDown={(e) => {
-                e.preventDefault(); // evitar que el blur cierre antes
-                handleSelect(t.name);
+              key={template.name}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                handleSelect(template.name);
               }}
               className={`cursor-pointer px-3 py-2 hover:bg-pdep-50 ${
-                selected === t.name ? "bg-pdep-50 font-medium" : ""
+                selected === template.name ? "bg-pdep-50 font-medium" : ""
               }`}
             >
-              <span className="font-mono">{t.name}</span>
-              {t.description && (
-                <span className="text-gray-400 ml-2">— {t.description}</span>
+              <span className="font-mono">{template.name}</span>
+              {template.description && (
+                <span className="text-gray-400 ml-2">— {template.description}</span>
               )}
             </li>
           ))}
@@ -135,15 +136,15 @@ export function AssignmentForm({
   const [slug, setSlug] = useState(defaultValues.slug ?? "");
   const [slugEdited, setSlugEdited] = useState(!!defaultValues.slug);
 
-  function handleTituloChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleTituloChange(event: React.ChangeEvent<HTMLInputElement>) {
     if (!slugEdited) {
-      setSlug(slugify(e.target.value));
+      setSlug(slugify(event.target.value));
     }
   }
 
-  function handleSlugChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setSlug(e.target.value);
-    setSlugEdited(e.target.value !== "");
+  function handleSlugChange(event: React.ChangeEvent<HTMLInputElement>) {
+    setSlug(event.target.value);
+    setSlugEdited(event.target.value !== "");
   }
 
   return (
@@ -234,9 +235,9 @@ export function AssignmentForm({
               defaultValue={defaultValues.paradigma ?? "funcional"}
               className={`${INPUT_CLASS} appearance-none pr-8`}
             >
-              {PARADIGMAS.map((p) => (
-                <option key={p} value={p}>
-                  {p.charAt(0).toUpperCase() + p.slice(1)}
+              {PARADIGMAS.map((paradigma) => (
+                <option key={paradigma} value={paradigma}>
+                  {paradigma.charAt(0).toUpperCase() + paradigma.slice(1)}
                 </option>
               ))}
             </select>
@@ -256,7 +257,7 @@ export function AssignmentForm({
               name="tipo"
               required
               value={tipo}
-              onChange={(e) => setTipo(e.target.value)}
+              onChange={(event) => setTipo(event.target.value)}
               className={`${INPUT_CLASS} appearance-none pr-8`}
             >
               <option value="individual">Individual</option>
@@ -280,7 +281,7 @@ export function AssignmentForm({
           <input
             name="maxIntegrantes"
             type="number"
-            min={2}
+            min={GRUPAL_MIN_MAX_INTEGRANTES}
             defaultValue={defaultValues.maxIntegrantes}
             placeholder="Ej: 3"
             className={errors.maxIntegrantes ? INPUT_ERROR_CLASS : INPUT_CLASS}
@@ -299,7 +300,7 @@ export function AssignmentForm({
           type="date"
           defaultValue={defaultValues.deadline}
           className={INPUT_CLASS}
-          onChange={(e) => e.target.blur()}
+
         />
       </div>
 

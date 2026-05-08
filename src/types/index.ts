@@ -1,3 +1,6 @@
+import { normalizarGithubUsername } from "@/domain/entities/domain-constants";
+export { normalizarGithubUsername };
+
 // ── Paradigmas ──────────────────────────────────────────────
 export type Paradigma = "funcional" | "logico" | "objetos";
 
@@ -48,4 +51,8 @@ export interface PdepUser {
   name: string;
   image: string;
   isAdmin: boolean;
+}
+
+export function usernameCanonicoDe(user: PdepUser): string {
+  return normalizarGithubUsername(user.githubUsername);
 }

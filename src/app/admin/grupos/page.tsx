@@ -38,17 +38,17 @@ export default async function AdminGruposPage({
         >
           Todos
         </a>
-        {PARADIGMAS.map((p) => (
+        {PARADIGMAS.map((paradigma) => (
           <a
-            key={p}
-            href={`/admin/grupos?paradigma=${p}`}
+            key={paradigma}
+            href={`/admin/grupos?paradigma=${paradigma}`}
             className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-              paradigmaFilter === p
+              paradigmaFilter === paradigma
                 ? "bg-pdep-600 text-white"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
-            {p.charAt(0).toUpperCase() + p.slice(1)}
+            {paradigma.charAt(0).toUpperCase() + paradigma.slice(1)}
           </a>
         ))}
       </div>
@@ -76,12 +76,12 @@ export default async function AdminGruposPage({
                 {grupo.assignment.titulo}
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {grupo.alumnos.getItems().map((a) => (
+                {grupo.usernamesDeMiembros().map((username) => (
                   <span
-                    key={a.githubUsername}
+                    key={username}
                     className="text-xs font-mono bg-gray-100 text-gray-700 px-2 py-1 rounded"
                   >
-                    {a.githubUsername}
+                    {username}
                   </span>
                 ))}
               </div>

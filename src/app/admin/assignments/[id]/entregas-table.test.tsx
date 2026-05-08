@@ -12,6 +12,7 @@ function makeRow(overrides?: Partial<EntregaRow>): EntregaRow {
     repoName: "kata-funcional-usuario1",
     repoUrl: "https://github.com/org/kata-funcional-usuario1",
     repoDeleted: false,
+    estadoRepo: "activo",
     createdAt: "2/1/2026",
     nombreCompleto: "García, Juan",
     ...overrides,
@@ -130,11 +131,18 @@ describe("EntregasTable", () => {
     expect(html).toContain('target="_blank"');
   });
 
-  it('muestra "Sin repo" cuando no hay repoUrl', () => {
+  it('muestra "Sin repo" cuando estadoRepo es "sin-repo"', () => {
     const html = renderToStaticMarkup(
-      <EntregasTable entregas={[makeRow({ repoUrl: undefined })]} />
+      <EntregasTable entregas={[makeRow({ estadoRepo: "sin-repo", repoUrl: undefined })]} />
     );
     expect(html).toContain("Sin repo");
+  });
+
+  it('muestra "Repositorio borrado" cuando estadoRepo es "borrado"', () => {
+    const html = renderToStaticMarkup(
+      <EntregasTable entregas={[makeRow({ estadoRepo: "borrado" })]} />
+    );
+    expect(html).toContain("Repositorio borrado");
   });
 
   it("muestra la fecha de la entrega", () => {

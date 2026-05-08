@@ -25,14 +25,14 @@ import AdminAlumnosPage from "./page";
 // ── Helpers ──────────────────────────────────────────────────
 
 function makeAlumno(overrides?: Partial<Alumno>): Alumno {
-  const a = new Alumno();
-  a.legajo = "12345";
-  a.nombre = "Juan";
-  a.apellido = "Garcia";
-  a.githubUsername = "juangarcia";
-  a.email = "juan@example.com";
-  a.comision = "miércoles noche";
-  return Object.assign(a, overrides);
+  const alumno = new Alumno();
+  alumno.legajo = "12345";
+  alumno.nombre = "Juan";
+  alumno.apellido = "Garcia";
+  alumno.githubUsername = "juangarcia";
+  alumno.email = "juan@example.com";
+  alumno.comision = "miércoles noche";
+  return Object.assign(alumno, overrides);
 }
 
 // ── Tests ────────────────────────────────────────────────────

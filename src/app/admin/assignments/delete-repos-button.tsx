@@ -22,10 +22,10 @@ export function DeleteReposButton({
       return;
 
     await call(async () => {
-      const res = await fetch(`/api/assignments/${assignmentId}/repos`, { method: "DELETE" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `Error ${res.status}`);
+      const response = await fetch(`/api/assignments/${assignmentId}/repos`, { method: "DELETE" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error ?? `Error ${response.status}`);
       }
       router.refresh();
     });

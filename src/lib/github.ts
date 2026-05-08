@@ -33,8 +33,8 @@ function getOctokit(): Octokit {
       // Fallback: PAT clásico (para desarrollo rápido)
       _octokit = new Octokit({ auth: process.env.GITHUB_PAT });
     }
-  } catch (e) {
-    handleOctokitError(e);
+  } catch (error) {
+    handleOctokitError(error);
   }
 
   return _octokit!;
@@ -69,8 +69,8 @@ export async function createRepoFromTemplate(
       repoUrl: data.html_url,
       repoFullName: data.full_name,
     };
-  } catch (e) {
-    handleOctokitError(e);
+  } catch (error) {
+    handleOctokitError(error);
   }
 }
 
@@ -82,21 +82,36 @@ export async function addCollaborators(
   permission: "push" | "admin" = "push"
 ): Promise<void> {
   const octokit = getOctokit();
+  const MAX_ATTEMPTS = 4;
+  const INITIAL_DELAY_MS = 500;
+  const MAX_DELAY_MS = 8000;
+  let lastError: unknown;
 
-  try {
-    await Promise.all(
-      usernames.map((username) =>
-        octokit.repos.addCollaborator({
-          owner: ORG,
-          repo: repoName,
-          username,
-          permission,
-        })
-      )
-    );
-  } catch (e) {
-    handleOctokitError(e);
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      await Promise.all(
+        usernames.map((username) =>
+          octokit.repos.addCollaborator({
+            owner: ORG,
+            repo: repoName,
+            username,
+            permission,
+          })
+        )
+      );
+      return;
+    } catch (error) {
+      lastError = error;
+      const isTransient = isRequestError(error) && (error.status === 404 || error.status === 422);
+      if (!isTransient || attempt >= MAX_ATTEMPTS - 1) break;
+      const delay = Math.min(
+        INITIAL_DELAY_MS * 2 ** attempt + Math.random() * INITIAL_DELAY_MS,
+        MAX_DELAY_MS
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
   }
+  handleOctokitError(lastError);
 }
 
 // ── Crear repo + dar acceso en una sola operación ───────────
@@ -124,9 +139,6 @@ export async function crearEntrega(opts: {
     isPrivate: true,
   });
 
-  // Pequeña pausa para que GitHub procese la creación
-  await new Promise((r) => setTimeout(r, 1500));
-
   await addCollaborators(repoName, opts.usernames);
 
   return { repoUrl, repoName };
@@ -148,14 +160,14 @@ export async function listarReposDeAssignment(
     });
 
     return data
-      .filter((r) => r.name.startsWith(`${slug}-`))
-      .map((r) => ({
-        name: r.name,
-        url: r.html_url,
-        updatedAt: r.updated_at ?? "",
+      .filter((repo) => repo.name.startsWith(`${slug}-`))
+      .map((repo) => ({
+        name: repo.name,
+        url: repo.html_url,
+        updatedAt: repo.updated_at ?? "",
       }));
-  } catch (e) {
-    handleOctokitError(e);
+  } catch (error) {
+    handleOctokitError(error);
   }
 }
 
@@ -165,10 +177,9 @@ export async function deleteRepo(repoName: string): Promise<void> {
   const octokit = getOctokit();
   try {
     await octokit.repos.delete({ owner: ORG, repo: repoName });
-  } catch (e) {
-    // 404 = el repo ya no existe → resultado idempotente, no es un error
-    if (isRequestError(e) && e.status === 404) return;
-    handleOctokitError(e);
+  } catch (error) {
+    if (isRequestError(error) && error.status === 404) return;
+    handleOctokitError(error);
   }
 }
 
@@ -199,13 +210,13 @@ export async function listarTemplates(): Promise<
     });
 
     return data
-      .filter((r) => r.is_template)
-      .map((r) => ({
-        name: r.name,
-        fullName: r.full_name,
-        description: r.description ?? "",
+      .filter((repo) => repo.is_template)
+      .map((repo) => ({
+        name: repo.name,
+        fullName: repo.full_name,
+        description: repo.description ?? "",
       }));
-  } catch (e) {
-    handleOctokitError(e);
+  } catch (error) {
+    handleOctokitError(error);
   }
 }

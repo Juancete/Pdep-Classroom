@@ -48,19 +48,19 @@ export type AgregarMiembroResult =
 // de la API. Google devuelve 409 + reason "duplicate" para este caso, pero
 // googleapis expone el status por varias rutas (err.code, err.status) y los
 // errores detallados pueden venir top-level o anidados en response.data.error.
-function isDuplicateError(e: unknown): boolean {
-  const err = e as {
+function isDuplicateError(error: unknown): boolean {
+  const apiError = error as {
     code?: number;
     status?: number;
     errors?: { reason?: string }[];
     response?: { data?: { error?: { errors?: { reason?: string }[] } } };
   };
-  if (err.code === 409 || err.status === 409) return true;
+  if (apiError.code === 409 || apiError.status === 409) return true;
   const hasDuplicateReason = (errors?: { reason?: string }[]) =>
-    Boolean(errors?.some((x) => x.reason === "duplicate"));
+    Boolean(errors?.some((errorEntry) => errorEntry.reason === "duplicate"));
   return (
-    hasDuplicateReason(err.errors) ||
-    hasDuplicateReason(err.response?.data?.error?.errors)
+    hasDuplicateReason(apiError.errors) ||
+    hasDuplicateReason(apiError.response?.data?.error?.errors)
   );
 }
 
@@ -80,9 +80,9 @@ export async function agregarMiembroAGrupo(
       { signal: AbortSignal.timeout(10_000) }
     );
     return { status: "added" };
-  } catch (e) {
-    if (isDuplicateError(e)) return { status: "already_member" };
-    const msg = e instanceof Error ? e.message : "Error al suscribir al grupo";
-    return { status: "error", error: msg };
+  } catch (error) {
+    if (isDuplicateError(error)) return { status: "already_member" };
+    const message = error instanceof Error ? error.message : "Error al suscribir al grupo";
+    return { status: "error", error: message };
   }
 }

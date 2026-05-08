@@ -1,5 +1,6 @@
 import { Collection, Entity, ManyToMany } from "@mikro-orm/core";
 import { Alumno } from "./Alumno";
+import type { Grupo } from "./Grupo";
 import {
   Assignment,
   type ParticipantesResueltos,
@@ -24,5 +25,21 @@ export class IndividualAssignment extends Assignment {
     githubUsername: string;
   }): Promise<ParticipantesResueltos> {
     return { usernames: [user.githubUsername] };
+  }
+
+  requiereSeleccionDeGrupo(_user: { isAdmin: boolean }, _grupo: Grupo | null): boolean {
+    return false;
+  }
+
+  alumnosSinGrupo(_alumnos: Alumno[], _grupos: Grupo[]): Alumno[] {
+    return [];
+  }
+
+  extraFormDefaults(): Partial<{ maxIntegrantes: number }> {
+    return {};
+  }
+
+  cargarGruposCon(_loader: (assignmentId: string) => Promise<Grupo[]>): Promise<Grupo[]> {
+    return Promise.resolve([]);
   }
 }
