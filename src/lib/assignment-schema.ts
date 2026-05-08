@@ -17,7 +17,7 @@ export const AssignmentBaseSchema = z.object({
   maxIntegrantes: z.coerce
     .number()
     .int()
-    .min(GRUPAL_MIN_MAX_INTEGRANTES, "Mínimo 2 integrantes")
+    .min(GRUPAL_MIN_MAX_INTEGRANTES, `Mínimo ${GRUPAL_MIN_MAX_INTEGRANTES} integrantes`)
     .optional(),
 });
 
