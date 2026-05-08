@@ -7,10 +7,13 @@ import {
 } from "@mikro-orm/core";
 import { randomUUID } from "crypto";
 import type { Assignment } from "./Assignment";
-import { type ColumnConfig, DEFAULT_COLUMN_CONFIG } from "@/types";
+import { type ColumnConfig, type GruposColumnConfig, DEFAULT_COLUMN_CONFIG } from "@/types";
+import { COMISION_ANIO_MIN, COMISION_ANIO_MAX } from "./domain-constants";
 
 @Entity()
 export class Comision {
+  static readonly ANIO_MIN = COMISION_ANIO_MIN;
+  static readonly ANIO_MAX = COMISION_ANIO_MAX;
   @PrimaryKey({ type: "uuid" })
   id: string = randomUUID();
 
@@ -32,5 +35,9 @@ export class Comision {
   constructor(anio: number, spreadsheetId: string) {
     this.anio = anio;
     this.spreadsheetId = spreadsheetId;
+  }
+
+  gruposConfig(): GruposColumnConfig | undefined {
+    return this.columnConfig?.grupos;
   }
 }

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { UserMenu } from "./logout-button";
 
@@ -20,11 +19,6 @@ interface Props {
 
 export function NavMenu({ links, username, image, isAdmin }: Props) {
   const [open, setOpen] = useState(false);
-  const pathname = usePathname();
-
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
 
   useEffect(() => {
     if (!open) return;
@@ -39,22 +33,22 @@ export function NavMenu({ links, username, image, isAdmin }: Props) {
 
     getFocusables()[0]?.focus();
 
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
         setOpen(false);
         return;
       }
-      if (e.key !== "Tab") return;
+      if (event.key !== "Tab") return;
       const items = getFocusables();
       if (items.length === 0) return;
       const first = items[0];
       const last = items[items.length - 1];
       const active = document.activeElement;
-      if (e.shiftKey && active === first) {
-        e.preventDefault();
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
         last.focus();
-      } else if (!e.shiftKey && active === last) {
-        e.preventDefault();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
         first.focus();
       }
     };
@@ -73,13 +67,13 @@ export function NavMenu({ links, username, image, isAdmin }: Props) {
   return (
     <>
       <div className="hidden md:flex items-center gap-6 text-sm">
-        {links.map((l) => (
+        {links.map((link) => (
           <Link
-            key={l.href}
-            href={l.href}
+            key={link.href}
+            href={link.href}
             className="hover:text-pdep-200 transition-colors"
           >
-            {l.label}
+            {link.label}
           </Link>
         ))}
         <UserMenu username={username} image={image} isAdmin={isAdmin} />
@@ -122,7 +116,7 @@ export function NavMenu({ links, username, image, isAdmin }: Props) {
         role="dialog"
         aria-modal="true"
         aria-label="Menú de navegación"
-        inert={!open}
+        inert={!open ? "" : undefined}
         className={`md:hidden fixed right-0 top-0 bottom-0 w-72 max-w-[85vw] bg-pdep-900 z-50 shadow-xl transform transition-transform ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
@@ -161,18 +155,20 @@ export function NavMenu({ links, username, image, isAdmin }: Props) {
         </div>
 
         <nav className="flex flex-col py-2">
-          {links.map((l) => (
+          {links.map((link) => (
             <Link
-              key={l.href}
-              href={l.href}
+              key={link.href}
+              href={link.href}
+              onClick={() => setOpen(false)}
               className="px-4 py-3 text-white hover:bg-pdep-800 transition-colors"
             >
-              {l.label}
+              {link.label}
             </Link>
           ))}
           {!isAdmin && (
             <Link
               href="/perfil"
+              onClick={() => setOpen(false)}
               className="px-4 py-3 text-pdep-200 hover:bg-pdep-800 hover:text-white transition-colors"
             >
               Editar perfil

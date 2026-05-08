@@ -4,6 +4,7 @@ import type { ComisionFormState } from "./actions";
 // ── Mocks ────────────────────────────────────────────────────
 
 const mockUseFormState = vi.fn();
+const mockFetchSheetNames = vi.fn();
 
 vi.mock("react-dom", async () => {
   const actual = await vi.importActual<typeof import("react-dom")>("react-dom");
@@ -13,6 +14,10 @@ vi.mock("react-dom", async () => {
     useFormStatus: () => ({ pending: false }),
   };
 });
+
+vi.mock("./actions", () => ({
+  fetchSheetNames: (...args: unknown[]) => mockFetchSheetNames(...args),
+}));
 
 import { ComisionForm } from "./comision-form";
 
@@ -39,6 +44,9 @@ function getSpreadsheetInput(container: HTMLElement) {
 }
 function getActivaCheckbox(container: HTMLElement) {
   return container.querySelector<HTMLInputElement>('[name="activa"]')!;
+}
+function getSheetNameField(container: HTMLElement) {
+  return container.querySelector<HTMLElement>('[name="sheetName"]')!;
 }
 
 // ── Tests ────────────────────────────────────────────────────
@@ -134,6 +142,54 @@ describe("ComisionForm", () => {
       expect(
         screen.getByRole("link", { name: "Cancelar" })
       ).toHaveAttribute("href", "/admin/comisiones");
+    });
+  });
+
+  describe("campo de nombre de hoja", () => {
+    it("muestra un input de texto cuando no hay initialSheetNames", () => {
+      const { container } = render(<ComisionForm action={noop} submitLabel="Crear" />);
+      expect(getSheetNameField(container).tagName).toBe("INPUT");
+    });
+
+    it("muestra un select cuando se pasan initialSheetNames", () => {
+      const { container } = render(
+        <ComisionForm
+          action={noop}
+          submitLabel="Crear"
+          initialSheetNames={["Alumnos", "Grupos"]}
+        />
+      );
+      expect(getSheetNameField(container).tagName).toBe("SELECT");
+    });
+
+    it("el select incluye las hojas provistas", () => {
+      const { container } = render(
+        <ComisionForm
+          action={noop}
+          submitLabel="Crear"
+          initialSheetNames={["Alumnos", "Grupos"]}
+        />
+      );
+      const select = getSheetNameField(container) as HTMLSelectElement;
+      const opciones = Array.from(select.options).map((option) => option.value);
+      expect(opciones).toContain("Alumnos");
+      expect(opciones).toContain("Grupos");
+    });
+
+    it("muestra el botón 'Cargar hojas'", () => {
+      render(<ComisionForm action={noop} submitLabel="Crear" />);
+      expect(screen.getByRole("button", { name: "Cargar hojas" })).toBeInTheDocument();
+    });
+
+    it("muestra el botón 'Recargar hojas' cuando ya hay hojas cargadas", () => {
+      render(
+        <ComisionForm
+          action={noop}
+          submitLabel="Crear"
+          initialSheetNames={["Alumnos"]}
+        />
+      );
+      expect(screen.getByRole("button", { name: "Recargar hojas" })).toBeInTheDocument();
     });
   });
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PdepUser } from "@/types";
+import { Alumno } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -53,6 +54,18 @@ import RegistroPage from "./page";
 
 // ── Helpers ──────────────────────────────────────────────────
 
+function makeAlumnoDB(overrides: Partial<Alumno> = {}): Alumno {
+  const alumno = new Alumno();
+  alumno.legajo = "12345";
+  alumno.nombre = "Juan";
+  alumno.apellido = "G";
+  alumno.githubUsername = "juan";
+  alumno.email = "juan@mail.com";
+  alumno.gruposSyncFallidoEn = null;
+  alumno.alumnoSyncFallidoEn = null;
+  return Object.assign(alumno, overrides);
+}
+
 function makeSession(githubUsername: string, overrides?: Partial<PdepUser>) {
   const pdepUser: PdepUser = {
     githubUsername,
@@ -92,14 +105,9 @@ describe("Registro page", () => {
       const comision = { id: "c1", spreadsheetId: "s1", columnConfig: null };
       mockGetComisionActiva.mockResolvedValue(comision);
       mockAuth.mockResolvedValue(makeSession("juan"));
-      mockGetAlumnoDeDB.mockResolvedValue({
-        legajo: "12345",
-        nombre: "Juan",
-        apellido: "G",
-        githubUsername: "juan",
-        email: "juan@mail.com",
-        registroConfirmadoEn: { id: "c1" },
-      });
+      mockGetAlumnoDeDB.mockResolvedValue(
+        makeAlumnoDB({ registroConfirmadoEn: { id: "c1" } as any })
+      );
 
       await expect(RegistroPage()).rejects.toThrow("REDIRECT:/dashboard");
     });
@@ -108,14 +116,9 @@ describe("Registro page", () => {
       const comision = { id: "c2", spreadsheetId: "s1", columnConfig: null };
       mockGetComisionActiva.mockResolvedValue(comision);
       mockAuth.mockResolvedValue(makeSession("juan"));
-      mockGetAlumnoDeDB.mockResolvedValue({
-        legajo: "12345",
-        nombre: "Juan",
-        apellido: "G",
-        githubUsername: "juan",
-        email: "juan@mail.com",
-        registroConfirmadoEn: { id: "c1" },
-      });
+      mockGetAlumnoDeDB.mockResolvedValue(
+        makeAlumnoDB({ registroConfirmadoEn: { id: "c1" } as any })
+      );
 
       await RegistroPage();
       expect(mockRedirect).not.toHaveBeenCalled();
@@ -125,14 +128,9 @@ describe("Registro page", () => {
       const comision = { id: "c1", spreadsheetId: "s1", columnConfig: null };
       mockGetComisionActiva.mockResolvedValue(comision);
       mockAuth.mockResolvedValue(makeSession("juan"));
-      mockGetAlumnoDeDB.mockResolvedValue({
-        legajo: "12345",
-        nombre: "Juan",
-        apellido: "G",
-        githubUsername: "juan",
-        email: "juan@mail.com",
-        registroConfirmadoEn: null,
-      });
+      mockGetAlumnoDeDB.mockResolvedValue(
+        makeAlumnoDB({ registroConfirmadoEn: undefined })
+      );
 
       await RegistroPage();
       expect(mockRedirect).not.toHaveBeenCalled();
@@ -141,14 +139,7 @@ describe("Registro page", () => {
     it("NO redirige si no hay comisión activa aunque el alumno exista en DB", async () => {
       mockGetComisionActiva.mockResolvedValue(null);
       mockAuth.mockResolvedValue(makeSession("juan"));
-      mockGetAlumnoDeDB.mockResolvedValue({
-        legajo: "12345",
-        nombre: "Juan",
-        apellido: "G",
-        githubUsername: "juan",
-        email: "juan@mail.com",
-        registroConfirmadoEn: null,
-      });
+      mockGetAlumnoDeDB.mockResolvedValue(makeAlumnoDB());
 
       await RegistroPage();
       expect(mockRedirect).not.toHaveBeenCalled();
@@ -160,14 +151,16 @@ describe("Registro page", () => {
       const comision = { id: "c2", spreadsheetId: "s1", columnConfig: null };
       mockGetComisionActiva.mockResolvedValue(comision);
       mockAuth.mockResolvedValue(makeSession("juan"));
-      mockGetAlumnoDeDB.mockResolvedValue({
-        legajo: "99999",
-        nombre: "Juan Carlos",
-        apellido: "García",
-        githubUsername: "juan",
-        email: "personal@gmail.com",
-        registroConfirmadoEn: { id: "c1" },
-      });
+      mockGetAlumnoDeDB.mockResolvedValue(
+        makeAlumnoDB({
+          legajo: "99999",
+          nombre: "Juan Carlos",
+          apellido: "García",
+          githubUsername: "juan",
+          email: "personal@gmail.com",
+          registroConfirmadoEn: { id: "c1" } as any,
+        })
+      );
       // Sheets tiene otro email y otro legajo (el admin rearmó la planilla) — debe ganar DB
       mockGetAlumnoDeSheets.mockResolvedValue({
         legajo: "11111",
@@ -250,14 +243,9 @@ describe("Registro page", () => {
       const comision = { id: "c2", spreadsheetId: "s1", columnConfig: null };
       mockGetComisionActiva.mockResolvedValue(comision);
       mockAuth.mockResolvedValue(makeSession("juan"));
-      mockGetAlumnoDeDB.mockResolvedValue({
-        legajo: "12345",
-        nombre: "Juan",
-        apellido: "G",
-        githubUsername: "juan",
-        email: "juan@mail.com",
-        registroConfirmadoEn: { id: "c1" },
-      });
+      mockGetAlumnoDeDB.mockResolvedValue(
+        makeAlumnoDB({ registroConfirmadoEn: { id: "c1" } as any })
+      );
 
       const element = await RegistroPage();
       const html = renderToStaticMarkup(element);

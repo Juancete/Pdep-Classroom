@@ -6,6 +6,7 @@ import {
   colLetter,
   isValidEmail,
   upsertarAlumnoEnSheets,
+  getSheetNames,
 } from "./sheets";
 import type { GruposColumnConfig } from "@/types";
 
@@ -309,53 +310,61 @@ describe("upsertarAlumnoEnSheets – validaciones", () => {
   };
 
   it("rechaza apellido vacío", async () => {
-    const r = await upsertarAlumnoEnSheets({ ...valid, apellido: "" });
-    expect(r).toEqual({ ok: false, error: "El apellido es obligatorio" });
+    const result = await upsertarAlumnoEnSheets({ ...valid, apellido: "" });
+    expect(result).toEqual({ ok: false, error: "El apellido es obligatorio" });
   });
 
   it("rechaza apellido con solo espacios", async () => {
-    const r = await upsertarAlumnoEnSheets({ ...valid, apellido: "   " });
-    expect(r).toEqual({ ok: false, error: "El apellido es obligatorio" });
+    const result = await upsertarAlumnoEnSheets({ ...valid, apellido: "   " });
+    expect(result).toEqual({ ok: false, error: "El apellido es obligatorio" });
   });
 
   it("rechaza nombre vacío", async () => {
-    const r = await upsertarAlumnoEnSheets({ ...valid, nombre: "" });
-    expect(r).toEqual({ ok: false, error: "El nombre es obligatorio" });
+    const result = await upsertarAlumnoEnSheets({ ...valid, nombre: "" });
+    expect(result).toEqual({ ok: false, error: "El nombre es obligatorio" });
   });
 
   it("rechaza legajo vacío", async () => {
-    const r = await upsertarAlumnoEnSheets({ ...valid, legajo: "" });
-    expect(r).toEqual({ ok: false, error: "El legajo debe tener entre 4 y 8 dígitos" });
+    const result = await upsertarAlumnoEnSheets({ ...valid, legajo: "" });
+    expect(result).toEqual({ ok: false, error: "El legajo debe tener entre 4 y 8 dígitos" });
   });
 
   it("rechaza legajo con letras", async () => {
-    const r = await upsertarAlumnoEnSheets({ ...valid, legajo: "abc12" });
-    expect(r).toEqual({ ok: false, error: "El legajo debe tener entre 4 y 8 dígitos" });
+    const result = await upsertarAlumnoEnSheets({ ...valid, legajo: "abc12" });
+    expect(result).toEqual({ ok: false, error: "El legajo debe tener entre 4 y 8 dígitos" });
   });
 
   it("rechaza email sin @", async () => {
-    const r = await upsertarAlumnoEnSheets({ ...valid, email: "juangmail.com" });
-    expect(r).toEqual({ ok: false, error: "El email no es válido" });
+    const result = await upsertarAlumnoEnSheets({ ...valid, email: "juangmail.com" });
+    expect(result).toEqual({ ok: false, error: "El email no es válido" });
   });
 
   it("rechaza email sin punto en el dominio", async () => {
-    const r = await upsertarAlumnoEnSheets({ ...valid, email: "juan@gmail" });
-    expect(r).toEqual({ ok: false, error: "El email no es válido" });
+    const result = await upsertarAlumnoEnSheets({ ...valid, email: "juan@gmail" });
+    expect(result).toEqual({ ok: false, error: "El email no es válido" });
   });
 
   it("rechaza email vacío", async () => {
-    const r = await upsertarAlumnoEnSheets({ ...valid, email: "" });
-    expect(r).toEqual({ ok: false, error: "El email no es válido" });
+    const result = await upsertarAlumnoEnSheets({ ...valid, email: "" });
+    expect(result).toEqual({ ok: false, error: "El email no es válido" });
   });
 
   it("rechaza github vacío", async () => {
-    const r = await upsertarAlumnoEnSheets({ ...valid, githubUsername: "" });
-    expect(r).toEqual({ ok: false, error: "El usuario de GitHub es obligatorio" });
+    const result = await upsertarAlumnoEnSheets({ ...valid, githubUsername: "" });
+    expect(result).toEqual({ ok: false, error: "El usuario de GitHub es obligatorio" });
   });
 
   it("lanza error si no hay spreadsheetId configurado (input válido)", async () => {
     await expect(upsertarAlumnoEnSheets(valid, undefined)).rejects.toThrow(
       "No hay una comisión activa"
     );
+  });
+});
+
+// ── getSheetNames – validación de spreadsheetId ──────────────
+
+describe("getSheetNames – validación de spreadsheetId", () => {
+  it("lanza error de dominio si el spreadsheetId está vacío", async () => {
+    await expect(getSheetNames("")).rejects.toThrow("No hay una comisión activa");
   });
 });

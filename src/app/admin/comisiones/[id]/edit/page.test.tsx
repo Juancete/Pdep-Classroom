@@ -8,6 +8,7 @@ const mockRequireAdmin = vi.fn();
 const mockGetComision = vi.fn();
 const mockCountAlumnos = vi.fn();
 const mockGetAlumnos = vi.fn();
+const mockGetSheetNames = vi.fn();
 const mockRedirect = vi.fn();
 const mockGetAlumnosConGruposSyncPendiente = vi.fn();
 
@@ -24,6 +25,7 @@ vi.mock("@/lib/repositories", () => ({
 
 vi.mock("@/lib/sheets", () => ({
   getAlumnos: (...args: unknown[]) => mockGetAlumnos(...args),
+  getSheetNames: (...args: unknown[]) => mockGetSheetNames(...args),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -58,9 +60,11 @@ vi.mock("../../comision-form", () => ({
   ComisionForm: ({
     submitLabel,
     defaultValues,
+    initialSheetNames,
   }: {
     submitLabel: string;
     defaultValues?: Record<string, unknown>;
+    initialSheetNames?: string[];
   }) =>
     React.createElement("div", {
       "data-testid": "comision-form",
@@ -68,6 +72,7 @@ vi.mock("../../comision-form", () => ({
       "data-default-anio": defaultValues?.anio,
       "data-default-spreadsheet-id": defaultValues?.spreadsheetId,
       "data-default-activa": defaultValues?.activa,
+      "data-initial-sheet-names": initialSheetNames?.join(","),
     }),
 }));
 
@@ -99,6 +104,7 @@ describe("Edit Comision page", () => {
     mockGetAlumnos.mockResolvedValue([]);
     mockCountAlumnos.mockResolvedValue(0);
     mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([]);
+    mockGetSheetNames.mockResolvedValue(["Alumnos", "Grupos"]);
   });
 
   it("siempre llama a requireAdmin", async () => {
@@ -142,6 +148,22 @@ describe("Edit Comision page", () => {
       mockGetComision.mockResolvedValue(makeComision({ activa: true }));
       const element = await EditComisionPage({ params: { id: "c1" } });
       expect(renderToStaticMarkup(element as React.ReactElement)).toContain('data-default-activa="true"');
+    });
+
+    it("pasa los nombres de hojas al formulario cuando getSheetNames responde", async () => {
+      mockGetComision.mockResolvedValue(makeComision());
+      mockGetSheetNames.mockResolvedValue(["Alumnos", "Grupos"]);
+      const element = await EditComisionPage({ params: { id: "c1" } });
+      expect(renderToStaticMarkup(element as React.ReactElement)).toContain("Alumnos,Grupos");
+    });
+
+    it("no pasa initialSheetNames cuando getSheetNames falla, pero la página sigue funcionando", async () => {
+      mockGetComision.mockResolvedValue(makeComision());
+      mockGetSheetNames.mockRejectedValue(new Error("sin acceso"));
+      const element = await EditComisionPage({ params: { id: "c1" } });
+      const html = renderToStaticMarkup(element as React.ReactElement);
+      expect(html).toContain('data-testid="comision-form"');
+      expect(html).not.toContain("data-initial-sheet-names=");
     });
   });
 
@@ -230,6 +252,33 @@ describe("Edit Comision page", () => {
       expect(html).toContain("Grupos pendientes");
       expect(html).toContain("2");
       expect(html).toContain('data-testid="sync-grupos-button"');
+    });
+
+    it("muestra la lista con nombres de los alumnos con sync pendiente", async () => {
+      mockGetComision.mockResolvedValue(makeComision());
+      mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([
+        { githubUsername: "ana", nombre: "Ana", apellido: "García", nombreCompleto: "García, Ana" },
+        { githubUsername: "bruno", nombre: "Bruno", apellido: "Ruiz", nombreCompleto: "Ruiz, Bruno" },
+      ]);
+
+      const html = renderToStaticMarkup(
+        await EditComisionPage({ params: { id: "c1" } }) as React.ReactElement
+      );
+      expect(html).toContain('data-testid="pendientes-grupos-lista"');
+      expect(html).toContain("García, Ana");
+      expect(html).toContain("@ana");
+      expect(html).toContain("Ruiz, Bruno");
+      expect(html).toContain("@bruno");
+    });
+
+    it("no muestra la lista cuando no hay alumnos con sync pendiente", async () => {
+      mockGetComision.mockResolvedValue(makeComision());
+      mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([]);
+
+      const html = renderToStaticMarkup(
+        await EditComisionPage({ params: { id: "c1" } }) as React.ReactElement
+      );
+      expect(html).not.toContain('data-testid="pendientes-grupos-lista"');
     });
 
     it("no muestra el badge si no hay alumnos pendientes", async () => {

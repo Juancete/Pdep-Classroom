@@ -9,19 +9,19 @@ import { slugify } from "@/lib/naming";
 import type { Paradigma } from "@/types";
 
 export async function getAssignments(): Promise<Assignment[]> {
-  const em = await getEM();
-  return em.find(Assignment, {}, { orderBy: { createdAt: "DESC" } });
+  const entityManager = await getEM();
+  return entityManager.find(Assignment, {}, { orderBy: { createdAt: "DESC" } });
 }
 
 export async function getAssignment(id: string): Promise<Assignment | null> {
-  const em = await getEM();
-  return em.findOne(Assignment, { id });
+  const entityManager = await getEM();
+  return entityManager.findOne(Assignment, { id });
 }
 
 export async function createAssignment(
   data: AssignmentFormData
 ): Promise<Assignment> {
-  const em = await getEM();
+  const entityManager = await getEM();
   const slug = data.slug || slugify(data.titulo);
 
   let assignment: Assignment;
@@ -41,8 +41,8 @@ export async function createAssignment(
   assignment.paradigma = data.paradigma as Paradigma;
   if (data.deadline) assignment.deadline = new Date(data.deadline);
 
-  em.persist(assignment);
-  await em.flush();
+  entityManager.persist(assignment);
+  await entityManager.flush();
   return assignment;
 }
 
@@ -50,8 +50,8 @@ export async function updateAssignment(
   id: string,
   data: Partial<AssignmentFormData>
 ): Promise<Assignment | null> {
-  const em = await getEM();
-  const assignment = await em.findOne(Assignment, { id });
+  const entityManager = await getEM();
+  const assignment = await entityManager.findOne(Assignment, { id });
   if (!assignment) return null;
 
   if (data.titulo !== undefined) assignment.titulo = data.titulo;
@@ -68,10 +68,22 @@ export async function updateAssignment(
     assignment.maxIntegrantes = data.maxIntegrantes;
   }
 
-  await em.flush();
+  await entityManager.flush();
   return assignment;
 }
 
 export async function deleteAssignment(id: string): Promise<void> {
   await deleteEntity(Assignment, id);
+}
+
+export async function setInscripcionesCerradas(
+  assignmentId: string,
+  cerradas: boolean
+): Promise<GrupalAssignment | null> {
+  const entityManager = await getEM();
+  const assignment = await entityManager.findOne(GrupalAssignment, { id: assignmentId });
+  if (!assignment) return null;
+  assignment.inscripcionesCerradas = cerradas;
+  await entityManager.flush();
+  return assignment;
 }

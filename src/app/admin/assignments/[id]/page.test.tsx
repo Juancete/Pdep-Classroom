@@ -60,6 +60,28 @@ vi.mock("../delete-repos-button", () => ({
   ),
 }));
 
+vi.mock("./grupos-panel", () => ({
+  GruposPanel: ({
+    assignmentId,
+    inscripcionesCerradas,
+    grupos,
+    alumnosSinGrupo,
+  }: {
+    assignmentId: string;
+    inscripcionesCerradas: boolean;
+    grupos: { id: string }[];
+    alumnosSinGrupo: { username: string }[];
+  }) => (
+    <div
+      data-testid="grupos-panel"
+      data-assignment={assignmentId}
+      data-cerradas={String(inscripcionesCerradas)}
+      data-grupos={grupos.length}
+      data-sin-grupo={alumnosSinGrupo.length}
+    />
+  ),
+}));
+
 import AssignmentDetailPage from "./page";
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -67,63 +89,74 @@ import AssignmentDetailPage from "./page";
 function makeIndividualAssignment(
   overrides?: Partial<IndividualAssignment>
 ): IndividualAssignment {
-  const a = new IndividualAssignment();
-  a.id = "a1";
-  a.titulo = "Kata Funcional";
-  a.descripcion = "Descripción de la kata";
-  a.templateRepo = "kata-template";
-  a.tipo = "individual";
-  a.paradigma = "funcional";
-  a.slug = "kata-funcional";
-  a.createdAt = new Date("2026-01-01");
-  return Object.assign(a, overrides);
+  const assignment = new IndividualAssignment();
+  assignment.id = "a1";
+  assignment.titulo = "Kata Funcional";
+  assignment.descripcion = "Descripción de la kata";
+  assignment.templateRepo = "kata-template";
+  assignment.tipo = "individual";
+  assignment.paradigma = "funcional";
+  assignment.slug = "kata-funcional";
+  assignment.createdAt = new Date("2026-01-01");
+  return Object.assign(assignment, overrides);
 }
 
 function makeGrupalAssignment(
   overrides?: Partial<GrupalAssignment>
 ): GrupalAssignment {
-  const a = new GrupalAssignment();
-  a.id = "a2";
-  a.titulo = "TP Objetos";
-  a.descripcion = "Trabajo práctico grupal";
-  a.templateRepo = "tp-objetos-template";
-  a.tipo = "grupal";
-  a.paradigma = "objetos";
-  a.slug = "tp-objetos";
-  a.createdAt = new Date("2026-01-01");
-  a.maxIntegrantes = 3;
-  return Object.assign(a, overrides);
+  const assignment = new GrupalAssignment();
+  assignment.id = "a2";
+  assignment.titulo = "TP Objetos";
+  assignment.descripcion = "Trabajo práctico grupal";
+  assignment.templateRepo = "tp-objetos-template";
+  assignment.tipo = "grupal";
+  assignment.paradigma = "objetos";
+  assignment.slug = "tp-objetos";
+  assignment.createdAt = new Date("2026-01-01");
+  assignment.maxIntegrantes = 3;
+  return Object.assign(assignment, overrides);
 }
 
 function makeEntrega(overrides?: Partial<Entrega>): Entrega {
-  const e = new Entrega();
-  e.id = "e1";
-  e.githubUsernames = ["usuario1"];
-  e.repoName = "kata-funcional-usuario1";
-  e.repoUrl = "https://github.com/org/kata-funcional-usuario1";
-  e.createdAt = new Date("2026-01-02");
-  return Object.assign(e, overrides);
+  const entrega = new Entrega();
+  entrega.id = "e1";
+  entrega.githubUsernames = ["usuario1"];
+  entrega.repoName = "kata-funcional-usuario1";
+  entrega.repoUrl = "https://github.com/org/kata-funcional-usuario1";
+  entrega.createdAt = new Date("2026-01-02");
+  return Object.assign(entrega, overrides);
 }
 
 function makeAlumno(overrides?: Partial<Alumno>): Alumno {
-  const a = new Alumno();
-  a.id = "al1";
-  a.legajo = "12345";
-  a.nombre = "Juan";
-  a.apellido = "García";
-  a.githubUsername = "usuario1";
-  a.email = "juan@test.com";
-  return Object.assign(a, overrides);
+  const alumno = new Alumno();
+  alumno.id = "al1";
+  alumno.legajo = "12345";
+  alumno.nombre = "Juan";
+  alumno.apellido = "García";
+  alumno.githubUsername = "usuario1";
+  alumno.email = "juan@test.com";
+  return Object.assign(alumno, overrides);
 }
 
 function makeGrupo(overrides?: Partial<Grupo>): Grupo {
-  const g = new Grupo();
-  g.id = "g1";
-  g.nombre = "Grupo 1";
-  g.paradigma = "objetos";
-  g.maxIntegrantes = 3;
-  g.creadoPor = "usuario1";
-  return Object.assign(g, overrides);
+  const grupo = new Grupo();
+  grupo.id = "g1";
+  grupo.nombre = "Grupo 1";
+  grupo.paradigma = "objetos";
+  grupo.maxIntegrantes = 3;
+  grupo.creadoPor = "usuario1";
+  const miembros: string[] = [];
+  const fakeMethods = {
+    isOpen: () => true,
+    estaLleno: () => false,
+    etiquetaCupo: () => `${miembros.length}/${grupo.maxIntegrantes} integrantes`,
+    usernamesDeMiembros: () => miembros,
+    usernamesCanonicos: () => miembros.map((username) => username.toLowerCase()),
+    alumnos: {
+      getItems: () => [] as ReturnType<typeof makeAlumno>[],
+    },
+  };
+  return Object.assign(grupo, fakeMethods, overrides);
 }
 
 // ── Tests ────────────────────────────────────────────────────
@@ -318,11 +351,84 @@ describe("Admin Assignment Detail Page", () => {
       mockGetAlumnos.mockResolvedValue([
         makeAlumno({ githubUsername: "usuario1", apellido: "García", nombre: "Juan" }),
       ]);
-      // No podemos inspeccionar los props del mock directamente, pero podemos
-      // verificar que el page no falla al construir el nombre completo
       await expect(
         AssignmentDetailPage({ params: { id: "a1" } })
       ).resolves.toBeDefined();
+    });
+  });
+
+  describe("panel de grupos (assignments grupales)", () => {
+    it("no muestra GruposPanel para assignments individuales", async () => {
+      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
+      const element = await AssignmentDetailPage({ params: { id: "a1" } });
+      expect(renderToStaticMarkup(element)).not.toContain("grupos-panel");
+    });
+
+    it("muestra GruposPanel para assignments grupales", async () => {
+      mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
+      const element = await AssignmentDetailPage({ params: { id: "a2" } });
+      expect(renderToStaticMarkup(element)).toContain('data-testid="grupos-panel"');
+    });
+
+    it("pasa inscripcionesCerradas=true cuando el assignment las tiene cerradas", async () => {
+      mockGetAssignment.mockResolvedValue(
+        makeGrupalAssignment({ id: "a2", inscripcionesCerradas: true })
+      );
+      const element = await AssignmentDetailPage({ params: { id: "a2" } });
+      expect(renderToStaticMarkup(element)).toContain('data-cerradas="true"');
+    });
+
+    it("pasa inscripcionesCerradas=false cuando están abiertas", async () => {
+      mockGetAssignment.mockResolvedValue(
+        makeGrupalAssignment({ id: "a2", inscripcionesCerradas: false })
+      );
+      const element = await AssignmentDetailPage({ params: { id: "a2" } });
+      expect(renderToStaticMarkup(element)).toContain('data-cerradas="false"');
+    });
+
+    it("pasa los grupos al panel", async () => {
+      mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
+      mockGetGruposDeAssignment.mockResolvedValue([
+        makeGrupo({ id: "g1" }),
+        makeGrupo({ id: "g2" }),
+      ]);
+      const element = await AssignmentDetailPage({ params: { id: "a2" } });
+      expect(renderToStaticMarkup(element)).toContain('data-grupos="2"');
+    });
+
+    it("calcula correctamente los alumnos sin grupo", async () => {
+      mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
+      mockGetAlumnos.mockResolvedValue([
+        makeAlumno({ id: "al1", githubUsername: "usuario1" }),
+        makeAlumno({ id: "al2", githubUsername: "usuario2" }),
+        makeAlumno({ id: "al3", githubUsername: "usuario3" }),
+      ]);
+      const miembros = ["usuario1"];
+      const grupoConMiembro = {
+        id: "g1",
+        nombre: "Grupo 1",
+        paradigma: "objetos",
+        maxIntegrantes: 3,
+        creadoPor: "usuario1",
+        isOpen: () => true,
+        estaLleno: () => false,
+        etiquetaCupo: () => `${miembros.length}/3 integrantes`,
+        usernamesDeMiembros: () => miembros,
+        usernamesCanonicos: () => miembros.map((username) => username.toLowerCase()),
+        alumnos: {
+          getItems: () => miembros.map((username) => makeAlumno({ githubUsername: username })),
+        },
+      };
+      mockGetGruposDeAssignment.mockResolvedValue([grupoConMiembro]);
+
+      const element = await AssignmentDetailPage({ params: { id: "a2" } });
+      expect(renderToStaticMarkup(element)).toContain('data-sin-grupo="2"');
+    });
+
+    it("no llama a getGruposDeAssignment para assignments individuales", async () => {
+      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
+      await AssignmentDetailPage({ params: { id: "a1" } });
+      expect(mockGetGruposDeAssignment).not.toHaveBeenCalled();
     });
   });
 });

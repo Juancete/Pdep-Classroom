@@ -101,16 +101,16 @@ describe("POST /api/registro", () => {
   });
 
   it("usa el githubUsername del usuario autenticado cuando coincide con el body", async () => {
-    const res = await POST(makeRequest(validBody));
-    expect(res.status).toBe(200);
+    const response = await POST(makeRequest(validBody));
+    expect(response.status).toBe(200);
     const [inputPasado] = mockUpsertarAlumnoEnSheets.mock.calls[0];
     expect(inputPasado.githubUsername).toBe("juangarcia");
   });
 
   it("devuelve 400 con field=githubUsername si el body trae un github distinto al de la sesión", async () => {
-    const res = await POST(makeRequest({ ...validBody, githubUsername: "attacker" }));
-    const json = await res.json();
-    expect(res.status).toBe(400);
+    const response = await POST(makeRequest({ ...validBody, githubUsername: "attacker" }));
+    const json = await response.json();
+    expect(response.status).toBe(400);
     expect(json.field).toBe("githubUsername");
     expect(json.error).toContain("juangarcia");
     expect(json.error).toContain("attacker");
@@ -119,8 +119,8 @@ describe("POST /api/registro", () => {
   });
 
   it("compara githubUsername case-insensitive (no rechaza JuanGarcia vs juangarcia)", async () => {
-    const res = await POST(makeRequest({ ...validBody, githubUsername: "JuanGarcia" }));
-    expect(res.status).toBe(200);
+    const response = await POST(makeRequest({ ...validBody, githubUsername: "JuanGarcia" }));
+    expect(response.status).toBe(200);
     const [inputPasado] = mockUpsertAlumno.mock.calls[0];
     expect(inputPasado.githubUsername).toBe("juangarcia");
   });
@@ -171,8 +171,8 @@ describe("POST /api/registro", () => {
     mockUpsertAlumno.mockRejectedValue(
       new FakeLegajoConflictError("12345", "otro-alumno")
     );
-    const res = await POST(makeRequest(validBody));
-    expect(res.status).toBe(400);
+    const response = await POST(makeRequest(validBody));
+    expect(response.status).toBe(400);
     expect(mockUpsertarAlumnoEnSheets).not.toHaveBeenCalled();
   });
 
@@ -180,33 +180,33 @@ describe("POST /api/registro", () => {
     mockUpsertAlumno.mockRejectedValue(
       new FakeLegajoConflictError("12345", "otro-alumno")
     );
-    const res = await POST(makeRequest(validBody));
-    const json = await res.json();
-    expect(res.status).toBe(400);
+    const response = await POST(makeRequest(validBody));
+    const json = await response.json();
+    expect(response.status).toBe(400);
     expect(json.field).toBe("legajo");
     expect(json.error).toContain("otro-alumno");
   });
 
   it("devuelve 400 si la validación de inputs falla sin tocar DB ni Sheets", async () => {
-    const res = await POST(makeRequest({ ...validBody, email: "no-es-email" }));
-    expect(res.status).toBe(400);
+    const response = await POST(makeRequest({ ...validBody, email: "no-es-email" }));
+    expect(response.status).toBe(400);
     expect(mockUpsertAlumno).not.toHaveBeenCalled();
     expect(mockUpsertarAlumnoEnSheets).not.toHaveBeenCalled();
   });
 
   it("devuelve 409 sin tocar Sheets ni DB si no hay comisión activa", async () => {
     mockGetComisionActiva.mockResolvedValue(null);
-    const res = await POST(makeRequest(validBody));
-    expect(res.status).toBe(409);
+    const response = await POST(makeRequest(validBody));
+    expect(response.status).toBe(409);
     expect(mockUpsertarAlumnoEnSheets).not.toHaveBeenCalled();
     expect(mockUpsertAlumno).not.toHaveBeenCalled();
   });
 
   it("devuelve 500 si algo tira un error inesperado", async () => {
     mockUpsertarAlumnoEnSheets.mockRejectedValue(new Error("boom"));
-    const res = await POST(makeRequest(validBody));
-    expect(res.status).toBe(500);
-    const json = await res.json();
+    const response = await POST(makeRequest(validBody));
+    expect(response.status).toBe(500);
+    const json = await response.json();
     // El mensaje del error interno no debe filtrarse al cliente.
     expect(json.error).toBe("Error interno del servidor");
     expect(json.error).not.toContain("boom");
@@ -222,25 +222,25 @@ describe("POST /api/registro", () => {
 
     it("devuelve groupSubscription: 'added' en el body cuando la suscripción funciona", async () => {
       mockAgregarMiembroAGrupo.mockResolvedValue({ status: "added" });
-      const res = await POST(makeRequest(validBody));
-      const json = await res.json();
-      expect(res.status).toBe(200);
+      const response = await POST(makeRequest(validBody));
+      const json = await response.json();
+      expect(response.status).toBe(200);
       expect(json).toEqual({ ok: true, groupSubscription: "added" });
     });
 
     it("devuelve groupSubscription: 'already_member' cuando el alumno ya estaba en el grupo", async () => {
       mockAgregarMiembroAGrupo.mockResolvedValue({ status: "already_member" });
-      const res = await POST(makeRequest(validBody));
-      const json = await res.json();
-      expect(res.status).toBe(200);
+      const response = await POST(makeRequest(validBody));
+      const json = await response.json();
+      expect(response.status).toBe(200);
       expect(json.groupSubscription).toBe("already_member");
     });
 
     it("devuelve groupSubscription: 'skipped' cuando la feature está desactivada", async () => {
       mockAgregarMiembroAGrupo.mockResolvedValue({ status: "skipped" });
-      const res = await POST(makeRequest(validBody));
-      const json = await res.json();
-      expect(res.status).toBe(200);
+      const response = await POST(makeRequest(validBody));
+      const json = await response.json();
+      expect(response.status).toBe(200);
       expect(json.groupSubscription).toBe("skipped");
     });
 
@@ -249,9 +249,9 @@ describe("POST /api/registro", () => {
         status: "error",
         error: "Sin permisos",
       });
-      const res = await POST(makeRequest(validBody));
-      const json = await res.json();
-      expect(res.status).toBe(200);
+      const response = await POST(makeRequest(validBody));
+      const json = await response.json();
+      expect(response.status).toBe(200);
       expect(json.groupSubscription).toBe("error");
       // El alta en DB ya ocurrió antes de intentar la suscripción
       expect(mockUpsertAlumno).toHaveBeenCalledOnce();
@@ -300,19 +300,19 @@ describe("POST /api/registro", () => {
     });
 
     it("no incluye gruposSync en el body cuando el wrapper completa sin throwear", async () => {
-      const res = await POST(makeRequest(validBody));
-      const json = await res.json();
-      expect(res.status).toBe(200);
+      const response = await POST(makeRequest(validBody));
+      const json = await response.json();
+      expect(response.status).toBe(200);
       expect(json.gruposSync).toBeUndefined();
     });
 
     it("responde 200 con gruposSync='error' cuando el wrapper throwea (el alta se preserva, el flag en DB dispara retry)", async () => {
       mockIntentarSincronizarGrupos.mockRejectedValue(new Error("Sheets caído"));
 
-      const res = await POST(makeRequest(validBody));
-      const json = await res.json();
+      const response = await POST(makeRequest(validBody));
+      const json = await response.json();
 
-      expect(res.status).toBe(200);
+      expect(response.status).toBe(200);
       expect(json.gruposSync).toBe("error");
       // El alta no se deshace por un fallo en el hook accesorio
       expect(mockMarcarRegistroConfirmado).toHaveBeenCalledOnce();

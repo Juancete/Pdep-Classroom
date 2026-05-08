@@ -51,6 +51,7 @@ const comisionConGrupos = {
     email: 4,
     grupos: gruposConfig,
   },
+  gruposConfig: () => gruposConfig,
 } as unknown as Parameters<typeof sincronizarGruposDelAlumno>[1];
 
 const comisionSinGrupos = {
@@ -65,6 +66,7 @@ const comisionSinGrupos = {
     githubUsername: 3,
     email: 4,
   },
+  gruposConfig: () => undefined,
 } as unknown as Parameters<typeof sincronizarGruposDelAlumno>[1];
 
 const alumnoFake = { id: "a1", githubUsername: "juangarcia" };

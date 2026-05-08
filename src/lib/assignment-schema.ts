@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PARADIGMAS } from "@/types";
+import { GRUPAL_MIN_MAX_INTEGRANTES } from "@/domain/entities/domain-constants";
 
 export const AssignmentBaseSchema = z.object({
   titulo: z.string().min(1, "El título es obligatorio"),
@@ -16,7 +17,7 @@ export const AssignmentBaseSchema = z.object({
   maxIntegrantes: z.coerce
     .number()
     .int()
-    .min(2, "Mínimo 2 integrantes")
+    .min(GRUPAL_MIN_MAX_INTEGRANTES, `Mínimo ${GRUPAL_MIN_MAX_INTEGRANTES} integrantes`)
     .optional(),
 });
 

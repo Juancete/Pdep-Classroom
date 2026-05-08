@@ -4,7 +4,8 @@ import {
   countAlumnos,
   getAlumnosConGruposSyncPendiente,
 } from "@/lib/repositories";
-import { getAlumnos } from "@/lib/sheets";
+import type { Alumno } from "@/domain/entities";
+import { getAlumnos, getSheetNames } from "@/lib/sheets";
 import { redirect } from "next/navigation";
 import { ComisionForm } from "../../comision-form";
 import { actualizarComision } from "../../actions";
@@ -22,12 +23,13 @@ export default async function EditComisionPage({
   if (!comision) redirect("/admin/comisiones");
 
   // Comparar counts en paralelo; si alguno falla no rompemos la página
-  const [countSheet, countDB, pendientesGrupos] = await Promise.all([
+  const [countSheet, countDB, pendientesGrupos, sheetNames] = await Promise.all([
     getAlumnos(comision.spreadsheetId, comision.columnConfig)
-      .then((a) => a.length)
+      .then((alumnos) => alumnos.length)
       .catch(() => null),
     countAlumnos().catch(() => null),
     getAlumnosConGruposSyncPendiente(comision.id).catch(() => [] as unknown[]),
+    getSheetNames(comision.spreadsheetId).catch(() => null),
   ]);
 
   const desynced =
@@ -64,6 +66,25 @@ export default async function EditComisionPage({
         )}
       </div>
 
+      {cantPendientesGrupos > 0 && (
+        <div
+          className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6"
+          data-testid="pendientes-grupos-lista"
+        >
+          <p className="text-xs font-semibold text-red-700 mb-2">
+            Alumnos con sync de grupos pendiente:
+          </p>
+          <ul className="space-y-0.5">
+            {(pendientesGrupos as Alumno[]).map((alumno) => (
+              <li key={alumno.githubUsername} className="text-xs text-red-700">
+                {alumno.nombreCompleto}{" "}
+                <span className="text-red-400">@{alumno.githubUsername}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <ComisionForm
         action={actualizarComision}
         defaultValues={{
@@ -73,6 +94,7 @@ export default async function EditComisionPage({
           activa: comision.activa,
           columnConfig: comision.columnConfig,
         }}
+        initialSheetNames={sheetNames ?? undefined}
         submitLabel="Guardar cambios"
       />
     </div>
