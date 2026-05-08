@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import React from "react";
+import { IndividualAssignment } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -60,7 +61,7 @@ import EditAssignmentPage from "./page";
 // ── Helpers ──────────────────────────────────────────────────
 
 function makeAssignment(overrides?: object) {
-  return {
+  return Object.assign(new IndividualAssignment(), {
     id: "a1",
     titulo: "Kata Funcional",
     descripcion: "Primera kata",
@@ -71,7 +72,7 @@ function makeAssignment(overrides?: object) {
     createdAt: new Date("2026-01-01"),
     slug: "kata-funcional",
     ...overrides,
-  };
+  });
 }
 
 // ── Tests ────────────────────────────────────────────────────

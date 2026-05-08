@@ -46,16 +46,16 @@ import AdminAssignmentsPage from "./page";
 // ── Helpers ──────────────────────────────────────────────────
 
 function makeAssignment(overrides?: Partial<IndividualAssignment>): IndividualAssignment {
-  const a = new IndividualAssignment();
-  a.id = "a1";
-  a.titulo = "Kata Funcional";
-  a.descripcion = "Descripción de la kata";
-  a.templateRepo = "kata-template";
-  a.tipo = "individual";
-  a.paradigma = "funcional";
-  a.slug = "kata-funcional";
-  a.createdAt = new Date("2026-01-01");
-  return Object.assign(a, overrides);
+  const assignment = new IndividualAssignment();
+  assignment.id = "a1";
+  assignment.titulo = "Kata Funcional";
+  assignment.descripcion = "Descripción de la kata";
+  assignment.templateRepo = "kata-template";
+  assignment.tipo = "individual";
+  assignment.paradigma = "funcional";
+  assignment.slug = "kata-funcional";
+  assignment.createdAt = new Date("2026-01-01");
+  return Object.assign(assignment, overrides);
 }
 
 // ── Tests ────────────────────────────────────────────────────

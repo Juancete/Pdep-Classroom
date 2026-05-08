@@ -9,6 +9,7 @@ import {
   DataRow,
   DataCell,
 } from "@/app/components/DataTable";
+import { matcheaEntregaQuery } from "@/lib/entrega-query";
 
 export type EntregaRow = {
   id: string;
@@ -16,18 +17,13 @@ export type EntregaRow = {
   repoName?: string;
   repoUrl?: string;
   repoDeleted: boolean;
+  estadoRepo: "borrado" | "activo" | "sin-repo";
   createdAt: string;
   nombreCompleto: string;
 };
 
 export function filterEntregas(entregas: EntregaRow[], rawQuery: string): EntregaRow[] {
-  const query = rawQuery.toLowerCase().trim();
-  if (!query) return entregas;
-  return entregas.filter(
-    (entrega) =>
-      entrega.githubUsernames.some((username) => username.toLowerCase().includes(query)) ||
-      (entrega.repoName ?? "").toLowerCase().includes(query)
-  );
+  return entregas.filter((entrega) => matcheaEntregaQuery(entrega, rawQuery));
 }
 
 export function EntregasTable({ entregas }: { entregas: EntregaRow[] }) {
@@ -76,11 +72,10 @@ export function EntregasTable({ entregas }: { entregas: EntregaRow[] }) {
                   </span>
                 </DataCell>
                 <DataCell label="Repositorio">
-                  {entrega.repoDeleted ? (
-                    <span className="text-red-400 text-xs">
-                      Repositorio borrado
-                    </span>
-                  ) : entrega.repoUrl ? (
+                  {entrega.estadoRepo === "borrado" && (
+                    <span className="text-red-400 text-xs">Repositorio borrado</span>
+                  )}
+                  {entrega.estadoRepo === "activo" && (
                     <a
                       href={entrega.repoUrl}
                       target="_blank"
@@ -102,7 +97,8 @@ export function EntregasTable({ entregas }: { entregas: EntregaRow[] }) {
                       </svg>
                       Ir al repo
                     </a>
-                  ) : (
+                  )}
+                  {entrega.estadoRepo === "sin-repo" && (
                     <span className="text-gray-400 text-xs">Sin repo</span>
                   )}
                 </DataCell>

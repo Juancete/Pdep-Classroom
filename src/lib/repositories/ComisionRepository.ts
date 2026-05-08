@@ -10,33 +10,33 @@ export interface ComisionFormData {
 }
 
 export async function getComisiones(): Promise<Comision[]> {
-  const em = await getEM();
-  return em.find(Comision, {}, { orderBy: { anio: "DESC" } });
+  const entityManager = await getEM();
+  return entityManager.find(Comision, {}, { orderBy: { anio: "DESC" } });
 }
 
 export async function getComision(id: string): Promise<Comision | null> {
-  const em = await getEM();
-  return em.findOne(Comision, { id });
+  const entityManager = await getEM();
+  return entityManager.findOne(Comision, { id });
 }
 
 export async function getComisionActiva(): Promise<Comision | null> {
-  const em = await getEM();
-  return em.findOne(Comision, { activa: true });
+  const entityManager = await getEM();
+  return entityManager.findOne(Comision, { activa: true });
 }
 
 export async function createComision(data: ComisionFormData): Promise<Comision> {
-  const em = await getEM();
+  const entityManager = await getEM();
 
   if (data.activa) {
-    await em.nativeUpdate(Comision, {}, { activa: false });
+    await entityManager.nativeUpdate(Comision, {}, { activa: false });
   }
 
   const comision = new Comision(data.anio, data.spreadsheetId);
   comision.activa = data.activa;
   comision.columnConfig = data.columnConfig ?? { ...DEFAULT_COLUMN_CONFIG };
 
-  em.persist(comision);
-  await em.flush();
+  entityManager.persist(comision);
+  await entityManager.flush();
   return comision;
 }
 
@@ -44,12 +44,12 @@ export async function updateComision(
   id: string,
   data: Partial<ComisionFormData>
 ): Promise<Comision | null> {
-  const em = await getEM();
-  const comision = await em.findOne(Comision, { id });
+  const entityManager = await getEM();
+  const comision = await entityManager.findOne(Comision, { id });
   if (!comision) return null;
 
   if (data.activa) {
-    await em.nativeUpdate(Comision, { id: { $ne: id } }, { activa: false });
+    await entityManager.nativeUpdate(Comision, { id: { $ne: id } }, { activa: false });
   }
 
   if (data.anio !== undefined) comision.anio = data.anio;
@@ -57,7 +57,7 @@ export async function updateComision(
   if (data.activa !== undefined) comision.activa = data.activa;
   if (data.columnConfig !== undefined) comision.columnConfig = data.columnConfig;
 
-  await em.flush();
+  await entityManager.flush();
   return comision;
 }
 

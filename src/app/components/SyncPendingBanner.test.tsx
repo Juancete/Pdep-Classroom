@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { Alumno } from "@/domain/entities";
+import { Alumno } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -20,15 +20,17 @@ import { SyncPendingBanner } from "./SyncPendingBanner";
 // ── Helpers ──────────────────────────────────────────────────
 
 function makeAlumno(overrides: Partial<Alumno> = {}): Alumno {
-  return {
+  return Object.assign(new Alumno(), {
     id: "uuid-1",
     legajo: "12345",
     nombre: "Juan",
     apellido: "Garcia",
     githubUsername: "juangarcia",
     email: "juan@example.com",
+    gruposSyncFallidoEn: null,
+    alumnoSyncFallidoEn: null,
     ...overrides,
-  } as Alumno;
+  });
 }
 
 // ── Tests ────────────────────────────────────────────────────
@@ -40,8 +42,8 @@ describe("SyncPendingBanner", () => {
 
   it("no renderiza nada si no hay usuario logueado", async () => {
     mockGetCurrentUser.mockResolvedValue(null);
-    const el = await SyncPendingBanner();
-    expect(el).toBeNull();
+    const banner = await SyncPendingBanner();
+    expect(banner).toBeNull();
     expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
   });
 
@@ -50,8 +52,8 @@ describe("SyncPendingBanner", () => {
       githubUsername: "juangarcia",
       isAdmin: true,
     });
-    const el = await SyncPendingBanner();
-    expect(el).toBeNull();
+    const banner = await SyncPendingBanner();
+    expect(banner).toBeNull();
     expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
   });
 
@@ -61,21 +63,21 @@ describe("SyncPendingBanner", () => {
       isAdmin: false,
     });
     mockGetAlumnoByGithub.mockResolvedValue(null);
-    const el = await SyncPendingBanner();
-    expect(el).toBeNull();
+    const banner = await SyncPendingBanner();
+    expect(banner).toBeNull();
   });
 
-  it("no renderiza nada si el alumno no tiene el flag prendido", async () => {
+  it("no renderiza nada si ningún flag está prendido", async () => {
     mockGetCurrentUser.mockResolvedValue({
       githubUsername: "juangarcia",
       isAdmin: false,
     });
     mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
-    const el = await SyncPendingBanner();
-    expect(el).toBeNull();
+    const banner = await SyncPendingBanner();
+    expect(banner).toBeNull();
   });
 
-  it("renderiza el banner cuando el alumno tiene el flag prendido", async () => {
+  it("renderiza el banner cuando gruposSyncFallidoEn está prendido", async () => {
     mockGetCurrentUser.mockResolvedValue({
       githubUsername: "juangarcia",
       isAdmin: false,
@@ -84,11 +86,45 @@ describe("SyncPendingBanner", () => {
       makeAlumno({ gruposSyncFallidoEn: new Date("2026-04-01") })
     );
 
-    const el = await SyncPendingBanner();
-    const html = renderToStaticMarkup(el as React.ReactElement);
+    const banner = await SyncPendingBanner();
+    const html = renderToStaticMarkup(banner as React.ReactElement);
 
     expect(html).toContain("No pudimos asignarte a tu grupo de TP");
     expect(html).toContain('href="/perfil"');
     expect(html).toContain("Reintentar");
+  });
+
+  it("renderiza el banner cuando alumnoSyncFallidoEn está prendido", async () => {
+    mockGetCurrentUser.mockResolvedValue({
+      githubUsername: "juangarcia",
+      isAdmin: false,
+    });
+    mockGetAlumnoByGithub.mockResolvedValue(
+      makeAlumno({ alumnoSyncFallidoEn: new Date("2026-04-01") })
+    );
+
+    const banner = await SyncPendingBanner();
+    const html = renderToStaticMarkup(banner as React.ReactElement);
+
+    expect(html).toContain("No pudimos reflejar tus datos de alumno");
+  });
+
+  it("renderiza mensaje combinado cuando ambos flags están prendidos", async () => {
+    mockGetCurrentUser.mockResolvedValue({
+      githubUsername: "juangarcia",
+      isAdmin: false,
+    });
+    mockGetAlumnoByGithub.mockResolvedValue(
+      makeAlumno({
+        gruposSyncFallidoEn: new Date("2026-04-01"),
+        alumnoSyncFallidoEn: new Date("2026-04-01"),
+      })
+    );
+
+    const banner = await SyncPendingBanner();
+    const html = renderToStaticMarkup(banner as React.ReactElement);
+
+    expect(html).toContain("tus datos");
+    expect(html).toContain("grupo de TP");
   });
 });

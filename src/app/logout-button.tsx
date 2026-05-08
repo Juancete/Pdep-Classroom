@@ -16,13 +16,13 @@ export function UserMenu({ username, image, isAdmin = false }: Props) {
 
   useEffect(() => {
     if (!open) return;
-    const onPointer = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+    const onPointer = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
         setOpen(false);
       }
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
     };
     document.addEventListener("mousedown", onPointer);
     document.addEventListener("keydown", onKey);
@@ -39,7 +39,7 @@ export function UserMenu({ username, image, isAdmin = false }: Props) {
         className="flex items-center gap-2 cursor-pointer"
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpen((previous) => !previous)}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={image} alt="" className="w-7 h-7 rounded-full" />

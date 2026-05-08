@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { getAlumnoByGithub, getComisionActiva } from "@/lib/repositories";
 import { redirect } from "next/navigation";
 import { AlumnoForm } from "@/app/components/AlumnoForm";
+import { verificarConsistenciaAlumno } from "@/lib/services/verificarConsistenciaAlumno";
 import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
 import type { PdepUser } from "@/types";
 
@@ -15,19 +16,21 @@ export default async function PerfilPage() {
   const alumno = await getAlumnoByGithub(githubUsername);
   if (!alumno) redirect("/registro");
 
-  // Si el alumno tiene sync de grupos pendiente, reintentamos al montar
-  // el perfil. Si funciona, el flag se limpia acá mismo y el banner global
-  // desaparece en el próximo render. Si sigue fallando, el wrapper deja el
-  // flag prendido y el banner sigue visible — no queremos que la excepción
-  // rompa el render del perfil.
-  if (alumno.gruposSyncFallidoEn) {
-    const comisionActiva = await getComisionActiva();
-    if (comisionActiva) {
-      try {
-        await intentarSincronizarGrupos(githubUsername, comisionActiva);
-      } catch {
-        // Flag persistente en DB se encarga del banner en este render.
+  // Reintento on-demand: si alguno de los flags de sync está prendido,
+  // el alumno probablemente entró acá específicamente para resolverlo.
+  // Las dos llamadas son independientes y se invocan solo si su flag está activo.
+  // Protegemos defensivamente: una excepción inesperada no debe romper el render.
+  if (alumno.tieneSyncPendiente()) {
+    try {
+      const comisionActiva = await getComisionActiva();
+      if (comisionActiva) {
+        const tareas: Promise<unknown>[] = [];
+        if (alumno.tieneSyncDeAlumnoFallido()) tareas.push(verificarConsistenciaAlumno(githubUsername, comisionActiva));
+        if (alumno.tieneSyncDeGruposFallido()) tareas.push(intentarSincronizarGrupos(githubUsername, comisionActiva));
+        await Promise.allSettled(tareas);
       }
+    } catch {
+      // Flags persistentes en DB se encargan del banner.
     }
   }
 

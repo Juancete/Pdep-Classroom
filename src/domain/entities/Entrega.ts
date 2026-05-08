@@ -8,6 +8,7 @@ import { randomUUID } from "crypto";
 import { Alumno } from "./Alumno";
 import { Assignment } from "./Assignment";
 import { Grupo } from "./Grupo";
+import { matcheaEntregaQuery } from "@/lib/entrega-query";
 
 @Entity()
 export class Entrega {
@@ -43,5 +44,23 @@ export class Entrega {
 
   hasRepo(): boolean {
     return !!this.repoUrl && !this.repoDeleted;
+  }
+
+  repoFueBorrado(): boolean {
+    return !!this.repoName && this.repoDeleted;
+  }
+
+  noTieneRepo(): boolean {
+    return !this.repoName;
+  }
+
+  estadoRepo(): "borrado" | "activo" | "sin-repo" {
+    if (this.repoFueBorrado()) return "borrado";
+    if (this.hasRepo()) return "activo";
+    return "sin-repo";
+  }
+
+  matcheaQuery(rawQuery: string): boolean {
+    return matcheaEntregaQuery(this, rawQuery);
   }
 }

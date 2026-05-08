@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PdepUser } from "@/types";
-import type { Alumno } from "@/domain/entities";
+import { Alumno } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
 const mockAuth = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
 const mockGetComisionActiva = vi.fn();
+const mockVerificarConsistenciaAlumno = vi.fn();
 const mockIntentarSincronizarGrupos = vi.fn();
 const mockRedirect = vi.fn().mockImplementation((url: string) => {
   throw new Error(`REDIRECT:${url}`);
@@ -20,6 +21,11 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/repositories", () => ({
   getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
   getComisionActiva: () => mockGetComisionActiva(),
+}));
+
+vi.mock("@/lib/services/verificarConsistenciaAlumno", () => ({
+  verificarConsistenciaAlumno: (...args: unknown[]) =>
+    mockVerificarConsistenciaAlumno(...args),
 }));
 
 vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
@@ -60,23 +66,28 @@ function makeSession(githubUsername: string) {
 }
 
 function makeAlumno(overrides: Partial<Alumno> = {}): Alumno {
-  return {
-    id: "uuid-1",
-    legajo: "12345",
-    nombre: "Juan",
-    apellido: "Garcia",
-    githubUsername: "juangarcia",
-    email: "juan@example.com",
-    comision: undefined,
-    ...overrides,
-  } as Alumno;
+  const alumno = new Alumno();
+  alumno.id = "uuid-1";
+  alumno.legajo = "12345";
+  alumno.nombre = "Juan";
+  alumno.apellido = "Garcia";
+  alumno.githubUsername = "juangarcia";
+  alumno.email = "juan@example.com";
+  alumno.gruposSyncFallidoEn = null;
+  alumno.alumnoSyncFallidoEn = null;
+  return Object.assign(alumno, overrides);
 }
+
+const comisionActiva = { id: "c1", spreadsheetId: "sheet-xyz" };
 
 // ── Tests ────────────────────────────────────────────────────
 
 describe("Perfil page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetComisionActiva.mockResolvedValue(comisionActiva);
+    mockVerificarConsistenciaAlumno.mockResolvedValue(undefined);
+    mockIntentarSincronizarGrupos.mockResolvedValue(undefined);
     mockRedirect.mockImplementation((url: string) => {
       throw new Error(`REDIRECT:${url}`);
     });
@@ -103,8 +114,6 @@ describe("Perfil page", () => {
     beforeEach(() => {
       mockAuth.mockResolvedValue(makeSession("juangarcia"));
       mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
-      mockGetComisionActiva.mockResolvedValue({ id: "c1" });
-      mockIntentarSincronizarGrupos.mockResolvedValue(false);
     });
 
     it("muestra el título Mi perfil", async () => {
@@ -133,31 +142,61 @@ describe("Perfil page", () => {
     });
   });
 
-  describe("reintento de sincronización de grupos al montar", () => {
+  describe("reintento manual on-demand al montar", () => {
     beforeEach(() => {
       mockAuth.mockResolvedValue(makeSession("juangarcia"));
-      mockGetComisionActiva.mockResolvedValue({ id: "c1" });
-      mockIntentarSincronizarGrupos.mockResolvedValue(undefined);
     });
 
-    it("no reintenta la sync si el alumno no tiene el flag prendido", async () => {
+    it("no dispara ninguna sync si ningún flag está prendido", async () => {
       mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
       await PerfilPage();
+      expect(mockVerificarConsistenciaAlumno).not.toHaveBeenCalled();
       expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
     });
 
-    it("reintenta la sync al montar si el alumno tiene el flag prendido", async () => {
+    it("llama a verificarConsistenciaAlumno si alumnoSyncFallidoEn está prendido", async () => {
+      mockGetAlumnoByGithub.mockResolvedValue(
+        makeAlumno({ alumnoSyncFallidoEn: new Date("2026-04-01") })
+      );
+      await PerfilPage();
+      expect(mockVerificarConsistenciaAlumno).toHaveBeenCalledWith(
+        "juangarcia",
+        comisionActiva
+      );
+      expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+    });
+
+    it("llama a intentarSincronizarGrupos si gruposSyncFallidoEn está prendido", async () => {
       mockGetAlumnoByGithub.mockResolvedValue(
         makeAlumno({ gruposSyncFallidoEn: new Date("2026-04-01") })
       );
       await PerfilPage();
       expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith(
         "juangarcia",
-        { id: "c1" }
+        comisionActiva
+      );
+      expect(mockVerificarConsistenciaAlumno).not.toHaveBeenCalled();
+    });
+
+    it("llama a ambas funciones si los dos flags están prendidos", async () => {
+      mockGetAlumnoByGithub.mockResolvedValue(
+        makeAlumno({
+          alumnoSyncFallidoEn: new Date("2026-04-01"),
+          gruposSyncFallidoEn: new Date("2026-04-01"),
+        })
+      );
+      await PerfilPage();
+      expect(mockVerificarConsistenciaAlumno).toHaveBeenCalledWith(
+        "juangarcia",
+        comisionActiva
+      );
+      expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith(
+        "juangarcia",
+        comisionActiva
       );
     });
 
-    it("no reintenta si tiene el flag pero no hay comisión activa (evita el crash)", async () => {
+    it("no dispara sync si no hay comisión activa", async () => {
       mockGetAlumnoByGithub.mockResolvedValue(
         makeAlumno({ gruposSyncFallidoEn: new Date("2026-04-01") })
       );
@@ -166,7 +205,7 @@ describe("Perfil page", () => {
       expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
     });
 
-    it("no rompe el render si el wrapper throwea (el flag persistido en DB mantiene el banner)", async () => {
+    it("no rompe el render si alguna sync throwea", async () => {
       mockGetAlumnoByGithub.mockResolvedValue(
         makeAlumno({ gruposSyncFallidoEn: new Date("2026-04-01") })
       );

@@ -23,7 +23,7 @@ function makeGrupo(overrides?: object) {
     id: "los-lambdas",
     nombre: "Los Lambdas",
     paradigma: "funcional",
-    alumnos: { getItems: () => [{ githubUsername: "juangarcia" }, { githubUsername: "mariaperez" }] },
+    usernamesDeMiembros: () => ["juangarcia", "mariaperez"],
     assignment: { id: "a1", titulo: "Kata Funcional" },
   };
   return { ...base, ...overrides };
@@ -148,13 +148,7 @@ describe("Admin Grupos page", () => {
     it("muestra los miembros del grupo", async () => {
       mockGetGrupos.mockResolvedValue([
         makeGrupo({
-          alumnos: {
-            getItems: () => [
-              { githubUsername: "user1" },
-              { githubUsername: "user2" },
-              { githubUsername: "user3" },
-            ],
-          },
+          usernamesDeMiembros: () => ["user1", "user2", "user3"],
         }),
       ]);
       const element = await AdminGruposPage({ searchParams: {} });

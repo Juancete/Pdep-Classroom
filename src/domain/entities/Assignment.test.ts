@@ -1,17 +1,19 @@
 import { describe, it, expect, vi } from "vitest";
 import { IndividualAssignment } from "./IndividualAssignment";
 import { GrupalAssignment, GrupoNoAsignadoError } from "./GrupalAssignment";
-import type { Alumno } from "./Alumno";
+import { Alumno } from "./Alumno";
 import type { Grupo } from "./Grupo";
 
 function fakeAlumno(github: string): Alumno {
-  return { githubUsername: github } as Alumno;
+  return Object.assign(new Alumno(), { githubUsername: github });
 }
 
 function fakeGrupo(id: string, usernames: string[]): Grupo {
   return {
     id,
     alumnos: { getItems: () => usernames.map(fakeAlumno) },
+    usernamesDeMiembros: () => usernames,
+    usernamesCanonicos: () => usernames.map(Alumno.normalizarUsername),
   } as unknown as Grupo;
 }
 
@@ -55,6 +57,22 @@ describe("IndividualAssignment", () => {
     const buscar = vi.fn();
     await individual.resolverParticipantesPara({ githubUsername: "ana" }, buscar);
     expect(buscar).not.toHaveBeenCalled();
+  });
+
+  it("requiereSeleccionDeGrupo siempre devuelve false", () => {
+    const individual = new IndividualAssignment();
+    expect(individual.requiereSeleccionDeGrupo({ isAdmin: false }, null)).toBe(false);
+    expect(individual.requiereSeleccionDeGrupo({ isAdmin: false }, fakeGrupo("g1", []))).toBe(false);
+    expect(individual.requiereSeleccionDeGrupo({ isAdmin: true }, null)).toBe(false);
+  });
+
+  it("alumnosSinGrupo siempre devuelve arreglo vacío", () => {
+    const individual = new IndividualAssignment();
+    expect(individual.alumnosSinGrupo([fakeAlumno("ana")], [])).toEqual([]);
+  });
+
+  it("extraFormDefaults devuelve objeto vacío", () => {
+    expect(new IndividualAssignment().extraFormDefaults()).toEqual({});
   });
 });
 
@@ -122,5 +140,74 @@ describe("GrupalAssignment", () => {
       expect(err.assignmentId).toBe("a1");
       expect(err.githubUsername).toBe("forastero");
     }
+  });
+
+  it("requiereSeleccionDeGrupo devuelve true cuando no es admin y no tiene grupo", () => {
+    expect(nuevoGrupal().requiereSeleccionDeGrupo({ isAdmin: false }, null)).toBe(true);
+  });
+
+  it("requiereSeleccionDeGrupo devuelve false cuando ya tiene grupo", () => {
+    expect(nuevoGrupal().requiereSeleccionDeGrupo({ isAdmin: false }, fakeGrupo("g1", []))).toBe(false);
+  });
+
+  it("requiereSeleccionDeGrupo devuelve false cuando es admin", () => {
+    expect(nuevoGrupal().requiereSeleccionDeGrupo({ isAdmin: true }, null)).toBe(false);
+  });
+
+  it("alumnosSinGrupo devuelve los alumnos no asignados a ningún grupo", () => {
+    const alumnos = [fakeAlumno("ana"), fakeAlumno("bob"), fakeAlumno("carol")];
+    const grupos = [fakeGrupo("g1", ["ana"])];
+    const sinGrupo = nuevoGrupal().alumnosSinGrupo(alumnos, grupos);
+    expect(sinGrupo.map((alumno) => alumno.githubUsername)).toEqual(["bob", "carol"]);
+  });
+
+  it("alumnosSinGrupo devuelve vacío cuando todos tienen grupo", () => {
+    const alumnos = [fakeAlumno("ANA"), fakeAlumno("BOB")];
+    const grupos = [fakeGrupo("g1", ["ana", "bob"])];
+    expect(nuevoGrupal().alumnosSinGrupo(alumnos, grupos)).toHaveLength(0);
+  });
+
+  it("alumnosSinGrupo es case-insensitive", () => {
+    const alumnos = [fakeAlumno("AnaGarcia")];
+    const grupos = [fakeGrupo("g1", ["anagarcia"])];
+    expect(nuevoGrupal().alumnosSinGrupo(alumnos, grupos)).toHaveLength(0);
+  });
+
+  it("extraFormDefaults incluye maxIntegrantes", () => {
+    expect(nuevoGrupal().extraFormDefaults()).toEqual({ maxIntegrantes: 4 });
+  });
+});
+
+describe("Assignment.nombreDelTemplate", () => {
+  it("devuelve solo el nombre cuando el templateRepo incluye organización", () => {
+    const individual = new IndividualAssignment();
+    individual.templateRepo = "pdep-unahur/kata-funcional";
+    expect(individual.nombreDelTemplate()).toBe("kata-funcional");
+  });
+
+  it("devuelve el templateRepo completo cuando no hay slash", () => {
+    const individual = new IndividualAssignment();
+    individual.templateRepo = "kata-funcional";
+    expect(individual.nombreDelTemplate()).toBe("kata-funcional");
+  });
+});
+
+describe("Assignment.cargarGruposCon", () => {
+  it("IndividualAssignment devuelve [] sin llamar al loader", async () => {
+    const loader = vi.fn();
+    const individual = new IndividualAssignment();
+    const result = await individual.cargarGruposCon(loader);
+    expect(result).toEqual([]);
+    expect(loader).not.toHaveBeenCalled();
+  });
+
+  it("GrupalAssignment llama al loader con su id y devuelve el resultado", async () => {
+    const grupal = new GrupalAssignment();
+    grupal.id = "a1";
+    const grupos = [fakeGrupo("g1", ["ana"])];
+    const loader = vi.fn().mockResolvedValue(grupos);
+    const result = await grupal.cargarGruposCon(loader);
+    expect(loader).toHaveBeenCalledWith("a1");
+    expect(result).toBe(grupos);
   });
 });

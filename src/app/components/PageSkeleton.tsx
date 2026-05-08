@@ -5,9 +5,9 @@ export function DashboardSkeleton() {
       <h1 className="text-2xl font-bold mb-1">Mis Trabajos Prácticos</h1>
       <div className="h-5 bg-gray-200 rounded w-72 mb-6 animate-pulse" />
       <div className="space-y-3">
-        {[...Array(3)].map((_, i) => (
+        {[...Array(3)].map((_, index) => (
           <div
-            key={i}
+            key={index}
             className="bg-white border border-gray-200 rounded-lg p-5 flex items-center justify-between animate-pulse"
           >
             <div className="flex-1 space-y-2">
@@ -42,13 +42,13 @@ export function AssignmentsTableSkeleton() {
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden animate-pulse">
         {/* Header */}
         <div className="bg-gray-50 border-b border-gray-200 px-4 py-3 flex gap-6">
-          {[140, 80, 60, 120, 60, 80, 80].map((w, i) => (
-            <div key={i} className="h-4 bg-gray-200 rounded" style={{ width: w }} />
+          {[140, 80, 60, 120, 60, 80, 80].map((width, index) => (
+            <div key={index} className="h-4 bg-gray-200 rounded" style={{ width }} />
           ))}
         </div>
         {/* Filas */}
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="px-4 py-3 border-b border-gray-100 flex gap-6 items-center">
+        {[...Array(4)].map((_, index) => (
+          <div key={index} className="px-4 py-3 border-b border-gray-100 flex gap-6 items-center">
             <div className="h-4 bg-gray-100 rounded w-36" />
             <div className="h-5 bg-gray-100 rounded-full w-20" />
             <div className="h-4 bg-gray-100 rounded w-16" />
@@ -73,12 +73,12 @@ export function ListSkeleton({ title, rows = 6 }: { title: string; rows?: number
       <h1 className="text-2xl font-bold mb-6">{title}</h1>
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden animate-pulse">
         <div className="bg-gray-50 border-b border-gray-200 px-4 py-3 flex gap-6">
-          {[120, 100, 140, 80].map((w, i) => (
-            <div key={i} className="h-4 bg-gray-200 rounded" style={{ width: w }} />
+          {[120, 100, 140, 80].map((width, index) => (
+            <div key={index} className="h-4 bg-gray-200 rounded" style={{ width }} />
           ))}
         </div>
-        {[...Array(rows)].map((_, i) => (
-          <div key={i} className="px-4 py-3 border-b border-gray-100 flex gap-6 items-center">
+        {[...Array(rows)].map((_, index) => (
+          <div key={index} className="px-4 py-3 border-b border-gray-100 flex gap-6 items-center">
             <div className="h-4 bg-gray-100 rounded w-28" />
             <div className="h-4 bg-gray-100 rounded w-24" />
             <div className="h-4 bg-gray-100 rounded w-36" />
