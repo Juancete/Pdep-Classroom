@@ -144,10 +144,12 @@ describe("GrupoSelector", () => {
       await user.type(screen.getByRole("textbox"), "Los Lambdas");
       await user.click(screen.getByRole("button", { name: /crear/i }));
 
-      expect(fetch).toHaveBeenCalledWith("/api/assignments/a1/grupos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombre: "Los Lambdas" }),
+      await waitFor(() => {
+        expect(fetch).toHaveBeenCalledWith("/api/assignments/a1/grupos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nombre: "Los Lambdas" }),
+        });
       });
     });
 
@@ -194,10 +196,12 @@ describe("GrupoSelector", () => {
 
       await user.click(screen.getByRole("button", { name: /unirme/i }));
 
-      expect(fetch).toHaveBeenCalledWith(
-        "/api/assignments/a1/grupos/g42/join",
-        { method: "POST" }
-      );
+      await waitFor(() => {
+        expect(fetch).toHaveBeenCalledWith(
+          "/api/assignments/a1/grupos/g42/join",
+          { method: "POST" }
+        );
+      });
     });
 
     it("llama a router.refresh() después de unirse exitosamente", async () => {

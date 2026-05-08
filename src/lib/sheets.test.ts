@@ -6,6 +6,7 @@ import {
   colLetter,
   isValidEmail,
   upsertarAlumnoEnSheets,
+  getSheetNames,
 } from "./sheets";
 import type { GruposColumnConfig } from "@/types";
 
@@ -357,5 +358,13 @@ describe("upsertarAlumnoEnSheets – validaciones", () => {
     await expect(upsertarAlumnoEnSheets(valid, undefined)).rejects.toThrow(
       "No hay una comisión activa"
     );
+  });
+});
+
+// ── getSheetNames – validación de spreadsheetId ──────────────
+
+describe("getSheetNames – validación de spreadsheetId", () => {
+  it("lanza error de dominio si el spreadsheetId está vacío", async () => {
+    await expect(getSheetNames("")).rejects.toThrow("No hay una comisión activa");
   });
 });

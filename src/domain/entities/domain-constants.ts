@@ -5,5 +5,5 @@ export const COMISION_ANIO_MAX = 2100;
 export const GRUPAL_MIN_MAX_INTEGRANTES = 2;
 
 export function normalizarGithubUsername(raw: unknown): string {
-  return String(raw ?? "").trim().replace("@", "").toLowerCase();
+  return String(raw ?? "").trim().replace(/^@+/, "").toLowerCase();
 }
