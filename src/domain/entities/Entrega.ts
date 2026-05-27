@@ -8,7 +8,6 @@ import { randomUUID } from "crypto";
 import { Alumno } from "./Alumno";
 import { Assignment } from "./Assignment";
 import { Grupo } from "./Grupo";
-import { matcheaEntregaQuery } from "@/lib/entrega-query";
 
 @Entity()
 export class Entrega {
@@ -58,9 +57,5 @@ export class Entrega {
     if (this.repoFueBorrado()) return "borrado";
     if (this.hasRepo()) return "activo";
     return "sin-repo";
-  }
-
-  matcheaQuery(rawQuery: string): boolean {
-    return matcheaEntregaQuery(this, rawQuery);
   }
 }
