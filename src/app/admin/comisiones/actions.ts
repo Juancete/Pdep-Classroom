@@ -8,6 +8,7 @@ import {
   upsertAlumnos,
   LegajoConflictError,
   getAlumnosByComision,
+  ComisionActivaDuplicadaError,
 } from "@/lib/repositories";
 import { getAlumnos, getAsignacionesGrupos, getSheetNames, type AsignacionGrupoRow } from "@/lib/sheets";
 import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
@@ -141,7 +142,26 @@ export async function crearComision(
   }
 
   const { anio, spreadsheetId, activa } = result.data;
-  await createComision({ anio, spreadsheetId, activa, columnConfig: toColumnConfig(result.data) });
+  try {
+    await createComision({
+      anio,
+      spreadsheetId,
+      activa,
+      columnConfig: toColumnConfig(result.data),
+    });
+  } catch (error) {
+    if (error instanceof ComisionActivaDuplicadaError) {
+      return {
+        ok: false,
+        errors: {
+          activa: [
+            "Otra comisión fue activada al mismo tiempo. Recargá la página y volvé a intentar.",
+          ],
+        },
+      };
+    }
+    throw error;
+  }
   redirect("/admin/comisiones");
 }
 
@@ -160,7 +180,26 @@ export async function actualizarComision(
   }
 
   const { anio, spreadsheetId, activa } = result.data;
-  await updateComision(id, { anio, spreadsheetId, activa, columnConfig: toColumnConfig(result.data) });
+  try {
+    await updateComision(id, {
+      anio,
+      spreadsheetId,
+      activa,
+      columnConfig: toColumnConfig(result.data),
+    });
+  } catch (error) {
+    if (error instanceof ComisionActivaDuplicadaError) {
+      return {
+        ok: false,
+        errors: {
+          activa: [
+            "Otra comisión fue activada al mismo tiempo. Recargá la página y volvé a intentar.",
+          ],
+        },
+      };
+    }
+    throw error;
+  }
   redirect("/admin/comisiones");
 }
 
