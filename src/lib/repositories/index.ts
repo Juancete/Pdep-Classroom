@@ -53,5 +53,6 @@ export {
   createComision,
   updateComision,
   deleteComision,
+  ComisionActivaDuplicadaError,
 } from "./ComisionRepository";
 export type { ComisionFormData } from "./ComisionRepository";

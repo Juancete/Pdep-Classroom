@@ -17,7 +17,7 @@ vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
-const { FakeLegajoConflictError } = vi.hoisted(() => {
+const { FakeLegajoConflictError, FakeComisionActivaDuplicadaError } = vi.hoisted(() => {
   class FakeLegajoConflictError extends Error {
     constructor(
       public readonly legajo: string,
@@ -29,7 +29,13 @@ const { FakeLegajoConflictError } = vi.hoisted(() => {
       this.name = "LegajoConflictError";
     }
   }
-  return { FakeLegajoConflictError };
+  class FakeComisionActivaDuplicadaError extends Error {
+    constructor() {
+      super("Ya existe otra comisión activa.");
+      this.name = "ComisionActivaDuplicadaError";
+    }
+  }
+  return { FakeLegajoConflictError, FakeComisionActivaDuplicadaError };
 });
 
 vi.mock("@/lib/repositories", () => ({
@@ -40,6 +46,7 @@ vi.mock("@/lib/repositories", () => ({
   getAlumnosByComision: (...args: unknown[]) =>
     mockGetAlumnosByComision(...args),
   LegajoConflictError: FakeLegajoConflictError,
+  ComisionActivaDuplicadaError: FakeComisionActivaDuplicadaError,
 }));
 
 vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
@@ -127,6 +134,25 @@ describe("crearComision", () => {
     );
   });
 
+  it("retorna error de activa si otra request activó una comisión al mismo tiempo", async () => {
+    mockCreateComision.mockRejectedValue(new FakeComisionActivaDuplicadaError());
+
+    const result = await crearComision(
+      null,
+      makeFormData({ ...BASE, activa: "on" })
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      errors: {
+        activa: [
+          "Otra comisión fue activada al mismo tiempo. Recargá la página y volvé a intentar.",
+        ],
+      },
+    });
+    expect(mockRedirect).not.toHaveBeenCalled();
+  });
+
   describe("validaciones", () => {
     it("retorna error si falta el año", async () => {
       const result = await crearComision(
@@ -197,6 +223,25 @@ describe("actualizarComision", () => {
     );
     expect(result).toMatchObject({ ok: false });
     expect(mockUpdateComision).not.toHaveBeenCalled();
+  });
+
+  it("retorna error de activa si otra request activó una comisión al mismo tiempo", async () => {
+    mockUpdateComision.mockRejectedValue(new FakeComisionActivaDuplicadaError());
+
+    const result = await actualizarComision(
+      null,
+      makeFormData({ ...BASE, id: "c1", activa: "on" })
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      errors: {
+        activa: [
+          "Otra comisión fue activada al mismo tiempo. Recargá la página y volvé a intentar.",
+        ],
+      },
+    });
+    expect(mockRedirect).not.toHaveBeenCalled();
   });
 });
 
