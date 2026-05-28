@@ -20,7 +20,7 @@ export class Migration20260528123000_unique_entrega_logica extends Migration {
           select 1
           from "entrega"
           where "repo_name" is not null
-          group by "repo_name"
+          group by lower("repo_name")
           having count(*) > 1
         ) then
           raise exception 'No se pueden crear índices únicos de entrega: hay repo_name duplicados.';
@@ -48,7 +48,7 @@ export class Migration20260528123000_unique_entrega_logica extends Migration {
       end $$;
     `);
 
-    this.addSql(`create unique index "entrega_repo_name_unique_idx" on "entrega" ("repo_name") where "repo_name" is not null;`);
+    this.addSql(`create unique index "entrega_repo_name_unique_idx" on "entrega" (lower("repo_name")) where "repo_name" is not null;`);
     this.addSql(`create unique index "entrega_assignment_alumno_unique_idx" on "entrega" ("assignment_id", "alumno_id") where "alumno_id" is not null;`);
     this.addSql(`create unique index "entrega_assignment_grupo_unique_idx" on "entrega" ("assignment_id", "grupo_id") where "grupo_id" is not null;`);
   }

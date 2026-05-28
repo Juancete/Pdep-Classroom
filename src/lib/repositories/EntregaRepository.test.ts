@@ -83,6 +83,7 @@ describe("EntregaRepository", () => {
 
   it("createOrGetEntrega devuelve existente por repoName sin insertar", async () => {
     const existing = new Entrega();
+    existing.assignment = { id: "a1" } as Assignment;
     mockEm.findOne.mockResolvedValueOnce(existing);
 
     await expect(
@@ -98,8 +99,37 @@ describe("EntregaRepository", () => {
     expect(mockEm.persist).not.toHaveBeenCalled();
   });
 
+  it("createOrGetEntrega ignora repoName existente de otro assignment y busca por entrega lógica", async () => {
+    const repoMatch = new Entrega();
+    repoMatch.assignment = { id: "otro-assignment" } as Assignment;
+    const logicalMatch = new Entrega();
+    logicalMatch.assignment = { id: "a1" } as Assignment;
+    mockEm.findOne
+      .mockResolvedValueOnce(repoMatch)
+      .mockResolvedValueOnce(logicalMatch);
+
+    await expect(
+      createOrGetEntrega({
+        assignmentId: "a1",
+        repoName: "kata-juan",
+        repoUrl: "https://github.com/org/kata-juan",
+        githubUsernames: ["juan"],
+        alumnoId: "alumno-1",
+      })
+    ).resolves.toBe(logicalMatch);
+
+    expect(mockEm.findOne).toHaveBeenNthCalledWith(
+      2,
+      Entrega,
+      { assignment: { id: "a1" }, alumno: { id: "alumno-1" } },
+      { populate: ["assignment", "grupo", "alumno"] }
+    );
+    expect(mockEm.persist).not.toHaveBeenCalled();
+  });
+
   it("createOrGetEntrega reconsulta y devuelve existente ante violación única", async () => {
     const existing = new Entrega();
+    existing.assignment = { id: "a1" } as Assignment;
     const duplicate = new Error("duplicate key value violates unique constraint");
     (duplicate as NodeJS.ErrnoException).code = "23505";
 
