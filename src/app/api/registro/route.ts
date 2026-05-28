@@ -3,25 +3,8 @@ import { requireUser } from "@/lib/session";
 import { type RegistroInput } from "@/lib/sheets";
 import { Alumno } from "@/domain/entities";
 import { usernameCanonicoDe } from "@/types";
-import { agregarMiembroAGrupo } from "@/lib/googleGroups";
 import { internalServerError } from "@/lib/api-errors";
-import { confirmarDatosAlumno } from "@/lib/services/alumnoRegistro";
-import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
-import { logger } from "@/lib/logger";
-
-// Enmascara la parte local del email para no escupir PII a los logs,
-// preservando dominio y primeras 2 letras para que un admin pueda
-// reconocer al alumno (combinado con el githubUsername del log).
-function maskEmail(correo: string): string {
-  return correo.replace(/^([^@]{1,2})([^@]*)(@.+)$/, "$1xxxxxx$3");
-}
-
-// Enmascara cualquier email embebido en un texto libre (p. ej. el
-// `message` de un error de googleapis, que suele citar el email del
-// miembro que se intentó agregar).
-function maskEmailsEnTexto(texto: string): string {
-  return texto.replace(/([\w.+-]{1,2})([\w.+-]*)(@[\w.-]+\.\w+)/g, "$1xxxxxx$3");
-}
+import { confirmarYProcesarAlumno } from "@/lib/services/alumnoRegistro";
 
 export async function POST(req: Request) {
   try {
@@ -50,7 +33,7 @@ export async function POST(req: Request) {
     }
     body.githubUsername = user.githubUsername;
 
-    const resultado = await confirmarDatosAlumno(body);
+    const resultado = await confirmarYProcesarAlumno(body);
     if (!resultado.ok) {
       return NextResponse.json(
         resultado.field
@@ -60,36 +43,10 @@ export async function POST(req: Request) {
       );
     }
 
-    // Hooks accesorios: el alta ya está persistida. Cada uno puede fallar sin
-    // abortar el registro; la respuesta incluye un status por hook para que el
-    // form muestre el warning correspondiente.
-    const groupSubscription = await agregarMiembroAGrupo(body.email);
-    if (groupSubscription.status === "error") {
-      logger.error(
-        {
-          githubUsername: body.githubUsername,
-          maskedEmail: maskEmail(body.email),
-          err: maskEmailsEnTexto(groupSubscription.error),
-        },
-        "Error al suscribir al Google Group"
-      );
-    }
-
-    // Hook accesorio: el alta ya está persistida. Si el sync falla, el wrapper
-    // marca el flag en DB para disparar el retry automático en /perfil — solo
-    // degradamos la respuesta a `gruposSync: "error"` para que el form muestre
-    // el warning inmediato.
-    let gruposSyncFallida = false;
-    try {
-      await intentarSincronizarGrupos(body.githubUsername, resultado.comision);
-    } catch {
-      gruposSyncFallida = true;
-    }
-
     return NextResponse.json({
       ok: true,
-      groupSubscription: groupSubscription.status,
-      ...(gruposSyncFallida && { gruposSync: "error" }),
+      groupSubscription: resultado.hooks.groupSubscription,
+      ...(resultado.hooks.gruposSync === "error" && { gruposSync: "error" }),
     });
   } catch (error) {
     return internalServerError("POST /api/registro", error);

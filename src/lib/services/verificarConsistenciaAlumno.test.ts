@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Alumno } from "@/domain/entities";
+import { Alumno } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -31,15 +31,14 @@ const comision = {
 } as unknown as Parameters<typeof verificarConsistenciaAlumno>[1];
 
 function makeAlumno(overrides: Partial<Alumno> = {}): Alumno {
-  return {
-    id: "uuid-1",
-    legajo: "12345",
-    nombre: "Juan",
-    apellido: "Garcia",
-    githubUsername: "juangarcia",
-    email: "juan@example.com",
-    ...overrides,
-  } as Alumno;
+  const alumno = new Alumno();
+  alumno.id = "uuid-1";
+  alumno.legajo = "12345";
+  alumno.nombre = "Juan";
+  alumno.apellido = "Garcia";
+  alumno.githubUsername = "juangarcia";
+  alumno.email = "juan@example.com";
+  return Object.assign(alumno, overrides);
 }
 
 // ── Tests ────────────────────────────────────────────────────

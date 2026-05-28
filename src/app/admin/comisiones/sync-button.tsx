@@ -29,6 +29,9 @@ export function SyncButton({ comisionId }: { comisionId: string }) {
       {state.status === "ok" && (
         <span className="text-xs text-green-600 font-medium">
           {state.sincronizados} sincronizados
+          {state.conErrorDeGrupo > 0 && (
+            <span className="text-amber-600"> · {state.conErrorDeGrupo} sin grupo</span>
+          )}
         </span>
       )}
       {state.status === "error" && (

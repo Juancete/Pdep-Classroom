@@ -5,6 +5,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const mockMembersInsert = vi.fn();
 const mockJWT = vi.fn();
 
+const mockMembersDelete = vi.fn();
+
 vi.mock("googleapis", () => ({
   google: {
     auth: {
@@ -13,12 +15,15 @@ vi.mock("googleapis", () => ({
       },
     },
     admin: () => ({
-      members: { insert: (...args: unknown[]) => mockMembersInsert(...args) },
+      members: {
+        insert: (...args: unknown[]) => mockMembersInsert(...args),
+        delete: (...args: unknown[]) => mockMembersDelete(...args),
+      },
     }),
   },
 }));
 
-import { agregarMiembroAGrupo } from "./googleGroups";
+import { agregarMiembroAGrupo, quitarMiembroDeGrupo } from "./googleGroups";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -50,6 +55,7 @@ describe("agregarMiembroAGrupo", () => {
     process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL = "admin@utn.edu.ar";
     process.env.GOOGLE_SERVICE_ACCOUNT_KEY = FAKE_SA_KEY;
     mockMembersInsert.mockResolvedValue({ data: {} });
+    mockMembersDelete.mockResolvedValue({ data: {} });
     mockJWT.mockReturnValue({});
   });
 
@@ -142,4 +148,62 @@ describe("agregarMiembroAGrupo", () => {
     expect(result).toEqual({ status: "error", error: "Sin permisos" });
   });
 
+});
+
+describe("quitarMiembroDeGrupo", () => {
+  const ENV_BACKUP = { ...process.env };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.GOOGLE_GROUP_EMAIL = "pdep@googlegroups.com";
+    process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL = "admin@utn.edu.ar";
+    process.env.GOOGLE_SERVICE_ACCOUNT_KEY = FAKE_SA_KEY;
+    mockMembersDelete.mockResolvedValue({ data: {} });
+    mockJWT.mockReturnValue({});
+  });
+
+  afterEach(() => {
+    process.env = { ...ENV_BACKUP };
+  });
+
+  it("retorna 'skipped' cuando GOOGLE_GROUP_EMAIL no está configurada", async () => {
+    delete process.env.GOOGLE_GROUP_EMAIL;
+    const result = await quitarMiembroDeGrupo("juan@gmail.com");
+    expect(result).toEqual({ status: "skipped" });
+    expect(mockMembersDelete).not.toHaveBeenCalled();
+  });
+
+  it("elimina el miembro del grupo (happy path)", async () => {
+    const result = await quitarMiembroDeGrupo("juan@gmail.com");
+    expect(result).toEqual({ status: "removed" });
+    expect(mockMembersDelete).toHaveBeenCalledWith(
+      { groupKey: "pdep@googlegroups.com", memberKey: "juan@gmail.com" },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
+  });
+
+  it("retorna 'not_member' cuando la API devuelve 404 en err.code", async () => {
+    mockMembersDelete.mockRejectedValue(gaxiosError(404, "notFound"));
+    const result = await quitarMiembroDeGrupo("juan@gmail.com");
+    expect(result).toEqual({ status: "not_member" });
+  });
+
+  it("retorna 'not_member' cuando la API devuelve 404 en err.status", async () => {
+    const err = Object.assign(new Error("Not Found"), { status: 404 });
+    mockMembersDelete.mockRejectedValue(err);
+    const result = await quitarMiembroDeGrupo("juan@gmail.com");
+    expect(result).toEqual({ status: "not_member" });
+  });
+
+  it("retorna 'not_member' cuando reason 'resourceNotFound' viene en err.errors", async () => {
+    mockMembersDelete.mockRejectedValue(gaxiosError(400, "resourceNotFound"));
+    const result = await quitarMiembroDeGrupo("juan@gmail.com");
+    expect(result).toEqual({ status: "not_member" });
+  });
+
+  it("retorna 'error' con mensaje cuando la API falla con otro código", async () => {
+    mockMembersDelete.mockRejectedValue(gaxiosError(403, "forbidden", "Sin permisos"));
+    const result = await quitarMiembroDeGrupo("juan@gmail.com");
+    expect(result).toEqual({ status: "error", error: "Sin permisos" });
+  });
 });
