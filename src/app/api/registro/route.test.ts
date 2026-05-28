@@ -140,6 +140,18 @@ describe("POST /api/registro", () => {
     expect(response.status).toBe(409);
   });
 
+  it("devuelve 400 si el body no es un objeto", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/registro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify("cadena"),
+      })
+    );
+    expect(response.status).toBe(400);
+    expect(mockConfirmarYProcesarAlumno).not.toHaveBeenCalled();
+  });
+
   it("devuelve 500 si algo tira un error inesperado", async () => {
     mockConfirmarYProcesarAlumno.mockRejectedValue(new Error("boom"));
     const response = await POST(makeRequest(validBody));

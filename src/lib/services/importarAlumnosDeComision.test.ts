@@ -144,6 +144,19 @@ describe("importarAlumnosDeComision", () => {
     );
   });
 
+  it("no duplica el prefijo cuando getAlumnos ya incluye 'No se pudo leer la planilla'", async () => {
+    mockGetAlumnos.mockRejectedValue(
+      new Error("No se pudo leer la planilla de alumnos: timeout")
+    );
+
+    await expect(importarAlumnosDeComision(comision as never)).rejects.toThrow(
+      "No se pudo leer la planilla de alumnos: timeout"
+    );
+    await expect(importarAlumnosDeComision(comision as never)).rejects.not.toThrow(
+      "No se pudo leer la planilla: No se pudo leer la planilla"
+    );
+  });
+
   it("propaga errores de upsertAlumnos", async () => {
     const error = new Error("legajo duplicado");
     mockUpsertAlumnos.mockRejectedValue(error);

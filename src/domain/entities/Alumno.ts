@@ -27,16 +27,16 @@ export function isValidEmail(email: string): boolean {
 export function validateRegistro(input: RegistroInput): string | null {
   const { legajo, apellido, nombre, githubUsername, email } = input;
 
-  if (!legajo || !new RegExp(`^${Alumno.LEGAJO_PATTERN}$`).test(legajo.trim()))
+  if (typeof legajo !== "string" || !legajo || !new RegExp(`^${Alumno.LEGAJO_PATTERN}$`).test(legajo.trim()))
     return "El legajo debe tener entre 4 y 8 dígitos";
-  if (!apellido.trim()) return "El apellido es obligatorio";
-  if (!nombre.trim()) return "El nombre es obligatorio";
+  if (typeof apellido !== "string" || !apellido.trim()) return "El apellido es obligatorio";
+  if (typeof nombre !== "string" || !nombre.trim()) return "El nombre es obligatorio";
   if (typeof githubUsername !== "string")
     return "El usuario de GitHub debe ser un texto";
   if (!githubUsername.trim()) return "El usuario de GitHub es obligatorio";
   if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(githubUsername.trim()))
     return "El usuario de GitHub no tiene un formato válido";
-  if (!isValidEmail(email)) return "El email no es válido";
+  if (typeof email !== "string" || !isValidEmail(email)) return "El email no es válido";
   return null;
 }
 
