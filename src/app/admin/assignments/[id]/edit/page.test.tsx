@@ -126,6 +126,17 @@ describe("Edit Assignment page", () => {
     expect(html).not.toContain("name=\"comisionId\"");
   });
 
+  it("muestra Histórica cuando la comisión asociada no está activa", async () => {
+    const comision = new Comision(2027, "sheet-2");
+    comision.activa = false;
+    mockGetAssignment.mockResolvedValue(makeAssignment({ comision }));
+
+    const element = await EditAssignmentPage({ params: { id: "a1" } });
+    const html = renderToStaticMarkup(element as React.ReactElement);
+
+    expect(html).toContain("2027 (Histórica)");
+  });
+
   it("muestra Sin comisión para assignments huérfanos", async () => {
     mockGetAssignment.mockResolvedValue(makeAssignment({ comision: undefined }));
 
