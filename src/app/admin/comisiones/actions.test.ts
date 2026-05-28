@@ -6,12 +6,11 @@ const mockRequireAdmin = vi.fn();
 const mockCreateComision = vi.fn();
 const mockUpdateComision = vi.fn();
 const mockGetComision = vi.fn();
-const mockUpsertAlumnos = vi.fn();
 const mockRedirect = vi.fn();
-const mockGetAlumnos = vi.fn();
 const mockGetAsignacionesGrupos = vi.fn();
 const mockGetAlumnosByComision = vi.fn();
 const mockIntentarSincronizarGrupos = vi.fn();
+const mockImportarAlumnosDeComision = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
@@ -42,7 +41,6 @@ vi.mock("@/lib/repositories", () => ({
   createComision: (...args: unknown[]) => mockCreateComision(...args),
   updateComision: (...args: unknown[]) => mockUpdateComision(...args),
   getComision: (...args: unknown[]) => mockGetComision(...args),
-  upsertAlumnos: (...args: unknown[]) => mockUpsertAlumnos(...args),
   getAlumnosByComision: (...args: unknown[]) =>
     mockGetAlumnosByComision(...args),
   LegajoConflictError: FakeLegajoConflictError,
@@ -54,8 +52,24 @@ vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
     mockIntentarSincronizarGrupos(...args),
 }));
 
+const { FakeLecturaPlanillaAlumnosError } = vi.hoisted(() => {
+  class FakeLecturaPlanillaAlumnosError extends Error {
+    constructor(cause: unknown) {
+      const message = cause instanceof Error ? cause.message : "Error desconocido";
+      super(`No se pudo leer la planilla: ${message}`);
+      this.name = "LecturaPlanillaAlumnosError";
+    }
+  }
+  return { FakeLecturaPlanillaAlumnosError };
+});
+
+vi.mock("@/lib/services/importarAlumnosDeComision", () => ({
+  importarAlumnosDeComision: (...args: unknown[]) =>
+    mockImportarAlumnosDeComision(...args),
+  LecturaPlanillaAlumnosError: FakeLecturaPlanillaAlumnosError,
+}));
+
 vi.mock("@/lib/sheets", () => ({
-  getAlumnos: (...args: unknown[]) => mockGetAlumnos(...args),
   getAsignacionesGrupos: (...args: unknown[]) => mockGetAsignacionesGrupos(...args),
 }));
 
@@ -258,8 +272,10 @@ describe("sincronizarAlumnos", () => {
     vi.clearAllMocks();
     mockRequireAdmin.mockResolvedValue(undefined);
     mockGetComision.mockResolvedValue(comisionMock);
-    mockGetAlumnos.mockResolvedValue([]);
-    mockUpsertAlumnos.mockResolvedValue(0);
+    mockImportarAlumnosDeComision.mockResolvedValue({
+      sincronizados: 0,
+      conErrorDeGrupo: 0,
+    });
   });
 
   it("siempre llama a requireAdmin", async () => {
@@ -271,11 +287,13 @@ describe("sincronizarAlumnos", () => {
     mockGetComision.mockResolvedValue(null);
     const result = await sincronizarAlumnos({ status: "idle" }, makeSync());
     expect(result).toEqual({ status: "error", message: "Comisión no encontrada" });
-    expect(mockGetAlumnos).not.toHaveBeenCalled();
+    expect(mockImportarAlumnosDeComision).not.toHaveBeenCalled();
   });
 
   it("retorna error si no se puede leer la planilla", async () => {
-    mockGetAlumnos.mockRejectedValue(new Error("acceso denegado"));
+    mockImportarAlumnosDeComision.mockRejectedValue(
+      new FakeLecturaPlanillaAlumnosError(new Error("acceso denegado"))
+    );
     const result = await sincronizarAlumnos({ status: "idle" }, makeSync());
     expect(result).toEqual({
       status: "error",
@@ -283,41 +301,38 @@ describe("sincronizarAlumnos", () => {
     });
   });
 
-  it("sincroniza correctamente y retorna el conteo", async () => {
-    const alumnos = [
-      { legajo: "111", nombre: "Ana", apellido: "López", githubUsername: "ana", email: "a@b.com" },
-      { legajo: "222", nombre: "Beto", apellido: "Ruiz", githubUsername: "beto", email: "b@b.com" },
-    ];
-    mockGetAlumnos.mockResolvedValue(alumnos);
-    mockUpsertAlumnos.mockResolvedValue(2);
+  it("sincroniza correctamente y retorna el conteo con conErrorDeGrupo:0", async () => {
+    mockImportarAlumnosDeComision.mockResolvedValue({
+      sincronizados: 2,
+      conErrorDeGrupo: 0,
+    });
 
     const result = await sincronizarAlumnos({ status: "idle" }, makeSync());
 
-    expect(result).toEqual({ status: "ok", sincronizados: 2 });
-    expect(mockUpsertAlumnos).toHaveBeenCalledOnce();
+    expect(result).toEqual({ status: "ok", sincronizados: 2, conErrorDeGrupo: 0 });
+    expect(mockImportarAlumnosDeComision).toHaveBeenCalledWith(comisionMock);
   });
 
-  it("llama a upsertAlumnos con la comisión incluida en cada alumno", async () => {
-    const alumno = { legajo: "111", nombre: "Ana", apellido: "López", githubUsername: "ana", email: "a@b.com" };
-    mockGetAlumnos.mockResolvedValue([alumno]);
-    mockUpsertAlumnos.mockResolvedValue(1);
+  it("delega la importación al servicio de aplicación", async () => {
+    mockImportarAlumnosDeComision.mockResolvedValue({
+      sincronizados: 1,
+      conErrorDeGrupo: 0,
+    });
 
     await sincronizarAlumnos({ status: "idle" }, makeSync());
 
-    expect(mockUpsertAlumnos).toHaveBeenCalledWith([{ ...alumno, comision: comisionMock }]);
+    expect(mockImportarAlumnosDeComision).toHaveBeenCalledWith(comisionMock);
   });
 
   it("retorna 0 sincronizados si la planilla está vacía", async () => {
-    mockGetAlumnos.mockResolvedValue([]);
     const result = await sincronizarAlumnos({ status: "idle" }, makeSync());
-    expect(result).toEqual({ status: "ok", sincronizados: 0 });
+    expect(result).toEqual({ status: "ok", sincronizados: 0, conErrorDeGrupo: 0 });
   });
 
-  it("retorna error controlado si upsertAlumnos lanza LegajoConflictError", async () => {
-    mockGetAlumnos.mockResolvedValue([
-      { legajo: "111", nombre: "Ana", apellido: "López", githubUsername: "ana", email: "a@b.com" },
-    ]);
-    mockUpsertAlumnos.mockRejectedValue(new FakeLegajoConflictError("111", "otra-persona"));
+  it("retorna error controlado si el servicio propaga LegajoConflictError", async () => {
+    mockImportarAlumnosDeComision.mockRejectedValue(
+      new FakeLegajoConflictError("111", "otra-persona")
+    );
 
     const result = await sincronizarAlumnos({ status: "idle" }, makeSync());
 
@@ -325,6 +340,17 @@ describe("sincronizarAlumnos", () => {
       status: "error",
       message: "El legajo 111 ya está registrado con el usuario @otra-persona. Verificá que sea el tuyo.",
     });
+  });
+
+  it("cuenta conErrorDeGrupo cuando algún hook de Google Groups falla", async () => {
+    mockImportarAlumnosDeComision.mockResolvedValue({
+      sincronizados: 3,
+      conErrorDeGrupo: 1,
+    });
+
+    const result = await sincronizarAlumnos({ status: "idle" }, makeSync());
+
+    expect(result).toEqual({ status: "ok", sincronizados: 3, conErrorDeGrupo: 1 });
   });
 });
 

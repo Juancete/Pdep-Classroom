@@ -107,6 +107,13 @@ export abstract class Assignment {
    */
   abstract extraFormDefaults(): Partial<{ maxIntegrantes: number }>;
 
+  /**
+   * Aplica los campos extra del form al subtipo (inverso de `extraFormDefaults()`).
+   * Individual: no-op. Grupal: setea `maxIntegrantes` si viene en `data`.
+   * Evita `instanceof GrupalAssignment` en la capa de repositorios.
+   */
+  abstract aplicarCamposExtra(data: Partial<{ maxIntegrantes: number }>): void;
+
   /** Nombre del repo template sin el prefijo de organización (ej. "org/repo" → "repo"). */
   nombreDelTemplate(): string {
     return this.templateRepo.includes("/")

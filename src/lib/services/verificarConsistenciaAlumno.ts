@@ -32,13 +32,7 @@ export async function verificarConsistenciaAlumno(
 
   try {
     const resultado = await upsertarAlumnoEnSheets(
-      {
-        legajo: alumno.legajo,
-        apellido: alumno.apellido,
-        nombre: alumno.nombre,
-        githubUsername: alumno.githubUsername,
-        email: alumno.email,
-      },
+      alumno.toRegistroInput(),
       comision.spreadsheetId,
       comision.columnConfig
     );

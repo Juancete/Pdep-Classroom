@@ -1,6 +1,7 @@
 export {
   getAlumnos,
   getAlumnoByGithub,
+  getAlumnosByGithubUsernames,
   getAlumnoByLegajo,
   createAlumno,
   upsertAlumno,

@@ -1,6 +1,7 @@
 import { getEM, deleteEntity } from "@/lib/db";
 import { Comision } from "@/domain/entities";
 import { type ColumnConfig, DEFAULT_COLUMN_CONFIG } from "@/types";
+import { extractDbErrorCode, UNIQUE_VIOLATION } from "./db-errors";
 
 export class ComisionActivaDuplicadaError extends Error {
   constructor() {
@@ -18,14 +19,11 @@ export interface ComisionFormData {
 
 function esViolacionDeComisionActivaUnica(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
-  const cause = error.cause;
-  const code =
-    (error as NodeJS.ErrnoException).code ??
-    (cause && typeof cause === "object" ? (cause as NodeJS.ErrnoException).code : undefined);
+  const code = extractDbErrorCode(error);
   const message = `${error.message} ${
-    cause instanceof Error ? cause.message : ""
+    error.cause instanceof Error ? error.cause.message : ""
   }`;
-  return code === "23505" && message.includes("comision_unica_activa_idx");
+  return code === UNIQUE_VIOLATION && message.includes("comision_unica_activa_idx");
 }
 
 async function traducirErrorDeComisionActiva<T>(

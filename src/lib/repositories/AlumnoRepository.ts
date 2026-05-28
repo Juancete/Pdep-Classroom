@@ -1,6 +1,8 @@
 import { getEM } from "@/lib/db";
-import { Alumno } from "@/domain/entities";
+import { Alumno, type AlumnoData } from "@/domain/entities";
 import type { Comision } from "@/domain/entities";
+
+export type { AlumnoData } from "@/domain/entities";
 
 // El legajo es la PK del alumno en la cursada: dos alumnos no pueden compartirlo.
 // La UNIQUE constraint de la DB ya lo garantiza, pero lanzamos este error antes
@@ -43,6 +45,20 @@ export async function getAlumnoByGithub(
   });
 }
 
+export async function getAlumnosByGithubUsernames(
+  githubUsernames: string[]
+): Promise<Alumno[]> {
+  const usernamesCanonicos = [
+    ...new Set(githubUsernames.map((username) => Alumno.normalizarUsername(username))),
+  ];
+  if (usernamesCanonicos.length === 0) return [];
+
+  const entityManager = await getEM();
+  return entityManager.find(Alumno, {
+    githubUsername: { $in: usernamesCanonicos },
+  });
+}
+
 export async function getAlumnoByLegajo(
   legajo: string
 ): Promise<Alumno | null> {
@@ -50,36 +66,11 @@ export async function getAlumnoByLegajo(
   return entityManager.findOne(Alumno, { legajo: legajo.trim() });
 }
 
-export interface AlumnoData {
-  legajo: string;
-  nombre: string;
-  apellido: string;
-  githubUsername: string;
-  email: string;
-  comision?: Comision;
-  registroConfirmadoEn?: Comision;
-}
-
-// Copia los campos de `data` sobre `alumno`. Para `registroConfirmadoEn`
-// se ignora `undefined` para no pisar un valor ya confirmado cuando el caller
-// (ej. sync desde Sheets) no trae ese dato.
-function applyAlumnoData(alumno: Alumno, data: AlumnoData): void {
-  alumno.legajo = data.legajo.trim();
-  alumno.nombre = data.nombre.trim();
-  alumno.apellido = data.apellido.trim();
-  alumno.githubUsername = Alumno.normalizarUsername(data.githubUsername);
-  alumno.email = Alumno.normalizarEmail(data.email);
-  alumno.comision = data.comision;
-  if (data.registroConfirmadoEn !== undefined) {
-    alumno.registroConfirmadoEn = data.registroConfirmadoEn;
-  }
-}
-
 export async function createAlumno(data: AlumnoData): Promise<Alumno> {
   await assertLegajoLibreOPropio(data.legajo, data.githubUsername);
   const entityManager = await getEM();
   const alumno = new Alumno();
-  applyAlumnoData(alumno, data);
+  alumno.actualizarDatos(data);
   entityManager.persist(alumno);
   await entityManager.flush();
   return alumno;
@@ -94,7 +85,7 @@ export async function upsertAlumno(data: AlumnoData): Promise<Alumno> {
   });
 
   if (existing) {
-    applyAlumnoData(existing, data);
+    existing.actualizarDatos(data);
     await entityManager.flush();
     return existing;
   }
@@ -115,7 +106,7 @@ export async function marcarRegistroConfirmado(
     githubUsername: Alumno.normalizarUsername(githubUsername),
   });
   if (!alumno) return;
-  alumno.registroConfirmadoEn = comision;
+  alumno.confirmarRegistroEn(comision);
   await entityManager.flush();
 }
 
@@ -125,7 +116,7 @@ export async function marcarGruposSyncFallido(githubUsername: string): Promise<v
     githubUsername: Alumno.normalizarUsername(githubUsername),
   });
   if (!alumno) return;
-  alumno.gruposSyncFallidoEn = new Date();
+  alumno.marcarSyncDeGruposFallido();
   await entityManager.flush();
 }
 
@@ -137,7 +128,7 @@ export async function marcarGruposSyncOk(githubUsername: string): Promise<void> 
   // Solo flusheamos si había algo prendido — evita un UPDATE por cada sync
   // exitosa del happy path.
   if (!alumno || !alumno.gruposSyncFallidoEn) return;
-  alumno.gruposSyncFallidoEn = null;
+  alumno.limpiarSyncDeGruposFallido();
   await entityManager.flush();
 }
 
@@ -147,7 +138,7 @@ export async function marcarAlumnoSyncFallido(githubUsername: string): Promise<v
     githubUsername: Alumno.normalizarUsername(githubUsername),
   });
   if (!alumno) return;
-  alumno.alumnoSyncFallidoEn = new Date();
+  alumno.marcarSyncDeAlumnoFallido();
   await entityManager.flush();
 }
 
@@ -157,7 +148,7 @@ export async function marcarAlumnoSyncOk(githubUsername: string): Promise<void> 
     githubUsername: Alumno.normalizarUsername(githubUsername),
   });
   if (!alumno || !alumno.alumnoSyncFallidoEn) return;
-  alumno.alumnoSyncFallidoEn = null;
+  alumno.limpiarSyncDeAlumnoFallido();
   await entityManager.flush();
 }
 
@@ -219,10 +210,10 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
     const key = Alumno.normalizarUsername(data.githubUsername);
     const existing = existentesPorGithub.get(key);
     if (existing) {
-      applyAlumnoData(existing, data);
+      existing.actualizarDatos(data);
     } else {
       const alumno = new Alumno();
-      applyAlumnoData(alumno, data);
+      alumno.actualizarDatos(data);
       entityManager.persist(alumno);
       // Si el batch trae otra fila con el mismo github (typo o fila duplicada
       // en la planilla), debe reutilizar esta instancia — sin esto, el UNIQUE
