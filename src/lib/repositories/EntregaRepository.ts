@@ -1,5 +1,5 @@
 import { getEM } from "@/lib/db";
-import { Assignment, Grupo, Entrega } from "@/domain/entities";
+import { Alumno, Assignment, Grupo, Entrega } from "@/domain/entities";
 
 export async function getEntregas(assignmentId?: string): Promise<Entrega[]> {
   const entityManager = await getEM();
@@ -37,6 +37,38 @@ export async function getEntregaDeUsuario(
       )
     ) ?? null
   );
+}
+
+export async function getEntregaByRepoName(repoName: string): Promise<Entrega | null> {
+  const entityManager = await getEM();
+  return entityManager.findOne(
+    Entrega,
+    { repoName },
+    { populate: ["assignment", "grupo", "alumno"] }
+  );
+}
+
+export async function getEntregaLogica(data: {
+  assignmentId: string;
+  alumnoId?: string;
+  grupoId?: string;
+}): Promise<Entrega | null> {
+  const entityManager = await getEM();
+  if (data.grupoId) {
+    return entityManager.findOne(
+      Entrega,
+      { assignment: { id: data.assignmentId }, grupo: { id: data.grupoId } },
+      { populate: ["assignment", "grupo", "alumno"] }
+    );
+  }
+  if (data.alumnoId) {
+    return entityManager.findOne(
+      Entrega,
+      { assignment: { id: data.assignmentId }, alumno: { id: data.alumnoId } },
+      { populate: ["assignment", "grupo", "alumno"] }
+    );
+  }
+  return null;
 }
 
 // Devuelve el conteo de entregas por assignmentId en una sola query.
@@ -81,6 +113,7 @@ export async function createEntrega(data: {
   repoName: string;
   repoUrl: string;
   githubUsernames: string[];
+  alumnoId?: string;
   grupoId?: string;
 }): Promise<Entrega> {
   const entityManager = await getEM();
@@ -93,6 +126,10 @@ export async function createEntrega(data: {
   entrega.repoUrl = data.repoUrl;
   entrega.githubUsernames = data.githubUsernames;
 
+  if (data.alumnoId) {
+    entrega.alumno = entityManager.getReference(Alumno, data.alumnoId);
+  }
+
   if (data.grupoId) {
     entrega.grupo = entityManager.getReference(Grupo, data.grupoId);
   }
@@ -100,4 +137,50 @@ export async function createEntrega(data: {
   entityManager.persist(entrega);
   await entityManager.flush();
   return entrega;
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const cause = error.cause;
+  const code =
+    (error as NodeJS.ErrnoException).code ??
+    (cause && typeof cause === "object" ? (cause as NodeJS.ErrnoException).code : undefined);
+  return code === "23505" || /unique constraint|duplicate key/i.test(error.message);
+}
+
+async function findExistingEntrega(data: {
+  assignmentId: string;
+  repoName: string;
+  alumnoId?: string;
+  grupoId?: string;
+}): Promise<Entrega | null> {
+  const entrega = await getEntregaByRepoName(data.repoName);
+  if (entrega?.assignment?.id === data.assignmentId) return entrega;
+
+  return getEntregaLogica({
+    assignmentId: data.assignmentId,
+    alumnoId: data.alumnoId,
+    grupoId: data.grupoId,
+  });
+}
+
+export async function createOrGetEntrega(data: {
+  assignmentId: string;
+  repoName: string;
+  repoUrl: string;
+  githubUsernames: string[];
+  alumnoId?: string;
+  grupoId?: string;
+}): Promise<Entrega> {
+  const existing = await findExistingEntrega(data);
+  if (existing) return existing;
+
+  try {
+    return await createEntrega(data);
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+    const reconciled = await findExistingEntrega(data);
+    if (reconciled) return reconciled;
+    throw error;
+  }
 }
