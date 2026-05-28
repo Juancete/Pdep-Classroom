@@ -32,9 +32,12 @@ export {
   getEntregas,
   getEntregasDeUsuario,
   getEntregaDeUsuario,
+  getEntregaByRepoName,
+  getEntregaLogica,
   getEntregaCountsByAssignment,
   getActiveRepoCountsByAssignment,
   createEntrega,
+  createOrGetEntrega,
   clearReposDeAssignment,
 } from "./EntregaRepository";
 
