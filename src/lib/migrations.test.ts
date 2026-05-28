@@ -30,6 +30,8 @@ describe("migrations", () => {
     );
 
     expect(migration).toContain('create unique index "entrega_repo_name_unique_idx"');
+    expect(migration).toContain('on "entrega" (lower("repo_name"))');
+    expect(migration).toContain('group by lower("repo_name")');
     expect(migration).toContain('create unique index "entrega_assignment_alumno_unique_idx"');
     expect(migration).toContain('create unique index "entrega_assignment_grupo_unique_idx"');
     expect(migration).toContain("hay repo_name duplicados");

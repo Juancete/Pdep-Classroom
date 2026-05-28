@@ -154,14 +154,14 @@ async function findExistingEntrega(data: {
   alumnoId?: string;
   grupoId?: string;
 }): Promise<Entrega | null> {
-  return (
-    (await getEntregaByRepoName(data.repoName)) ??
-    (await getEntregaLogica({
-      assignmentId: data.assignmentId,
-      alumnoId: data.alumnoId,
-      grupoId: data.grupoId,
-    }))
-  );
+  const entrega = await getEntregaByRepoName(data.repoName);
+  if (entrega?.assignment?.id === data.assignmentId) return entrega;
+
+  return getEntregaLogica({
+    assignmentId: data.assignmentId,
+    alumnoId: data.alumnoId,
+    grupoId: data.grupoId,
+  });
 }
 
 export async function createOrGetEntrega(data: {

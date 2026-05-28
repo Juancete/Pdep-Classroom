@@ -91,6 +91,48 @@ describe("POST /api/assignments/[id]/accept", () => {
     }));
   });
 
+  it("mantiene idempotencia si se acepta dos veces el mismo assignment", async () => {
+    const entrega = makeEntrega();
+    mockAceptarAssignment.mockResolvedValue(entrega);
+
+    const firstResponse = await POST(makeRequest(), { params: { id: "a1" } });
+    const secondResponse = await POST(makeRequest(), { params: { id: "a1" } });
+
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(200);
+    const firstData = await firstResponse.json();
+    const secondData = await secondResponse.json();
+    expect(firstData.id).toBe(secondData.id);
+    expect(firstData.repoName).toBe(secondData.repoName);
+    expect(mockAceptarAssignment).toHaveBeenCalledTimes(2);
+  });
+
+  it("mantiene una única entrega ante aceptación concurrente por miembros del mismo grupo", async () => {
+    const entrega = makeEntrega({
+      id: "e-grupo",
+      repoName: "kata-funcional-los-lambdas",
+      githubUsernames: ["juangarcia", "marialopez"],
+    });
+    mockRequireUser
+      .mockResolvedValueOnce(makeUser({ githubUsername: "juangarcia" }))
+      .mockResolvedValueOnce(makeUser({ githubUsername: "marialopez" }));
+    mockAceptarAssignment.mockResolvedValue(entrega);
+
+    const [firstResponse, secondResponse] = await Promise.all([
+      POST(makeRequest(), { params: { id: "a1" } }),
+      POST(makeRequest(), { params: { id: "a1" } }),
+    ]);
+
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(200);
+    const firstData = await firstResponse.json();
+    const secondData = await secondResponse.json();
+    expect(firstData.id).toBe("e-grupo");
+    expect(secondData.id).toBe("e-grupo");
+    expect(firstData.repoName).toBe("kata-funcional-los-lambdas");
+    expect(secondData.repoName).toBe("kata-funcional-los-lambdas");
+  });
+
   it("devuelve 404 si el assignment no existe", async () => {
     mockAceptarAssignment.mockRejectedValue(new FakeAssignmentNoEncontradoError("Assignment no encontrado"));
     const response = await POST(makeRequest(), { params: { id: "no-existe" } });
