@@ -39,6 +39,10 @@ export class IndividualAssignment extends Assignment {
     return {};
   }
 
+  aplicarCamposExtra(_data: Partial<{ maxIntegrantes: number }>): void {
+    // Los assignments individuales no tienen campos extra.
+  }
+
   cargarGruposCon(_loader: (assignmentId: string) => Promise<Grupo[]>): Promise<Grupo[]> {
     return Promise.resolve([]);
   }

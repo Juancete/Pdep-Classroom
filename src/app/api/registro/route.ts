@@ -3,19 +3,14 @@ import { requireUser } from "@/lib/session";
 import { type RegistroInput } from "@/lib/sheets";
 import { Alumno } from "@/domain/entities";
 import { usernameCanonicoDe } from "@/types";
-import { internalServerError } from "@/lib/api-errors";
+import { internalServerError, parseJsonObjectBody } from "@/lib/api-errors";
 import { confirmarYProcesarAlumno } from "@/lib/services/alumnoRegistro";
 
 export async function POST(req: Request) {
   try {
     const user = await requireUser();
-    const body = await req.json();
-    if (typeof body !== "object" || body === null || Array.isArray(body)) {
-      return NextResponse.json(
-        { error: "No pudimos leer los datos enviados. Volvé a intentar." },
-        { status: 400 }
-      );
-    }
+    const body = await parseJsonObjectBody(req);
+    if (body instanceof NextResponse) return body;
 
     // Si el form envió un githubUsername distinto al de la sesión, devolvemos
     // error con `field` para que el form lo pinte inline y pueda ofrecer el

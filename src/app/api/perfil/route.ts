@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
 import { type RegistroInput } from "@/lib/sheets";
-import { internalServerError } from "@/lib/api-errors";
+import { internalServerError, parseJsonObjectBody } from "@/lib/api-errors";
 import { confirmarYProcesarAlumno } from "@/lib/services/alumnoRegistro";
 
 type PerfilInput = Omit<RegistroInput, "githubUsername">;
@@ -9,13 +9,8 @@ type PerfilInput = Omit<RegistroInput, "githubUsername">;
 export async function PATCH(req: Request) {
   try {
     const user = await requireUser();
-    const body = await req.json();
-    if (typeof body !== "object" || body === null || Array.isArray(body)) {
-      return NextResponse.json(
-        { error: "No pudimos leer los datos enviados. Volvé a intentar." },
-        { status: 400 }
-      );
-    }
+    const body = await parseJsonObjectBody(req);
+    if (body instanceof NextResponse) return body;
 
     const resultado = await confirmarYProcesarAlumno({
       ...(body as PerfilInput),

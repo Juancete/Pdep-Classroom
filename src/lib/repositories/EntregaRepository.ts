@@ -1,4 +1,5 @@
 import { getEM } from "@/lib/db";
+import { extractDbErrorCode, UNIQUE_VIOLATION } from "./db-errors";
 import { Alumno, Assignment, Grupo, Entrega } from "@/domain/entities";
 
 export async function getEntregas(assignmentId?: string): Promise<Entrega[]> {
@@ -141,11 +142,8 @@ export async function createEntrega(data: {
 
 function isUniqueViolation(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
-  const cause = error.cause;
-  const code =
-    (error as NodeJS.ErrnoException).code ??
-    (cause && typeof cause === "object" ? (cause as NodeJS.ErrnoException).code : undefined);
-  return code === "23505" || /unique constraint|duplicate key/i.test(error.message);
+  const code = extractDbErrorCode(error);
+  return code === UNIQUE_VIOLATION || /unique constraint|duplicate key/i.test(error.message);
 }
 
 async function findExistingEntrega(data: {

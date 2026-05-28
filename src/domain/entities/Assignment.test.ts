@@ -211,3 +211,25 @@ describe("Assignment.cargarGruposCon", () => {
     expect(result).toBe(grupos);
   });
 });
+
+describe("Assignment.aplicarCamposExtra", () => {
+  it("IndividualAssignment ignora cualquier campo extra sin lanzar error", () => {
+    const individual = new IndividualAssignment();
+    expect(() => individual.aplicarCamposExtra({ maxIntegrantes: 5 })).not.toThrow();
+    expect(() => individual.aplicarCamposExtra({})).not.toThrow();
+  });
+
+  it("GrupalAssignment setea maxIntegrantes cuando viene en los datos", () => {
+    const grupal = new GrupalAssignment();
+    grupal.maxIntegrantes = 3;
+    grupal.aplicarCamposExtra({ maxIntegrantes: 6 });
+    expect(grupal.maxIntegrantes).toBe(6);
+  });
+
+  it("GrupalAssignment no modifica maxIntegrantes si no viene en los datos", () => {
+    const grupal = new GrupalAssignment();
+    grupal.maxIntegrantes = 3;
+    grupal.aplicarCamposExtra({});
+    expect(grupal.maxIntegrantes).toBe(3);
+  });
+});
