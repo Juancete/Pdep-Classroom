@@ -5,13 +5,16 @@ import {
   createComision,
   updateComision,
   getComision,
-  upsertAlumnos,
   LegajoConflictError,
   getAlumnosByComision,
   ComisionActivaDuplicadaError,
 } from "@/lib/repositories";
-import { getAlumnos, getAsignacionesGrupos, getSheetNames, type AsignacionGrupoRow } from "@/lib/sheets";
+import { getAsignacionesGrupos, getSheetNames, type AsignacionGrupoRow } from "@/lib/sheets";
 import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
+import {
+  importarAlumnosDeComision,
+  LecturaPlanillaAlumnosError,
+} from "@/lib/services/importarAlumnosDeComision";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -205,7 +208,7 @@ export async function actualizarComision(
 
 export type SyncState =
   | { status: "idle" }
-  | { status: "ok"; sincronizados: number }
+  | { status: "ok"; sincronizados: number; conErrorDeGrupo: number }
   | { status: "error"; message: string };
 
 export async function sincronizarAlumnos(
@@ -218,25 +221,19 @@ export async function sincronizarAlumnos(
   const comision = await getComision(id);
   if (!comision) return { status: "error", message: "Comisión no encontrada" };
 
-  let alumnos;
   try {
-    alumnos = await getAlumnos(comision.spreadsheetId, comision.columnConfig);
+    const { sincronizados, conErrorDeGrupo } = await importarAlumnosDeComision(comision);
+    revalidatePath("/admin/comisiones");
+    return { status: "ok", sincronizados, conErrorDeGrupo };
   } catch (error) {
-    return { status: "error", message: `No se pudo leer la planilla: ${(error as Error).message}` };
-  }
-
-  let sincronizados: number;
-  try {
-    sincronizados = await upsertAlumnos(alumnos.map((alumno) => ({ ...alumno, comision })));
-  } catch (error) {
+    if (error instanceof LecturaPlanillaAlumnosError) {
+      return { status: "error", message: error.message };
+    }
     if (error instanceof LegajoConflictError) {
       return { status: "error", message: error.message };
     }
     throw error;
   }
-
-  revalidatePath("/admin/comisiones");
-  return { status: "ok", sincronizados };
 }
 
 export type SyncGruposState =

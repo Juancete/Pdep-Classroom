@@ -3,52 +3,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ── Mocks ────────────────────────────────────────────────────
 
 const mockRequireUser = vi.fn();
-const mockUpsertarAlumnoEnSheets = vi.fn();
-const mockGetComisionActiva = vi.fn();
-const mockUpsertAlumno = vi.fn();
-const mockMarcarRegistroConfirmado = vi.fn();
-const mockIntentarSincronizarGrupos = vi.fn();
+const mockConfirmarYProcesarAlumno = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireUser: () => mockRequireUser(),
 }));
 
-vi.mock("@/lib/sheets", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/sheets")>("@/lib/sheets");
-  return {
-    upsertarAlumnoEnSheets: (...args: unknown[]) => mockUpsertarAlumnoEnSheets(...args),
-    validateRegistro: actual.validateRegistro,
-  };
-});
-
-const { FakeLegajoConflictError } = vi.hoisted(() => {
-  class FakeLegajoConflictError extends Error {
-    constructor(
-      public readonly legajo: string,
-      public readonly otroGithubUsername: string
-    ) {
-      super(
-        `El legajo ${legajo} ya está registrado con el usuario @${otroGithubUsername}. Verificá que sea el tuyo.`
-      );
-      this.name = "LegajoConflictError";
-    }
-  }
-  return { FakeLegajoConflictError };
-});
-
-vi.mock("@/lib/repositories", () => ({
-  getComisionActiva: () => mockGetComisionActiva(),
-  upsertAlumno: (data: unknown) => mockUpsertAlumno(data),
-  marcarRegistroConfirmado: (...args: unknown[]) =>
-    mockMarcarRegistroConfirmado(...args),
-  LegajoConflictError: FakeLegajoConflictError,
-}));
-
-// El handler llama al wrapper `intentarSincronizarGrupos`, que encapsula
-// log + flag persistente + retorno booleano para el handler.
-vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
-  intentarSincronizarGrupos: (...args: unknown[]) =>
-    mockIntentarSincronizarGrupos(...args),
+vi.mock("@/lib/services/alumnoRegistro", () => ({
+  confirmarYProcesarAlumno: (...args: unknown[]) =>
+    mockConfirmarYProcesarAlumno(...args),
 }));
 
 import { PATCH } from "./route";
@@ -81,120 +44,106 @@ describe("PATCH /api/perfil", () => {
       image: "",
       isAdmin: false,
     });
-    mockGetComisionActiva.mockResolvedValue({
-      id: "c1",
-      spreadsheetId: "sheet-xyz",
-      columnConfig: { sheetName: "Alumnos", headerRows: 1, legajo: 0, apellido: 1, nombre: 2, githubUsername: 3, email: 4 },
+    mockConfirmarYProcesarAlumno.mockResolvedValue({
+      ok: true,
+      comision: { id: "c1" },
+      hooks: { groupSubscription: "already_member", gruposSync: "ok" },
     });
-    mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: true });
-    mockUpsertAlumno.mockResolvedValue(undefined);
-    mockMarcarRegistroConfirmado.mockResolvedValue(undefined);
-    mockIntentarSincronizarGrupos.mockResolvedValue(undefined);
   });
 
-  it("actualiza Sheets y DB en un mismo request", async () => {
+  it("devuelve 200 con hooks en body cuando todo funciona", async () => {
     const response = await PATCH(makeRequest(validBody));
+    const json = await response.json();
     expect(response.status).toBe(200);
-    expect(mockUpsertarAlumnoEnSheets).toHaveBeenCalledTimes(1);
-    expect(mockUpsertAlumno).toHaveBeenCalledTimes(1);
+    expect(json).toEqual({ ok: true, groupSubscription: "already_member" });
+  });
+
+  it("no incluye gruposSync en el body cuando el hook no falla", async () => {
+    const response = await PATCH(makeRequest(validBody));
+    const json = await response.json();
+    expect(json.gruposSync).toBeUndefined();
+  });
+
+  it("incluye gruposSync:'error' cuando el hook de sync falla", async () => {
+    mockConfirmarYProcesarAlumno.mockResolvedValue({
+      ok: true,
+      comision: { id: "c1" },
+      hooks: { groupSubscription: "already_member", gruposSync: "error" },
+    });
+    const response = await PATCH(makeRequest(validBody));
+    const json = await response.json();
+    expect(response.status).toBe(200);
+    expect(json.gruposSync).toBe("error");
   });
 
   it("usa el githubUsername del usuario autenticado (no del body)", async () => {
     await PATCH(makeRequest({ ...validBody, githubUsername: "attacker" }));
-    const [inputPasado] = mockUpsertAlumno.mock.calls[0];
+    const [inputPasado] = mockConfirmarYProcesarAlumno.mock.calls[0];
     expect(inputPasado.githubUsername).toBe("juangarcia");
   });
 
-  it("marca registroConfirmadoEn recién después de que Sheets confirmó", async () => {
-    const comision = await mockGetComisionActiva();
-    await PATCH(makeRequest(validBody));
-    expect(mockMarcarRegistroConfirmado).toHaveBeenCalledWith("juangarcia", comision);
-    const [dataPasada] = mockUpsertAlumno.mock.calls[0];
-    expect(dataPasada.registroConfirmadoEn).toBeUndefined();
-  });
-
-  it("no marca registroConfirmadoEn si Sheets falla", async () => {
-    mockUpsertarAlumnoEnSheets.mockResolvedValue({
-      ok: false,
-      error: "sheets error",
+  it("la respuesta incluye groupSubscription (perfil también suscribe al grupo)", async () => {
+    mockConfirmarYProcesarAlumno.mockResolvedValue({
+      ok: true,
+      comision: { id: "c1" },
+      hooks: { groupSubscription: "added" },
     });
-    await PATCH(makeRequest(validBody));
-    expect(mockMarcarRegistroConfirmado).not.toHaveBeenCalled();
-  });
-
-  it("no toca Sheets si el upsert en DB falla con LegajoConflictError", async () => {
-    mockUpsertAlumno.mockRejectedValue(
-      new FakeLegajoConflictError("12345", "otro-alumno")
-    );
     const response = await PATCH(makeRequest(validBody));
-    expect(response.status).toBe(400);
-    expect(mockUpsertarAlumnoEnSheets).not.toHaveBeenCalled();
+    const json = await response.json();
+    expect(json.groupSubscription).toBe("added");
   });
 
-  it("devuelve 400 con field=legajo si el upsert en DB detecta conflicto de legajo", async () => {
-    mockUpsertAlumno.mockRejectedValue(
-      new FakeLegajoConflictError("12345", "otro-alumno")
-    );
+  it("devuelve 400 con el error del servicio cuando ok:false", async () => {
+    mockConfirmarYProcesarAlumno.mockResolvedValue({
+      ok: false,
+      status: 400,
+      error: "El email es inválido",
+    });
+    const response = await PATCH(makeRequest(validBody));
+    const json = await response.json();
+    expect(response.status).toBe(400);
+    expect(json.error).toBe("El email es inválido");
+    expect(json.field).toBeUndefined();
+  });
+
+  it("devuelve 400 con field cuando el servicio devuelve field", async () => {
+    mockConfirmarYProcesarAlumno.mockResolvedValue({
+      ok: false,
+      status: 400,
+      error: "El legajo ya está registrado con otro usuario",
+      field: "legajo",
+    });
     const response = await PATCH(makeRequest(validBody));
     const json = await response.json();
     expect(response.status).toBe(400);
     expect(json.field).toBe("legajo");
-    expect(json.error).toContain("otro-alumno");
   });
 
-  it("devuelve 400 si la validación de inputs falla sin tocar DB ni Sheets", async () => {
-    const response = await PATCH(makeRequest({ ...validBody, email: "no-es-email" }));
-    expect(response.status).toBe(400);
-    expect(mockUpsertAlumno).not.toHaveBeenCalled();
-    expect(mockUpsertarAlumnoEnSheets).not.toHaveBeenCalled();
-  });
-
-  it("devuelve 409 sin tocar Sheets ni DB si no hay comisión activa", async () => {
-    mockGetComisionActiva.mockResolvedValue(null);
+  it("devuelve 409 cuando el servicio devuelve status 409", async () => {
+    mockConfirmarYProcesarAlumno.mockResolvedValue({
+      ok: false,
+      status: 409,
+      error: "No hay comisión activa",
+    });
     const response = await PATCH(makeRequest(validBody));
     expect(response.status).toBe(409);
-    expect(mockUpsertarAlumnoEnSheets).not.toHaveBeenCalled();
-    expect(mockUpsertAlumno).not.toHaveBeenCalled();
   });
 
   it("devuelve 500 si algo tira un error inesperado", async () => {
-    mockUpsertarAlumnoEnSheets.mockRejectedValue(new Error("boom"));
+    mockConfirmarYProcesarAlumno.mockRejectedValue(new Error("boom"));
     const response = await PATCH(makeRequest(validBody));
     expect(response.status).toBe(500);
   });
 
-  describe("sincronización de grupos desde planilla", () => {
-    it("llama a intentarSincronizarGrupos con el github de la sesión y la comisión activa", async () => {
-      const comision = await mockGetComisionActiva();
-      await PATCH(makeRequest(validBody));
-      expect(mockIntentarSincronizarGrupos).toHaveBeenCalledWith(
-        "juangarcia",
-        comision
-      );
-    });
-
-    it("no incluye gruposSync en el body cuando el wrapper completa sin throwear", async () => {
-      const response = await PATCH(makeRequest(validBody));
-      const json = await response.json();
-      expect(response.status).toBe(200);
-      expect(json.gruposSync).toBeUndefined();
-    });
-
-    it("responde 200 con gruposSync='error' cuando el wrapper throwea (el alta se preserva, el flag en DB dispara retry)", async () => {
-      mockIntentarSincronizarGrupos.mockRejectedValue(new Error("Sheets caído"));
-
-      const response = await PATCH(makeRequest(validBody));
-      const json = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(json.gruposSync).toBe("error");
-      expect(mockMarcarRegistroConfirmado).toHaveBeenCalledOnce();
-    });
-
-    it("no intenta sincronizar si la confirmación del perfil falla antes", async () => {
-      mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: false, error: "boom" });
-      await PATCH(makeRequest(validBody));
-      expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
-    });
+  it("devuelve 400 si el body no es un objeto", async () => {
+    const response = await PATCH(
+      new Request("http://localhost/api/perfil", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify("cadena"),
+      })
+    );
+    expect(response.status).toBe(400);
+    expect(mockConfirmarYProcesarAlumno).not.toHaveBeenCalled();
   });
 });
