@@ -19,11 +19,13 @@ export type { AlumnoData } from "./AlumnoRepository";
 
 export {
   getAssignments,
+  getAssignmentsDeComision,
   getAssignment,
   createAssignment,
   updateAssignment,
   deleteAssignment,
   setInscripcionesCerradas,
+  ComisionActivaRequeridaError,
 } from "./AssignmentRepository";
 
 export {

@@ -31,6 +31,10 @@ function errorState(errors: Record<string, string[]>) {
   mockUseFormState.mockReturnValue([{ ok: false, errors }, noop]);
 }
 
+function formErrorState(formError: string) {
+  mockUseFormState.mockReturnValue([{ ok: false, errors: {}, formError }, noop]);
+}
+
 const TEMPLATES = [
   { name: "kata-template", fullName: "org/kata-template", description: "Kata base" },
   { name: "tp-objetos", fullName: "org/tp-objetos", description: "TP de objetos" },
@@ -223,6 +227,16 @@ describe("AssignmentForm", () => {
         />
       );
       expect(screen.getByText("Debe ser al menos 2")).toBeInTheDocument();
+    });
+
+    it("muestra error global del formulario", () => {
+      formErrorState("Necesitás una comisión activa para crear assignments.");
+
+      render(<AssignmentForm action={noop} templates={[]} submitLabel="Crear" />);
+
+      expect(
+        screen.getByText("Necesitás una comisión activa para crear assignments.")
+      ).toBeInTheDocument();
     });
   });
 

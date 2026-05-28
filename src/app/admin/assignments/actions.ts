@@ -1,7 +1,11 @@
 "use server";
 
 import { requireAdmin } from "@/lib/session";
-import { createAssignment, updateAssignment } from "@/lib/repositories";
+import {
+  ComisionActivaRequeridaError,
+  createAssignment,
+  updateAssignment,
+} from "@/lib/repositories";
 import { redirect } from "next/navigation";
 import { AssignmentSchema, AssignmentFormState } from "@/lib/assignment-schema";
 
@@ -31,7 +35,15 @@ export async function crearAssignment(
     return { ok: false, errors: result.error.flatten().fieldErrors };
   }
 
-  await createAssignment(result.data);
+  try {
+    await createAssignment(result.data);
+  } catch (error) {
+    if (error instanceof ComisionActivaRequeridaError) {
+      return { ok: false, errors: {}, formError: error.message };
+    }
+    throw error;
+  }
+
   redirect("/admin/assignments");
 }
 
