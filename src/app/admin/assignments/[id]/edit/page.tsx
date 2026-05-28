@@ -19,6 +19,14 @@ export default async function EditAssignmentPage({
   return (
     <div className="max-w-xl">
       <h1 className="text-2xl font-bold mb-6">Editar Assignment</h1>
+      <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+        Comisión:{" "}
+        <span className="font-medium text-gray-800">
+          {assignment.comision
+            ? `${assignment.comision.anio} (${assignment.comision.activa ? "Activa" : "Histórica"})`
+            : "Sin comisión"}
+        </span>
+      </div>
       <AssignmentForm
         action={actualizarAssignment}
         templates={templates}

@@ -149,6 +149,14 @@ export function AssignmentForm({
 
   return (
     <form action={formAction} className="space-y-5" data-template-count={templates.length}>
+      {state?.formError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          {state.formError}
+        </div>
+      )}
       {defaultValues.id && <input type="hidden" name="id" value={defaultValues.id} />}
       {/* Título */}
       <div>

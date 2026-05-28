@@ -7,11 +7,16 @@ const mockCreateAssignment = vi.fn();
 const mockUpdateAssignment = vi.fn();
 const mockRedirect = vi.fn();
 
+const { FakeComisionActivaRequeridaError } = vi.hoisted(() => ({
+  FakeComisionActivaRequeridaError: class FakeComisionActivaRequeridaError extends Error {},
+}));
+
 vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
 vi.mock("@/lib/repositories", () => ({
+  ComisionActivaRequeridaError: FakeComisionActivaRequeridaError,
   createAssignment: (...args: unknown[]) => mockCreateAssignment(...args),
   updateAssignment: (...args: unknown[]) => mockUpdateAssignment(...args),
 }));
@@ -93,6 +98,23 @@ describe("crearAssignment", () => {
       );
       // el slug es generado por el repositorio, no por la action
       expect(mockRedirect).toHaveBeenCalledWith("/admin/assignments");
+    });
+
+    it("retorna error global si no hay comisión activa", async () => {
+      mockCreateAssignment.mockRejectedValue(
+        new FakeComisionActivaRequeridaError(
+          "Necesitás una comisión activa para crear assignments."
+        )
+      );
+
+      const result = await crearAssignment(null, makeFormData(BASE_INDIVIDUAL));
+
+      expect(result).toEqual({
+        ok: false,
+        errors: {},
+        formError: "Necesitás una comisión activa para crear assignments.",
+      });
+      expect(mockRedirect).not.toHaveBeenCalled();
     });
   });
 
