@@ -9,6 +9,7 @@ const mockRequireUser = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
 const mockGetComisionActiva = vi.fn();
 const mockGetAssignments = vi.fn();
+const mockGetAssignmentsDeComision = vi.fn();
 const mockGetEntregaDeUsuario = vi.fn();
 const mockGetGruposDeAlumno = vi.fn();
 const mockRedirect = vi.fn().mockImplementation((url: string) => {
@@ -21,6 +22,8 @@ vi.mock("@/lib/session", () => ({
 
 vi.mock("@/lib/repositories", () => ({
   getAssignments: () => mockGetAssignments(),
+  getAssignmentsDeComision: (comisionId: string) =>
+    mockGetAssignmentsDeComision(comisionId),
   getEntregasDeUsuario: (username: string) => mockGetEntregaDeUsuario(username),
   getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
   getComisionActiva: () => mockGetComisionActiva(),
@@ -111,6 +114,7 @@ describe("Dashboard page", () => {
       throw new Error(`REDIRECT:${url}`);
     });
     mockGetAssignments.mockResolvedValue([]);
+    mockGetAssignmentsDeComision.mockResolvedValue([]);
     mockGetEntregaDeUsuario.mockResolvedValue(new Map());
     mockGetComisionActiva.mockResolvedValue({ id: "c1" });
     mockGetAlumnoByGithub.mockResolvedValue(null);
@@ -156,6 +160,21 @@ describe("Dashboard page", () => {
       expect(mockRedirect).not.toHaveBeenCalled();
     });
 
+    it("consulta assignments de la comisión activa para alumnos", async () => {
+      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
+      mockGetAlumnoByGithub.mockResolvedValue(
+        makeAlumno({ registroConfirmadoEn: { id: "c1" } as any })
+      );
+      mockGetAssignmentsDeComision.mockResolvedValue([makeAssignment({ titulo: "TP Vigente" })]);
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+
+      expect(mockGetAssignmentsDeComision).toHaveBeenCalledWith("c1");
+      expect(mockGetAssignments).not.toHaveBeenCalled();
+      expect(html).toContain("TP Vigente");
+    });
+
     it("no redirige si no hay comisión activa (deja pasar aunque no haya confirmado)", async () => {
       mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
       mockGetComisionActiva.mockResolvedValue(null);
@@ -164,6 +183,7 @@ describe("Dashboard page", () => {
       const element = await DashboardPage();
       expect(element).toBeDefined();
       expect(mockRedirect).not.toHaveBeenCalled();
+      expect(mockGetAssignmentsDeComision).not.toHaveBeenCalled();
     });
 
     it("no redirige a /registro aunque no esté registrado si es admin", async () => {
@@ -173,6 +193,8 @@ describe("Dashboard page", () => {
       expect(element).toBeDefined();
       expect(mockRedirect).not.toHaveBeenCalled();
       expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
+      expect(mockGetAssignments).toHaveBeenCalled();
+      expect(mockGetAssignmentsDeComision).not.toHaveBeenCalled();
     });
   });
 
@@ -331,7 +353,7 @@ describe("Dashboard page", () => {
     });
 
     it("muestra 'Elegir grupo' cuando es grupal y el alumno no tiene grupo", async () => {
-      mockGetAssignments.mockResolvedValue([makeGrupalAssignment()]);
+      mockGetAssignmentsDeComision.mockResolvedValue([makeGrupalAssignment()]);
       mockGetEntregaDeUsuario.mockResolvedValue(new Map());
       mockGetGruposDeAlumno.mockResolvedValue(new Map());
 
@@ -342,7 +364,7 @@ describe("Dashboard page", () => {
     });
 
     it("el link 'Elegir grupo' apunta a la página del grupo del assignment", async () => {
-      mockGetAssignments.mockResolvedValue([makeGrupalAssignment({ id: "tp-g1" })]);
+      mockGetAssignmentsDeComision.mockResolvedValue([makeGrupalAssignment({ id: "tp-g1" })]);
       mockGetEntregaDeUsuario.mockResolvedValue(new Map());
       mockGetGruposDeAlumno.mockResolvedValue(new Map());
 
@@ -353,7 +375,7 @@ describe("Dashboard page", () => {
 
     it("muestra AcceptButton cuando es grupal y el alumno ya tiene grupo", async () => {
       const grupalAssignment = makeGrupalAssignment({ id: "tp-g1" });
-      mockGetAssignments.mockResolvedValue([grupalAssignment]);
+      mockGetAssignmentsDeComision.mockResolvedValue([grupalAssignment]);
       mockGetEntregaDeUsuario.mockResolvedValue(new Map());
       mockGetGruposDeAlumno.mockResolvedValue(
         new Map([["tp-g1", { nombre: "Los Lambdas" }]])
@@ -367,7 +389,7 @@ describe("Dashboard page", () => {
 
     it("muestra el nombre del grupo cuando el alumno ya tiene grupo sin entrega", async () => {
       const grupalAssignment = makeGrupalAssignment({ id: "tp-g1" });
-      mockGetAssignments.mockResolvedValue([grupalAssignment]);
+      mockGetAssignmentsDeComision.mockResolvedValue([grupalAssignment]);
       mockGetEntregaDeUsuario.mockResolvedValue(new Map());
       mockGetGruposDeAlumno.mockResolvedValue(
         new Map([["tp-g1", { nombre: "Los Lambdas" }]])
@@ -381,7 +403,7 @@ describe("Dashboard page", () => {
     it("muestra 'Ir al repo' cuando ya tiene entrega, aunque tenga grupo", async () => {
       const grupalAssignment = makeGrupalAssignment({ id: "tp-g1" });
       const entrega = makeEntrega({ repoUrl: "https://github.com/pdep/tp-g1" });
-      mockGetAssignments.mockResolvedValue([grupalAssignment]);
+      mockGetAssignmentsDeComision.mockResolvedValue([grupalAssignment]);
       mockGetEntregaDeUsuario.mockResolvedValue(new Map([["tp-g1", entrega]]));
       mockGetGruposDeAlumno.mockResolvedValue(
         new Map([["tp-g1", { nombre: "Los Lambdas" }]])

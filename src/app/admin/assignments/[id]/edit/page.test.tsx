@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import React from "react";
-import { IndividualAssignment } from "@/domain/entities";
+import { Comision, IndividualAssignment } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -61,6 +61,8 @@ import EditAssignmentPage from "./page";
 // ── Helpers ──────────────────────────────────────────────────
 
 function makeAssignment(overrides?: object) {
+  const comision = new Comision(2026, "sheet-1");
+  comision.activa = true;
   return Object.assign(new IndividualAssignment(), {
     id: "a1",
     titulo: "Kata Funcional",
@@ -71,6 +73,7 @@ function makeAssignment(overrides?: object) {
     deadline: new Date("2026-06-30"),
     createdAt: new Date("2026-01-01"),
     slug: "kata-funcional",
+    comision,
     ...overrides,
   });
 }
@@ -108,6 +111,39 @@ describe("Edit Assignment page", () => {
     const element = await EditAssignmentPage({ params: { id: "a1" } });
     const html = renderToStaticMarkup(element as React.ReactElement);
     expect(html).toContain("data-submit-label=\"Guardar cambios\"");
+  });
+
+  it("muestra la comisión asociada sin agregarla al formulario", async () => {
+    const comision = new Comision(2027, "sheet-2");
+    comision.activa = true;
+    mockGetAssignment.mockResolvedValue(makeAssignment({ comision }));
+
+    const element = await EditAssignmentPage({ params: { id: "a1" } });
+    const html = renderToStaticMarkup(element as React.ReactElement);
+
+    expect(html).toContain("Comisión:");
+    expect(html).toContain("2027 (Activa)");
+    expect(html).not.toContain("name=\"comisionId\"");
+  });
+
+  it("muestra Histórica cuando la comisión asociada no está activa", async () => {
+    const comision = new Comision(2027, "sheet-2");
+    comision.activa = false;
+    mockGetAssignment.mockResolvedValue(makeAssignment({ comision }));
+
+    const element = await EditAssignmentPage({ params: { id: "a1" } });
+    const html = renderToStaticMarkup(element as React.ReactElement);
+
+    expect(html).toContain("2027 (Histórica)");
+  });
+
+  it("muestra Sin comisión para assignments huérfanos", async () => {
+    mockGetAssignment.mockResolvedValue(makeAssignment({ comision: undefined }));
+
+    const element = await EditAssignmentPage({ params: { id: "a1" } });
+    const html = renderToStaticMarkup(element as React.ReactElement);
+
+    expect(html).toContain("Sin comisión");
   });
 
   describe("defaultValues pre-populados", () => {

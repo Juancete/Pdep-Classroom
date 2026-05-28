@@ -46,11 +46,12 @@ export default async function AdminAssignmentsPage() {
       {sorted.length === 0 ? (
         <DataEmpty>No hay assignments todavía. Creá el primero.</DataEmpty>
       ) : (
-        <DataTable columns="2fr 1fr 1fr 1.5fr 90px 110px 180px">
+        <DataTable columns="2fr 1fr 1fr 1fr 1.5fr 90px 110px 180px">
           <DataHeader>
             <DataHeaderCell>Título</DataHeaderCell>
             <DataHeaderCell>Paradigma</DataHeaderCell>
             <DataHeaderCell>Tipo</DataHeaderCell>
+            <DataHeaderCell>Comisión</DataHeaderCell>
             <DataHeaderCell>Template</DataHeaderCell>
             <DataHeaderCell>Entregas</DataHeaderCell>
             <DataHeaderCell>Deadline</DataHeaderCell>
@@ -69,6 +70,24 @@ export default async function AdminAssignmentsPage() {
                 </DataCell>
                 <DataCell label="Tipo">
                   <span className="text-gray-500">{assignment.tipo}</span>
+                </DataCell>
+                <DataCell label="Comisión">
+                  {assignment.comision ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-gray-600">
+                      {assignment.comision.anio}
+                      <span
+                        className={`rounded-full px-2 py-0.5 ${
+                          assignment.comision.activa
+                            ? "bg-green-50 text-green-700"
+                            : "bg-gray-100 text-gray-500"
+                        }`}
+                      >
+                        {assignment.comision.activa ? "Activa" : "Histórica"}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-xs text-gray-400">Sin comisión</span>
+                  )}
                 </DataCell>
                 <DataCell label="Template">
                   <span className="font-mono text-xs text-gray-500 break-all">
