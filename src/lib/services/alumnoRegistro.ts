@@ -1,12 +1,19 @@
-import { upsertarAlumnoEnSheets, validateRegistro, type RegistroInput } from "@/lib/sheets";
+import { validateRegistro, type RegistroInput } from "@/domain/entities";
+import { upsertarAlumnoEnSheets } from "@/lib/sheets";
 import {
   getComisionActiva,
+  getAlumnoByGithub,
   upsertAlumno,
   marcarRegistroConfirmado,
   LegajoConflictError,
 } from "@/lib/repositories";
 import { Comision } from "@/domain/entities";
 import { logger } from "@/lib/logger";
+import {
+  ejecutarHooksPostConfirmacion,
+  HOOKS_CONFIRMACION_ALUMNO,
+  type ResultadoHooks,
+} from "./hooksPostConfirmacion";
 
 /**
  * Resultado de `confirmarDatosAlumno` — discriminated union con el status HTTP
@@ -28,9 +35,9 @@ export type ResultadoConfirmacion =
  * valida los datos del alumno, persiste en DB (DB-primero para atomicidad
  * sobre legajo↔github) y refleja en la planilla.
  *
- * El handler es quien agrega lo específico: registro hace la validación de
- * coherencia github↔sesión antes de llamar, y después de un resultado OK
- * dispara los hooks accesorios (Google Groups, sync de grupos desde planilla).
+ * El handler agrega lo específico de HTTP, como la validación de coherencia
+ * github↔sesión. El flujo de aplicación `confirmarYProcesarAlumno` encadena los
+ * hooks accesorios después de una confirmación OK.
  */
 export async function confirmarDatosAlumno(
   input: RegistroInput
@@ -103,4 +110,45 @@ export async function confirmarDatosAlumno(
   }
 
   return { ok: true, comision: comisionActiva };
+}
+
+export type ResultadoConfirmacionConHooks =
+  | { ok: true; comision: Comision; hooks: ResultadoHooks }
+  | {
+      ok: false;
+      status: 400 | 409;
+      error: string;
+      field?: "legajo" | "githubUsername";
+    };
+
+/**
+ * Orquesta el evento completo "alumno confirmado/actualizado" para los flujos de
+ * un único alumno (registro y perfil): confirma los datos y dispara los hooks
+ * accesorios (Google Groups + sync de grupos). Captura el email previo ANTES de
+ * confirmar para que, si cambió, el hook de Google Groups des-suscriba la
+ * dirección vieja. La ruta sólo valida entrada, llama acá y traduce el resultado
+ * a HTTP.
+ */
+export async function confirmarYProcesarAlumno(
+  input: RegistroInput
+): Promise<ResultadoConfirmacionConHooks> {
+  // El email previo se lee antes de confirmar: `upsertAlumno` (dentro de
+  // `confirmarDatosAlumno`) pisa el email en la DB, así que después ya no
+  // tendríamos la dirección vieja para des-suscribirla del grupo.
+  const emailPrevio = (await getAlumnoByGithub(input.githubUsername))?.email;
+
+  const resultado = await confirmarDatosAlumno(input);
+  if (!resultado.ok) return resultado;
+
+  const hooks = await ejecutarHooksPostConfirmacion(
+    {
+      githubUsername: input.githubUsername,
+      email: input.email,
+      comision: resultado.comision,
+      emailPrevio,
+    },
+    HOOKS_CONFIRMACION_ALUMNO
+  );
+
+  return { ok: true, comision: resultado.comision, hooks };
 }
