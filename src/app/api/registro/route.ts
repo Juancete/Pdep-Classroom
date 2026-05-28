@@ -9,7 +9,13 @@ import { confirmarYProcesarAlumno } from "@/lib/services/alumnoRegistro";
 export async function POST(req: Request) {
   try {
     const user = await requireUser();
-    const body = (await req.json()) as RegistroInput;
+    const body = await req.json();
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json(
+        { error: "No pudimos leer los datos enviados. Volvé a intentar." },
+        { status: 400 }
+      );
+    }
 
     // Si el form envió un githubUsername distinto al de la sesión, devolvemos
     // error con `field` para que el form lo pinte inline y pueda ofrecer el
@@ -33,7 +39,7 @@ export async function POST(req: Request) {
     }
     body.githubUsername = user.githubUsername;
 
-    const resultado = await confirmarYProcesarAlumno(body);
+    const resultado = await confirmarYProcesarAlumno(body as RegistroInput);
     if (!resultado.ok) {
       return NextResponse.json(
         resultado.field

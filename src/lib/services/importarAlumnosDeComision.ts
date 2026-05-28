@@ -17,7 +17,10 @@ export type ResultadoImportacionAlumnos = {
 export class LecturaPlanillaAlumnosError extends Error {
   constructor(cause: unknown) {
     const message = cause instanceof Error ? cause.message : "Error desconocido";
-    super(`No se pudo leer la planilla: ${message}`, { cause });
+    const fullMessage = message.startsWith("No se pudo leer la planilla")
+      ? message
+      : `No se pudo leer la planilla: ${message}`;
+    super(fullMessage, { cause });
     this.name = "LecturaPlanillaAlumnosError";
   }
 }

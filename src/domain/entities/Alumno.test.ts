@@ -318,4 +318,26 @@ describe("validateRegistro", () => {
       "El usuario de GitHub debe ser un texto"
     );
   });
+
+  it("no tira TypeError cuando legajo, apellido, nombre o email no son strings", () => {
+    expect(() =>
+      validateRegistro({ ...valid, legajo: 12345 as unknown as string })
+    ).not.toThrow();
+    expect(() =>
+      validateRegistro({ ...valid, apellido: null as unknown as string })
+    ).not.toThrow();
+    expect(() =>
+      validateRegistro({ ...valid, nombre: undefined as unknown as string })
+    ).not.toThrow();
+    expect(() =>
+      validateRegistro({ ...valid, email: 42 as unknown as string })
+    ).not.toThrow();
+  });
+
+  it("devuelve error de validación (no null) cuando legajo, apellido, nombre o email no son strings", () => {
+    expect(validateRegistro({ ...valid, legajo: 12345 as unknown as string })).not.toBeNull();
+    expect(validateRegistro({ ...valid, apellido: null as unknown as string })).not.toBeNull();
+    expect(validateRegistro({ ...valid, nombre: undefined as unknown as string })).not.toBeNull();
+    expect(validateRegistro({ ...valid, email: 42 as unknown as string })).not.toBeNull();
+  });
 });
