@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/session";
 import {
   getAssignments,
+  getAssignmentsDeComision,
   getEntregasDeUsuario,
   getAlumnoByGithub,
   getComisionActiva,
@@ -12,12 +13,14 @@ import type { Grupo } from "@/domain/entities";
 
 export default async function DashboardPage() {
   const user = await requireUser();
+  let comisionActivaId: string | null = null;
 
   if (!user.isAdmin) {
     const [alumno, comisionActiva] = await Promise.all([
       getAlumnoByGithub(user.githubUsername),
       getComisionActiva(),
     ]);
+    comisionActivaId = comisionActiva?.id ?? null;
     if (comisionActiva && (!alumno || alumno.necesitaConfirmarRegistroPara(comisionActiva))) {
       redirect("/registro");
     }
@@ -28,7 +31,11 @@ export default async function DashboardPage() {
     : getGruposDeAlumno(user.githubUsername);
 
   const [assignments, entregasMap, gruposMap] = await Promise.all([
-    getAssignments(),
+    user.isAdmin
+      ? getAssignments()
+      : comisionActivaId
+        ? getAssignmentsDeComision(comisionActivaId)
+        : Promise.resolve([]),
     getEntregasDeUsuario(user.githubUsername),
     gruposPromise,
   ]);
