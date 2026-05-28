@@ -52,13 +52,8 @@ export async function createAssignment(
 
   let assignment: Assignment;
 
-  if (data.tipo === "grupal") {
-    const grupal = new GrupalAssignment();
-    grupal.maxIntegrantes = data.maxIntegrantes!;
-    assignment = grupal;
-  } else {
-    assignment = new IndividualAssignment();
-  }
+  assignment = data.tipo === "grupal" ? new GrupalAssignment() : new IndividualAssignment();
+  assignment.aplicarCamposExtra(data);
 
   assignment.titulo = data.titulo;
   assignment.slug = slug;
@@ -91,9 +86,7 @@ export async function updateAssignment(
   if (data.deadline !== undefined)
     assignment.deadline = data.deadline ? new Date(data.deadline) : undefined;
 
-  if (assignment instanceof GrupalAssignment && data.maxIntegrantes !== undefined) {
-    assignment.maxIntegrantes = data.maxIntegrantes;
-  }
+  assignment.aplicarCamposExtra(data);
 
   await entityManager.flush();
   return assignment;
