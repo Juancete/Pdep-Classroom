@@ -3,9 +3,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ── Mocks ────────────────────────────────────────────────────
 
 const mockGetComisionActiva = vi.fn();
+const mockGetAlumnoByGithub = vi.fn();
 const mockUpsertAlumno = vi.fn();
 const mockMarcarRegistroConfirmado = vi.fn();
 const mockUpsertarAlumnoEnSheets = vi.fn();
+const mockEjecutarHooksPostConfirmacion = vi.fn();
 
 const { FakeLegajoConflictError } = vi.hoisted(() => {
   class FakeLegajoConflictError extends Error {
@@ -24,10 +26,17 @@ const { FakeLegajoConflictError } = vi.hoisted(() => {
 
 vi.mock("@/lib/repositories", () => ({
   getComisionActiva: () => mockGetComisionActiva(),
+  getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
   upsertAlumno: (data: unknown) => mockUpsertAlumno(data),
   marcarRegistroConfirmado: (...args: unknown[]) =>
     mockMarcarRegistroConfirmado(...args),
   LegajoConflictError: FakeLegajoConflictError,
+}));
+
+vi.mock("./hooksPostConfirmacion", () => ({
+  ejecutarHooksPostConfirmacion: (...args: unknown[]) =>
+    mockEjecutarHooksPostConfirmacion(...args),
+  HOOKS_CONFIRMACION_ALUMNO: [],
 }));
 
 // Para `validateRegistro` usamos la implementación real: es pura y testearla
@@ -41,7 +50,7 @@ vi.mock("@/lib/sheets", async () => {
   };
 });
 
-import { confirmarDatosAlumno } from "./alumnoRegistro";
+import { confirmarDatosAlumno, confirmarYProcesarAlumno } from "./alumnoRegistro";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -73,9 +82,11 @@ describe("confirmarDatosAlumno", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetComisionActiva.mockResolvedValue(comisionActiva);
+    mockGetAlumnoByGithub.mockResolvedValue(null);
     mockUpsertAlumno.mockResolvedValue(undefined);
     mockMarcarRegistroConfirmado.mockResolvedValue(undefined);
     mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: true });
+    mockEjecutarHooksPostConfirmacion.mockResolvedValue({});
   });
 
   it("devuelve { ok: true, comision } cuando todo el flujo funciona", async () => {
@@ -225,5 +236,75 @@ describe("confirmarDatosAlumno", () => {
   it("deja propagar errores inesperados del upsert en DB (no-LegajoConflictError)", async () => {
     mockUpsertAlumno.mockRejectedValue(new Error("conexión caída"));
     await expect(confirmarDatosAlumno(validInput)).rejects.toThrow("conexión caída");
+  });
+});
+
+// ── confirmarYProcesarAlumno ─────────────────────────────────
+
+describe("confirmarYProcesarAlumno", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetComisionActiva.mockResolvedValue(comisionActiva);
+    mockGetAlumnoByGithub.mockResolvedValue(null);
+    mockUpsertAlumno.mockResolvedValue(undefined);
+    mockMarcarRegistroConfirmado.mockResolvedValue(undefined);
+    mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: true });
+    mockEjecutarHooksPostConfirmacion.mockResolvedValue({ groupSubscription: "added", gruposSync: "ok" });
+  });
+
+  it("propaga el resultado { ok: false } cuando confirmarDatosAlumno falla", async () => {
+    mockGetComisionActiva.mockResolvedValue(null);
+    const resultado = await confirmarYProcesarAlumno(validInput);
+    expect(resultado).toMatchObject({ ok: false, status: 409 });
+    expect(mockEjecutarHooksPostConfirmacion).not.toHaveBeenCalled();
+  });
+
+  it("devuelve { ok: true, comision, hooks } cuando todo funciona", async () => {
+    const resultado = await confirmarYProcesarAlumno(validInput);
+    expect(resultado).toEqual({
+      ok: true,
+      comision: comisionActiva,
+      hooks: { groupSubscription: "added", gruposSync: "ok" },
+    });
+  });
+
+  it("ejecuta los hooks pasando el contexto del alumno", async () => {
+    await confirmarYProcesarAlumno(validInput);
+    expect(mockEjecutarHooksPostConfirmacion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        githubUsername: validInput.githubUsername,
+        email: validInput.email,
+        comision: comisionActiva,
+      }),
+      expect.any(Array)
+    );
+  });
+
+  it("pasa emailPrevio: undefined cuando el alumno no existe en DB antes de confirmar", async () => {
+    mockGetAlumnoByGithub.mockResolvedValue(null);
+    await confirmarYProcesarAlumno(validInput);
+    expect(mockEjecutarHooksPostConfirmacion).toHaveBeenCalledWith(
+      expect.objectContaining({ emailPrevio: undefined }),
+      expect.any(Array)
+    );
+  });
+
+  it("pasa el email previo del alumno existente para que el hook lo des-suscriba si cambió", async () => {
+    mockGetAlumnoByGithub.mockResolvedValue({ email: "viejo@gmail.com" });
+    await confirmarYProcesarAlumno(validInput);
+    expect(mockEjecutarHooksPostConfirmacion).toHaveBeenCalledWith(
+      expect.objectContaining({ emailPrevio: "viejo@gmail.com" }),
+      expect.any(Array)
+    );
+  });
+
+  it("lee el email previo ANTES de confirmar (upsertAlumno pisa el email en DB)", async () => {
+    mockGetAlumnoByGithub.mockResolvedValue({ email: "viejo@gmail.com" });
+    await confirmarYProcesarAlumno(validInput);
+    const ordenLlamadas = [
+      mockGetAlumnoByGithub.mock.invocationCallOrder[0],
+      mockUpsertAlumno.mock.invocationCallOrder[0],
+    ];
+    expect(ordenLlamadas[0]).toBeLessThan(ordenLlamadas[1]);
   });
 });

@@ -3,6 +3,43 @@ import { randomUUID } from "crypto";
 import { Comision } from "./Comision";
 import { ALUMNO_LEGAJO_PATTERN, ALUMNO_EMAIL_PATTERN, normalizarGithubUsername } from "./domain-constants";
 
+export interface RegistroInput {
+  legajo: string;
+  apellido: string;
+  nombre: string;
+  githubUsername: string;
+  email: string;
+}
+
+export interface AlumnoData extends RegistroInput {
+  comision: Comision;
+  registroConfirmadoEn?: Comision;
+}
+
+// Regex de email RFC-lite: una arroba, algún dominio, un punto después.
+// Suficiente para detectar typos comunes sin sobre-complicar.
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function isValidEmail(email: string): boolean {
+  return EMAIL_REGEX.test(email.trim());
+}
+
+export function validateRegistro(input: RegistroInput): string | null {
+  const { legajo, apellido, nombre, githubUsername, email } = input;
+
+  if (typeof legajo !== "string" || !legajo || !new RegExp(`^${Alumno.LEGAJO_PATTERN}$`).test(legajo.trim()))
+    return "El legajo debe tener entre 4 y 8 dígitos";
+  if (typeof apellido !== "string" || !apellido.trim()) return "El apellido es obligatorio";
+  if (typeof nombre !== "string" || !nombre.trim()) return "El nombre es obligatorio";
+  if (typeof githubUsername !== "string")
+    return "El usuario de GitHub debe ser un texto";
+  if (!githubUsername.trim()) return "El usuario de GitHub es obligatorio";
+  if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(githubUsername.trim()))
+    return "El usuario de GitHub no tiene un formato válido";
+  if (typeof email !== "string" || !isValidEmail(email)) return "El email no es válido";
+  return null;
+}
+
 @Entity()
 export class Alumno {
   static readonly LEGAJO_PATTERN = ALUMNO_LEGAJO_PATTERN;
@@ -33,8 +70,10 @@ export class Alumno {
   @Property({ type: 'string' })
   email!: string;
 
-  @ManyToOne(() => Comision, { nullable: true })
-  comision?: Comision;
+  // Todo alumno pertenece a exactamente una comisión. La FK es NOT NULL;
+  // borrar una comisión borra sus alumnos en cascada (on delete cascade).
+  @ManyToOne(() => Comision)
+  comision!: Comision;
 
   // Marca la comisión en la que el alumno confirmó sus datos por última vez.
   // Si no coincide con la comisión activa, se le pide re-confirmar en /registro.
@@ -61,6 +100,39 @@ export class Alumno {
     return `${this.apellido}, ${this.nombre}`;
   }
 
+  // Aplica solo los campos de RegistroInput (sin comisión ni confirmación).
+  // Usado por parseAlumnosRows en sheets.ts, donde los Alumno son transitorios
+  // (DTOs de planilla) y la comisión se inyecta en el call site de upsertAlumnos.
+  aplicarRegistro(input: RegistroInput): void {
+    this.legajo = input.legajo.trim();
+    this.nombre = input.nombre.trim();
+    this.apellido = input.apellido.trim();
+    this.githubUsername = Alumno.normalizarUsername(input.githubUsername);
+    this.email = Alumno.normalizarEmail(input.email);
+  }
+
+  actualizarDatos(data: AlumnoData): void {
+    this.aplicarRegistro(data);
+    this.comision = data.comision;
+    if (data.registroConfirmadoEn !== undefined) {
+      this.registroConfirmadoEn = data.registroConfirmadoEn;
+    }
+  }
+
+  toRegistroInput(): RegistroInput {
+    return {
+      legajo: this.legajo,
+      apellido: this.apellido,
+      nombre: this.nombre,
+      githubUsername: this.githubUsername,
+      email: this.email,
+    };
+  }
+
+  confirmarRegistroEn(comision: Comision): void {
+    this.registroConfirmadoEn = comision;
+  }
+
   confirmoRegistroEn(comision: Comision | null): boolean {
     if (!comision) return false;
     return this.registroConfirmadoEn?.id === comision.id;
@@ -74,8 +146,24 @@ export class Alumno {
     return this.alumnoSyncFallidoEn !== null;
   }
 
+  marcarSyncDeAlumnoFallido(fecha = new Date()): void {
+    this.alumnoSyncFallidoEn = fecha;
+  }
+
+  limpiarSyncDeAlumnoFallido(): void {
+    this.alumnoSyncFallidoEn = null;
+  }
+
   tieneSyncDeGruposFallido(): boolean {
     return this.gruposSyncFallidoEn !== null;
+  }
+
+  marcarSyncDeGruposFallido(fecha = new Date()): void {
+    this.gruposSyncFallidoEn = fecha;
+  }
+
+  limpiarSyncDeGruposFallido(): void {
+    this.gruposSyncFallidoEn = null;
   }
 
   tieneSyncPendiente(): boolean {

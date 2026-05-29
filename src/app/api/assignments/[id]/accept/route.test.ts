@@ -1,23 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PdepUser } from "@/types";
-import {
-  IndividualAssignment,
-  GrupalAssignment,
-  Entrega,
-  type Assignment,
-} from "@/domain/entities";
+import { Entrega, GrupoNoAsignadoError } from "@/domain/entities";
 
-// ── Mocks ────────────────────────────────────────────────────
-
-const mockRequireUser = vi.fn();
-const mockCheckRateLimit = vi.fn();
-const mockGetAssignment = vi.fn();
-const mockGetEntregaDeUsuario = vi.fn();
-const mockCreateEntrega = vi.fn();
-const mockCrearEntrega = vi.fn();
-const mockRepoExists = vi.fn();
-const mockAddCollaborators = vi.fn();
-const mockGetGrupoDeAlumno = vi.fn();
+const {
+  mockRequireUser,
+  mockCheckRateLimit,
+  mockAceptarAssignment,
+  FakeAlumnoNoRegistradoError,
+  FakeAssignmentNoEncontradoError,
+} = vi.hoisted(() => ({
+  mockRequireUser: vi.fn(),
+  mockCheckRateLimit: vi.fn(),
+  mockAceptarAssignment: vi.fn(),
+  FakeAlumnoNoRegistradoError: class AlumnoNoRegistradoError extends Error {},
+  FakeAssignmentNoEncontradoError: class AssignmentNoEncontradoError extends Error {},
+}));
 
 vi.mock("@/lib/session", () => ({
   requireUser: () => mockRequireUser(),
@@ -27,24 +24,16 @@ vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: (key: string) => mockCheckRateLimit(key),
 }));
 
-vi.mock("@/lib/repositories", () => ({
-  getAssignment: (id: string) => mockGetAssignment(id),
-  getEntregaDeUsuario: (assignmentId: string, username: string) =>
-    mockGetEntregaDeUsuario(assignmentId, username),
-  createEntrega: (data: unknown) => mockCreateEntrega(data),
-  getGrupoDeAlumnoEnAssignment: (assignmentId: string, username: string) =>
-    mockGetGrupoDeAlumno(assignmentId, username),
-}));
-
-vi.mock("@/lib/github", () => ({
-  crearEntrega: (opts: unknown) => mockCrearEntrega(opts),
-  repoExists: (name: string) => mockRepoExists(name),
-  addCollaborators: (repoName: string, usernames: string[]) => mockAddCollaborators(repoName, usernames),
-}));
+vi.mock("@/lib/services/aceptarAssignment", () => {
+  return {
+    aceptarAssignment: (assignmentId: string, user: PdepUser) =>
+      mockAceptarAssignment(assignmentId, user),
+    AlumnoNoRegistradoError: FakeAlumnoNoRegistradoError,
+    AssignmentNoEncontradoError: FakeAssignmentNoEncontradoError,
+  };
+});
 
 import { POST } from "./route";
-
-// ── Helpers ──────────────────────────────────────────────────
 
 function makeUser(overrides?: Partial<PdepUser>): PdepUser {
   return {
@@ -54,23 +43,6 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
     isAdmin: false,
     ...overrides,
   };
-}
-
-type AssignmentOverrides = Partial<IndividualAssignment & GrupalAssignment>;
-
-function makeAssignment(overrides?: AssignmentOverrides): Assignment {
-  const assignment: Assignment =
-    overrides?.tipo === "grupal"
-      ? Object.assign(new GrupalAssignment(), { maxIntegrantes: 4 })
-      : new IndividualAssignment();
-  assignment.id = "a1";
-  assignment.titulo = "Kata Funcional";
-  assignment.descripcion = "";
-  assignment.templateRepo = "kata-template";
-  assignment.paradigma = "funcional";
-  assignment.slug = "kata-funcional";
-  assignment.createdAt = new Date("2026-01-01");
-  return Object.assign(assignment, overrides);
 }
 
 function makeEntrega(overrides?: Partial<Entrega>): Entrega {
@@ -89,172 +61,99 @@ function makeRequest(): Request {
   });
 }
 
-// ── Tests ────────────────────────────────────────────────────
-
 describe("POST /api/assignments/[id]/accept", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireUser.mockResolvedValue(makeUser());
     mockCheckRateLimit.mockReturnValue(true);
-    mockGetAssignment.mockResolvedValue(makeAssignment());
-    mockGetEntregaDeUsuario.mockResolvedValue(undefined);
-    mockRepoExists.mockResolvedValue(false);
-    mockCrearEntrega.mockResolvedValue({
-      repoName: "kata-funcional-juangarcia",
-      repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
-    });
-    mockCreateEntrega.mockResolvedValue(makeEntrega());
+    mockAceptarAssignment.mockResolvedValue(makeEntrega());
   });
 
-  describe("rate limiting", () => {
-    it("devuelve 429 cuando el rate limit está activo", async () => {
-      mockCheckRateLimit.mockReturnValue(false);
-      const response = await POST(makeRequest(), { params: { id: "a1" } });
-      expect(response.status).toBe(429);
-      const data = await response.json();
-      expect(data.error).toBeDefined();
-    });
-
-    it("pasa la clave correcta al rate limiter (username:assignmentId)", async () => {
-      await POST(makeRequest(), { params: { id: "a1" } });
-      expect(mockCheckRateLimit).toHaveBeenCalledWith("juangarcia:a1");
-    });
-
-    it("no consulta el store si el rate limit bloquea", async () => {
-      mockCheckRateLimit.mockReturnValue(false);
-      await POST(makeRequest(), { params: { id: "a1" } });
-      expect(mockGetAssignment).not.toHaveBeenCalled();
-    });
+  it("devuelve 429 cuando el rate limit está activo", async () => {
+    mockCheckRateLimit.mockReturnValue(false);
+    const response = await POST(makeRequest(), { params: { id: "a1" } });
+    expect(response.status).toBe(429);
+    expect(mockAceptarAssignment).not.toHaveBeenCalled();
   });
 
-  describe("autenticación", () => {
-    it("devuelve 500 si requireUser lanza (no autenticado)", async () => {
-      mockRequireUser.mockRejectedValue(new Error("redirect"));
-      const response = await POST(makeRequest(), { params: { id: "a1" } });
-      expect(response.status).toBe(500);
-    });
+  it("pasa la clave correcta al rate limiter", async () => {
+    await POST(makeRequest(), { params: { id: "a1" } });
+    expect(mockCheckRateLimit).toHaveBeenCalledWith("juangarcia:a1");
   });
 
-  describe("validaciones", () => {
-    it("devuelve 404 si el assignment no existe", async () => {
-      mockGetAssignment.mockResolvedValue(undefined);
-      const response = await POST(makeRequest(), { params: { id: "no-existe" } });
-      expect(response.status).toBe(404);
-    });
-
-    it("devuelve 409 si el usuario ya tiene entrega", async () => {
-      mockGetEntregaDeUsuario.mockResolvedValue(makeEntrega());
-      const response = await POST(makeRequest(), { params: { id: "a1" } });
-      expect(response.status).toBe(409);
-    });
-
-    it("devuelve 400 si assignment grupal y el usuario no tiene grupo", async () => {
-      mockGetAssignment.mockResolvedValue(makeAssignment({ tipo: "grupal" }));
-      mockGetGrupoDeAlumno.mockResolvedValue(undefined);
-      const response = await POST(makeRequest(), { params: { id: "a1" } });
-      expect(response.status).toBe(400);
-    });
+  it("devuelve 200 con la entrega del servicio", async () => {
+    const response = await POST(makeRequest(), { params: { id: "a1" } });
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.repoName).toBe("kata-funcional-juangarcia");
+    expect(mockAceptarAssignment).toHaveBeenCalledWith("a1", expect.objectContaining({
+      githubUsername: "juangarcia",
+    }));
   });
 
-  describe("creación exitosa (individual)", () => {
-    it("devuelve 200 con la entrega creada", async () => {
-      const response = await POST(makeRequest(), { params: { id: "a1" } });
-      expect(response.status).toBe(200);
-      const data = await response.json();
-      expect(data.repoName).toBe("kata-funcional-juangarcia");
-    });
+  it("mantiene idempotencia si se acepta dos veces el mismo assignment", async () => {
+    const entrega = makeEntrega();
+    mockAceptarAssignment.mockResolvedValue(entrega);
 
-    it("llama a crearEntrega con los parámetros correctos", async () => {
-      await POST(makeRequest(), { params: { id: "a1" } });
-      expect(mockCrearEntrega).toHaveBeenCalledWith(
-        expect.objectContaining({
-          templateRepo: "kata-template",
-          slug: "kata-funcional",
-          usernames: ["juangarcia"],
-        })
-      );
-    });
+    const firstResponse = await POST(makeRequest(), { params: { id: "a1" } });
+    const secondResponse = await POST(makeRequest(), { params: { id: "a1" } });
+
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(200);
+    const firstData = await firstResponse.json();
+    const secondData = await secondResponse.json();
+    expect(firstData.id).toBe(secondData.id);
+    expect(firstData.repoName).toBe(secondData.repoName);
+    expect(mockAceptarAssignment).toHaveBeenCalledTimes(2);
   });
 
-  describe("creación exitosa (grupal)", () => {
-    function makeGrupo(githubUsernames: string[], id = "los-lambdas") {
-      return {
-        id,
-        nombre: "Los Lambdas",
-        alumnos: { getItems: () => githubUsernames.map((username) => ({ githubUsername: username })) },
-        usernamesDeMiembros: () => githubUsernames,
-      };
-    }
-
-    it("devuelve 200 con la entrega creada para el grupo", async () => {
-      mockGetAssignment.mockResolvedValue(makeAssignment({ tipo: "grupal" }));
-      mockGetGrupoDeAlumno.mockResolvedValue(
-        makeGrupo(["juangarcia", "mariaperez"])
-      );
-      mockCrearEntrega.mockResolvedValue({
-        repoName: "kata-funcional-los-lambdas",
-        repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-los-lambdas",
-      });
-      mockCreateEntrega.mockResolvedValue(
-        makeEntrega({ repoName: "kata-funcional-los-lambdas" })
-      );
-      const response = await POST(makeRequest(), { params: { id: "a1" } });
-      expect(response.status).toBe(200);
+  it("mantiene una única entrega ante aceptación concurrente por miembros del mismo grupo", async () => {
+    const entrega = makeEntrega({
+      id: "e-grupo",
+      repoName: "kata-funcional-los-lambdas",
+      githubUsernames: ["juangarcia", "marialopez"],
     });
+    mockRequireUser
+      .mockResolvedValueOnce(makeUser({ githubUsername: "juangarcia" }))
+      .mockResolvedValueOnce(makeUser({ githubUsername: "marialopez" }));
+    mockAceptarAssignment.mockResolvedValue(entrega);
 
-    it("llama a crearEntrega con los usernames del grupo", async () => {
-      mockGetAssignment.mockResolvedValue(makeAssignment({ tipo: "grupal" }));
-      mockGetGrupoDeAlumno.mockResolvedValue(
-        makeGrupo(["juangarcia", "mariaperez"])
-      );
-      mockCrearEntrega.mockResolvedValue({
-        repoName: "kata-funcional-los-lambdas",
-        repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-los-lambdas",
-      });
-      mockCreateEntrega.mockResolvedValue(makeEntrega());
-      await POST(makeRequest(), { params: { id: "a1" } });
-      expect(mockCrearEntrega).toHaveBeenCalledWith(
-        expect.objectContaining({
-          usernames: ["juangarcia", "mariaperez"],
-          grupoId: "los-lambdas",
-        })
-      );
-    });
+    const [firstResponse, secondResponse] = await Promise.all([
+      POST(makeRequest(), { params: { id: "a1" } }),
+      POST(makeRequest(), { params: { id: "a1" } }),
+    ]);
 
-    it("busca el grupo por assignmentId, no por paradigma", async () => {
-      mockGetAssignment.mockResolvedValue(
-        makeAssignment({ id: "a1", tipo: "grupal" })
-      );
-      mockGetGrupoDeAlumno.mockResolvedValue(makeGrupo(["juangarcia"], "g1"));
-      mockCrearEntrega.mockResolvedValue({
-        repoName: "kata-funcional-grupo-x",
-        repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-grupo-x",
-      });
-      mockCreateEntrega.mockResolvedValue(makeEntrega());
-      await POST(makeRequest(), { params: { id: "a1" } });
-      expect(mockGetGrupoDeAlumno).toHaveBeenCalledWith("a1", "juangarcia");
-    });
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(200);
+    const firstData = await firstResponse.json();
+    const secondData = await secondResponse.json();
+    expect(firstData.id).toBe("e-grupo");
+    expect(secondData.id).toBe("e-grupo");
+    expect(firstData.repoName).toBe("kata-funcional-los-lambdas");
+    expect(secondData.repoName).toBe("kata-funcional-los-lambdas");
   });
 
-  describe("repo ya existe", () => {
-    beforeEach(() => {
-      mockRepoExists.mockResolvedValue(true);
-      mockAddCollaborators.mockResolvedValue(undefined);
-    });
+  it("devuelve 404 si el assignment no existe", async () => {
+    mockAceptarAssignment.mockRejectedValue(new FakeAssignmentNoEncontradoError("Assignment no encontrado"));
+    const response = await POST(makeRequest(), { params: { id: "no-existe" } });
+    expect(response.status).toBe(404);
+  });
 
-    it("registra la entrega sin crear un nuevo repo si ya existe", async () => {
-      const response = await POST(makeRequest(), { params: { id: "a1" } });
-      expect(response.status).toBe(200);
-      expect(mockCrearEntrega).not.toHaveBeenCalled();
-      expect(mockCreateEntrega).toHaveBeenCalled();
-    });
+  it("devuelve 400 si assignment grupal y el usuario no tiene grupo", async () => {
+    mockAceptarAssignment.mockRejectedValue(new GrupoNoAsignadoError("a1", "juangarcia"));
+    const response = await POST(makeRequest(), { params: { id: "a1" } });
+    expect(response.status).toBe(400);
+  });
 
-    it("agrega al usuario como colaborador del repo existente", async () => {
-      await POST(makeRequest(), { params: { id: "a1" } });
-      expect(mockAddCollaborators).toHaveBeenCalledWith(
-        expect.any(String),
-        ["juangarcia"]
-      );
-    });
+  it("devuelve 400 si el alumno no está registrado para una entrega individual", async () => {
+    mockAceptarAssignment.mockRejectedValue(new FakeAlumnoNoRegistradoError("Completá tu registro"));
+    const response = await POST(makeRequest(), { params: { id: "a1" } });
+    expect(response.status).toBe(400);
+  });
+
+  it("devuelve 500 si requireUser lanza", async () => {
+    mockRequireUser.mockRejectedValue(new Error("redirect"));
+    const response = await POST(makeRequest(), { params: { id: "a1" } });
+    expect(response.status).toBe(500);
   });
 });

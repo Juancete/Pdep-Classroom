@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Alumno } from "./Alumno";
+import { Alumno, validateRegistro } from "./Alumno";
 import type { Comision } from "./Comision";
 
 function nuevoAlumno(overrides: Partial<Alumno> = {}): Alumno {
@@ -62,6 +62,102 @@ describe("Alumno.usernameCanonico", () => {
   });
 });
 
+describe("Alumno.actualizarDatos", () => {
+  it("trimmea y normaliza los datos del alumno", () => {
+    const alumno = new Alumno();
+    const comision = fakeComision("c1");
+
+    alumno.actualizarDatos({
+      legajo: " 12345 ",
+      nombre: " Ana ",
+      apellido: " García ",
+      githubUsername: " @AnaGarcia ",
+      email: " ANA@Example.COM ",
+      comision,
+    });
+
+    expect(alumno).toMatchObject({
+      legajo: "12345",
+      nombre: "Ana",
+      apellido: "García",
+      githubUsername: "anagarcia",
+      email: "ana@example.com",
+      comision,
+    });
+  });
+
+  it("no pisa registroConfirmadoEn cuando el dato viene undefined", () => {
+    const comisionActual = fakeComision("activa");
+    const comisionConfirmada = fakeComision("confirmada");
+    const alumno = nuevoAlumno({ registroConfirmadoEn: comisionConfirmada });
+
+    alumno.actualizarDatos({
+      legajo: "54321",
+      nombre: "Ana",
+      apellido: "García",
+      githubUsername: "ana-garcia",
+      email: "ana@example.com",
+      comision: comisionActual,
+    });
+
+    expect(alumno.registroConfirmadoEn).toBe(comisionConfirmada);
+  });
+
+  it("actualiza registroConfirmadoEn cuando el dato viene definido", () => {
+    const comisionActual = fakeComision("activa");
+    const comisionNueva = fakeComision("nueva");
+    const alumno = nuevoAlumno({ registroConfirmadoEn: fakeComision("vieja") });
+
+    alumno.actualizarDatos({
+      legajo: "54321",
+      nombre: "Ana",
+      apellido: "García",
+      githubUsername: "ana-garcia",
+      email: "ana@example.com",
+      comision: comisionActual,
+      registroConfirmadoEn: comisionNueva,
+    });
+
+    expect(alumno.registroConfirmadoEn).toBe(comisionNueva);
+  });
+});
+
+describe("Alumno.aplicarRegistro", () => {
+  it("trimmea y normaliza los campos de registro sin tocar comisión", () => {
+    const comisionPrevia = fakeComision("c-previa");
+    const alumno = nuevoAlumno({ comision: comisionPrevia });
+
+    alumno.aplicarRegistro({
+      legajo: " 99999 ",
+      nombre: " Pedro ",
+      apellido: " Pérez ",
+      githubUsername: " @PedroPerez ",
+      email: " PEDRO@Example.COM ",
+    });
+
+    expect(alumno.legajo).toBe("99999");
+    expect(alumno.nombre).toBe("Pedro");
+    expect(alumno.apellido).toBe("Pérez");
+    expect(alumno.githubUsername).toBe("pedroperez");
+    expect(alumno.email).toBe("pedro@example.com");
+    expect(alumno.comision).toBe(comisionPrevia);
+  });
+});
+
+describe("Alumno.toRegistroInput", () => {
+  it("devuelve los campos que espera el registro de Sheets", () => {
+    const alumno = nuevoAlumno();
+
+    expect(alumno.toRegistroInput()).toEqual({
+      legajo: "12345",
+      apellido: "García",
+      nombre: "Ana",
+      githubUsername: "ana-garcia",
+      email: "ana@example.com",
+    });
+  });
+});
+
 describe("Alumno.confirmoRegistroEn", () => {
   it("devuelve true cuando registroConfirmadoEn apunta a la comision activa", () => {
     const comision = fakeComision("c1");
@@ -89,6 +185,17 @@ describe("Alumno.confirmoRegistroEn", () => {
   });
 });
 
+describe("Alumno.confirmarRegistroEn", () => {
+  it("marca la comisión en la que confirmó registro", () => {
+    const comision = fakeComision("c1");
+    const alumno = nuevoAlumno();
+
+    alumno.confirmarRegistroEn(comision);
+
+    expect(alumno.registroConfirmadoEn).toBe(comision);
+  });
+});
+
 describe("Alumno.necesitaConfirmarRegistroPara", () => {
   it("devuelve true cuando el alumno no confirmó para la comision activa", () => {
     const alumno = nuevoAlumno({ registroConfirmadoEn: fakeComision("c-antigua") });
@@ -105,6 +212,30 @@ describe("Alumno.necesitaConfirmarRegistroPara", () => {
 });
 
 describe("Alumno — predicados de sync", () => {
+  describe("transiciones de sync", () => {
+    it("prende y limpia el flag de sync de alumno", () => {
+      const fecha = new Date("2026-04-01T00:00:00Z");
+      const alumno = nuevoAlumno();
+
+      alumno.marcarSyncDeAlumnoFallido(fecha);
+      expect(alumno.alumnoSyncFallidoEn).toBe(fecha);
+
+      alumno.limpiarSyncDeAlumnoFallido();
+      expect(alumno.alumnoSyncFallidoEn).toBeNull();
+    });
+
+    it("prende y limpia el flag de sync de grupos", () => {
+      const fecha = new Date("2026-04-01T00:00:00Z");
+      const alumno = nuevoAlumno();
+
+      alumno.marcarSyncDeGruposFallido(fecha);
+      expect(alumno.gruposSyncFallidoEn).toBe(fecha);
+
+      alumno.limpiarSyncDeGruposFallido();
+      expect(alumno.gruposSyncFallidoEn).toBeNull();
+    });
+  });
+
   describe("tieneSyncDeAlumnoFallido", () => {
     it("devuelve false cuando el flag está limpio", () => {
       const alumno = nuevoAlumno({ alumnoSyncFallidoEn: null });
@@ -177,5 +308,62 @@ describe("Alumno — predicados de sync", () => {
         "No pudimos sincronizar tus datos ni asignarte a tu grupo de TP desde la planilla."
       );
     });
+  });
+});
+
+describe("validateRegistro", () => {
+  const valid = {
+    legajo: "12345",
+    apellido: "García",
+    nombre: "Juan",
+    githubUsername: "juangarcia",
+    email: "juan@gmail.com",
+  };
+
+  it("acepta input válido", () => {
+    expect(validateRegistro(valid)).toBeNull();
+  });
+
+  it("mantiene los mensajes de error existentes", () => {
+    expect(validateRegistro({ ...valid, legajo: "" })).toBe(
+      "El legajo debe tener entre 4 y 8 dígitos"
+    );
+    expect(validateRegistro({ ...valid, apellido: "" })).toBe("El apellido es obligatorio");
+    expect(validateRegistro({ ...valid, nombre: "  " })).toBe("El nombre es obligatorio");
+    expect(validateRegistro({ ...valid, githubUsername: "" })).toBe(
+      "El usuario de GitHub es obligatorio"
+    );
+    expect(validateRegistro({ ...valid, githubUsername: "user name" })).toBe(
+      "El usuario de GitHub no tiene un formato válido"
+    );
+    expect(validateRegistro({ ...valid, email: "" })).toBe("El email no es válido");
+  });
+
+  it("rechaza github username que no es string", () => {
+    expect(validateRegistro({ ...valid, githubUsername: 123 as unknown as string })).toBe(
+      "El usuario de GitHub debe ser un texto"
+    );
+  });
+
+  it("no tira TypeError cuando legajo, apellido, nombre o email no son strings", () => {
+    expect(() =>
+      validateRegistro({ ...valid, legajo: 12345 as unknown as string })
+    ).not.toThrow();
+    expect(() =>
+      validateRegistro({ ...valid, apellido: null as unknown as string })
+    ).not.toThrow();
+    expect(() =>
+      validateRegistro({ ...valid, nombre: undefined as unknown as string })
+    ).not.toThrow();
+    expect(() =>
+      validateRegistro({ ...valid, email: 42 as unknown as string })
+    ).not.toThrow();
+  });
+
+  it("devuelve error de validación (no null) cuando legajo, apellido, nombre o email no son strings", () => {
+    expect(validateRegistro({ ...valid, legajo: 12345 as unknown as string })).not.toBeNull();
+    expect(validateRegistro({ ...valid, apellido: null as unknown as string })).not.toBeNull();
+    expect(validateRegistro({ ...valid, nombre: undefined as unknown as string })).not.toBeNull();
+    expect(validateRegistro({ ...valid, email: 42 as unknown as string })).not.toBeNull();
   });
 });
