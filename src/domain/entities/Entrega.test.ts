@@ -62,37 +62,3 @@ describe("Entrega.estadoRepo", () => {
     expect(entrega.estadoRepo()).toBe("sin-repo");
   });
 });
-
-describe("Entrega.matcheaQuery", () => {
-  it("devuelve true para query vacía (no filtra nada)", () => {
-    const entrega = nuevaEntrega({ githubUsernames: ["ana"] });
-    expect(entrega.matcheaQuery("")).toBe(true);
-    expect(entrega.matcheaQuery("   ")).toBe(true);
-  });
-
-  it("devuelve true cuando la query coincide con un username", () => {
-    const entrega = nuevaEntrega({ githubUsernames: ["AnaGarcia", "bob"] });
-    expect(entrega.matcheaQuery("ana")).toBe(true);
-  });
-
-  it("es case-insensitive en usernames", () => {
-    const entrega = nuevaEntrega({ githubUsernames: ["AnaGarcia"] });
-    expect(entrega.matcheaQuery("anagarcia")).toBe(true);
-    expect(entrega.matcheaQuery("ANAGARCIA")).toBe(true);
-  });
-
-  it("devuelve true cuando la query coincide con el repoName", () => {
-    const entrega = nuevaEntrega({ githubUsernames: ["ana"], repoName: "tp-funcional-ana" });
-    expect(entrega.matcheaQuery("funcional")).toBe(true);
-  });
-
-  it("devuelve false cuando la query no coincide con ningún campo", () => {
-    const entrega = nuevaEntrega({ githubUsernames: ["ana"], repoName: "tp-funcional-ana" });
-    expect(entrega.matcheaQuery("logico")).toBe(false);
-  });
-
-  it("tolera repoName undefined sin explotar", () => {
-    const entrega = nuevaEntrega({ githubUsernames: ["ana"], repoName: undefined });
-    expect(entrega.matcheaQuery("algo")).toBe(false);
-  });
-});

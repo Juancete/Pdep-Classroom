@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { IndividualAssignment } from "@/domain/entities";
+import { Comision, IndividualAssignment } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -47,6 +47,8 @@ import AdminAssignmentsPage from "./page";
 
 function makeAssignment(overrides?: Partial<IndividualAssignment>): IndividualAssignment {
   const assignment = new IndividualAssignment();
+  const comision = new Comision(2026, "sheet-1");
+  comision.activa = true;
   assignment.id = "a1";
   assignment.titulo = "Kata Funcional";
   assignment.descripcion = "Descripción de la kata";
@@ -55,6 +57,7 @@ function makeAssignment(overrides?: Partial<IndividualAssignment>): IndividualAs
   assignment.paradigma = "funcional";
   assignment.slug = "kata-funcional";
   assignment.createdAt = new Date("2026-01-01");
+  assignment.comision = comision;
   return Object.assign(assignment, overrides);
 }
 
@@ -142,6 +145,41 @@ describe("Admin Assignments page", () => {
       expect(html).toContain("mi-template-especial");
     });
 
+    it("muestra la comisión activa asociada", async () => {
+      const comision = new Comision(2027, "sheet-2");
+      comision.activa = true;
+      mockGetAssignments.mockResolvedValue([makeAssignment({ comision })]);
+
+      const element = await AdminAssignmentsPage();
+      const html = renderToStaticMarkup(element);
+
+      expect(html).toContain("2027");
+      expect(html).toContain("Activa");
+    });
+
+    it("muestra comisión histórica cuando no está activa", async () => {
+      const comision = new Comision(2025, "sheet-old");
+      comision.activa = false;
+      mockGetAssignments.mockResolvedValue([makeAssignment({ comision })]);
+
+      const element = await AdminAssignmentsPage();
+      const html = renderToStaticMarkup(element);
+
+      expect(html).toContain("2025");
+      expect(html).toContain("Histórica");
+    });
+
+    it("muestra Sin comisión para assignments huérfanos", async () => {
+      mockGetAssignments.mockResolvedValue([
+        makeAssignment({ comision: undefined }),
+      ]);
+
+      const element = await AdminAssignmentsPage();
+      const html = renderToStaticMarkup(element);
+
+      expect(html).toContain("Sin comisión");
+    });
+
     it("muestra las cabeceras de la tabla", async () => {
       mockGetAssignments.mockResolvedValue([makeAssignment()]);
       const element = await AdminAssignmentsPage();
@@ -149,6 +187,7 @@ describe("Admin Assignments page", () => {
       expect(html).toContain("Título");
       expect(html).toContain("Paradigma");
       expect(html).toContain("Tipo");
+      expect(html).toContain("Comisión");
       expect(html).toContain("Template");
       expect(html).toContain("Entregas");
       expect(html).toContain("Deadline");

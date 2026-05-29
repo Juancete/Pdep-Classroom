@@ -1,0 +1,221 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { PdepUser } from "@/types";
+import {
+  Alumno,
+  Entrega,
+  GrupalAssignment,
+  IndividualAssignment,
+  type Assignment,
+} from "@/domain/entities";
+
+const mockGetAssignment = vi.fn();
+const mockGetEntregaDeUsuario = vi.fn();
+const mockGetGrupoDeAlumno = vi.fn();
+const mockGetAlumnoByGithub = vi.fn();
+const mockCreateOrGetEntrega = vi.fn();
+const mockCrearEntrega = vi.fn();
+const mockRepoExists = vi.fn();
+const mockAddCollaborators = vi.fn();
+
+vi.mock("@/lib/repositories", () => ({
+  getAssignment: (id: string) => mockGetAssignment(id),
+  getEntregaDeUsuario: (assignmentId: string, username: string) =>
+    mockGetEntregaDeUsuario(assignmentId, username),
+  getGrupoDeAlumnoEnAssignment: (assignmentId: string, username: string) =>
+    mockGetGrupoDeAlumno(assignmentId, username),
+  getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
+  createOrGetEntrega: (data: unknown) => mockCreateOrGetEntrega(data),
+}));
+
+vi.mock("@/lib/github", () => ({
+  crearEntrega: (opts: unknown) => mockCrearEntrega(opts),
+  repoExists: (repoName: string) => mockRepoExists(repoName),
+  addCollaborators: (repoName: string, usernames: string[]) =>
+    mockAddCollaborators(repoName, usernames),
+}));
+
+import {
+  aceptarAssignment,
+  AlumnoNoRegistradoError,
+  AssignmentNoEncontradoError,
+} from "./aceptarAssignment";
+
+function makeUser(overrides?: Partial<PdepUser>): PdepUser {
+  return {
+    githubUsername: "juangarcia",
+    name: "Juan García",
+    image: "",
+    isAdmin: false,
+    ...overrides,
+  };
+}
+
+function makeAssignment(overrides?: Partial<IndividualAssignment & GrupalAssignment>): Assignment {
+  const assignment: Assignment =
+    overrides?.tipo === "grupal"
+      ? Object.assign(new GrupalAssignment(), { maxIntegrantes: 4 })
+      : new IndividualAssignment();
+  assignment.id = "a1";
+  assignment.titulo = "Kata Funcional";
+  assignment.descripcion = "";
+  assignment.templateRepo = "pdep-mn-utn/kata-template";
+  assignment.paradigma = "funcional";
+  assignment.slug = "kata-funcional";
+  assignment.createdAt = new Date("2026-01-01");
+  return Object.assign(assignment, overrides);
+}
+
+function makeAlumno(overrides?: Partial<Alumno>): Alumno {
+  const alumno = new Alumno();
+  alumno.id = "alumno-1";
+  alumno.githubUsername = "juangarcia";
+  alumno.legajo = "12345";
+  alumno.nombre = "Juan";
+  alumno.apellido = "García";
+  alumno.email = "juan@example.com";
+  return Object.assign(alumno, overrides);
+}
+
+function makeEntrega(overrides?: Partial<Entrega>): Entrega {
+  const entrega = new Entrega();
+  entrega.id = "e1";
+  entrega.repoName = "kata-funcional-juangarcia";
+  entrega.repoUrl = "https://github.com/pdep-mn-utn/kata-funcional-juangarcia";
+  entrega.githubUsernames = ["juangarcia"];
+  entrega.createdAt = new Date();
+  return Object.assign(entrega, overrides);
+}
+
+function makeGrupo(githubUsernames: string[], id = "los-lambdas") {
+  return {
+    id,
+    usernamesDeMiembros: () => githubUsernames,
+  };
+}
+
+describe("aceptarAssignment", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetAssignment.mockResolvedValue(makeAssignment());
+    mockGetEntregaDeUsuario.mockResolvedValue(null);
+    mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
+    mockRepoExists.mockResolvedValue(false);
+    mockCrearEntrega.mockResolvedValue({
+      repoName: "kata-funcional-juangarcia",
+      repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
+    });
+    mockCreateOrGetEntrega.mockResolvedValue(makeEntrega());
+  });
+
+  it("devuelve la entrega existente sin tocar GitHub", async () => {
+    const entrega = makeEntrega();
+    mockGetEntregaDeUsuario.mockResolvedValue(entrega);
+
+    await expect(aceptarAssignment("a1", makeUser())).resolves.toBe(entrega);
+
+    expect(mockRepoExists).not.toHaveBeenCalled();
+    expect(mockCrearEntrega).not.toHaveBeenCalled();
+    expect(mockCreateOrGetEntrega).not.toHaveBeenCalled();
+  });
+
+  it("falla con error de dominio si el assignment no existe", async () => {
+    mockGetAssignment.mockResolvedValue(null);
+
+    await expect(aceptarAssignment("a1", makeUser())).rejects.toBeInstanceOf(
+      AssignmentNoEncontradoError
+    );
+  });
+
+  it("crea repo y entrega individual con alumnoId", async () => {
+    await aceptarAssignment("a1", makeUser());
+
+    expect(mockCrearEntrega).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateRepo: "kata-template",
+        slug: "kata-funcional",
+        usernames: ["juangarcia"],
+      })
+    );
+    expect(mockCreateOrGetEntrega).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assignmentId: "a1",
+        alumnoId: "alumno-1",
+        grupoId: undefined,
+        repoName: "kata-funcional-juangarcia",
+      })
+    );
+  });
+
+  it("falla si el alumno individual no existe en DB", async () => {
+    mockGetAlumnoByGithub.mockResolvedValue(null);
+
+    await expect(aceptarAssignment("a1", makeUser())).rejects.toBeInstanceOf(
+      AlumnoNoRegistradoError
+    );
+
+    expect(mockCrearEntrega).not.toHaveBeenCalled();
+  });
+
+  it("crea entrega grupal con grupoId y todos los miembros", async () => {
+    mockGetAssignment.mockResolvedValue(makeAssignment({ tipo: "grupal" }));
+    mockGetGrupoDeAlumno.mockResolvedValue(makeGrupo(["juangarcia", "mariaperez"]));
+    mockCrearEntrega.mockResolvedValue({
+      repoName: "kata-funcional-los-lambdas",
+      repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-los-lambdas",
+    });
+
+    await aceptarAssignment("a1", makeUser());
+
+    expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
+    expect(mockCreateOrGetEntrega).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assignmentId: "a1",
+        alumnoId: undefined,
+        grupoId: "los-lambdas",
+        githubUsernames: ["juangarcia", "mariaperez"],
+      })
+    );
+  });
+
+  it("reconcilia cuando el repo ya existe en GitHub", async () => {
+    mockRepoExists.mockResolvedValue(true);
+
+    await aceptarAssignment("a1", makeUser());
+
+    expect(mockCrearEntrega).not.toHaveBeenCalled();
+    expect(mockAddCollaborators).toHaveBeenCalledWith(
+      "kata-funcional-juangarcia",
+      ["juangarcia"]
+    );
+    expect(mockCreateOrGetEntrega).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoName: "kata-funcional-juangarcia",
+        repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
+      })
+    );
+  });
+
+  it("si crearEntrega falla pero el repo apareció, reconcilia la entrega local", async () => {
+    mockRepoExists
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    mockCrearEntrega.mockRejectedValue(new Error("name already exists"));
+
+    await aceptarAssignment("a1", makeUser());
+
+    expect(mockAddCollaborators).toHaveBeenCalledWith(
+      "kata-funcional-juangarcia",
+      ["juangarcia"]
+    );
+    expect(mockCreateOrGetEntrega).toHaveBeenCalled();
+  });
+
+  it("propaga el error de GitHub si el repo no existe después del fallo", async () => {
+    mockRepoExists
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false);
+    mockCrearEntrega.mockRejectedValue(new Error("GitHub caído"));
+
+    await expect(aceptarAssignment("a1", makeUser())).rejects.toThrow("GitHub caído");
+  });
+});

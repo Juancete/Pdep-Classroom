@@ -86,3 +86,90 @@ export async function agregarMiembroAGrupo(
     return { status: "error", error: message };
   }
 }
+
+// ── Des-suscribir alumno del grupo ──────────────────────────
+
+// Detecta "el miembro no estaba en el grupo": la baja es idempotente, así que
+// un 404 (o reason notFound/resourceNotFound) lo tratamos como éxito silencioso.
+// Mismo enfoque defensivo que `isDuplicateError`: el status puede venir por
+// err.code, err.status o anidado en response.data.error.errors.
+function isNotFoundError(error: unknown): boolean {
+  const apiError = error as {
+    code?: number;
+    status?: number;
+    errors?: { reason?: string }[];
+    response?: { data?: { error?: { errors?: { reason?: string }[] } } };
+  };
+  if (apiError.code === 404 || apiError.status === 404) return true;
+  const hasNotFoundReason = (errors?: { reason?: string }[]) =>
+    Boolean(
+      errors?.some(
+        (errorEntry) =>
+          errorEntry.reason === "notFound" || errorEntry.reason === "resourceNotFound"
+      )
+    );
+  return (
+    hasNotFoundReason(apiError.errors) ||
+    hasNotFoundReason(apiError.response?.data?.error?.errors)
+  );
+}
+
+// Dentro de un 404 de members.delete, la API de Admin Directory distingue
+// grupo inexistente ("Resource Not Found: groupKey") de miembro ausente
+// ("Resource Not Found: memberKey"). Detectar el primero es importante porque
+// indica config rota (GOOGLE_GROUP_EMAIL inválido), no una baja idempotente.
+// Recolectamos todos los mensajes de error posibles y buscamos "groupKey".
+function esGrupoInexistente(error: unknown): boolean {
+  const apiError = error as {
+    message?: string;
+    errors?: { message?: string }[];
+    response?: { data?: { error?: { message?: string; errors?: { message?: string }[] } } };
+  };
+  const mensajes: string[] = [];
+  if (apiError.message) mensajes.push(apiError.message);
+  if (apiError.errors) {
+    for (const errorEntry of apiError.errors) {
+      if (errorEntry.message) mensajes.push(errorEntry.message);
+    }
+  }
+  const errorAnidado = apiError.response?.data?.error;
+  if (errorAnidado?.message) mensajes.push(errorAnidado.message);
+  if (errorAnidado?.errors) {
+    for (const errorEntry of errorAnidado.errors) {
+      if (errorEntry.message) mensajes.push(errorEntry.message);
+    }
+  }
+  return mensajes.some((mensaje) => mensaje.toLowerCase().includes("groupkey"));
+}
+
+export type QuitarMiembroResult =
+  | { status: "removed" }
+  | { status: "not_member" }
+  | { status: "skipped" }
+  | { status: "error"; error: string };
+
+export async function quitarMiembroDeGrupo(
+  memberEmail: string
+): Promise<QuitarMiembroResult> {
+  const groupEmail = getGroupEmail();
+  if (!groupEmail) return { status: "skipped" };
+
+  try {
+    const admin = getDirectoryClient();
+    await admin.members.delete(
+      { groupKey: groupEmail, memberKey: memberEmail },
+      { signal: AbortSignal.timeout(10_000) }
+    );
+    return { status: "removed" };
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      if (esGrupoInexistente(error)) {
+        const message = error instanceof Error ? error.message : "El grupo configurado no existe";
+        return { status: "error", error: message };
+      }
+      return { status: "not_member" };
+    }
+    const message = error instanceof Error ? error.message : "Error al quitar del grupo";
+    return { status: "error", error: message };
+  }
+}

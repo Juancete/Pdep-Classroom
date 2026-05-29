@@ -32,5 +32,5 @@ export type AssignmentFormErrors =
   z.typeToFlattenedError<AssignmentFormData>["fieldErrors"];
 
 export type AssignmentFormState =
-  | { ok: false; errors: AssignmentFormErrors }
+  | { ok: false; errors: AssignmentFormErrors; formError?: string }
   | null;

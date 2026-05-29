@@ -1,4 +1,10 @@
-export { Alumno } from "./Alumno";
+export {
+  Alumno,
+  isValidEmail,
+  validateRegistro,
+  type AlumnoData,
+  type RegistroInput,
+} from "./Alumno";
 export { Comision } from "./Comision";
 export { Assignment } from "./Assignment";
 export type {

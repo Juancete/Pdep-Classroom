@@ -1,5 +1,10 @@
 import { google } from "googleapis";
-import { Alumno } from "@/domain/entities";
+import {
+  Alumno,
+  isValidEmail,
+  validateRegistro,
+  type RegistroInput,
+} from "@/domain/entities";
 import {
   type ColumnConfig,
   DEFAULT_COLUMN_CONFIG,
@@ -7,6 +12,9 @@ import {
   type Paradigma,
   PARADIGMAS,
 } from "@/types";
+
+export { isValidEmail, validateRegistro };
+export type { RegistroInput };
 
 // ── Auth con service account ────────────────────────────────
 
@@ -70,11 +78,13 @@ export function parseAlumnosRows(
     .filter((row) => row[config.legajo] && row[config.githubUsername])
     .map((row) => {
       const alumno = new Alumno();
-      alumno.legajo = norm(row[config.legajo]);
-      alumno.apellido = norm(row[config.apellido]);
-      alumno.nombre = norm(row[config.nombre]);
-      alumno.githubUsername = Alumno.normalizarUsername(row[config.githubUsername]);
-      alumno.email = norm(row[config.email]);
+      alumno.aplicarRegistro({
+        legajo: norm(row[config.legajo]),
+        apellido: norm(row[config.apellido]),
+        nombre: norm(row[config.nombre]),
+        githubUsername: norm(row[config.githubUsername]),
+        email: norm(row[config.email]),
+      });
       return alumno;
     });
 }
@@ -140,40 +150,6 @@ async function findAlumnoRowIndex(
   );
   if (rowIndex === -1) return null;
   return config.headerRows + 1 + rowIndex;
-}
-
-// ── Registro de alumno ──────────────────────────────────────
-
-export interface RegistroInput {
-  legajo: string;
-  apellido: string;
-  nombre: string;
-  githubUsername: string;
-  email: string;
-}
-
-// Regex de email RFC-lite: una arroba, algún dominio, un punto después.
-// Suficiente para detectar typos comunes sin sobre-complicar.
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-export function isValidEmail(email: string): boolean {
-  return EMAIL_REGEX.test(email.trim());
-}
-
-export function validateRegistro(input: RegistroInput): string | null {
-  const { legajo, apellido, nombre, githubUsername, email } = input;
-
-  if (!legajo || !new RegExp(`^${Alumno.LEGAJO_PATTERN}$`).test(legajo.trim()))
-    return "El legajo debe tener entre 4 y 8 dígitos";
-  if (!apellido.trim()) return "El apellido es obligatorio";
-  if (!nombre.trim()) return "El nombre es obligatorio";
-  if (typeof githubUsername !== "string")
-    return "El usuario de GitHub debe ser un texto";
-  if (!githubUsername.trim()) return "El usuario de GitHub es obligatorio";
-  if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(githubUsername.trim()))
-    return "El usuario de GitHub no tiene un formato válido";
-  if (!isValidEmail(email)) return "El email no es válido";
-  return null;
 }
 
 // ── Upsert de alumno en la planilla ─────────────────────────

@@ -80,6 +80,10 @@ export class GrupalAssignment extends Assignment {
     return { maxIntegrantes: this.maxIntegrantes };
   }
 
+  aplicarCamposExtra(data: Partial<{ maxIntegrantes: number }>): void {
+    if (data.maxIntegrantes !== undefined) this.maxIntegrantes = data.maxIntegrantes;
+  }
+
   cargarGruposCon(loader: (assignmentId: string) => Promise<Grupo[]>): Promise<Grupo[]> {
     return loader(this.id);
   }

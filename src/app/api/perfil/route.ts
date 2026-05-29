@@ -1,24 +1,18 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
 import { type RegistroInput } from "@/lib/sheets";
-import { internalServerError } from "@/lib/api-errors";
-import { confirmarDatosAlumno } from "@/lib/services/alumnoRegistro";
-import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
+import { internalServerError, parseJsonObjectBody } from "@/lib/api-errors";
+import { confirmarYProcesarAlumno } from "@/lib/services/alumnoRegistro";
 
 type PerfilInput = Omit<RegistroInput, "githubUsername">;
 
 export async function PATCH(req: Request) {
   try {
     const user = await requireUser();
-    const body = await req.json();
-    if (typeof body !== "object" || body === null || Array.isArray(body)) {
-      return NextResponse.json(
-        { error: "No pudimos leer los datos enviados. Volvé a intentar." },
-        { status: 400 }
-      );
-    }
+    const body = await parseJsonObjectBody(req);
+    if (body instanceof NextResponse) return body;
 
-    const resultado = await confirmarDatosAlumno({
+    const resultado = await confirmarYProcesarAlumno({
       ...(body as PerfilInput),
       githubUsername: user.githubUsername,
     });
@@ -31,19 +25,10 @@ export async function PATCH(req: Request) {
       );
     }
 
-    // Los datos del alumno ya se actualizaron. Si el sync falla, el wrapper
-    // marca el flag en DB para disparar el retry automático en /perfil —
-    // degradamos la respuesta a `gruposSync: "error"` para el warning inmediato.
-    let gruposSyncFallida = false;
-    try {
-      await intentarSincronizarGrupos(user.githubUsername, resultado.comision);
-    } catch {
-      gruposSyncFallida = true;
-    }
-
     return NextResponse.json({
       ok: true,
-      ...(gruposSyncFallida && { gruposSync: "error" }),
+      groupSubscription: resultado.hooks.groupSubscription,
+      ...(resultado.hooks.gruposSync === "error" && { gruposSync: "error" }),
     });
   } catch (error) {
     return internalServerError("PATCH /api/perfil", error);
