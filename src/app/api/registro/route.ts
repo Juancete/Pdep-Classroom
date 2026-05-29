@@ -32,9 +32,10 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    body.githubUsername = user.githubUsername;
-
-    const resultado = await confirmarYProcesarAlumno(body as RegistroInput);
+    const resultado = await confirmarYProcesarAlumno({
+      ...(body as Omit<RegistroInput, "githubUsername">),
+      githubUsername: user.githubUsername,
+    });
     if (!resultado.ok) {
       return NextResponse.json(
         resultado.field

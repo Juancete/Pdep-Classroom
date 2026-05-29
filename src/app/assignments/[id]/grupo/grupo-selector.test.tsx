@@ -21,6 +21,7 @@ function makeGrupo(overrides: Partial<GrupoResumen> = {}): GrupoResumen {
     paradigma: "objetos",
     maxIntegrantes: 3,
     estaLleno: false,
+    etiquetaCupo: "1/3 integrantes",
     miembros: ["bob"],
     ...overrides,
   };
