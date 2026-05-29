@@ -78,7 +78,7 @@ export function parseAlumnosRows(
     .filter((row) => row[config.legajo] && row[config.githubUsername])
     .map((row) => {
       const alumno = new Alumno();
-      alumno.actualizarDatos({
+      alumno.aplicarRegistro({
         legajo: norm(row[config.legajo]),
         apellido: norm(row[config.apellido]),
         nombre: norm(row[config.nombre]),

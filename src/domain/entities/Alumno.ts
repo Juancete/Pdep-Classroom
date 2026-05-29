@@ -12,7 +12,7 @@ export interface RegistroInput {
 }
 
 export interface AlumnoData extends RegistroInput {
-  comision?: Comision;
+  comision: Comision;
   registroConfirmadoEn?: Comision;
 }
 
@@ -70,8 +70,10 @@ export class Alumno {
   @Property({ type: 'string' })
   email!: string;
 
-  @ManyToOne(() => Comision, { nullable: true })
-  comision?: Comision;
+  // Todo alumno pertenece a exactamente una comisión. La FK es NOT NULL;
+  // borrar una comisión borra sus alumnos en cascada (on delete cascade).
+  @ManyToOne(() => Comision)
+  comision!: Comision;
 
   // Marca la comisión en la que el alumno confirmó sus datos por última vez.
   // Si no coincide con la comisión activa, se le pide re-confirmar en /registro.
@@ -98,12 +100,19 @@ export class Alumno {
     return `${this.apellido}, ${this.nombre}`;
   }
 
+  // Aplica solo los campos de RegistroInput (sin comisión ni confirmación).
+  // Usado por parseAlumnosRows en sheets.ts, donde los Alumno son transitorios
+  // (DTOs de planilla) y la comisión se inyecta en el call site de upsertAlumnos.
+  aplicarRegistro(input: RegistroInput): void {
+    this.legajo = input.legajo.trim();
+    this.nombre = input.nombre.trim();
+    this.apellido = input.apellido.trim();
+    this.githubUsername = Alumno.normalizarUsername(input.githubUsername);
+    this.email = Alumno.normalizarEmail(input.email);
+  }
+
   actualizarDatos(data: AlumnoData): void {
-    this.legajo = data.legajo.trim();
-    this.nombre = data.nombre.trim();
-    this.apellido = data.apellido.trim();
-    this.githubUsername = Alumno.normalizarUsername(data.githubUsername);
-    this.email = Alumno.normalizarEmail(data.email);
+    this.aplicarRegistro(data);
     this.comision = data.comision;
     if (data.registroConfirmadoEn !== undefined) {
       this.registroConfirmadoEn = data.registroConfirmadoEn;
