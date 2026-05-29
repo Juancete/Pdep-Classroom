@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { IndividualAssignment } from "./IndividualAssignment";
 import { GrupalAssignment, GrupoNoAsignadoError } from "./GrupalAssignment";
+import type { Assignment } from "./Assignment";
 import { Alumno } from "./Alumno";
 import type { Grupo } from "./Grupo";
 
@@ -44,16 +45,15 @@ describe("IndividualAssignment", () => {
 
   it("resolverParticipantesPara devuelve solo al usuario que acepta", async () => {
     const individual = new IndividualAssignment();
-    const participantes = await individual.resolverParticipantesPara(
-      { githubUsername: "ana" },
-      vi.fn()
-    );
+    const participantes = await individual.resolverParticipantesPara({ githubUsername: "ana" });
     expect(participantes.usernames).toEqual(["ana"]);
     expect(participantes.grupoId).toBeUndefined();
   });
 
   it("resolverParticipantesPara ignora la lambda de buscar grupo", async () => {
-    const individual = new IndividualAssignment();
+    // Se tipea como Assignment (contrato base) para poder pasar el segundo argumento
+    // y verificar que la implementación individual no lo invoca.
+    const individual: Assignment = new IndividualAssignment();
     const buscar = vi.fn();
     await individual.resolverParticipantesPara({ githubUsername: "ana" }, buscar);
     expect(buscar).not.toHaveBeenCalled();
