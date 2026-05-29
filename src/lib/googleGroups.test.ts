@@ -206,4 +206,24 @@ describe("quitarMiembroDeGrupo", () => {
     const result = await quitarMiembroDeGrupo("juan@gmail.com");
     expect(result).toEqual({ status: "error", error: "Sin permisos" });
   });
+
+  it("retorna 'error' cuando el 404 indica que el grupo no existe (groupKey en el mensaje)", async () => {
+    mockMembersDelete.mockRejectedValue(gaxiosError(404, "notFound", "Resource Not Found: groupKey"));
+    const result = await quitarMiembroDeGrupo("juan@gmail.com");
+    expect(result.status).toBe("error");
+  });
+
+  it("retorna 'not_member' cuando el 404 indica que el miembro no estaba (memberKey en el mensaje)", async () => {
+    const err = gaxiosError(404, "notFound", "Resource Not Found: memberKey");
+    mockMembersDelete.mockRejectedValue(err);
+    const result = await quitarMiembroDeGrupo("juan@gmail.com");
+    expect(result).toEqual({ status: "not_member" });
+  });
+
+  it("retorna 'not_member' cuando el 404 no incluye marcador de groupKey ni memberKey (comportamiento defensivo)", async () => {
+    const err = Object.assign(new Error("Not Found"), { status: 404 });
+    mockMembersDelete.mockRejectedValue(err);
+    const result = await quitarMiembroDeGrupo("juan@gmail.com");
+    expect(result).toEqual({ status: "not_member" });
+  });
 });

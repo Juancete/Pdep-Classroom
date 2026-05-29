@@ -87,6 +87,7 @@ describe("Alumno.actualizarDatos", () => {
   });
 
   it("no pisa registroConfirmadoEn cuando el dato viene undefined", () => {
+    const comisionActual = fakeComision("activa");
     const comisionConfirmada = fakeComision("confirmada");
     const alumno = nuevoAlumno({ registroConfirmadoEn: comisionConfirmada });
 
@@ -96,12 +97,14 @@ describe("Alumno.actualizarDatos", () => {
       apellido: "García",
       githubUsername: "ana-garcia",
       email: "ana@example.com",
+      comision: comisionActual,
     });
 
     expect(alumno.registroConfirmadoEn).toBe(comisionConfirmada);
   });
 
   it("actualiza registroConfirmadoEn cuando el dato viene definido", () => {
+    const comisionActual = fakeComision("activa");
     const comisionNueva = fakeComision("nueva");
     const alumno = nuevoAlumno({ registroConfirmadoEn: fakeComision("vieja") });
 
@@ -111,10 +114,33 @@ describe("Alumno.actualizarDatos", () => {
       apellido: "García",
       githubUsername: "ana-garcia",
       email: "ana@example.com",
+      comision: comisionActual,
       registroConfirmadoEn: comisionNueva,
     });
 
     expect(alumno.registroConfirmadoEn).toBe(comisionNueva);
+  });
+});
+
+describe("Alumno.aplicarRegistro", () => {
+  it("trimmea y normaliza los campos de registro sin tocar comisión", () => {
+    const comisionPrevia = fakeComision("c-previa");
+    const alumno = nuevoAlumno({ comision: comisionPrevia });
+
+    alumno.aplicarRegistro({
+      legajo: " 99999 ",
+      nombre: " Pedro ",
+      apellido: " Pérez ",
+      githubUsername: " @PedroPerez ",
+      email: " PEDRO@Example.COM ",
+    });
+
+    expect(alumno.legajo).toBe("99999");
+    expect(alumno.nombre).toBe("Pedro");
+    expect(alumno.apellido).toBe("Pérez");
+    expect(alumno.githubUsername).toBe("pedroperez");
+    expect(alumno.email).toBe("pedro@example.com");
+    expect(alumno.comision).toBe(comisionPrevia);
   });
 });
 

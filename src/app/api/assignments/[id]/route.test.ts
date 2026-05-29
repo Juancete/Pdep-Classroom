@@ -124,4 +124,18 @@ describe("PATCH /api/assignments/[id]", () => {
     await PATCH(request, { params: { id: "a1" } });
     expect(mockUpdateAssignment).toHaveBeenCalledWith("a1", { paradigma: "logico" });
   });
+
+  it("devuelve 400 con formErrors cuando el body no es JSON válido o es null", async () => {
+    mockGetAssignment.mockResolvedValue(makeAssignment());
+    const request = new Request("http://localhost/api/assignments/a1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: "not-json",
+    });
+    const response = await PATCH(request, { params: { id: "a1" } });
+    expect(response.status).toBe(400);
+    const data = await response.json();
+    expect(data.formErrors).toBeDefined();
+    expect(data.formErrors.length).toBeGreaterThan(0);
+  });
 });

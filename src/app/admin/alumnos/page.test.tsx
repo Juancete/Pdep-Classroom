@@ -31,7 +31,7 @@ function makeAlumno(overrides?: Partial<Alumno>): Alumno {
   alumno.apellido = "Garcia";
   alumno.githubUsername = "juangarcia";
   alumno.email = "juan@example.com";
-  alumno.comision = "miércoles noche";
+  alumno.comision = { id: "c1", anio: 2026, spreadsheetId: "sheet-1", activa: true } as Alumno["comision"];
   return Object.assign(alumno, overrides);
 }
 
