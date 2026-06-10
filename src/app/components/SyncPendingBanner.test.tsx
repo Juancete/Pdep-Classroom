@@ -6,6 +6,7 @@ import { Alumno } from "@/domain/entities";
 
 const mockGetCurrentUser = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
+const mockIsGoogleGroupsConfigured = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
@@ -13,6 +14,10 @@ vi.mock("@/lib/session", () => ({
 
 vi.mock("@/lib/repositories", () => ({
   getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
+}));
+
+vi.mock("@/lib/googleGroups", () => ({
+  isGoogleGroupsConfigured: () => mockIsGoogleGroupsConfigured(),
 }));
 
 import { SyncPendingBanner } from "./SyncPendingBanner";
@@ -38,6 +43,7 @@ function makeAlumno(overrides: Partial<Alumno> = {}): Alumno {
 describe("SyncPendingBanner", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockIsGoogleGroupsConfigured.mockReturnValue(false);
   });
 
   it("no renderiza nada si no hay usuario logueado", async () => {
@@ -126,5 +132,22 @@ describe("SyncPendingBanner", () => {
 
     expect(html).toContain("tus datos");
     expect(html).toContain("grupo de TP");
+  });
+
+  it("muestra una membresía de Google Groups pendiente cuando está habilitada", async () => {
+    mockIsGoogleGroupsConfigured.mockReturnValue(true);
+    mockGetCurrentUser.mockResolvedValue({
+      githubUsername: "juangarcia",
+      isAdmin: false,
+    });
+    mockGetAlumnoByGithub.mockResolvedValue(
+      makeAlumno({ googleGroupEstado: "fallido" })
+    );
+
+    const html = renderToStaticMarkup(
+      (await SyncPendingBanner()) as React.ReactElement
+    );
+    expect(html).toContain("suscripción al grupo de Google");
+    expect(html).toContain('href="/perfil"');
   });
 });

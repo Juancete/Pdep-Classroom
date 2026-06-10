@@ -5,9 +5,19 @@ import type { PdepUser } from "@/types";
 // ── Mocks ────────────────────────────────────────────────────
 
 const mockGetCurrentUser = vi.fn();
+const mockGetAlumnoByGithub = vi.fn();
+const mockIsGoogleGroupsConfigured = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
+}));
+
+vi.mock("@/lib/repositories", () => ({
+  getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
+}));
+
+vi.mock("@/lib/googleGroups", () => ({
+  isGoogleGroupsConfigured: () => mockIsGoogleGroupsConfigured(),
 }));
 
 vi.mock("next/link", () => ({
@@ -21,8 +31,16 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("./logout-button", () => ({
-  UserMenu: ({ username }: { username: string }) => (
-    <div data-testid="user-menu">{username}</div>
+  UserMenu: ({
+    username,
+    hasPendingSync,
+  }: {
+    username: string;
+    hasPendingSync?: boolean;
+  }) => (
+    <div data-testid="user-menu" data-pending={String(hasPendingSync)}>
+      {username}
+    </div>
   ),
 }));
 
@@ -43,7 +61,11 @@ function makeUser(overrides: Partial<PdepUser> = {}): PdepUser {
 // ── Nav ──────────────────────────────────────────────────────
 
 describe("Nav", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetAlumnoByGithub.mockResolvedValue(null);
+    mockIsGoogleGroupsConfigured.mockReturnValue(false);
+  });
 
   it("muestra el nombre de la app", async () => {
     mockGetCurrentUser.mockResolvedValue(null);
@@ -85,6 +107,17 @@ describe("Nav", () => {
     mockGetCurrentUser.mockResolvedValue(makeUser({ githubUsername: "pepelopez" }));
     const html = renderToStaticMarkup(await Nav());
     expect(html).toContain("pepelopez");
+  });
+
+  it("pasa el estado pendiente al menú del alumno", async () => {
+    mockGetCurrentUser.mockResolvedValue(makeUser());
+    mockIsGoogleGroupsConfigured.mockReturnValue(true);
+    mockGetAlumnoByGithub.mockResolvedValue({
+      tieneSyncPendiente: () => true,
+    });
+
+    const html = renderToStaticMarkup(await Nav());
+    expect(html).toContain('data-pending="true"');
   });
 });
 

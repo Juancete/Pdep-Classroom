@@ -1,9 +1,18 @@
 import { getCurrentUser } from "@/lib/session";
+import { getAlumnoByGithub } from "@/lib/repositories";
+import { isGoogleGroupsConfigured } from "@/lib/googleGroups";
 import Link from "next/link";
 import { NavMenu, type NavLink } from "./nav-menu";
 
 export async function Nav() {
   const user = await getCurrentUser();
+  const alumno =
+    user && !user.isAdmin
+      ? await getAlumnoByGithub(user.githubUsername).catch(() => null)
+      : null;
+  const hasPendingSync = Boolean(
+    alumno?.tieneSyncPendiente(isGoogleGroupsConfigured())
+  );
 
   const links: NavLink[] = user
     ? [
@@ -32,6 +41,7 @@ export async function Nav() {
             username={user.githubUsername}
             image={user.image}
             isAdmin={user.isAdmin}
+            hasPendingSync={hasPendingSync}
           />
         )}
       </div>

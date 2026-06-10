@@ -15,9 +15,16 @@ interface Props {
   username: string;
   image: string;
   isAdmin: boolean;
+  hasPendingSync?: boolean;
 }
 
-export function NavMenu({ links, username, image, isAdmin }: Props) {
+export function NavMenu({
+  links,
+  username,
+  image,
+  isAdmin,
+  hasPendingSync = false,
+}: Props) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -76,13 +83,22 @@ export function NavMenu({ links, username, image, isAdmin }: Props) {
             {link.label}
           </Link>
         ))}
-        <UserMenu username={username} image={image} isAdmin={isAdmin} />
+        <UserMenu
+          username={username}
+          image={image}
+          isAdmin={isAdmin}
+          hasPendingSync={hasPendingSync}
+        />
       </div>
 
       <button
         type="button"
-        className="md:hidden p-2 -mr-2 text-pdep-200 hover:text-white transition-colors"
-        aria-label="Abrir menú"
+        className="md:hidden relative p-2 -mr-2 text-pdep-200 hover:text-white transition-colors"
+        aria-label={
+          hasPendingSync
+            ? "Abrir menú, hay una acción pendiente en tu perfil"
+            : "Abrir menú"
+        }
         aria-expanded={open}
         aria-controls="mobile-drawer"
         onClick={() => setOpen(true)}
@@ -101,6 +117,12 @@ export function NavMenu({ links, username, image, isAdmin }: Props) {
             d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"
           />
         </svg>
+        {hasPendingSync && (
+          <span
+            className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-pdep-900"
+            aria-hidden="true"
+          />
+        )}
       </button>
 
       <div
@@ -169,9 +191,23 @@ export function NavMenu({ links, username, image, isAdmin }: Props) {
             <Link
               href="/perfil"
               onClick={() => setOpen(false)}
-              className="px-4 py-3 text-pdep-200 hover:bg-pdep-800 hover:text-white transition-colors"
+              className="flex items-center justify-between gap-3 px-4 py-3 text-pdep-200 hover:bg-pdep-800 hover:text-white transition-colors"
             >
-              Editar perfil
+              <span>
+                Editar perfil
+                {hasPendingSync && (
+                  <span className="sr-only">, acción pendiente</span>
+                )}
+              </span>
+              {hasPendingSync && (
+                <span
+                  className="inline-flex items-center gap-1 text-xs font-medium text-amber-300"
+                  aria-hidden="true"
+                >
+                  <span>!</span>
+                  Pendiente
+                </span>
+              )}
             </Link>
           )}
           <button

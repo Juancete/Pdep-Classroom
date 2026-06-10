@@ -10,6 +10,10 @@ function getAdminSubject(): string | null {
   return process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL?.trim() || null;
 }
 
+export function isGoogleGroupsConfigured(): boolean {
+  return Boolean(getGroupEmail() && getAdminSubject());
+}
+
 // ── Cliente de Admin Directory API ──────────────────────────
 // Agregar miembros a un Google Group requiere Domain-Wide Delegation:
 // el service account impersona a un admin del workspace.
