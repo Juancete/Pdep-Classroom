@@ -10,8 +10,14 @@ function getAdminSubject(): string | null {
   return process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL?.trim() || null;
 }
 
+function getServiceAccountKey(): string | null {
+  return process.env.GOOGLE_SERVICE_ACCOUNT_KEY?.trim() || null;
+}
+
 export function isGoogleGroupsConfigured(): boolean {
-  return Boolean(getGroupEmail() && getAdminSubject());
+  return Boolean(
+    getGroupEmail() && getAdminSubject() && getServiceAccountKey()
+  );
 }
 
 // ── Cliente de Admin Directory API ──────────────────────────
@@ -25,7 +31,7 @@ function getDirectoryClient() {
   }
 
   const keyJson = Buffer.from(
-    process.env.GOOGLE_SERVICE_ACCOUNT_KEY ?? "",
+    getServiceAccountKey() ?? "",
     "base64"
   ).toString("utf-8");
   const credentials = JSON.parse(keyJson);

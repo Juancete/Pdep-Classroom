@@ -552,4 +552,41 @@ describe("sincronizarGoogleGroupsDeLaComision", () => {
       true
     );
   });
+
+  it("continúa con el lote cuando un alumno lanza una excepción", async () => {
+    mockGetAlumnosConGoogleGroupPendiente.mockResolvedValue([
+      { githubUsername: "ana" },
+      { githubUsername: "bruno" },
+    ]);
+    mockIntentarSincronizarGoogleGroup
+      .mockRejectedValueOnce(new Error("error inesperado"))
+      .mockResolvedValueOnce({ status: "added" });
+
+    await expect(
+      sincronizarGoogleGroupsDeLaComision({ status: "idle" }, makeFd())
+    ).resolves.toEqual({
+      status: "ok",
+      sincronizados: 1,
+      omitidos: 0,
+      aunConError: 1,
+    });
+    expect(mockIntentarSincronizarGoogleGroup).toHaveBeenCalledTimes(2);
+  });
+
+  it("no incluye omitidos cuando la integración está desactivada", async () => {
+    mockIsGoogleGroupsConfigured.mockReturnValue(false);
+
+    await expect(
+      sincronizarGoogleGroupsDeLaComision({ status: "idle" }, makeFd())
+    ).resolves.toEqual({
+      status: "ok",
+      sincronizados: 0,
+      omitidos: 0,
+      aunConError: 0,
+    });
+    expect(mockGetAlumnosConGoogleGroupPendiente).toHaveBeenCalledWith(
+      "c1",
+      false
+    );
+  });
 });

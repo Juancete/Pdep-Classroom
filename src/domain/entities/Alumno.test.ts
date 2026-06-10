@@ -333,6 +333,18 @@ describe("estado de Google Groups", () => {
     ]);
   });
 
+  it("no deja el email activo pendiente de baja en una secuencia A→B→A", () => {
+    const alumno = nuevoAlumno({
+      googleGroupEmailSincronizado: "a@gmail.com",
+    });
+
+    alumno.registrarEmailAgregadoAGoogleGroup("b@gmail.com");
+    alumno.registrarEmailAgregadoAGoogleGroup("a@gmail.com");
+
+    expect(alumno.googleGroupEmailSincronizado).toBe("a@gmail.com");
+    expect(alumno.googleGroupEmailsPendientesBaja).toEqual(["b@gmail.com"]);
+  });
+
   it("marca pendiente cuando cambia el email persistido", () => {
     const alumno = nuevoAlumno({
       email: "viejo@gmail.com",
