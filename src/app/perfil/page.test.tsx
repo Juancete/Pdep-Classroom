@@ -250,5 +250,21 @@ describe("Perfil page", () => {
 
       expect(mockIntentarSincronizarGoogleGroup).not.toHaveBeenCalled();
     });
+
+    it("no inicia Google Groups si falla antes getComisionActiva", async () => {
+      mockIsGoogleGroupsConfigured.mockReturnValue(true);
+      mockGetAlumnoByGithub.mockResolvedValue(
+        makeAlumno({
+          gruposSyncFallidoEn: new Date("2026-04-01"),
+          googleGroupEstado: "fallido",
+        })
+      );
+      mockGetComisionActiva.mockRejectedValue(new Error("DB caída"));
+
+      await expect(PerfilPage()).resolves.toBeDefined();
+
+      expect(mockIntentarSincronizarGoogleGroup).not.toHaveBeenCalled();
+      expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+    });
   });
 });

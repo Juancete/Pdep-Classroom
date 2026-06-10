@@ -80,6 +80,11 @@ describe("agregarMiembroAGrupo", () => {
     expect(isGoogleGroupsConfigured()).toBe(false);
   });
 
+  it("considera desactivada la integración sin service account key", () => {
+    delete process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+    expect(isGoogleGroupsConfigured()).toBe(false);
+  });
+
   it("retorna 'skipped' cuando GOOGLE_GROUP_EMAIL está vacío", async () => {
     process.env.GOOGLE_GROUP_EMAIL = "   ";
     const result = await agregarMiembroAGrupo("juan@gmail.com");

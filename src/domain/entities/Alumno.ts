@@ -217,6 +217,10 @@ export class Alumno {
   registrarEmailAgregadoAGoogleGroup(email: string): void {
     const emailNormalizado = Alumno.normalizarEmail(email);
     const anterior = this.googleGroupEmailSincronizado;
+    this.googleGroupEmailsPendientesBaja =
+      this.googleGroupEmailsPendientesBaja.filter(
+        (pendiente) => pendiente !== emailNormalizado
+      );
     if (
       anterior &&
       anterior !== emailNormalizado &&

@@ -318,17 +318,21 @@ export async function sincronizarGoogleGroupsDeLaComision(
   let aunConError = 0;
 
   for (const alumno of alumnos) {
-    const resultado = await intentarSincronizarGoogleGroup(
-      alumno.githubUsername
-    );
-    if (
-      resultado.status === "added" ||
-      resultado.status === "already_member"
-    ) {
-      sincronizados++;
-    } else if (resultado.status === "skipped") {
-      omitidos++;
-    } else {
+    try {
+      const resultado = await intentarSincronizarGoogleGroup(
+        alumno.githubUsername
+      );
+      if (
+        resultado.status === "added" ||
+        resultado.status === "already_member"
+      ) {
+        sincronizados++;
+      } else if (resultado.status === "skipped") {
+        omitidos++;
+      } else {
+        aunConError++;
+      }
+    } catch {
       aunConError++;
     }
   }

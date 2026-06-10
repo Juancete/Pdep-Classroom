@@ -27,9 +27,6 @@ export default async function PerfilPage() {
   if (alumno.tieneSyncPendiente(googleGroupsConfigurado)) {
     try {
       const tareas: Promise<unknown>[] = [];
-      if (alumno.tieneGoogleGroupPendiente(googleGroupsConfigurado)) {
-        tareas.push(intentarSincronizarGoogleGroup(githubUsername));
-      }
       if (
         alumno.tieneSyncDeAlumnoFallido() ||
         alumno.tieneSyncDeGruposFallido()
@@ -47,6 +44,9 @@ export default async function PerfilPage() {
             );
           }
         }
+      }
+      if (alumno.tieneGoogleGroupPendiente(googleGroupsConfigurado)) {
+        tareas.push(intentarSincronizarGoogleGroup(githubUsername));
       }
       await Promise.allSettled(tareas);
     } catch {
