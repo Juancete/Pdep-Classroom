@@ -1,8 +1,5 @@
-import { Alumno, type Comision } from "@/domain/entities";
-import {
-  getAlumnosByGithubUsernames,
-  upsertAlumnos,
-} from "@/lib/repositories";
+import type { Comision } from "@/domain/entities";
+import { upsertAlumnos } from "@/lib/repositories";
 import { getAlumnos } from "@/lib/sheets";
 import {
   ejecutarHooksPostConfirmacion,
@@ -27,8 +24,7 @@ export class LecturaPlanillaAlumnosError extends Error {
 
 /**
  * Caso de uso de importación admin: lee alumnos desde Sheets, persiste el bulk
- * upsert y dispara los hooks accesorios de importación. Captura emails previos
- * antes del flush para que Google Groups pueda des-suscribir direcciones viejas.
+ * upsert y dispara los hooks accesorios de importación.
  */
 export async function importarAlumnosDeComision(
   comision: Comision
@@ -40,26 +36,17 @@ export async function importarAlumnosDeComision(
     throw new LecturaPlanillaAlumnosError(error);
   }
 
-  const existentes = await getAlumnosByGithubUsernames(
-    alumnos.map((alumno) => alumno.githubUsername)
-  );
-  const emailPrevioPorGithub = new Map(
-    existentes.map((alumno) => [alumno.usernameCanonico, alumno.email])
-  );
-
   const sincronizados = await upsertAlumnos(
     alumnos.map((alumno) => ({ ...alumno, comision }))
   );
 
   let conErrorDeGrupo = 0;
   for (const alumno of alumnos) {
-    const githubUsername = Alumno.normalizarUsername(alumno.githubUsername);
     const { groupSubscription } = await ejecutarHooksPostConfirmacion(
       {
         githubUsername: alumno.githubUsername,
         email: alumno.email,
         comision,
-        emailPrevio: emailPrevioPorGithub.get(githubUsername),
       },
       HOOKS_IMPORTACION_ALUMNO
     );

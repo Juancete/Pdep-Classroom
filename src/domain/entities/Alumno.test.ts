@@ -311,6 +311,47 @@ describe("Alumno — predicados de sync", () => {
   });
 });
 
+describe("estado de Google Groups", () => {
+  it("solo se considera pendiente cuando la integración está habilitada", () => {
+    const alumno = nuevoAlumno({ googleGroupEstado: "fallido" });
+    expect(alumno.tieneGoogleGroupPendiente(false)).toBe(false);
+    expect(alumno.tieneGoogleGroupPendiente(true)).toBe(true);
+  });
+
+  it("acumula emails anteriores para darlos de baja", () => {
+    const alumno = nuevoAlumno({
+      googleGroupEmailSincronizado: "primero@gmail.com",
+    });
+
+    alumno.registrarEmailAgregadoAGoogleGroup("segundo@gmail.com");
+    alumno.registrarEmailAgregadoAGoogleGroup("tercero@gmail.com");
+
+    expect(alumno.googleGroupEmailSincronizado).toBe("tercero@gmail.com");
+    expect(alumno.googleGroupEmailsPendientesBaja).toEqual([
+      "primero@gmail.com",
+      "segundo@gmail.com",
+    ]);
+  });
+
+  it("marca pendiente cuando cambia el email persistido", () => {
+    const alumno = nuevoAlumno({
+      email: "viejo@gmail.com",
+      googleGroupEstado: "sincronizado",
+    });
+
+    alumno.actualizarDatos({
+      legajo: alumno.legajo,
+      apellido: alumno.apellido,
+      nombre: alumno.nombre,
+      githubUsername: alumno.githubUsername,
+      email: "nuevo@gmail.com",
+      comision: alumno.comision,
+    });
+
+    expect(alumno.googleGroupEstado).toBe("pendiente");
+  });
+});
+
 describe("validateRegistro", () => {
   const valid = {
     legajo: "12345",

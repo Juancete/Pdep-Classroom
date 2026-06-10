@@ -11,6 +11,9 @@ const mockGetAsignacionesGrupos = vi.fn();
 const mockGetAlumnosByComision = vi.fn();
 const mockIntentarSincronizarGrupos = vi.fn();
 const mockImportarAlumnosDeComision = vi.fn();
+const mockGetAlumnosConGoogleGroupPendiente = vi.fn();
+const mockIntentarSincronizarGoogleGroup = vi.fn();
+const mockIsGoogleGroupsConfigured = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
@@ -43,6 +46,8 @@ vi.mock("@/lib/repositories", () => ({
   getComision: (...args: unknown[]) => mockGetComision(...args),
   getAlumnosByComision: (...args: unknown[]) =>
     mockGetAlumnosByComision(...args),
+  getAlumnosConGoogleGroupPendiente: (...args: unknown[]) =>
+    mockGetAlumnosConGoogleGroupPendiente(...args),
   LegajoConflictError: FakeLegajoConflictError,
   ComisionActivaDuplicadaError: FakeComisionActivaDuplicadaError,
 }));
@@ -50,6 +55,15 @@ vi.mock("@/lib/repositories", () => ({
 vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
   intentarSincronizarGrupos: (...args: unknown[]) =>
     mockIntentarSincronizarGrupos(...args),
+}));
+
+vi.mock("@/lib/services/intentarSincronizarGoogleGroup", () => ({
+  intentarSincronizarGoogleGroup: (...args: unknown[]) =>
+    mockIntentarSincronizarGoogleGroup(...args),
+}));
+
+vi.mock("@/lib/googleGroups", () => ({
+  isGoogleGroupsConfigured: () => mockIsGoogleGroupsConfigured(),
 }));
 
 const { FakeLecturaPlanillaAlumnosError } = vi.hoisted(() => {
@@ -86,6 +100,7 @@ import {
   actualizarComision,
   sincronizarAlumnos,
   sincronizarGruposDeLaComision,
+  sincronizarGoogleGroupsDeLaComision,
 } from "./actions";
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -480,5 +495,61 @@ describe("sincronizarGruposDeLaComision", () => {
     await expect(
       sincronizarGruposDeLaComision({ status: "idle" }, makeFd())
     ).rejects.toThrow("forbidden");
+  });
+});
+
+describe("sincronizarGoogleGroupsDeLaComision", () => {
+  function makeFd(): FormData {
+    return makeFormData({ comisionId: "c1" });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequireAdmin.mockResolvedValue(undefined);
+    mockGetComision.mockResolvedValue({ id: "c1" });
+    mockGetAlumnosConGoogleGroupPendiente.mockResolvedValue([]);
+    mockIsGoogleGroupsConfigured.mockReturnValue(true);
+  });
+
+  it("requiere admin", async () => {
+    mockRequireAdmin.mockRejectedValue(new Error("forbidden"));
+    await expect(
+      sincronizarGoogleGroupsDeLaComision({ status: "idle" }, makeFd())
+    ).rejects.toThrow("forbidden");
+  });
+
+  it("devuelve error si la comisión no existe", async () => {
+    mockGetComision.mockResolvedValue(null);
+    await expect(
+      sincronizarGoogleGroupsDeLaComision({ status: "idle" }, makeFd())
+    ).resolves.toEqual({
+      status: "error",
+      message: "Comisión no encontrada",
+    });
+  });
+
+  it("procesa solo pendientes y agrega los resultados", async () => {
+    mockGetAlumnosConGoogleGroupPendiente.mockResolvedValue([
+      { githubUsername: "ana" },
+      { githubUsername: "bruno" },
+      { githubUsername: "cintia" },
+    ]);
+    mockIntentarSincronizarGoogleGroup
+      .mockResolvedValueOnce({ status: "added" })
+      .mockResolvedValueOnce({ status: "skipped" })
+      .mockResolvedValueOnce({ status: "error", error: "boom" });
+
+    await expect(
+      sincronizarGoogleGroupsDeLaComision({ status: "idle" }, makeFd())
+    ).resolves.toEqual({
+      status: "ok",
+      sincronizados: 1,
+      omitidos: 1,
+      aunConError: 1,
+    });
+    expect(mockGetAlumnosConGoogleGroupPendiente).toHaveBeenCalledWith(
+      "c1",
+      true
+    );
   });
 });

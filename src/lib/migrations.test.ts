@@ -38,4 +38,21 @@ describe("migrations", () => {
     expect(migration).toContain("hay entregas individuales duplicadas");
     expect(migration).toContain("hay entregas grupales duplicadas");
   });
+
+  it("agrega el estado persistente de Google Groups con default pendiente", () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        "migrations",
+        "Migration20260610120000_add_google_group_state_to_alumno.ts"
+      ),
+      "utf8"
+    );
+
+    expect(migration).toContain('"google_group_estado"');
+    expect(migration).toContain("default 'pendiente'");
+    expect(migration).toContain('"google_group_email_sincronizado"');
+    expect(migration).toContain('"google_group_emails_pendientes_baja"');
+    expect(migration).toContain('"google_group_ultimo_error"');
+  });
 });

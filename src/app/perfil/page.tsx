@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { AlumnoForm } from "@/app/components/AlumnoForm";
 import { verificarConsistenciaAlumno } from "@/lib/services/verificarConsistenciaAlumno";
 import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
+import { intentarSincronizarGoogleGroup } from "@/lib/services/intentarSincronizarGoogleGroup";
+import { isGoogleGroupsConfigured } from "@/lib/googleGroups";
 import type { PdepUser } from "@/types";
 
 export default async function PerfilPage() {
@@ -18,17 +20,35 @@ export default async function PerfilPage() {
 
   // Reintento on-demand: si alguno de los flags de sync está prendido,
   // el alumno probablemente entró acá específicamente para resolverlo.
-  // Las dos llamadas son independientes y se invocan solo si su flag está activo.
+  // Las sincronizaciones son independientes y se invocan solo si su estado
+  // persistido indica que necesitan reintento.
   // Protegemos defensivamente: una excepción inesperada no debe romper el render.
-  if (alumno.tieneSyncPendiente()) {
+  const googleGroupsConfigurado = isGoogleGroupsConfigured();
+  if (alumno.tieneSyncPendiente(googleGroupsConfigurado)) {
     try {
-      const comisionActiva = await getComisionActiva();
-      if (comisionActiva) {
-        const tareas: Promise<unknown>[] = [];
-        if (alumno.tieneSyncDeAlumnoFallido()) tareas.push(verificarConsistenciaAlumno(githubUsername, comisionActiva));
-        if (alumno.tieneSyncDeGruposFallido()) tareas.push(intentarSincronizarGrupos(githubUsername, comisionActiva));
-        await Promise.allSettled(tareas);
+      const tareas: Promise<unknown>[] = [];
+      if (alumno.tieneGoogleGroupPendiente(googleGroupsConfigurado)) {
+        tareas.push(intentarSincronizarGoogleGroup(githubUsername));
       }
+      if (
+        alumno.tieneSyncDeAlumnoFallido() ||
+        alumno.tieneSyncDeGruposFallido()
+      ) {
+        const comisionActiva = await getComisionActiva();
+        if (comisionActiva) {
+          if (alumno.tieneSyncDeAlumnoFallido()) {
+            tareas.push(
+              verificarConsistenciaAlumno(githubUsername, comisionActiva)
+            );
+          }
+          if (alumno.tieneSyncDeGruposFallido()) {
+            tareas.push(
+              intentarSincronizarGrupos(githubUsername, comisionActiva)
+            );
+          }
+        }
+      }
+      await Promise.allSettled(tareas);
     } catch {
       // Flags persistentes en DB se encargan del banner.
     }
