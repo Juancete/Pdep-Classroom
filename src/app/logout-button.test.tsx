@@ -75,4 +75,27 @@ describe("UserMenu", () => {
     await openMenu("juangarcia");
     expect(screen.getByRole("menuitem", { name: "Editar perfil" })).toBeInTheDocument();
   });
+
+  it("señala en el avatar y en Editar perfil cuando hay una acción pendiente", async () => {
+    render(
+      <UserMenu
+        username="juangarcia"
+        image=""
+        hasPendingSync
+      />
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: /acción pendiente en tu perfil/i,
+    });
+    expect(trigger).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(trigger);
+    expect(
+      screen.getByRole("menuitem", {
+        name: /Editar perfil, acción pendiente/i,
+      })
+    ).toHaveAttribute("href", "/perfil");
+  });
 });

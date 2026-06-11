@@ -10,6 +10,8 @@ const mockGetAlumnoByGithub = vi.fn();
 const mockGetComisionActiva = vi.fn();
 const mockVerificarConsistenciaAlumno = vi.fn();
 const mockIntentarSincronizarGrupos = vi.fn();
+const mockIntentarSincronizarGoogleGroup = vi.fn();
+const mockIsGoogleGroupsConfigured = vi.fn();
 const mockRedirect = vi.fn().mockImplementation((url: string) => {
   throw new Error(`REDIRECT:${url}`);
 });
@@ -31,6 +33,15 @@ vi.mock("@/lib/services/verificarConsistenciaAlumno", () => ({
 vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
   intentarSincronizarGrupos: (...args: unknown[]) =>
     mockIntentarSincronizarGrupos(...args),
+}));
+
+vi.mock("@/lib/services/intentarSincronizarGoogleGroup", () => ({
+  intentarSincronizarGoogleGroup: (...args: unknown[]) =>
+    mockIntentarSincronizarGoogleGroup(...args),
+}));
+
+vi.mock("@/lib/googleGroups", () => ({
+  isGoogleGroupsConfigured: () => mockIsGoogleGroupsConfigured(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -88,6 +99,8 @@ describe("Perfil page", () => {
     mockGetComisionActiva.mockResolvedValue(comisionActiva);
     mockVerificarConsistenciaAlumno.mockResolvedValue(undefined);
     mockIntentarSincronizarGrupos.mockResolvedValue(undefined);
+    mockIntentarSincronizarGoogleGroup.mockResolvedValue({ status: "added" });
+    mockIsGoogleGroupsConfigured.mockReturnValue(false);
     mockRedirect.mockImplementation((url: string) => {
       throw new Error(`REDIRECT:${url}`);
     });
@@ -152,6 +165,7 @@ describe("Perfil page", () => {
       await PerfilPage();
       expect(mockVerificarConsistenciaAlumno).not.toHaveBeenCalled();
       expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+      expect(mockIntentarSincronizarGoogleGroup).not.toHaveBeenCalled();
     });
 
     it("llama a verificarConsistenciaAlumno si alumnoSyncFallidoEn está prendido", async () => {
@@ -212,6 +226,47 @@ describe("Perfil page", () => {
       mockIntentarSincronizarGrupos.mockRejectedValue(new Error("Sheets caído"));
 
       await expect(PerfilPage()).resolves.toBeDefined();
+    });
+
+    it("reintenta Google Groups cuando está configurado y pendiente", async () => {
+      mockIsGoogleGroupsConfigured.mockReturnValue(true);
+      mockGetAlumnoByGithub.mockResolvedValue(
+        makeAlumno({ googleGroupEstado: "fallido" })
+      );
+
+      await PerfilPage();
+
+      expect(mockIntentarSincronizarGoogleGroup).toHaveBeenCalledWith(
+        "juangarcia"
+      );
+    });
+
+    it("no presenta omitido como pendiente mientras la integración está desactivada", async () => {
+      mockGetAlumnoByGithub.mockResolvedValue(
+        makeAlumno({ googleGroupEstado: "omitido" })
+      );
+
+      await PerfilPage();
+
+      expect(mockIntentarSincronizarGoogleGroup).not.toHaveBeenCalled();
+    });
+
+    it("reintenta Google Groups aunque falle getComisionActiva", async () => {
+      mockIsGoogleGroupsConfigured.mockReturnValue(true);
+      mockGetAlumnoByGithub.mockResolvedValue(
+        makeAlumno({
+          gruposSyncFallidoEn: new Date("2026-04-01"),
+          googleGroupEstado: "fallido",
+        })
+      );
+      mockGetComisionActiva.mockRejectedValue(new Error("DB caída"));
+
+      await expect(PerfilPage()).resolves.toBeDefined();
+
+      expect(mockIntentarSincronizarGoogleGroup).toHaveBeenCalledWith(
+        "juangarcia"
+      );
+      expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
     });
   });
 });

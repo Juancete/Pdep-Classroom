@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockGetAlumnos = vi.fn();
-const mockGetAlumnosByGithubUsernames = vi.fn();
 const mockUpsertAlumnos = vi.fn();
 const mockEjecutarHooksPostConfirmacion = vi.fn();
 const mockIntentarSincronizarGrupos = vi.fn();
@@ -11,8 +10,6 @@ vi.mock("@/lib/sheets", () => ({
 }));
 
 vi.mock("@/lib/repositories", () => ({
-  getAlumnosByGithubUsernames: (...args: unknown[]) =>
-    mockGetAlumnosByGithubUsernames(...args),
   upsertAlumnos: (...args: unknown[]) => mockUpsertAlumnos(...args),
 }));
 
@@ -54,7 +51,6 @@ describe("importarAlumnosDeComision", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetAlumnos.mockResolvedValue(alumnos);
-    mockGetAlumnosByGithubUsernames.mockResolvedValue([]);
     mockUpsertAlumnos.mockResolvedValue(2);
     mockEjecutarHooksPostConfirmacion.mockResolvedValue({ groupSubscription: "added" });
   });
@@ -64,18 +60,6 @@ describe("importarAlumnosDeComision", () => {
     expect(mockGetAlumnos).toHaveBeenCalledWith("sheet-abc", {});
   });
 
-  it("captura emails previos antes de upsertAlumnos", async () => {
-    await importarAlumnosDeComision(comision as never);
-    expect(mockGetAlumnosByGithubUsernames.mock.invocationCallOrder[0]).toBeLessThan(
-      mockUpsertAlumnos.mock.invocationCallOrder[0]
-    );
-  });
-
-  it("busca alumnos previos por githubUsername en batch", async () => {
-    await importarAlumnosDeComision(comision as never);
-    expect(mockGetAlumnosByGithubUsernames).toHaveBeenCalledWith(["Ana", "beto"]);
-  });
-
   it("persiste los alumnos con la comisión incluida", async () => {
     await importarAlumnosDeComision(comision as never);
     expect(mockUpsertAlumnos).toHaveBeenCalledWith(
@@ -83,31 +67,14 @@ describe("importarAlumnosDeComision", () => {
     );
   });
 
-  it("pasa emailPrevio al hook cuando el alumno ya existía", async () => {
-    mockGetAlumnosByGithubUsernames.mockResolvedValue([
-      { githubUsername: "ana", usernameCanonico: "ana", email: "ana-viejo@b.com" },
-    ]);
-
+  it("pasa el contexto persistido al hook de Google Groups", async () => {
     await importarAlumnosDeComision(comision as never);
 
     expect(mockEjecutarHooksPostConfirmacion).toHaveBeenCalledWith(
       expect.objectContaining({
         githubUsername: "Ana",
         email: "ana-nuevo@b.com",
-        emailPrevio: "ana-viejo@b.com",
-      }),
-      ["google-groups-hook"]
-    );
-  });
-
-  it("pasa emailPrevio undefined cuando el alumno no existía", async () => {
-    await importarAlumnosDeComision(comision as never);
-
-    expect(mockEjecutarHooksPostConfirmacion).toHaveBeenCalledWith(
-      expect.objectContaining({
-        githubUsername: "Ana",
-        email: "ana-nuevo@b.com",
-        emailPrevio: undefined,
+        comision,
       }),
       ["google-groups-hook"]
     );

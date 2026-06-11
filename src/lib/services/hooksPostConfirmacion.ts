@@ -1,24 +1,12 @@
-import {
-  agregarMiembroAGrupo,
-  quitarMiembroDeGrupo,
-  type AgregarMiembroResult,
-} from "@/lib/googleGroups";
+import type { AgregarMiembroResult } from "@/lib/googleGroups";
 import { intentarSincronizarGrupos } from "./intentarSincronizarGrupos";
-import { logger } from "@/lib/logger";
-import { Alumno, type Comision } from "@/domain/entities";
+import { intentarSincronizarGoogleGroup } from "./intentarSincronizarGoogleGroup";
+import type { Comision } from "@/domain/entities";
 
-/**
- * Contexto del evento "alumno confirmado/actualizado". `emailPrevio` es el email
- * que el alumno tenía en la DB antes de esta confirmación; se usa para des-suscribir
- * del Google Group la dirección vieja cuando el email cambió. En un alta nueva
- * (registro de un alumno inexistente) o en la importación no hay previo, así que
- * sólo se suscribe la dirección actual.
- */
 export type ContextoAlumno = {
   githubUsername: string;
   email: string;
   comision: Comision;
-  emailPrevio?: string;
 };
 
 export type ResultadoHooks = {
@@ -28,63 +16,14 @@ export type ResultadoHooks = {
 
 export type HookPostConfirmacion = (ctx: ContextoAlumno) => Promise<ResultadoHooks>;
 
-// Enmascara la parte local del email para no escupir PII a los logs,
-// preservando dominio y primeras 2 letras para que un admin pueda
-// reconocer al alumno (combinado con el githubUsername del log).
-function maskEmail(correo: string): string {
-  return correo.replace(/^([^@]{1,2})([^@]*)(@.+)$/, "$1xxxxxx$3");
-}
-
-// Enmascara cualquier email embebido en un texto libre (p. ej. el `message` de
-// un error de googleapis, que suele citar el email del miembro afectado).
-function maskEmailsEnTexto(texto: string): string {
-  return texto.replace(/([\w.+-]{1,2})([\w.+-]*)(@[\w.-]+\.\w+)/g, "$1xxxxxx$3");
-}
-
 /**
- * Suscribe al alumno al Google Group con su email actual y, si el email cambió
- * respecto al previo, des-suscribe la dirección vieja sólo cuando el alta nueva
- * quedó asegurada. La baja es best-effort: se loguea pero no degrada la
- * respuesta. El status devuelto refleja la suscripción del email actual, no la
- * baja del viejo.
+ * Reconcilia la membresía persistente del alumno. El servicio obtiene email y
+ * estado desde DB para que la misma operación sirva también en los reintentos.
  */
 export const hookGoogleGroups: HookPostConfirmacion = async ({
   githubUsername,
-  email,
-  emailPrevio,
 }) => {
-  const suscripcion = await agregarMiembroAGrupo(email);
-  if (suscripcion.status === "error") {
-    logger.error(
-      {
-        githubUsername,
-        maskedEmail: maskEmail(email),
-        err: maskEmailsEnTexto(suscripcion.error),
-      },
-      "Error al suscribir al Google Group"
-    );
-  }
-
-  const puedeQuitarEmailPrevio =
-    suscripcion.status === "added" || suscripcion.status === "already_member";
-  if (
-    puedeQuitarEmailPrevio &&
-    emailPrevio &&
-    Alumno.normalizarEmail(emailPrevio) !== Alumno.normalizarEmail(email)
-  ) {
-    const baja = await quitarMiembroDeGrupo(emailPrevio);
-    if (baja.status === "error") {
-      logger.error(
-        {
-          githubUsername,
-          maskedEmail: maskEmail(emailPrevio),
-          err: maskEmailsEnTexto(baja.error),
-        },
-        "Error al des-suscribir el email anterior del Google Group"
-      );
-    }
-  }
-
+  const suscripcion = await intentarSincronizarGoogleGroup(githubUsername);
   return { groupSubscription: suscripcion.status };
 };
 

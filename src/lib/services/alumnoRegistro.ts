@@ -2,7 +2,6 @@ import { validateRegistro, type RegistroInput } from "@/domain/entities";
 import { upsertarAlumnoEnSheets } from "@/lib/sheets";
 import {
   getComisionActiva,
-  getAlumnoByGithub,
   upsertAlumno,
   marcarRegistroConfirmado,
   LegajoConflictError,
@@ -124,19 +123,12 @@ export type ResultadoConfirmacionConHooks =
 /**
  * Orquesta el evento completo "alumno confirmado/actualizado" para los flujos de
  * un único alumno (registro y perfil): confirma los datos y dispara los hooks
- * accesorios (Google Groups + sync de grupos). Captura el email previo ANTES de
- * confirmar para que, si cambió, el hook de Google Groups des-suscriba la
- * dirección vieja. La ruta sólo valida entrada, llama acá y traduce el resultado
- * a HTTP.
+ * accesorios (Google Groups + sync de grupos). La ruta sólo valida entrada,
+ * llama acá y traduce el resultado a HTTP.
  */
 export async function confirmarYProcesarAlumno(
   input: RegistroInput
 ): Promise<ResultadoConfirmacionConHooks> {
-  // El email previo se lee antes de confirmar: `upsertAlumno` (dentro de
-  // `confirmarDatosAlumno`) pisa el email en la DB, así que después ya no
-  // tendríamos la dirección vieja para des-suscribirla del grupo.
-  const emailPrevio = (await getAlumnoByGithub(input.githubUsername))?.email;
-
   const resultado = await confirmarDatosAlumno(input);
   if (!resultado.ok) return resultado;
 
@@ -145,7 +137,6 @@ export async function confirmarYProcesarAlumno(
       githubUsername: input.githubUsername,
       email: input.email,
       comision: resultado.comision,
-      emailPrevio,
     },
     HOOKS_CONFIRMACION_ALUMNO
   );
