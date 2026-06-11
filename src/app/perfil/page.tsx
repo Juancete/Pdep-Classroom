@@ -25,33 +25,41 @@ export default async function PerfilPage() {
   // Protegemos defensivamente: una excepción inesperada no debe romper el render.
   const googleGroupsConfigurado = isGoogleGroupsConfigured();
   if (alumno.tieneSyncPendiente(googleGroupsConfigurado)) {
-    try {
-      const tareas: Promise<unknown>[] = [];
-      if (
-        alumno.tieneSyncDeAlumnoFallido() ||
-        alumno.tieneSyncDeGruposFallido()
-      ) {
-        const comisionActiva = await getComisionActiva();
-        if (comisionActiva) {
+    const tareas: Promise<unknown>[] = [];
+    if (
+      alumno.tieneSyncDeAlumnoFallido() ||
+      alumno.tieneSyncDeGruposFallido()
+    ) {
+      tareas.push(
+        (async () => {
+          const comisionActiva = await getComisionActiva();
+          if (!comisionActiva) return;
+
+          const tareasDeComision: Promise<unknown>[] = [];
           if (alumno.tieneSyncDeAlumnoFallido()) {
-            tareas.push(
-              verificarConsistenciaAlumno(githubUsername, comisionActiva)
+            tareasDeComision.push(
+              verificarConsistenciaAlumno(
+                githubUsername,
+                comisionActiva
+              )
             );
           }
           if (alumno.tieneSyncDeGruposFallido()) {
-            tareas.push(
-              intentarSincronizarGrupos(githubUsername, comisionActiva)
+            tareasDeComision.push(
+              intentarSincronizarGrupos(
+                githubUsername,
+                comisionActiva
+              )
             );
           }
-        }
-      }
-      if (alumno.tieneGoogleGroupPendiente(googleGroupsConfigurado)) {
-        tareas.push(intentarSincronizarGoogleGroup(githubUsername));
-      }
-      await Promise.allSettled(tareas);
-    } catch {
-      // Flags persistentes en DB se encargan del banner.
+          await Promise.allSettled(tareasDeComision);
+        })()
+      );
     }
+    if (alumno.tieneGoogleGroupPendiente(googleGroupsConfigurado)) {
+      tareas.push(intentarSincronizarGoogleGroup(githubUsername));
+    }
+    await Promise.allSettled(tareas);
   }
 
   return (

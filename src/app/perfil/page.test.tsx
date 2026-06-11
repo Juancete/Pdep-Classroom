@@ -251,7 +251,7 @@ describe("Perfil page", () => {
       expect(mockIntentarSincronizarGoogleGroup).not.toHaveBeenCalled();
     });
 
-    it("no inicia Google Groups si falla antes getComisionActiva", async () => {
+    it("reintenta Google Groups aunque falle getComisionActiva", async () => {
       mockIsGoogleGroupsConfigured.mockReturnValue(true);
       mockGetAlumnoByGithub.mockResolvedValue(
         makeAlumno({
@@ -263,7 +263,9 @@ describe("Perfil page", () => {
 
       await expect(PerfilPage()).resolves.toBeDefined();
 
-      expect(mockIntentarSincronizarGoogleGroup).not.toHaveBeenCalled();
+      expect(mockIntentarSincronizarGoogleGroup).toHaveBeenCalledWith(
+        "juangarcia"
+      );
       expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
     });
   });
