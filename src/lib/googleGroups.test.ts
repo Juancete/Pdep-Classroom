@@ -23,7 +23,11 @@ vi.mock("googleapis", () => ({
   },
 }));
 
-import { agregarMiembroAGrupo, quitarMiembroDeGrupo } from "./googleGroups";
+import {
+  agregarMiembroAGrupo,
+  isGoogleGroupsConfigured,
+  quitarMiembroDeGrupo,
+} from "./googleGroups";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -68,6 +72,17 @@ describe("agregarMiembroAGrupo", () => {
     const result = await agregarMiembroAGrupo("juan@gmail.com");
     expect(result).toEqual({ status: "skipped" });
     expect(mockMembersInsert).not.toHaveBeenCalled();
+  });
+
+  it("considera habilitada la integración solo con grupo y admin configurados", () => {
+    expect(isGoogleGroupsConfigured()).toBe(true);
+    delete process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL;
+    expect(isGoogleGroupsConfigured()).toBe(false);
+  });
+
+  it("considera desactivada la integración sin service account key", () => {
+    delete process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+    expect(isGoogleGroupsConfigured()).toBe(false);
   });
 
   it("retorna 'skipped' cuando GOOGLE_GROUP_EMAIL está vacío", async () => {

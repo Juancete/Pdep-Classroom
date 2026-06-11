@@ -13,6 +13,8 @@ export {
   marcarAlumnoSyncOk,
   getAlumnosByComision,
   getAlumnosConGruposSyncPendiente,
+  getAlumnosConGoogleGroupPendiente,
+  actualizarEstadoGoogleGroup,
   countAlumnos,
   LegajoConflictError,
 } from "./AlumnoRepository";
