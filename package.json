@@ -10,6 +10,7 @@
     "lint": "next lint",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:migrations": "vitest run --config vitest.migrations.config.ts",
     "test:coverage": "vitest run --coverage",
     "db:migration:create": "mikro-orm migration:create",
     "db:migration:up": "mikro-orm migration:up",
