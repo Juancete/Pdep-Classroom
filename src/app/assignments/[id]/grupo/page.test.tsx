@@ -7,6 +7,7 @@ import { GrupalAssignment, IndividualAssignment } from "@/domain/entities";
 
 const mockRequireUser = vi.fn();
 const mockGetAssignment = vi.fn();
+const mockGetAlumnoByGithub = vi.fn();
 const mockGetGruposDeAssignment = vi.fn();
 const mockGetEntregaDeUsuario = vi.fn();
 const mockNotFound = vi.fn(() => { throw new Error("NOT_FOUND"); });
@@ -17,6 +18,7 @@ vi.mock("@/lib/session", () => ({
 
 vi.mock("@/lib/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
+  getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
   getGruposDeAssignment: (id: string) => mockGetGruposDeAssignment(id),
   getEntregaDeUsuario: (assignmentId: string, username: string) =>
     mockGetEntregaDeUsuario(assignmentId, username),
@@ -72,7 +74,16 @@ function makeGrupalAssignment(overrides = {}): GrupalAssignment {
   assignment.slug = "tp-grupal";
   assignment.maxIntegrantes = 3;
   assignment.inscripcionesCerradas = false;
+  assignment.comision = { id: "c1" } as never;
   return Object.assign(assignment, overrides);
+}
+
+function makeAlumno(comisionId = "c1") {
+  return {
+    id: "alumno-ana",
+    githubUsername: "ana",
+    comision: { id: comisionId },
+  };
 }
 
 function makeGrupo(
@@ -107,6 +118,7 @@ describe("GrupoPage", () => {
     vi.clearAllMocks();
     mockRequireUser.mockResolvedValue(makeUser());
     mockGetAssignment.mockResolvedValue(makeGrupalAssignment());
+    mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
     mockGetGruposDeAssignment.mockResolvedValue([]);
     mockGetEntregaDeUsuario.mockResolvedValue(null);
   });
@@ -121,6 +133,23 @@ describe("GrupoPage", () => {
     individual.id = "a1";
     mockGetAssignment.mockResolvedValue(individual);
     await expect(GrupoPage({ params: { id: "a1" } })).rejects.toThrow("NOT_FOUND");
+  });
+
+  it("llama a notFound para acceso directo desde otra comisión", async () => {
+    mockGetAlumnoByGithub.mockResolvedValue(makeAlumno("c2"));
+
+    await expect(GrupoPage({ params: { id: "a1" } })).rejects.toThrow("NOT_FOUND");
+
+    expect(mockGetGruposDeAssignment).not.toHaveBeenCalled();
+  });
+
+  it("permite acceso global al administrador", async () => {
+    mockRequireUser.mockResolvedValue(makeUser({ isAdmin: true }));
+
+    const element = await GrupoPage({ params: { id: "a1" } });
+
+    expect(renderToStaticMarkup(element)).toContain("TP Grupal");
+    expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
   });
 
   it("muestra el título del assignment", async () => {

@@ -43,6 +43,7 @@ import { crearGrupo, unirseAGrupo } from "./GrupoRepository";
 import {
   Grupo,
   Alumno,
+  Comision,
   GrupalAssignment,
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
@@ -51,6 +52,11 @@ import {
 } from "@/domain/entities";
 import { IndividualAssignment } from "@/domain/entities/IndividualAssignment";
 import type { Collection } from "@mikro-orm/core";
+import {
+  AccesoAssignmentProhibidoError,
+  AssignmentNoEncontradoError,
+  GrupoNoEncontradoError,
+} from "@/lib/services/assignmentAuthorization";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -63,7 +69,14 @@ function fakeAlumno(id: string, githubUsername: string): Alumno {
   alumno.nombre = githubUsername;
   alumno.apellido = "Test";
   alumno.email = `${githubUsername}@test`;
+  alumno.comision = fakeComision();
   return alumno;
+}
+
+function fakeComision(id = "c1"): Comision {
+  const comision = new Comision(2026, "sheet-test");
+  comision.id = id;
+  return comision;
 }
 
 function fakeGrupal(overrides: Partial<GrupalAssignment> = {}): GrupalAssignment {
@@ -72,6 +85,7 @@ function fakeGrupal(overrides: Partial<GrupalAssignment> = {}): GrupalAssignment
   grupal.paradigma = "funcional";
   grupal.maxIntegrantes = 3;
   grupal.inscripcionesCerradas = false;
+  grupal.comision = fakeComision();
   Object.assign(grupal, overrides);
   return grupal;
 }
@@ -136,6 +150,7 @@ describe("crearGrupo", () => {
       assignmentId: "a1",
       alumnoId: "alumno-ana",
       nombre: "Los Lambdas",
+      esAdmin: false,
     });
 
     expect(grupo.nombre).toBe("Los Lambdas");
@@ -148,12 +163,12 @@ describe("crearGrupo", () => {
     expect(mockTx.flush).toHaveBeenCalled();
   });
 
-  it("lanza AssignmentNoGrupalError si el assignment no existe", async () => {
+  it("lanza AssignmentNoEncontradoError si el assignment no existe", async () => {
     mockTx.findOne.mockResolvedValueOnce(null);
 
     await expect(
-      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x" })
-    ).rejects.toBeInstanceOf(AssignmentNoGrupalError);
+      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x", esAdmin: false })
+    ).rejects.toBeInstanceOf(AssignmentNoEncontradoError);
   });
 
   it("lanza AssignmentNoGrupalError si el assignment es individual", async () => {
@@ -162,15 +177,17 @@ describe("crearGrupo", () => {
     mockTx.findOne.mockResolvedValueOnce(individual);
 
     await expect(
-      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x" })
+      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x", esAdmin: false })
     ).rejects.toBeInstanceOf(AssignmentNoGrupalError);
   });
 
   it("lanza InscripcionesCerradasError si el docente cerró las inscripciones", async () => {
+    const ana = fakeAlumno("alumno-ana", "ana");
     mockTx.findOne.mockResolvedValueOnce(fakeGrupal({ inscripcionesCerradas: true }));
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
     await expect(
-      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x" })
+      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x", esAdmin: false })
     ).rejects.toBeInstanceOf(InscripcionesCerradasError);
   });
 
@@ -184,27 +201,89 @@ describe("crearGrupo", () => {
     mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
     await expect(
-      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x" })
+      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x", esAdmin: false })
     ).rejects.toBeInstanceOf(AlumnoYaEnGrupoDelAssignmentError);
     expect(mockTx.persist).not.toHaveBeenCalled();
+  });
+
+  it("rechaza dentro de la transacción a un alumno de otra comisión", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    ana.comision = fakeComision("c2");
+    mockTx.findOne.mockResolvedValueOnce(assignment);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+
+    await expect(
+      crearGrupo({
+        assignmentId: "a1",
+        alumnoId: "alumno-ana",
+        nombre: "x",
+        esAdmin: false,
+      })
+    ).rejects.toBeInstanceOf(AccesoAssignmentProhibidoError);
+
+    expect(mockEm.transactional).toHaveBeenCalledTimes(1);
+    expect(mockTx.persist).not.toHaveBeenCalled();
+    expect(mockTx.flush).not.toHaveBeenCalled();
+  });
+
+  it("permite crear entre comisiones cuando el contexto es administrador", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    ana.comision = fakeComision("c2");
+    mockTx.findOne
+      .mockResolvedValueOnce(assignment)
+      .mockResolvedValueOnce(null);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+
+    await expect(
+      crearGrupo({
+        assignmentId: "a1",
+        alumnoId: "alumno-ana",
+        nombre: "x",
+        esAdmin: true,
+      })
+    ).resolves.toBeInstanceOf(Grupo);
   });
 });
 
 // ── unirseAGrupo ────────────────────────────────────────────
 
 describe("unirseAGrupo", () => {
+  it("rechaza con 404 lógico si el grupo no pertenece al assignment de la URL", async () => {
+    mockTx.findOne.mockResolvedValueOnce(null);
+
+    await expect(
+      unirseAGrupo({
+        assignmentId: "a-otro",
+        grupoId: "g1",
+        alumnoId: "alumno-ana",
+        esAdmin: false,
+      })
+    ).rejects.toBeInstanceOf(GrupoNoEncontradoError);
+
+    expect(mockTx.findOneOrFail).not.toHaveBeenCalled();
+    expect(mockTx.flush).not.toHaveBeenCalled();
+  });
+
   it("happy path: suma al alumno y flushea", async () => {
     const assignment = fakeGrupal();
     const ana = fakeAlumno("alumno-ana", "ana");
     const grupo = fakeGrupo("g1", assignment, []);
-    mockTx.findOneOrFail
+    mockTx.findOne
       .mockResolvedValueOnce(grupo) // Grupo
-      .mockResolvedValueOnce(ana); // Alumno
-    mockTx.findOne.mockResolvedValueOnce(null); // enOtroGrupo
+      .mockResolvedValueOnce(null); // enOtroGrupo
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana); // Alumno
 
-    const resultado = await unirseAGrupo({ grupoId: "g1", alumnoId: "alumno-ana" });
+    const resultado = await unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", esAdmin: false });
 
     expect(resultado).toBe(grupo);
+    expect(mockTx.findOne).toHaveBeenNthCalledWith(
+      1,
+      Grupo,
+      { id: "g1", assignment: { id: "a1" } },
+      { populate: ["alumnos", "assignment.comision"] }
+    );
     expect(grupo.alumnos.contains(ana)).toBe(true);
     expect(mockTx.flush).toHaveBeenCalled();
   });
@@ -213,11 +292,10 @@ describe("unirseAGrupo", () => {
     const assignment = fakeGrupal();
     const ana = fakeAlumno("alumno-ana", "ana");
     const grupo = fakeGrupo("g1", assignment, [ana]);
-    mockTx.findOneOrFail
-      .mockResolvedValueOnce(grupo)
-      .mockResolvedValueOnce(ana);
+    mockTx.findOne.mockResolvedValueOnce(grupo);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
-    const resultado = await unirseAGrupo({ grupoId: "g1", alumnoId: "alumno-ana" });
+    const resultado = await unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", esAdmin: false });
 
     expect(resultado).toBe(grupo);
     expect(mockTx.flush).not.toHaveBeenCalled();
@@ -225,11 +303,13 @@ describe("unirseAGrupo", () => {
 
   it("lanza InscripcionesCerradasError cuando el docente cerró el assignment", async () => {
     const assignment = fakeGrupal({ inscripcionesCerradas: true });
+    const ana = fakeAlumno("alumno-ana", "ana");
     const grupo = fakeGrupo("g1", assignment, []);
-    mockTx.findOneOrFail.mockResolvedValueOnce(grupo);
+    mockTx.findOne.mockResolvedValueOnce(grupo);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
     await expect(
-      unirseAGrupo({ grupoId: "g1", alumnoId: "alumno-ana" })
+      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", esAdmin: false })
     ).rejects.toBeInstanceOf(InscripcionesCerradasError);
   });
 
@@ -238,13 +318,13 @@ describe("unirseAGrupo", () => {
     const ana = fakeAlumno("alumno-ana", "ana");
     const grupoDestino = fakeGrupo("g1", assignment, []);
     const grupoOtro = fakeGrupo("g-otro", assignment, [ana]);
-    mockTx.findOneOrFail
+    mockTx.findOne
       .mockResolvedValueOnce(grupoDestino)
-      .mockResolvedValueOnce(ana);
-    mockTx.findOne.mockResolvedValueOnce(grupoOtro);
+      .mockResolvedValueOnce(grupoOtro);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
     await expect(
-      unirseAGrupo({ grupoId: "g1", alumnoId: "alumno-ana" })
+      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", esAdmin: false })
     ).rejects.toBeInstanceOf(AlumnoYaEnGrupoDelAssignmentError);
     expect(mockTx.flush).not.toHaveBeenCalled();
   });
@@ -255,13 +335,13 @@ describe("unirseAGrupo", () => {
     const bob = fakeAlumno("alumno-bob", "bob");
     const cora = fakeAlumno("alumno-cora", "cora");
     const grupoLleno = fakeGrupo("g1", assignment, [ana, bob]);
-    mockTx.findOneOrFail
+    mockTx.findOne
       .mockResolvedValueOnce(grupoLleno)
-      .mockResolvedValueOnce(cora);
-    mockTx.findOne.mockResolvedValueOnce(null);
+      .mockResolvedValueOnce(null);
+    mockTx.findOneOrFail.mockResolvedValueOnce(cora);
 
     await expect(
-      unirseAGrupo({ grupoId: "g1", alumnoId: "alumno-cora" })
+      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-cora", esAdmin: false })
     ).rejects.toBeInstanceOf(GrupoLlenoError);
   });
 
@@ -269,13 +349,56 @@ describe("unirseAGrupo", () => {
     const assignment = fakeGrupal();
     const ana = fakeAlumno("alumno-ana", "ana");
     const grupo = fakeGrupo("g1", assignment, []);
-    mockTx.findOneOrFail
+    mockTx.findOne
       .mockResolvedValueOnce(grupo)
-      .mockResolvedValueOnce(ana);
-    mockTx.findOne.mockResolvedValueOnce(null);
+      .mockResolvedValueOnce(null);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
-    await unirseAGrupo({ grupoId: "g1", alumnoId: "alumno-ana" });
+    await unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", esAdmin: false });
 
     expect(mockEm.transactional).toHaveBeenCalledTimes(1);
+  });
+
+  it("rechaza dentro de la transacción a un alumno de otra comisión", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    ana.comision = fakeComision("c2");
+    const grupo = fakeGrupo("g1", assignment, []);
+    mockTx.findOne.mockResolvedValueOnce(grupo);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+
+    await expect(
+      unirseAGrupo({
+        assignmentId: "a1",
+        grupoId: "g1",
+        alumnoId: "alumno-ana",
+        esAdmin: false,
+      })
+    ).rejects.toBeInstanceOf(AccesoAssignmentProhibidoError);
+
+    expect(mockEm.transactional).toHaveBeenCalledTimes(1);
+    expect(mockTx.flush).not.toHaveBeenCalled();
+  });
+
+  it("permite unirse entre comisiones cuando el contexto es administrador", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    ana.comision = fakeComision("c2");
+    const grupo = fakeGrupo("g1", assignment, []);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupo)
+      .mockResolvedValueOnce(null);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+
+    await expect(
+      unirseAGrupo({
+        assignmentId: "a1",
+        grupoId: "g1",
+        alumnoId: "alumno-ana",
+        esAdmin: true,
+      })
+    ).resolves.toBe(grupo);
+
+    expect(mockTx.flush).toHaveBeenCalled();
   });
 });
