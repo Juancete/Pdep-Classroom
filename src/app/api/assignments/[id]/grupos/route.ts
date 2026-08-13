@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/session";
+import { getCurrentUser } from "@/lib/session";
 import {
   getAlumnoByGithub,
+  getAssignment,
   getGruposDeAssignment,
   crearGrupo,
 } from "@/lib/repositories";
@@ -13,6 +14,11 @@ import {
 } from "@/domain/entities";
 import { internalServerError } from "@/lib/api-errors";
 import type { Grupo } from "@/domain/entities";
+import {
+  AccesoAssignmentProhibidoError,
+  AssignmentNoEncontradoError,
+  autorizarAccesoAssignment,
+} from "@/lib/services/assignmentAuthorization";
 
 const CrearGrupoSchema = z.object({
   nombre: z.string().min(1).max(100),
@@ -34,10 +40,29 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    await requireUser();
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const [assignment, alumno] = await Promise.all([
+      getAssignment(params.id),
+      user.isAdmin
+        ? Promise.resolve(null)
+        : getAlumnoByGithub(user.githubUsername, true),
+    ]);
+    if (!assignment) throw new AssignmentNoEncontradoError(params.id);
+    autorizarAccesoAssignment(user, alumno, assignment);
+
     const grupos = await getGruposDeAssignment(params.id);
     return NextResponse.json(grupos.map(serializarGrupo));
   } catch (error) {
+    if (error instanceof AssignmentNoEncontradoError) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
+    if (error instanceof AccesoAssignmentProhibidoError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
     return internalServerError("GET /api/assignments/[id]/grupos", error, {
       assignmentId: params.id,
     });
@@ -49,7 +74,10 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const user = await requireUser();
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
 
     const body = await req.json().catch(() => null);
     const parsed = CrearGrupoSchema.safeParse(body);
@@ -60,11 +88,11 @@ export async function POST(
       );
     }
 
-    const alumno = await getAlumnoByGithub(user.githubUsername);
+    const alumno = await getAlumnoByGithub(user.githubUsername, true);
     if (!alumno) {
       return NextResponse.json(
-        { error: "Alumno no registrado" },
-        { status: 404 }
+        { error: "No tenés acceso a este assignment" },
+        { status: 403 }
       );
     }
 
@@ -72,10 +100,17 @@ export async function POST(
       assignmentId: params.id,
       alumnoId: alumno.id,
       nombre: parsed.data.nombre,
+      esAdmin: user.isAdmin,
     });
 
     return NextResponse.json(serializarGrupo(grupo), { status: 201 });
   } catch (error) {
+    if (error instanceof AssignmentNoEncontradoError) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
+    if (error instanceof AccesoAssignmentProhibidoError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
     if (error instanceof AssignmentNoGrupalError) {
       return NextResponse.json(
         { error: "Este assignment no es grupal" },
