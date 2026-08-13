@@ -41,12 +41,15 @@ export async function getAlumnos(): Promise<Alumno[]> {
 }
 
 export async function getAlumnoByGithub(
-  githubUsername: string
+  githubUsername: string,
+  populateComision = false
 ): Promise<Alumno | null> {
   const entityManager = await getEM();
-  return entityManager.findOne(Alumno, {
-    githubUsername: Alumno.normalizarUsername(githubUsername),
-  });
+  return entityManager.findOne(
+    Alumno,
+    { githubUsername: Alumno.normalizarUsername(githubUsername) },
+    populateComision ? { populate: ["comision"] } : undefined
+  );
 }
 
 export async function getAlumnosByGithubUsernames(

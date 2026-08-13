@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/session";
+import { getCurrentUser } from "@/lib/session";
 import { getAlumnoByGithub, unirseAGrupo } from "@/lib/repositories";
 import {
   InscripcionesCerradasError,
@@ -8,6 +8,10 @@ import {
 } from "@/domain/entities";
 import { internalServerError } from "@/lib/api-errors";
 import type { Grupo } from "@/domain/entities";
+import {
+  AccesoAssignmentProhibidoError,
+  GrupoNoEncontradoError,
+} from "@/lib/services/assignmentAuthorization";
 
 function serializarGrupo(grupo: Grupo) {
   return {
@@ -25,23 +29,34 @@ export async function POST(
   { params }: { params: { id: string; grupoId: string } }
 ) {
   try {
-    const user = await requireUser();
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
 
-    const alumno = await getAlumnoByGithub(user.githubUsername);
+    const alumno = await getAlumnoByGithub(user.githubUsername, true);
     if (!alumno) {
       return NextResponse.json(
-        { error: "Alumno no registrado" },
-        { status: 404 }
+        { error: "No tenés acceso a este assignment" },
+        { status: 403 }
       );
     }
 
     const grupo = await unirseAGrupo({
+      assignmentId: params.id,
       grupoId: params.grupoId,
       alumnoId: alumno.id,
+      esAdmin: user.isAdmin,
     });
 
     return NextResponse.json(serializarGrupo(grupo));
   } catch (error) {
+    if (error instanceof GrupoNoEncontradoError) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
+    if (error instanceof AccesoAssignmentProhibidoError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
     if (error instanceof InscripcionesCerradasError) {
       return NextResponse.json(
         { error: "Las inscripciones a grupos están cerradas" },

@@ -1,15 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PdepUser } from "@/types";
 import { Entrega, GrupoNoAsignadoError } from "@/domain/entities";
+import { AccesoAssignmentProhibidoError } from "@/lib/services/assignmentAuthorization";
 
 const {
-  mockRequireUser,
+  mockGetCurrentUser,
   mockCheckRateLimit,
   mockAceptarAssignment,
   FakeAlumnoNoRegistradoError,
   FakeAssignmentNoEncontradoError,
 } = vi.hoisted(() => ({
-  mockRequireUser: vi.fn(),
+  mockGetCurrentUser: vi.fn(),
   mockCheckRateLimit: vi.fn(),
   mockAceptarAssignment: vi.fn(),
   FakeAlumnoNoRegistradoError: class AlumnoNoRegistradoError extends Error {},
@@ -17,7 +18,7 @@ const {
 }));
 
 vi.mock("@/lib/session", () => ({
-  requireUser: () => mockRequireUser(),
+  getCurrentUser: () => mockGetCurrentUser(),
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
@@ -64,7 +65,7 @@ function makeRequest(): Request {
 describe("POST /api/assignments/[id]/accept", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRequireUser.mockResolvedValue(makeUser());
+    mockGetCurrentUser.mockResolvedValue(makeUser());
     mockCheckRateLimit.mockReturnValue(true);
     mockAceptarAssignment.mockResolvedValue(makeEntrega());
   });
@@ -113,7 +114,7 @@ describe("POST /api/assignments/[id]/accept", () => {
       repoName: "kata-funcional-los-lambdas",
       githubUsernames: ["juangarcia", "marialopez"],
     });
-    mockRequireUser
+    mockGetCurrentUser
       .mockResolvedValueOnce(makeUser({ githubUsername: "juangarcia" }))
       .mockResolvedValueOnce(makeUser({ githubUsername: "marialopez" }));
     mockAceptarAssignment.mockResolvedValue(entrega);
@@ -139,6 +140,14 @@ describe("POST /api/assignments/[id]/accept", () => {
     expect(response.status).toBe(404);
   });
 
+  it("devuelve 403 si el alumno pertenece a otra comisión", async () => {
+    mockAceptarAssignment.mockRejectedValue(
+      new AccesoAssignmentProhibidoError("a1")
+    );
+    const response = await POST(makeRequest(), { params: { id: "a1" } });
+    expect(response.status).toBe(403);
+  });
+
   it("devuelve 400 si assignment grupal y el usuario no tiene grupo", async () => {
     mockAceptarAssignment.mockRejectedValue(new GrupoNoAsignadoError("a1", "juangarcia"));
     const response = await POST(makeRequest(), { params: { id: "a1" } });
@@ -151,9 +160,9 @@ describe("POST /api/assignments/[id]/accept", () => {
     expect(response.status).toBe(400);
   });
 
-  it("devuelve 500 si requireUser lanza", async () => {
-    mockRequireUser.mockRejectedValue(new Error("redirect"));
+  it("devuelve 401 si no hay sesión", async () => {
+    mockGetCurrentUser.mockResolvedValue(null);
     const response = await POST(makeRequest(), { params: { id: "a1" } });
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(401);
   });
 });

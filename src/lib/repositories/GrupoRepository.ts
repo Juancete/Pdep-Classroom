@@ -9,6 +9,11 @@ import {
   AssignmentNoGrupalError,
 } from "@/domain/entities";
 import type { Paradigma } from "@/types";
+import {
+  AssignmentNoEncontradoError,
+  GrupoNoEncontradoError,
+  autorizarAccesoAssignment,
+} from "@/lib/services/assignmentAuthorization";
 
 export async function getGruposDeAlumno(
   githubUsername: string
@@ -61,20 +66,34 @@ export async function crearGrupo(params: {
   assignmentId: string;
   alumnoId: string;
   nombre: string;
+  esAdmin: boolean;
 }): Promise<Grupo> {
-  const { assignmentId, alumnoId, nombre } = params;
+  const { assignmentId, alumnoId, nombre, esAdmin } = params;
   const entityManager = await getEM();
 
   return entityManager.transactional(async (transaction) => {
-    const assignment = await transaction.findOne(Assignment, { id: assignmentId });
-    if (!assignment || !(assignment instanceof GrupalAssignment)) {
+    const assignment = await transaction.findOne(
+      Assignment,
+      { id: assignmentId },
+      { populate: ["comision"] }
+    );
+    if (!assignment) {
+      throw new AssignmentNoEncontradoError(assignmentId);
+    }
+    if (!(assignment instanceof GrupalAssignment)) {
       throw new AssignmentNoGrupalError(assignmentId);
     }
+
+    const alumno = await transaction.findOneOrFail(
+      Alumno,
+      { id: alumnoId },
+      { populate: ["comision"] }
+    );
+    autorizarAccesoAssignment({ isAdmin: esAdmin }, alumno, assignment);
+
     if (!assignment.aceptaNuevasInscripciones()) {
       throw new InscripcionesCerradasError(assignmentId);
     }
-
-    const alumno = await transaction.findOneOrFail(Alumno, { id: alumnoId });
 
     const yaEnGrupo = await transaction.findOne(Grupo, {
       assignment: { id: assignmentId },
@@ -103,20 +122,29 @@ export async function crearGrupo(params: {
 // para resolver el race del último cupo (dos joins simultáneos al mismo
 // grupo cuando queda un solo lugar).
 export async function unirseAGrupo(params: {
+  assignmentId: string;
   grupoId: string;
   alumnoId: string;
+  esAdmin: boolean;
 }): Promise<Grupo> {
-  const { grupoId, alumnoId } = params;
+  const { assignmentId, grupoId, alumnoId, esAdmin } = params;
   const entityManager = await getEM();
 
   return entityManager.transactional(async (transaction) => {
-    const grupo = await transaction.findOneOrFail(
+    const grupo = await transaction.findOne(
       Grupo,
-      { id: grupoId },
-      { populate: ["alumnos", "assignment"] }
+      { id: grupoId, assignment: { id: assignmentId } },
+      { populate: ["alumnos", "assignment.comision"] }
     );
+    if (!grupo) throw new GrupoNoEncontradoError(assignmentId, grupoId);
+
     const assignment = grupo.assignment;
-    const alumno = await transaction.findOneOrFail(Alumno, { id: alumnoId });
+    const alumno = await transaction.findOneOrFail(
+      Alumno,
+      { id: alumnoId },
+      { populate: ["comision"] }
+    );
+    autorizarAccesoAssignment({ isAdmin: esAdmin }, alumno, assignment);
 
     if (grupo.alumnos.contains(alumno)) {
       return grupo;
