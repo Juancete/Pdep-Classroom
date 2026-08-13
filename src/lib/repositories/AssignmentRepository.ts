@@ -50,9 +50,8 @@ export async function createAssignment(
 
   const slug = data.slug || slugify(data.titulo);
 
-  let assignment: Assignment;
-
-  assignment = data.tipo === "grupal" ? new GrupalAssignment() : new IndividualAssignment();
+  const assignment: Assignment =
+    data.tipo === "grupal" ? new GrupalAssignment() : new IndividualAssignment();
   assignment.aplicarCamposExtra(data);
 
   assignment.titulo = data.titulo;

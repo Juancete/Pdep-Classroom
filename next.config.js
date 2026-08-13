@@ -1,15 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: [
-      "@mikro-orm/core",
-      "@mikro-orm/postgresql",
-      "@mikro-orm/migrations",
-      "pino",
-      "pino-pretty",
-    ],
-    instrumentationHook: true,
-  },
+  serverExternalPackages: [
+    "@mikro-orm/core",
+    "@mikro-orm/postgresql",
+    "@mikro-orm/migrations",
+    "pino",
+    "pino-pretty",
+  ],
 
   images: {
     remotePatterns: [

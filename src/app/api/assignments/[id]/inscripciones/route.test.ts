@@ -48,7 +48,7 @@ describe("PATCH /api/assignments/[id]/inscripciones", () => {
     mockGuardAdmin.mockResolvedValue(
       NextResponse.json({ error: "No autorizado" }, { status: 401 })
     );
-    const response = await PATCH(makeRequest({ cerrada: true }), { params: { id: "a1" } });
+    const response = await PATCH(makeRequest({ cerrada: true }), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(401);
     expect(mockSetInscripcionesCerradas).not.toHaveBeenCalled();
   });
@@ -57,7 +57,7 @@ describe("PATCH /api/assignments/[id]/inscripciones", () => {
     mockSetInscripcionesCerradas.mockResolvedValue(
       makeAssignment({ inscripcionesCerradas: true })
     );
-    const response = await PATCH(makeRequest({ cerrada: true }), { params: { id: "a1" } });
+    const response = await PATCH(makeRequest({ cerrada: true }), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.inscripcionesCerradas).toBe(true);
@@ -68,7 +68,7 @@ describe("PATCH /api/assignments/[id]/inscripciones", () => {
     mockSetInscripcionesCerradas.mockResolvedValue(
       makeAssignment({ inscripcionesCerradas: false })
     );
-    const response = await PATCH(makeRequest({ cerrada: false }), { params: { id: "a1" } });
+    const response = await PATCH(makeRequest({ cerrada: false }), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.inscripcionesCerradas).toBe(false);
@@ -76,20 +76,20 @@ describe("PATCH /api/assignments/[id]/inscripciones", () => {
   });
 
   it("devuelve 400 si el body no tiene el campo cerrada", async () => {
-    const response = await PATCH(makeRequest({}), { params: { id: "a1" } });
+    const response = await PATCH(makeRequest({}), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(400);
     expect(mockSetInscripcionesCerradas).not.toHaveBeenCalled();
   });
 
   it("devuelve 404 si el assignment grupal no existe", async () => {
     mockSetInscripcionesCerradas.mockResolvedValue(null);
-    const response = await PATCH(makeRequest({ cerrada: true }), { params: { id: "no-existe" } });
+    const response = await PATCH(makeRequest({ cerrada: true }), { params: Promise.resolve({ id: "no-existe" }) });
     expect(response.status).toBe(404);
   });
 
   it("devuelve 500 para errores inesperados", async () => {
     mockSetInscripcionesCerradas.mockRejectedValue(new Error("DB exploded"));
-    const response = await PATCH(makeRequest({ cerrada: true }), { params: { id: "a1" } });
+    const response = await PATCH(makeRequest({ cerrada: true }), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(500);
   });
 });

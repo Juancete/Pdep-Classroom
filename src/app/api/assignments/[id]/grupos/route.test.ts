@@ -84,7 +84,7 @@ describe("GET /api/assignments/[id]/grupos", () => {
   });
 
   it("devuelve 200 con la lista de grupos serializados", async () => {
-    const response = await GET(makeRequest(undefined, "GET"), { params: { id: "a1" } });
+    const response = await GET(makeRequest(undefined, "GET"), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data).toHaveLength(1);
@@ -99,7 +99,7 @@ describe("GET /api/assignments/[id]/grupos", () => {
 
   it("devuelve lista vacía si no hay grupos", async () => {
     mockGetGruposDeAssignment.mockResolvedValue([]);
-    const response = await GET(makeRequest(undefined, "GET"), { params: { id: "a1" } });
+    const response = await GET(makeRequest(undefined, "GET"), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data).toEqual([]);
@@ -109,7 +109,7 @@ describe("GET /api/assignments/[id]/grupos", () => {
     mockGetAlumnoByGithub.mockResolvedValue(makeAlumno("alumno-ana", "ana"));
     mockGetAssignment.mockResolvedValue(makeAssignment({ comision: { id: "c2" } }));
 
-    const response = await GET(makeRequest(undefined, "GET"), { params: { id: "a1" } });
+    const response = await GET(makeRequest(undefined, "GET"), { params: Promise.resolve({ id: "a1" }) });
 
     expect(response.status).toBe(403);
     expect(mockGetGruposDeAssignment).not.toHaveBeenCalled();
@@ -118,7 +118,7 @@ describe("GET /api/assignments/[id]/grupos", () => {
   it("devuelve 404 si el assignment no existe", async () => {
     mockGetAssignment.mockResolvedValue(null);
 
-    const response = await GET(makeRequest(undefined, "GET"), { params: { id: "a1" } });
+    const response = await GET(makeRequest(undefined, "GET"), { params: Promise.resolve({ id: "a1" }) });
 
     expect(response.status).toBe(404);
     expect(mockGetGruposDeAssignment).not.toHaveBeenCalled();
@@ -127,7 +127,7 @@ describe("GET /api/assignments/[id]/grupos", () => {
   it("permite acceso global al administrador", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser({ isAdmin: true }));
 
-    const response = await GET(makeRequest(undefined, "GET"), { params: { id: "a1" } });
+    const response = await GET(makeRequest(undefined, "GET"), { params: Promise.resolve({ id: "a1" }) });
 
     expect(response.status).toBe(200);
     expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
@@ -135,7 +135,7 @@ describe("GET /api/assignments/[id]/grupos", () => {
 
   it("devuelve 401 si el usuario no está autenticado", async () => {
     mockGetCurrentUser.mockResolvedValue(null);
-    const response = await GET(makeRequest(undefined, "GET"), { params: { id: "a1" } });
+    const response = await GET(makeRequest(undefined, "GET"), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(401);
     expect(mockGetGruposDeAssignment).not.toHaveBeenCalled();
   });
@@ -150,7 +150,7 @@ describe("POST /api/assignments/[id]/grupos", () => {
   });
 
   it("crea el grupo y devuelve 201 con el grupo serializado", async () => {
-    const response = await POST(makeRequest({ nombre: "Los Lambdas" }), { params: { id: "a1" } });
+    const response = await POST(makeRequest({ nombre: "Los Lambdas" }), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(201);
     const data = await response.json();
     expect(data.nombre).toBe("Los Lambdas");
@@ -158,7 +158,7 @@ describe("POST /api/assignments/[id]/grupos", () => {
   });
 
   it("llama a crearGrupo con assignmentId, alumnoId y nombre", async () => {
-    await POST(makeRequest({ nombre: "Los Lambdas" }), { params: { id: "a1" } });
+    await POST(makeRequest({ nombre: "Los Lambdas" }), { params: Promise.resolve({ id: "a1" }) });
     expect(mockCrearGrupo).toHaveBeenCalledWith({
       assignmentId: "a1",
       alumnoId: "alumno-ana",
@@ -170,7 +170,7 @@ describe("POST /api/assignments/[id]/grupos", () => {
   it("propaga el contexto administrativo confiable a la transacción", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser({ isAdmin: true }));
 
-    await POST(makeRequest({ nombre: "Los Lambdas" }), { params: { id: "a1" } });
+    await POST(makeRequest({ nombre: "Los Lambdas" }), { params: Promise.resolve({ id: "a1" }) });
 
     expect(mockCrearGrupo).toHaveBeenCalledWith(
       expect.objectContaining({ esAdmin: true })
@@ -178,50 +178,50 @@ describe("POST /api/assignments/[id]/grupos", () => {
   });
 
   it("devuelve 400 si el body no tiene nombre", async () => {
-    const response = await POST(makeRequest({}), { params: { id: "a1" } });
+    const response = await POST(makeRequest({}), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(400);
   });
 
   it("devuelve 403 si el alumno no está registrado", async () => {
     mockGetAlumnoByGithub.mockResolvedValue(null);
-    const response = await POST(makeRequest({ nombre: "x" }), { params: { id: "a1" } });
+    const response = await POST(makeRequest({ nombre: "x" }), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(403);
     expect(mockCrearGrupo).not.toHaveBeenCalled();
   });
 
   it("devuelve 400 si el assignment no es grupal", async () => {
     mockCrearGrupo.mockRejectedValue(new AssignmentNoGrupalError("a1"));
-    const response = await POST(makeRequest({ nombre: "x" }), { params: { id: "a1" } });
+    const response = await POST(makeRequest({ nombre: "x" }), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(400);
   });
 
   it("devuelve 404 si el assignment no existe", async () => {
     mockCrearGrupo.mockRejectedValue(new AssignmentNoEncontradoError("a1"));
-    const response = await POST(makeRequest({ nombre: "x" }), { params: { id: "a1" } });
+    const response = await POST(makeRequest({ nombre: "x" }), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(404);
   });
 
   it("devuelve 403 si la autorización transaccional rechaza la comisión", async () => {
     mockCrearGrupo.mockRejectedValue(new AccesoAssignmentProhibidoError("a1"));
-    const response = await POST(makeRequest({ nombre: "x" }), { params: { id: "a1" } });
+    const response = await POST(makeRequest({ nombre: "x" }), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(403);
   });
 
   it("devuelve 409 si las inscripciones están cerradas", async () => {
     mockCrearGrupo.mockRejectedValue(new InscripcionesCerradasError("a1"));
-    const response = await POST(makeRequest({ nombre: "x" }), { params: { id: "a1" } });
+    const response = await POST(makeRequest({ nombre: "x" }), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(409);
   });
 
   it("devuelve 409 si el alumno ya está en otro grupo del assignment", async () => {
     mockCrearGrupo.mockRejectedValue(new AlumnoYaEnGrupoDelAssignmentError("a1", "ana"));
-    const response = await POST(makeRequest({ nombre: "x" }), { params: { id: "a1" } });
+    const response = await POST(makeRequest({ nombre: "x" }), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(409);
   });
 
   it("devuelve 500 para errores inesperados", async () => {
     mockCrearGrupo.mockRejectedValue(new Error("DB exploded"));
-    const response = await POST(makeRequest({ nombre: "x" }), { params: { id: "a1" } });
+    const response = await POST(makeRequest({ nombre: "x" }), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(500);
   });
 });
