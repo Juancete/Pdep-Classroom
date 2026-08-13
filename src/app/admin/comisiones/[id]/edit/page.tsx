@@ -3,6 +3,7 @@ import {
   getComision,
   countAlumnos,
   getAlumnosConGruposSyncPendiente,
+  getAlumnosConGoogleGroupPendiente,
 } from "@/lib/repositories";
 import type { Alumno } from "@/domain/entities";
 import { getAlumnos, getSheetNames } from "@/lib/sheets";
@@ -11,30 +12,46 @@ import { ComisionForm } from "../../comision-form";
 import { actualizarComision } from "../../actions";
 import { SyncButton } from "../../sync-button";
 import { SyncGruposButton } from "../../sync-grupos-button";
+import { SyncGoogleGroupsButton } from "../../sync-google-groups-button";
+import { isGoogleGroupsConfigured } from "@/lib/googleGroups";
 
-export default async function EditComisionPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function EditComisionPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   await requireAdmin();
 
   const comision = await getComision(params.id);
   if (!comision) redirect("/admin/comisiones");
 
   // Comparar counts en paralelo; si alguno falla no rompemos la página
-  const [countSheet, countDB, pendientesGrupos, sheetNames] = await Promise.all([
+  const googleGroupsConfigurado = isGoogleGroupsConfigured();
+  const [
+    countSheet,
+    countDB,
+    pendientesGrupos,
+    pendientesGoogleGroup,
+    sheetNames,
+  ] = await Promise.all([
     getAlumnos(comision.spreadsheetId, comision.columnConfig)
       .then((alumnos) => alumnos.length)
       .catch(() => null),
     countAlumnos().catch(() => null),
     getAlumnosConGruposSyncPendiente(comision.id).catch(() => [] as unknown[]),
+    googleGroupsConfigurado
+      ? getAlumnosConGoogleGroupPendiente(comision.id, true).catch(
+          () => [] as unknown[]
+        )
+      : Promise.resolve([] as unknown[]),
     getSheetNames(comision.spreadsheetId).catch(() => null),
   ]);
 
   const desynced =
     countSheet !== null && countDB !== null && countSheet !== countDB;
   const cantPendientesGrupos = pendientesGrupos.length;
+  const cantPendientesGoogleGroup = pendientesGoogleGroup.length;
 
   return (
     <div className="max-w-xl">
@@ -64,6 +81,18 @@ export default async function EditComisionPage({
             <SyncGruposButton comisionId={comision.id} />
           </>
         )}
+        {cantPendientesGoogleGroup > 0 && (
+          <>
+            <span
+              title="Alumnos cuya membresía del Google Group requiere reintento"
+              className="inline-flex items-center gap-1.5 text-xs font-medium bg-red-100 text-red-700 border border-red-200 px-2.5 py-1 rounded-full"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+              Google Groups pendientes · {cantPendientesGoogleGroup}
+            </span>
+            <SyncGoogleGroupsButton comisionId={comision.id} />
+          </>
+        )}
       </div>
 
       {cantPendientesGrupos > 0 && (
@@ -79,6 +108,37 @@ export default async function EditComisionPage({
               <li key={alumno.githubUsername} className="text-xs text-red-700">
                 {alumno.nombreCompleto}{" "}
                 <span className="text-red-400">@{alumno.githubUsername}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {cantPendientesGoogleGroup > 0 && (
+        <div
+          className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6"
+          data-testid="pendientes-google-group-lista"
+        >
+          <p className="text-xs font-semibold text-red-700 mb-2">
+            Alumnos con membresía de Google Groups pendiente:
+          </p>
+          <ul className="space-y-1">
+            {(pendientesGoogleGroup as Alumno[]).map((alumno) => (
+              <li key={alumno.githubUsername} className="text-xs text-red-700">
+                {alumno.nombreCompleto}{" "}
+                <span className="text-red-400">@{alumno.githubUsername}</span>
+                {alumno.googleGroupUltimoIntentoEn && (
+                  <span className="text-red-400">
+                    {" "}
+                    · último intento{" "}
+                    {alumno.googleGroupUltimoIntentoEn.toLocaleString("es-AR")}
+                  </span>
+                )}
+                {alumno.googleGroupUltimoError && (
+                  <span className="block text-red-600">
+                    {alumno.googleGroupUltimoError}
+                  </span>
+                )}
               </li>
             ))}
           </ul>

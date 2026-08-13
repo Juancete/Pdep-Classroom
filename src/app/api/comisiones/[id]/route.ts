@@ -2,10 +2,8 @@ import { NextResponse } from "next/server";
 import { guardAdmin } from "@/lib/api-auth";
 import { getComision, deleteComision } from "@/lib/repositories";
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const unauthorized = await guardAdmin();
   if (unauthorized) return unauthorized;
 

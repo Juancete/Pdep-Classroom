@@ -1,7 +1,6 @@
 "use client";
 
-import { useFormState } from "react-dom";
-import { useState, useRef } from "react";
+import { useActionState, useState, useRef } from "react";
 import type { ComisionFormState } from "./actions";
 import { fetchSheetNames } from "./actions";
 import { INPUT_CLASS, INPUT_ERROR_CLASS, FieldError, SubmitButton } from "../ui";
@@ -118,7 +117,7 @@ function SheetNameSelect({
 }
 
 export function ComisionForm({ action, defaultValues = {}, submitLabel, initialSheetNames }: Props) {
-  const [state, formAction] = useFormState(action, null);
+  const [state, formAction] = useActionState(action, null);
   const errors = state?.errors ?? {};
   const config = defaultValues.columnConfig ?? DEFAULT_COLUMN_CONFIG;
   const grupos = config.grupos;

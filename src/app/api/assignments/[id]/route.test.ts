@@ -54,13 +54,13 @@ describe("DELETE /api/assignments/[id]", () => {
 
   it("devuelve 401 si no es admin", async () => {
     mockRequireAdmin.mockRejectedValue(new Error("redirect"));
-    const response = await DELETE(makeRequest("DELETE"), { params: { id: "a1" } });
+    const response = await DELETE(makeRequest("DELETE"), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(401);
   });
 
   it("devuelve 404 si el assignment no existe", async () => {
     mockGetAssignment.mockResolvedValue(undefined);
-    const response = await DELETE(makeRequest("DELETE"), { params: { id: "no-existe" } });
+    const response = await DELETE(makeRequest("DELETE"), { params: Promise.resolve({ id: "no-existe" }) });
     expect(response.status).toBe(404);
     const data = await response.json();
     expect(data.error).toContain("no encontrado");
@@ -68,7 +68,7 @@ describe("DELETE /api/assignments/[id]", () => {
 
   it("elimina el assignment y devuelve ok: true", async () => {
     mockGetAssignment.mockResolvedValue(makeAssignment());
-    const response = await DELETE(makeRequest("DELETE"), { params: { id: "a1" } });
+    const response = await DELETE(makeRequest("DELETE"), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.ok).toBe(true);
@@ -76,7 +76,7 @@ describe("DELETE /api/assignments/[id]", () => {
 
   it("llama a deleteAssignment con el id correcto", async () => {
     mockGetAssignment.mockResolvedValue(makeAssignment({ id: "tp-logico" }));
-    await DELETE(makeRequest("DELETE"), { params: { id: "tp-logico" } });
+    await DELETE(makeRequest("DELETE"), { params: Promise.resolve({ id: "tp-logico" }) });
     expect(mockDeleteAssignment).toHaveBeenCalledWith("tp-logico");
   });
 });
@@ -92,14 +92,14 @@ describe("PATCH /api/assignments/[id]", () => {
   it("devuelve 401 si no es admin", async () => {
     mockRequireAdmin.mockRejectedValue(new Error("redirect"));
     const request = makeRequest("PATCH", { titulo: "Nuevo" });
-    const response = await PATCH(request, { params: { id: "a1" } });
+    const response = await PATCH(request, { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(401);
   });
 
   it("devuelve 404 si el assignment no existe", async () => {
     mockGetAssignment.mockResolvedValue(undefined);
     const request = makeRequest("PATCH", { titulo: "Nuevo" });
-    const response = await PATCH(request, { params: { id: "no-existe" } });
+    const response = await PATCH(request, { params: Promise.resolve({ id: "no-existe" }) });
     expect(response.status).toBe(404);
   });
 
@@ -110,7 +110,7 @@ describe("PATCH /api/assignments/[id]", () => {
     mockUpdateAssignment.mockResolvedValue(updated);
 
     const request = makeRequest("PATCH", { titulo: "Actualizado" });
-    const response = await PATCH(request, { params: { id: "a1" } });
+    const response = await PATCH(request, { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.titulo).toBe("Actualizado");
@@ -121,7 +121,7 @@ describe("PATCH /api/assignments/[id]", () => {
     mockUpdateAssignment.mockResolvedValue(makeAssignment({ paradigma: "logico" }));
 
     const request = makeRequest("PATCH", { paradigma: "logico" });
-    await PATCH(request, { params: { id: "a1" } });
+    await PATCH(request, { params: Promise.resolve({ id: "a1" }) });
     expect(mockUpdateAssignment).toHaveBeenCalledWith("a1", { paradigma: "logico" });
   });
 
@@ -132,7 +132,7 @@ describe("PATCH /api/assignments/[id]", () => {
       headers: { "Content-Type": "application/json" },
       body: "not-json",
     });
-    const response = await PATCH(request, { params: { id: "a1" } });
+    const response = await PATCH(request, { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(400);
     const data = await response.json();
     expect(data.formErrors).toBeDefined();

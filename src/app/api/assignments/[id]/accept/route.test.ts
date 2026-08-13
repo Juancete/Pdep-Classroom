@@ -1,15 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PdepUser } from "@/types";
 import { Entrega, GrupoNoAsignadoError } from "@/domain/entities";
+import { AccesoAssignmentProhibidoError } from "@/lib/services/assignmentAuthorization";
 
 const {
-  mockRequireUser,
+  mockGetCurrentUser,
   mockCheckRateLimit,
   mockAceptarAssignment,
   FakeAlumnoNoRegistradoError,
   FakeAssignmentNoEncontradoError,
 } = vi.hoisted(() => ({
-  mockRequireUser: vi.fn(),
+  mockGetCurrentUser: vi.fn(),
   mockCheckRateLimit: vi.fn(),
   mockAceptarAssignment: vi.fn(),
   FakeAlumnoNoRegistradoError: class AlumnoNoRegistradoError extends Error {},
@@ -17,7 +18,7 @@ const {
 }));
 
 vi.mock("@/lib/session", () => ({
-  requireUser: () => mockRequireUser(),
+  getCurrentUser: () => mockGetCurrentUser(),
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
@@ -64,25 +65,25 @@ function makeRequest(): Request {
 describe("POST /api/assignments/[id]/accept", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRequireUser.mockResolvedValue(makeUser());
+    mockGetCurrentUser.mockResolvedValue(makeUser());
     mockCheckRateLimit.mockReturnValue(true);
     mockAceptarAssignment.mockResolvedValue(makeEntrega());
   });
 
   it("devuelve 429 cuando el rate limit está activo", async () => {
     mockCheckRateLimit.mockReturnValue(false);
-    const response = await POST(makeRequest(), { params: { id: "a1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(429);
     expect(mockAceptarAssignment).not.toHaveBeenCalled();
   });
 
   it("pasa la clave correcta al rate limiter", async () => {
-    await POST(makeRequest(), { params: { id: "a1" } });
+    await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(mockCheckRateLimit).toHaveBeenCalledWith("juangarcia:a1");
   });
 
   it("devuelve 200 con la entrega del servicio", async () => {
-    const response = await POST(makeRequest(), { params: { id: "a1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.repoName).toBe("kata-funcional-juangarcia");
@@ -95,8 +96,8 @@ describe("POST /api/assignments/[id]/accept", () => {
     const entrega = makeEntrega();
     mockAceptarAssignment.mockResolvedValue(entrega);
 
-    const firstResponse = await POST(makeRequest(), { params: { id: "a1" } });
-    const secondResponse = await POST(makeRequest(), { params: { id: "a1" } });
+    const firstResponse = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
+    const secondResponse = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
 
     expect(firstResponse.status).toBe(200);
     expect(secondResponse.status).toBe(200);
@@ -113,14 +114,14 @@ describe("POST /api/assignments/[id]/accept", () => {
       repoName: "kata-funcional-los-lambdas",
       githubUsernames: ["juangarcia", "marialopez"],
     });
-    mockRequireUser
+    mockGetCurrentUser
       .mockResolvedValueOnce(makeUser({ githubUsername: "juangarcia" }))
       .mockResolvedValueOnce(makeUser({ githubUsername: "marialopez" }));
     mockAceptarAssignment.mockResolvedValue(entrega);
 
     const [firstResponse, secondResponse] = await Promise.all([
-      POST(makeRequest(), { params: { id: "a1" } }),
-      POST(makeRequest(), { params: { id: "a1" } }),
+      POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) }),
+      POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) }),
     ]);
 
     expect(firstResponse.status).toBe(200);
@@ -135,25 +136,33 @@ describe("POST /api/assignments/[id]/accept", () => {
 
   it("devuelve 404 si el assignment no existe", async () => {
     mockAceptarAssignment.mockRejectedValue(new FakeAssignmentNoEncontradoError("Assignment no encontrado"));
-    const response = await POST(makeRequest(), { params: { id: "no-existe" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "no-existe" }) });
     expect(response.status).toBe(404);
+  });
+
+  it("devuelve 403 si el alumno pertenece a otra comisión", async () => {
+    mockAceptarAssignment.mockRejectedValue(
+      new AccesoAssignmentProhibidoError("a1")
+    );
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
+    expect(response.status).toBe(403);
   });
 
   it("devuelve 400 si assignment grupal y el usuario no tiene grupo", async () => {
     mockAceptarAssignment.mockRejectedValue(new GrupoNoAsignadoError("a1", "juangarcia"));
-    const response = await POST(makeRequest(), { params: { id: "a1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(400);
   });
 
   it("devuelve 400 si el alumno no está registrado para una entrega individual", async () => {
     mockAceptarAssignment.mockRejectedValue(new FakeAlumnoNoRegistradoError("Completá tu registro"));
-    const response = await POST(makeRequest(), { params: { id: "a1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(400);
   });
 
-  it("devuelve 500 si requireUser lanza", async () => {
-    mockRequireUser.mockRejectedValue(new Error("redirect"));
-    const response = await POST(makeRequest(), { params: { id: "a1" } });
-    expect(response.status).toBe(500);
+  it("devuelve 401 si no hay sesión", async () => {
+    mockGetCurrentUser.mockResolvedValue(null);
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
+    expect(response.status).toBe(401);
   });
 });

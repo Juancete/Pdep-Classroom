@@ -4,6 +4,7 @@ export {
   validateRegistro,
   type AlumnoData,
   type RegistroInput,
+  type EstadoGoogleGroup,
 } from "./Alumno";
 export { Comision } from "./Comision";
 export { Assignment } from "./Assignment";

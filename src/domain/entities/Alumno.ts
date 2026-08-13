@@ -1,4 +1,4 @@
-import { Entity, ManyToOne, PrimaryKey, Property } from "@mikro-orm/core";
+import { Entity, Enum, ManyToOne, PrimaryKey, Property } from "@mikro-orm/core";
 import { randomUUID } from "crypto";
 import { Comision } from "./Comision";
 import { ALUMNO_LEGAJO_PATTERN, ALUMNO_EMAIL_PATTERN, normalizarGithubUsername } from "./domain-constants";
@@ -15,6 +15,12 @@ export interface AlumnoData extends RegistroInput {
   comision: Comision;
   registroConfirmadoEn?: Comision;
 }
+
+export type EstadoGoogleGroup =
+  | "pendiente"
+  | "sincronizado"
+  | "fallido"
+  | "omitido";
 
 // Regex de email RFC-lite: una arroba, algún dominio, un punto después.
 // Suficiente para detectar typos comunes sin sobre-complicar.
@@ -72,7 +78,7 @@ export class Alumno {
 
   // Todo alumno pertenece a exactamente una comisión. La FK es NOT NULL;
   // borrar una comisión borra sus alumnos en cascada (on delete cascade).
-  @ManyToOne(() => Comision)
+  @ManyToOne(() => Comision, { deleteRule: "cascade" })
   comision!: Comision;
 
   // Marca la comisión en la que el alumno confirmó sus datos por última vez.
@@ -91,6 +97,24 @@ export class Alumno {
   // alta del alumno: se prende si re-upsertar la fila en Sheets falla.
   @Property({ type: 'datetime', nullable: true })
   alumnoSyncFallidoEn: Date | null = null;
+
+  @Enum({ items: ["pendiente", "sincronizado", "fallido", "omitido"] })
+  googleGroupEstado: EstadoGoogleGroup = "pendiente";
+
+  @Property({ type: "string", nullable: true })
+  googleGroupEmailSincronizado: string | null = null;
+
+  @Property({ type: "array", defaultRaw: "'{}'" })
+  googleGroupEmailsPendientesBaja: string[] = [];
+
+  @Property({ type: "text", nullable: true })
+  googleGroupUltimoError: string | null = null;
+
+  @Property({ type: "datetime", nullable: true })
+  googleGroupUltimoIntentoEn: Date | null = null;
+
+  @Property({ type: "datetime", nullable: true })
+  googleGroupSincronizadoEn: Date | null = null;
 
   get usernameCanonico(): string {
     return Alumno.normalizarUsername(this.githubUsername);
@@ -112,10 +136,16 @@ export class Alumno {
   }
 
   actualizarDatos(data: AlumnoData): void {
+    const emailAnterior = this.email
+      ? Alumno.normalizarEmail(this.email)
+      : null;
     this.aplicarRegistro(data);
     this.comision = data.comision;
     if (data.registroConfirmadoEn !== undefined) {
       this.registroConfirmadoEn = data.registroConfirmadoEn;
+    }
+    if (emailAnterior && emailAnterior !== this.email) {
+      this.marcarGoogleGroupPendiente();
     }
   }
 
@@ -166,11 +196,86 @@ export class Alumno {
     this.gruposSyncFallidoEn = null;
   }
 
-  tieneSyncPendiente(): boolean {
-    return this.tieneSyncDeAlumnoFallido() || this.tieneSyncDeGruposFallido();
+  tieneGoogleGroupPendiente(integracionHabilitada: boolean): boolean {
+    if (!integracionHabilitada) return false;
+    return (
+      this.googleGroupEstado === "pendiente" ||
+      this.googleGroupEstado === "fallido" ||
+      this.googleGroupEstado === "omitido"
+    );
   }
 
-  mensajeDeSyncPendiente(): string {
+  marcarGoogleGroupPendiente(): void {
+    this.googleGroupEstado = "pendiente";
+    this.googleGroupUltimoError = null;
+  }
+
+  registrarIntentoGoogleGroup(fecha = new Date()): void {
+    this.googleGroupUltimoIntentoEn = fecha;
+  }
+
+  registrarEmailAgregadoAGoogleGroup(email: string): void {
+    const emailNormalizado = Alumno.normalizarEmail(email);
+    const anterior = this.googleGroupEmailSincronizado;
+    this.googleGroupEmailsPendientesBaja =
+      this.googleGroupEmailsPendientesBaja.filter(
+        (pendiente) => pendiente !== emailNormalizado
+      );
+    if (
+      anterior &&
+      anterior !== emailNormalizado &&
+      !this.googleGroupEmailsPendientesBaja.includes(anterior)
+    ) {
+      this.googleGroupEmailsPendientesBaja.push(anterior);
+    }
+    this.googleGroupEmailSincronizado = emailNormalizado;
+  }
+
+  registrarBajaGoogleGroup(email: string): void {
+    const emailNormalizado = Alumno.normalizarEmail(email);
+    this.googleGroupEmailsPendientesBaja =
+      this.googleGroupEmailsPendientesBaja.filter(
+        (pendiente) => pendiente !== emailNormalizado
+      );
+  }
+
+  marcarGoogleGroupSincronizado(fecha = new Date()): void {
+    this.googleGroupEstado = "sincronizado";
+    this.googleGroupUltimoError = null;
+    this.googleGroupSincronizadoEn = fecha;
+  }
+
+  marcarGoogleGroupFallido(error: string): void {
+    this.googleGroupEstado = "fallido";
+    this.googleGroupUltimoError = error;
+  }
+
+  marcarGoogleGroupOmitido(): void {
+    this.googleGroupEstado = "omitido";
+    this.googleGroupUltimoError = null;
+  }
+
+  tieneSyncPendiente(integracionGoogleHabilitada = false): boolean {
+    return (
+      this.tieneSyncDeAlumnoFallido() ||
+      this.tieneSyncDeGruposFallido() ||
+      this.tieneGoogleGroupPendiente(integracionGoogleHabilitada)
+    );
+  }
+
+  mensajeDeSyncPendiente(integracionGoogleHabilitada = false): string {
+    const googleGroupPendiente = this.tieneGoogleGroupPendiente(
+      integracionGoogleHabilitada
+    );
+    if (
+      googleGroupPendiente &&
+      (this.tieneSyncDeGruposFallido() || this.tieneSyncDeAlumnoFallido())
+    ) {
+      return "Hay sincronizaciones pendientes de tus datos y de tu suscripción al grupo de Google.";
+    }
+    if (googleGroupPendiente) {
+      return "No pudimos completar tu suscripción al grupo de Google.";
+    }
     if (this.tieneSyncDeGruposFallido() && this.tieneSyncDeAlumnoFallido()) {
       return "No pudimos sincronizar tus datos ni asignarte a tu grupo de TP desde la planilla.";
     }

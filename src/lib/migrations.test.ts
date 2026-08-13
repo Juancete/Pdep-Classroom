@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 
+type SnapshotTable = {
+  name: string;
+  columns: Record<string, { default?: string; nullable?: boolean }>;
+  foreignKeys: Record<string, { deleteRule?: string }>;
+};
+
 describe("migrations", () => {
   it("garantiza una única comisión activa con un índice único parcial", () => {
     const migration = readFileSync(
@@ -37,5 +43,54 @@ describe("migrations", () => {
     expect(migration).toContain("hay repo_name duplicados");
     expect(migration).toContain("hay entregas individuales duplicadas");
     expect(migration).toContain("hay entregas grupales duplicadas");
+  });
+
+  it("agrega el estado persistente de Google Groups con default pendiente", () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        "migrations",
+        "Migration20260610120000_add_google_group_state_to_alumno.ts"
+      ),
+      "utf8"
+    );
+
+    expect(migration).toContain('"google_group_estado"');
+    expect(migration).toContain("default 'pendiente'");
+    expect(migration).toContain('"google_group_email_sincronizado"');
+    expect(migration).toContain('"google_group_emails_pendientes_baja"');
+    expect(migration).toContain(
+      '"google_group_emails_pendientes_baja" text[] not null default \'{}\''
+    );
+    expect(migration).toContain('"google_group_ultimo_error"');
+  });
+
+  it("mantiene el snapshot alineado con Google Groups y las cascadas", () => {
+    const snapshot = JSON.parse(
+      readFileSync(
+        join(process.cwd(), "migrations", ".snapshot-pdep_classroom.json"),
+        "utf8"
+      )
+    ) as { tables: SnapshotTable[] };
+    const alumno = snapshot.tables.find((table) => table.name === "alumno");
+    const assignment = snapshot.tables.find(
+      (table) => table.name === "assignment"
+    );
+
+    expect(alumno?.columns.google_group_emails_pendientes_baja).toMatchObject({
+      nullable: false,
+      default: "'{}'",
+    });
+    expect(alumno?.columns).toHaveProperty("google_group_estado");
+    expect(alumno?.columns).toHaveProperty("google_group_email_sincronizado");
+    expect(alumno?.columns).toHaveProperty("google_group_ultimo_error");
+    expect(alumno?.columns).toHaveProperty("google_group_ultimo_intento_en");
+    expect(alumno?.columns).toHaveProperty("google_group_sincronizado_en");
+    expect(
+      alumno?.foreignKeys.alumno_comision_id_foreign.deleteRule
+    ).toBe("cascade");
+    expect(
+      assignment?.foreignKeys.assignment_comision_id_foreign.deleteRule
+    ).toBe("cascade");
   });
 });

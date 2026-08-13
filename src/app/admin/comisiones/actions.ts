@@ -7,6 +7,7 @@ import {
   getComision,
   LegajoConflictError,
   getAlumnosByComision,
+  getAlumnosConGoogleGroupPendiente,
   ComisionActivaDuplicadaError,
 } from "@/lib/repositories";
 import { getAsignacionesGrupos, getSheetNames, type AsignacionGrupoRow } from "@/lib/sheets";
@@ -19,6 +20,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { DEFAULT_COLUMN_CONFIG, type GruposColumnConfig } from "@/types";
+import { intentarSincronizarGoogleGroup } from "@/lib/services/intentarSincronizarGoogleGroup";
+import { isGoogleGroupsConfigured } from "@/lib/googleGroups";
 
 export type ComisionFormState =
   | { ok: false; errors: Record<string, string[] | undefined> }
@@ -284,4 +287,57 @@ export async function sincronizarGruposDeLaComision(
   revalidatePath("/admin/comisiones");
   revalidatePath(`/admin/comisiones/${id}/edit`);
   return { status: "ok", sincronizados, aunConError };
+}
+
+export type SyncGoogleGroupState =
+  | { status: "idle" }
+  | {
+      status: "ok";
+      sincronizados: number;
+      omitidos: number;
+      aunConError: number;
+    }
+  | { status: "error"; message: string };
+
+export async function sincronizarGoogleGroupsDeLaComision(
+  _prevState: SyncGoogleGroupState,
+  formData: FormData
+): Promise<SyncGoogleGroupState> {
+  await requireAdmin();
+
+  const id = formData.get("comisionId") as string;
+  const comision = await getComision(id);
+  if (!comision) return { status: "error", message: "Comisión no encontrada" };
+
+  const alumnos = await getAlumnosConGoogleGroupPendiente(
+    id,
+    isGoogleGroupsConfigured()
+  );
+  let sincronizados = 0;
+  let omitidos = 0;
+  let aunConError = 0;
+
+  for (const alumno of alumnos) {
+    try {
+      const resultado = await intentarSincronizarGoogleGroup(
+        alumno.githubUsername
+      );
+      if (
+        resultado.status === "added" ||
+        resultado.status === "already_member"
+      ) {
+        sincronizados++;
+      } else if (resultado.status === "skipped") {
+        omitidos++;
+      } else {
+        aunConError++;
+      }
+    } catch {
+      aunConError++;
+    }
+  }
+
+  revalidatePath(`/admin/comisiones/${id}/edit`);
+  revalidatePath("/perfil");
+  return { status: "ok", sincronizados, omitidos, aunConError };
 }

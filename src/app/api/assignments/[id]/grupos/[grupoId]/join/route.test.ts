@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PdepUser } from "@/types";
 import {
+  AccesoAssignmentProhibidoError,
+  GrupoNoEncontradoError,
+} from "@/lib/services/assignmentAuthorization";
+import {
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
   GrupoLlenoError,
@@ -8,12 +12,12 @@ import {
 
 // ── Mocks ────────────────────────────────────────────────────
 
-const mockRequireUser = vi.fn();
+const mockGetCurrentUser = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
 const mockUnirseAGrupo = vi.fn();
 
 vi.mock("@/lib/session", () => ({
-  requireUser: () => mockRequireUser(),
+  getCurrentUser: () => mockGetCurrentUser(),
 }));
 
 vi.mock("@/lib/repositories", () => ({
@@ -36,7 +40,7 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
 }
 
 function makeAlumno(id = "alumno-ana", github = "ana") {
-  return { id, githubUsername: github };
+  return { id, githubUsername: github, comision: { id: "c1" } };
 }
 
 function makeGrupoEntity(overrides = {}) {
@@ -64,13 +68,13 @@ function makeRequest(): Request {
 describe("POST /api/assignments/[id]/grupos/[grupoId]/join", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRequireUser.mockResolvedValue(makeUser());
+    mockGetCurrentUser.mockResolvedValue(makeUser());
     mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
     mockUnirseAGrupo.mockResolvedValue(makeGrupoEntity());
   });
 
   it("devuelve 200 con el grupo actualizado", async () => {
-    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.id).toBe("g1");
@@ -78,23 +82,35 @@ describe("POST /api/assignments/[id]/grupos/[grupoId]/join", () => {
   });
 
   it("llama a unirseAGrupo con grupoId y alumnoId", async () => {
-    await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
     expect(mockUnirseAGrupo).toHaveBeenCalledWith({
+      assignmentId: "a1",
       grupoId: "g1",
       alumnoId: "alumno-ana",
+      esAdmin: false,
     });
   });
 
-  it("devuelve 404 si el alumno no está registrado", async () => {
+  it("propaga el contexto administrativo confiable a la transacción", async () => {
+    mockGetCurrentUser.mockResolvedValue(makeUser({ isAdmin: true }));
+
+    await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
+
+    expect(mockUnirseAGrupo).toHaveBeenCalledWith(
+      expect.objectContaining({ esAdmin: true })
+    );
+  });
+
+  it("devuelve 403 si el alumno no está registrado", async () => {
     mockGetAlumnoByGithub.mockResolvedValue(null);
-    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
-    expect(response.status).toBe(404);
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
+    expect(response.status).toBe(403);
     expect(mockUnirseAGrupo).not.toHaveBeenCalled();
   });
 
   it("devuelve 409 si las inscripciones están cerradas", async () => {
     mockUnirseAGrupo.mockRejectedValue(new InscripcionesCerradasError("a1"));
-    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
     expect(response.status).toBe(409);
   });
 
@@ -102,19 +118,31 @@ describe("POST /api/assignments/[id]/grupos/[grupoId]/join", () => {
     mockUnirseAGrupo.mockRejectedValue(
       new AlumnoYaEnGrupoDelAssignmentError("a1", "ana")
     );
-    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
     expect(response.status).toBe(409);
   });
 
   it("devuelve 409 si el grupo está lleno", async () => {
     mockUnirseAGrupo.mockRejectedValue(new GrupoLlenoError("g1", 3));
-    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
     expect(response.status).toBe(409);
+  });
+
+  it("devuelve 404 si el grupo no pertenece al assignment de la URL", async () => {
+    mockUnirseAGrupo.mockRejectedValue(new GrupoNoEncontradoError("a1", "g1"));
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
+    expect(response.status).toBe(404);
+  });
+
+  it("devuelve 403 si la autorización transaccional rechaza la comisión", async () => {
+    mockUnirseAGrupo.mockRejectedValue(new AccesoAssignmentProhibidoError("a1"));
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
+    expect(response.status).toBe(403);
   });
 
   it("devuelve 500 para errores inesperados", async () => {
     mockUnirseAGrupo.mockRejectedValue(new Error("DB exploded"));
-    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
     expect(response.status).toBe(500);
   });
 });

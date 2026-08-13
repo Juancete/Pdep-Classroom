@@ -8,9 +8,15 @@ interface Props {
   username: string;
   image: string;
   isAdmin?: boolean;
+  hasPendingSync?: boolean;
 }
 
-export function UserMenu({ username, image, isAdmin = false }: Props) {
+export function UserMenu({
+  username,
+  image,
+  isAdmin = false,
+  hasPendingSync = false,
+}: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -36,13 +42,24 @@ export function UserMenu({ username, image, isAdmin = false }: Props) {
     <div ref={ref} className="relative">
       <button
         type="button"
-        className="flex items-center gap-2 cursor-pointer"
+        className="relative flex items-center gap-2 cursor-pointer"
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={
+          hasPendingSync
+            ? `${username}, hay una acción pendiente en tu perfil`
+            : username
+        }
         onClick={() => setOpen((previous) => !previous)}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={image} alt="" className="w-7 h-7 rounded-full" />
+        {hasPendingSync && (
+          <span
+            className="absolute -top-0.5 left-5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-pdep-900"
+            aria-hidden="true"
+          />
+        )}
         <span className="font-mono text-xs text-pdep-200">{username}</span>
       </button>
 
@@ -56,9 +73,22 @@ export function UserMenu({ username, image, isAdmin = false }: Props) {
               href="/perfil"
               role="menuitem"
               onClick={() => setOpen(false)}
-              className="block px-4 py-2 text-sm text-pdep-200 hover:text-white hover:bg-pdep-700 transition-colors"
+              className="flex items-center justify-between gap-3 px-4 py-2 text-sm text-pdep-200 hover:text-white hover:bg-pdep-700 transition-colors"
             >
-              Editar perfil
+              <span>
+                Editar perfil
+                {hasPendingSync && (
+                  <span className="sr-only">, acción pendiente</span>
+                )}
+              </span>
+              {hasPendingSync && (
+                <span
+                  className="text-xs font-semibold text-amber-300"
+                  aria-hidden="true"
+                >
+                  !
+                </span>
+              )}
             </Link>
           )}
           <button

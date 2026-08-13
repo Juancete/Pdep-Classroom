@@ -11,6 +11,8 @@ const mockGetAlumnos = vi.fn();
 const mockGetSheetNames = vi.fn();
 const mockRedirect = vi.fn();
 const mockGetAlumnosConGruposSyncPendiente = vi.fn();
+const mockGetAlumnosConGoogleGroupPendiente = vi.fn();
+const mockIsGoogleGroupsConfigured = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
@@ -21,6 +23,12 @@ vi.mock("@/lib/repositories", () => ({
   countAlumnos: () => mockCountAlumnos(),
   getAlumnosConGruposSyncPendiente: (...args: unknown[]) =>
     mockGetAlumnosConGruposSyncPendiente(...args),
+  getAlumnosConGoogleGroupPendiente: (...args: unknown[]) =>
+    mockGetAlumnosConGoogleGroupPendiente(...args),
+}));
+
+vi.mock("@/lib/googleGroups", () => ({
+  isGoogleGroupsConfigured: () => mockIsGoogleGroupsConfigured(),
 }));
 
 vi.mock("@/lib/sheets", () => ({
@@ -53,6 +61,18 @@ vi.mock("../../sync-grupos-button", () => ({
       "button",
       { "data-testid": "sync-grupos-button", "data-comision-id": comisionId },
       "Resincronizar grupos"
+    ),
+}));
+
+vi.mock("../../sync-google-groups-button", () => ({
+  SyncGoogleGroupsButton: ({ comisionId }: { comisionId: string }) =>
+    React.createElement(
+      "button",
+      {
+        "data-testid": "sync-google-groups-button",
+        "data-comision-id": comisionId,
+      },
+      "Reintentar Google Groups"
     ),
 }));
 
@@ -104,63 +124,65 @@ describe("Edit Comision page", () => {
     mockGetAlumnos.mockResolvedValue([]);
     mockCountAlumnos.mockResolvedValue(0);
     mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([]);
+    mockGetAlumnosConGoogleGroupPendiente.mockResolvedValue([]);
+    mockIsGoogleGroupsConfigured.mockReturnValue(false);
     mockGetSheetNames.mockResolvedValue(["Alumnos", "Grupos"]);
   });
 
   it("siempre llama a requireAdmin", async () => {
     mockGetComision.mockResolvedValue(makeComision());
-    await EditComisionPage({ params: { id: "c1" } });
+    await EditComisionPage({ params: Promise.resolve({ id: "c1" }) });
     expect(mockRequireAdmin).toHaveBeenCalledOnce();
   });
 
   it("redirige a /admin/comisiones si la comisión no existe", async () => {
     mockGetComision.mockResolvedValue(null);
-    await expect(EditComisionPage({ params: { id: "no-existe" } })).rejects.toThrow("redirect");
+    await expect(EditComisionPage({ params: Promise.resolve({ id: "no-existe" }) })).rejects.toThrow("redirect");
     expect(mockRedirect).toHaveBeenCalledWith("/admin/comisiones");
   });
 
   it("muestra el título con el año de la comisión", async () => {
     mockGetComision.mockResolvedValue(makeComision({ anio: 2026 }));
-    const element = await EditComisionPage({ params: { id: "c1" } });
+    const element = await EditComisionPage({ params: Promise.resolve({ id: "c1" }) });
     expect(renderToStaticMarkup(element as React.ReactElement)).toContain("2026");
   });
 
   it("renderiza el formulario con submitLabel 'Guardar cambios'", async () => {
     mockGetComision.mockResolvedValue(makeComision());
-    const element = await EditComisionPage({ params: { id: "c1" } });
+    const element = await EditComisionPage({ params: Promise.resolve({ id: "c1" }) });
     expect(renderToStaticMarkup(element as React.ReactElement)).toContain('data-submit-label="Guardar cambios"');
   });
 
   describe("defaultValues pre-populados", () => {
     it("pasa el año como defaultValue", async () => {
       mockGetComision.mockResolvedValue(makeComision({ anio: 2025 }));
-      const element = await EditComisionPage({ params: { id: "c1" } });
+      const element = await EditComisionPage({ params: Promise.resolve({ id: "c1" }) });
       expect(renderToStaticMarkup(element as React.ReactElement)).toContain('data-default-anio="2025"');
     });
 
     it("pasa el spreadsheetId como defaultValue", async () => {
       mockGetComision.mockResolvedValue(makeComision({ spreadsheetId: "mi-sheet-xyz" }));
-      const element = await EditComisionPage({ params: { id: "c1" } });
+      const element = await EditComisionPage({ params: Promise.resolve({ id: "c1" }) });
       expect(renderToStaticMarkup(element as React.ReactElement)).toContain("mi-sheet-xyz");
     });
 
     it("pasa activa como defaultValue", async () => {
       mockGetComision.mockResolvedValue(makeComision({ activa: true }));
-      const element = await EditComisionPage({ params: { id: "c1" } });
+      const element = await EditComisionPage({ params: Promise.resolve({ id: "c1" }) });
       expect(renderToStaticMarkup(element as React.ReactElement)).toContain('data-default-activa="true"');
     });
 
     it("pasa los nombres de hojas al formulario cuando getSheetNames responde", async () => {
       mockGetComision.mockResolvedValue(makeComision());
       mockGetSheetNames.mockResolvedValue(["Alumnos", "Grupos"]);
-      const element = await EditComisionPage({ params: { id: "c1" } });
+      const element = await EditComisionPage({ params: Promise.resolve({ id: "c1" }) });
       expect(renderToStaticMarkup(element as React.ReactElement)).toContain("Alumnos,Grupos");
     });
 
     it("no pasa initialSheetNames cuando getSheetNames falla, pero la página sigue funcionando", async () => {
       mockGetComision.mockResolvedValue(makeComision());
       mockGetSheetNames.mockRejectedValue(new Error("sin acceso"));
-      const element = await EditComisionPage({ params: { id: "c1" } });
+      const element = await EditComisionPage({ params: Promise.resolve({ id: "c1" }) });
       const html = renderToStaticMarkup(element as React.ReactElement);
       expect(html).toContain('data-testid="comision-form"');
       expect(html).not.toContain("data-initial-sheet-names=");
@@ -174,7 +196,7 @@ describe("Edit Comision page", () => {
       mockCountAlumnos.mockResolvedValue(5);
 
       const html = renderToStaticMarkup(
-        await EditComisionPage({ params: { id: "c1" } }) as React.ReactElement
+        await EditComisionPage({ params: Promise.resolve({ id: "c1" }) }) as React.ReactElement
       );
       expect(html).not.toContain("Desincronizado");
     });
@@ -185,7 +207,7 @@ describe("Edit Comision page", () => {
       mockCountAlumnos.mockResolvedValue(3);
 
       const html = renderToStaticMarkup(
-        await EditComisionPage({ params: { id: "c1" } }) as React.ReactElement
+        await EditComisionPage({ params: Promise.resolve({ id: "c1" }) }) as React.ReactElement
       );
       expect(html).toContain("Desincronizado");
       expect(html).toContain("10 en planilla");
@@ -198,7 +220,7 @@ describe("Edit Comision page", () => {
       mockCountAlumnos.mockResolvedValue(3);
 
       const html = renderToStaticMarkup(
-        await EditComisionPage({ params: { id: "c1" } }) as React.ReactElement
+        await EditComisionPage({ params: Promise.resolve({ id: "c1" }) }) as React.ReactElement
       );
       expect(html).toContain('data-testid="sync-button"');
     });
@@ -209,7 +231,7 @@ describe("Edit Comision page", () => {
       mockCountAlumnos.mockResolvedValue(5);
 
       const html = renderToStaticMarkup(
-        await EditComisionPage({ params: { id: "c1" } }) as React.ReactElement
+        await EditComisionPage({ params: Promise.resolve({ id: "c1" }) }) as React.ReactElement
       );
       expect(html).not.toContain('data-testid="sync-button"');
     });
@@ -220,7 +242,7 @@ describe("Edit Comision page", () => {
       mockCountAlumnos.mockResolvedValue(5);
 
       const html = renderToStaticMarkup(
-        await EditComisionPage({ params: { id: "c1" } }) as React.ReactElement
+        await EditComisionPage({ params: Promise.resolve({ id: "c1" }) }) as React.ReactElement
       );
       expect(html).not.toContain("Desincronizado");
     });
@@ -229,7 +251,7 @@ describe("Edit Comision page", () => {
       const comision = makeComision();
       mockGetComision.mockResolvedValue(comision);
 
-      await EditComisionPage({ params: { id: "c1" } });
+      await EditComisionPage({ params: Promise.resolve({ id: "c1" }) });
 
       expect(mockGetAlumnos).toHaveBeenCalledWith(
         comision.spreadsheetId,
@@ -247,7 +269,7 @@ describe("Edit Comision page", () => {
       ]);
 
       const html = renderToStaticMarkup(
-        await EditComisionPage({ params: { id: "c1" } }) as React.ReactElement
+        await EditComisionPage({ params: Promise.resolve({ id: "c1" }) }) as React.ReactElement
       );
       expect(html).toContain("Grupos pendientes");
       expect(html).toContain("2");
@@ -262,7 +284,7 @@ describe("Edit Comision page", () => {
       ]);
 
       const html = renderToStaticMarkup(
-        await EditComisionPage({ params: { id: "c1" } }) as React.ReactElement
+        await EditComisionPage({ params: Promise.resolve({ id: "c1" }) }) as React.ReactElement
       );
       expect(html).toContain('data-testid="pendientes-grupos-lista"');
       expect(html).toContain("García, Ana");
@@ -276,7 +298,7 @@ describe("Edit Comision page", () => {
       mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([]);
 
       const html = renderToStaticMarkup(
-        await EditComisionPage({ params: { id: "c1" } }) as React.ReactElement
+        await EditComisionPage({ params: Promise.resolve({ id: "c1" }) }) as React.ReactElement
       );
       expect(html).not.toContain('data-testid="pendientes-grupos-lista"');
     });
@@ -286,7 +308,7 @@ describe("Edit Comision page", () => {
       mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([]);
 
       const html = renderToStaticMarkup(
-        await EditComisionPage({ params: { id: "c1" } }) as React.ReactElement
+        await EditComisionPage({ params: Promise.resolve({ id: "c1" }) }) as React.ReactElement
       );
       expect(html).not.toContain("Grupos pendientes");
       expect(html).not.toContain('data-testid="sync-grupos-button"');
@@ -297,9 +319,48 @@ describe("Edit Comision page", () => {
       mockGetAlumnosConGruposSyncPendiente.mockRejectedValue(new Error("DB down"));
 
       const html = renderToStaticMarkup(
-        await EditComisionPage({ params: { id: "c1" } }) as React.ReactElement
+        await EditComisionPage({ params: Promise.resolve({ id: "c1" }) }) as React.ReactElement
       );
       expect(html).not.toContain("Grupos pendientes");
+    });
+  });
+
+  describe("membresías de Google Groups pendientes", () => {
+    it("muestra badge, lista y retry cuando la integración está habilitada", async () => {
+      mockIsGoogleGroupsConfigured.mockReturnValue(true);
+      mockGetComision.mockResolvedValue(makeComision());
+      mockGetAlumnosConGoogleGroupPendiente.mockResolvedValue([
+        {
+          githubUsername: "ana",
+          nombreCompleto: "García, Ana",
+          googleGroupUltimoError: "Sin permisos para anxxxxxx@utn.edu.ar",
+          googleGroupUltimoIntentoEn: new Date("2026-06-10T12:00:00Z"),
+        },
+      ]);
+
+      const html = renderToStaticMarkup(
+        (await EditComisionPage({
+          params: Promise.resolve({ id: "c1" }),
+        })) as React.ReactElement
+      );
+
+      expect(html).toContain("Google Groups pendientes");
+      expect(html).toContain("García, Ana");
+      expect(html).toContain("Sin permisos");
+      expect(html).toContain('data-testid="sync-google-groups-button"');
+    });
+
+    it("no consulta ni muestra pendientes cuando la integración está desactivada", async () => {
+      mockGetComision.mockResolvedValue(makeComision());
+
+      const html = renderToStaticMarkup(
+        (await EditComisionPage({
+          params: Promise.resolve({ id: "c1" }),
+        })) as React.ReactElement
+      );
+
+      expect(mockGetAlumnosConGoogleGroupPendiente).not.toHaveBeenCalled();
+      expect(html).not.toContain("Google Groups pendientes");
     });
   });
 });

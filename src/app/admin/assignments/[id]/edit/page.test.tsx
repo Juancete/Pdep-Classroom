@@ -89,26 +89,26 @@ describe("Edit Assignment page", () => {
 
   it("siempre llama a requireAdmin", async () => {
     mockGetAssignment.mockResolvedValue(makeAssignment());
-    await EditAssignmentPage({ params: { id: "a1" } });
+    await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
     expect(mockRequireAdmin).toHaveBeenCalledOnce();
   });
 
   it("redirige a /admin/assignments si el assignment no existe", async () => {
     mockGetAssignment.mockResolvedValue(undefined);
-    await expect(EditAssignmentPage({ params: { id: "no-existe" } })).rejects.toThrow("redirect");
+    await expect(EditAssignmentPage({ params: Promise.resolve({ id: "no-existe" }) })).rejects.toThrow("redirect");
     expect(mockRedirect).toHaveBeenCalledWith("/admin/assignments");
   });
 
   it("muestra el título 'Editar Assignment'", async () => {
     mockGetAssignment.mockResolvedValue(makeAssignment());
-    const element = await EditAssignmentPage({ params: { id: "a1" } });
+    const element = await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element as React.ReactElement);
     expect(html).toContain("Editar Assignment");
   });
 
   it("renderiza el formulario con submitLabel 'Guardar cambios'", async () => {
     mockGetAssignment.mockResolvedValue(makeAssignment());
-    const element = await EditAssignmentPage({ params: { id: "a1" } });
+    const element = await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element as React.ReactElement);
     expect(html).toContain("data-submit-label=\"Guardar cambios\"");
   });
@@ -118,7 +118,7 @@ describe("Edit Assignment page", () => {
     comision.activa = true;
     mockGetAssignment.mockResolvedValue(makeAssignment({ comision }));
 
-    const element = await EditAssignmentPage({ params: { id: "a1" } });
+    const element = await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element as React.ReactElement);
 
     expect(html).toContain("Comisión:");
@@ -131,7 +131,7 @@ describe("Edit Assignment page", () => {
     comision.activa = false;
     mockGetAssignment.mockResolvedValue(makeAssignment({ comision }));
 
-    const element = await EditAssignmentPage({ params: { id: "a1" } });
+    const element = await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element as React.ReactElement);
 
     expect(html).toContain("2027 (Histórica)");
@@ -140,7 +140,7 @@ describe("Edit Assignment page", () => {
   it("muestra Sin comisión para assignments huérfanos", async () => {
     mockGetAssignment.mockResolvedValue(makeAssignment({ comision: undefined }));
 
-    const element = await EditAssignmentPage({ params: { id: "a1" } });
+    const element = await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element as React.ReactElement);
 
     expect(html).toContain("Sin comisión");
@@ -149,28 +149,28 @@ describe("Edit Assignment page", () => {
   describe("defaultValues pre-populados", () => {
     it("pasa el título del assignment como defaultValue", async () => {
       mockGetAssignment.mockResolvedValue(makeAssignment({ titulo: "TP Lógico" }));
-      const element = await EditAssignmentPage({ params: { id: "a1" } });
+      const element = await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
       const html = renderToStaticMarkup(element as React.ReactElement);
       expect(html).toContain("TP Lógico");
     });
 
     it("pasa el slug del assignment como defaultValue", async () => {
       mockGetAssignment.mockResolvedValue(makeAssignment({ slug: "tp-logico" }));
-      const element = await EditAssignmentPage({ params: { id: "a1" } });
+      const element = await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
       const html = renderToStaticMarkup(element as React.ReactElement);
       expect(html).toContain("tp-logico");
     });
 
     it("pasa el templateRepo del assignment como defaultValue", async () => {
       mockGetAssignment.mockResolvedValue(makeAssignment({ templateRepo: "mi-template" }));
-      const element = await EditAssignmentPage({ params: { id: "a1" } });
+      const element = await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
       const html = renderToStaticMarkup(element as React.ReactElement);
       expect(html).toContain("mi-template");
     });
 
     it("pasa el deadline del assignment como defaultValue", async () => {
       mockGetAssignment.mockResolvedValue(makeAssignment({ deadline: new Date("2026-12-31") }));
-      const element = await EditAssignmentPage({ params: { id: "a1" } });
+      const element = await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
       const html = renderToStaticMarkup(element as React.ReactElement);
       expect(html).toContain("2026-12-31");
     });
@@ -182,7 +182,7 @@ describe("Edit Assignment page", () => {
       mockListarTemplates.mockResolvedValue([
         { name: "kata-template", fullName: "pdep-mn-utn/kata-template", description: "" },
       ]);
-      const element = await EditAssignmentPage({ params: { id: "a1" } });
+      const element = await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
       const html = renderToStaticMarkup(element as React.ReactElement);
       expect(html).toContain('data-template-count="1"');
     });
@@ -190,7 +190,7 @@ describe("Edit Assignment page", () => {
     it("propaga el error cuando falla la carga de templates", async () => {
       mockGetAssignment.mockResolvedValue(makeAssignment());
       mockListarTemplates.mockRejectedValue(new Error("Sin credenciales"));
-      await expect(EditAssignmentPage({ params: { id: "a1" } })).rejects.toThrow("Sin credenciales");
+      await expect(EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) })).rejects.toThrow("Sin credenciales");
     });
   });
 });
