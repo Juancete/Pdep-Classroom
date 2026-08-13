@@ -78,7 +78,7 @@ export class Alumno {
 
   // Todo alumno pertenece a exactamente una comisión. La FK es NOT NULL;
   // borrar una comisión borra sus alumnos en cascada (on delete cascade).
-  @ManyToOne(() => Comision)
+  @ManyToOne(() => Comision, { deleteRule: "cascade" })
   comision!: Comision;
 
   // Marca la comisión en la que el alumno confirmó sus datos por última vez.
@@ -104,7 +104,7 @@ export class Alumno {
   @Property({ type: "string", nullable: true })
   googleGroupEmailSincronizado: string | null = null;
 
-  @Property({ type: "array" })
+  @Property({ type: "array", defaultRaw: "'{}'" })
   googleGroupEmailsPendientesBaja: string[] = [];
 
   @Property({ type: "text", nullable: true })
