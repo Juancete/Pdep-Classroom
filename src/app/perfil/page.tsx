@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { AlumnoForm } from "@/app/components/AlumnoForm";
 import { verificarConsistenciaAlumno } from "@/lib/services/verificarConsistenciaAlumno";
 import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
+import { intentarSincronizarGoogleGroup } from "@/lib/services/intentarSincronizarGoogleGroup";
+import { isGoogleGroupsConfigured } from "@/lib/googleGroups";
 import type { PdepUser } from "@/types";
 
 export default async function PerfilPage() {
@@ -18,20 +20,46 @@ export default async function PerfilPage() {
 
   // Reintento on-demand: si alguno de los flags de sync está prendido,
   // el alumno probablemente entró acá específicamente para resolverlo.
-  // Las dos llamadas son independientes y se invocan solo si su flag está activo.
+  // Las sincronizaciones son independientes y se invocan solo si su estado
+  // persistido indica que necesitan reintento.
   // Protegemos defensivamente: una excepción inesperada no debe romper el render.
-  if (alumno.tieneSyncPendiente()) {
-    try {
-      const comisionActiva = await getComisionActiva();
-      if (comisionActiva) {
-        const tareas: Promise<unknown>[] = [];
-        if (alumno.tieneSyncDeAlumnoFallido()) tareas.push(verificarConsistenciaAlumno(githubUsername, comisionActiva));
-        if (alumno.tieneSyncDeGruposFallido()) tareas.push(intentarSincronizarGrupos(githubUsername, comisionActiva));
-        await Promise.allSettled(tareas);
-      }
-    } catch {
-      // Flags persistentes en DB se encargan del banner.
+  const googleGroupsConfigurado = isGoogleGroupsConfigured();
+  if (alumno.tieneSyncPendiente(googleGroupsConfigurado)) {
+    const tareas: Promise<unknown>[] = [];
+    if (
+      alumno.tieneSyncDeAlumnoFallido() ||
+      alumno.tieneSyncDeGruposFallido()
+    ) {
+      tareas.push(
+        (async () => {
+          const comisionActiva = await getComisionActiva();
+          if (!comisionActiva) return;
+
+          const tareasDeComision: Promise<unknown>[] = [];
+          if (alumno.tieneSyncDeAlumnoFallido()) {
+            tareasDeComision.push(
+              verificarConsistenciaAlumno(
+                githubUsername,
+                comisionActiva
+              )
+            );
+          }
+          if (alumno.tieneSyncDeGruposFallido()) {
+            tareasDeComision.push(
+              intentarSincronizarGrupos(
+                githubUsername,
+                comisionActiva
+              )
+            );
+          }
+          await Promise.allSettled(tareasDeComision);
+        })()
+      );
     }
+    if (alumno.tieneGoogleGroupPendiente(googleGroupsConfigurado)) {
+      tareas.push(intentarSincronizarGoogleGroup(githubUsername));
+    }
+    await Promise.allSettled(tareas);
   }
 
   return (

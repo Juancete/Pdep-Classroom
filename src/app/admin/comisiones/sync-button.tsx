@@ -1,6 +1,7 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 import { sincronizarAlumnos, type SyncState } from "./actions";
 
 function SyncSubmitButton() {
@@ -17,7 +18,7 @@ function SyncSubmitButton() {
 }
 
 export function SyncButton({ comisionId }: { comisionId: string }) {
-  const [state, action] = useFormState<SyncState, FormData>(
+  const [state, action] = useActionState<SyncState, FormData>(
     sincronizarAlumnos,
     { status: "idle" }
   );

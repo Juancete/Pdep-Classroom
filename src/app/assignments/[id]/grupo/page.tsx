@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import {
   getAssignment,
+  getAlumnoByGithub,
   getGruposDeAssignment,
   getEntregaDeUsuario,
 } from "@/lib/repositories";
@@ -9,22 +10,34 @@ import { GrupalAssignment } from "@/domain/entities";
 import { GrupoSelector } from "./grupo-selector";
 import { MiGrupo } from "./mi-grupo";
 import type { GrupoResumen } from "./mi-grupo";
+import { autorizarAccesoAssignment } from "@/lib/services/assignmentAuthorization";
 
-export default async function GrupoPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function GrupoPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const user = await requireUser();
 
-  const [assignment, grupos] = await Promise.all([
+  const [assignment, alumno] = await Promise.all([
     getAssignment(params.id),
-    getGruposDeAssignment(params.id),
+    user.isAdmin
+      ? Promise.resolve(null)
+      : getAlumnoByGithub(user.githubUsername, true),
   ]);
 
   if (!assignment || !(assignment instanceof GrupalAssignment)) {
     notFound();
   }
+
+  try {
+    autorizarAccesoAssignment(user, alumno, assignment);
+  } catch {
+    notFound();
+  }
+
+  const grupos = await getGruposDeAssignment(params.id);
 
   const miGrupo = grupos.find((grupo) => grupo.contieneA(user.githubUsername));
 

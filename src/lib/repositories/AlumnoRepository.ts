@@ -1,5 +1,9 @@
 import { getEM } from "@/lib/db";
-import { Alumno, type AlumnoData } from "@/domain/entities";
+import {
+  Alumno,
+  type AlumnoData,
+  type EstadoGoogleGroup,
+} from "@/domain/entities";
 import type { Comision } from "@/domain/entities";
 
 export type { AlumnoData } from "@/domain/entities";
@@ -37,12 +41,15 @@ export async function getAlumnos(): Promise<Alumno[]> {
 }
 
 export async function getAlumnoByGithub(
-  githubUsername: string
+  githubUsername: string,
+  populateComision = false
 ): Promise<Alumno | null> {
   const entityManager = await getEM();
-  return entityManager.findOne(Alumno, {
-    githubUsername: Alumno.normalizarUsername(githubUsername),
-  });
+  return entityManager.findOne(
+    Alumno,
+    { githubUsername: Alumno.normalizarUsername(githubUsername) },
+    populateComision ? { populate: ["comision"] } : undefined
+  );
 }
 
 export async function getAlumnosByGithubUsernames(
@@ -172,6 +179,38 @@ export async function getAlumnosConGruposSyncPendiente(
     { comision: { id: comisionId }, gruposSyncFallidoEn: { $ne: null } },
     { orderBy: { apellido: "ASC", nombre: "ASC" } }
   );
+}
+
+export async function getAlumnosConGoogleGroupPendiente(
+  comisionId: string,
+  incluirOmitidos = false
+): Promise<Alumno[]> {
+  const entityManager = await getEM();
+  const estados: EstadoGoogleGroup[] = incluirOmitidos
+    ? ["pendiente", "fallido", "omitido"]
+    : ["pendiente", "fallido"];
+  return entityManager.find(
+    Alumno,
+    {
+      comision: { id: comisionId },
+      googleGroupEstado: { $in: estados },
+    },
+    { orderBy: { apellido: "ASC", nombre: "ASC" } }
+  );
+}
+
+export async function actualizarEstadoGoogleGroup(
+  githubUsername: string,
+  actualizar: (alumno: Alumno) => void
+): Promise<Alumno | null> {
+  const entityManager = await getEM();
+  const alumno = await entityManager.findOne(Alumno, {
+    githubUsername: Alumno.normalizarUsername(githubUsername),
+  });
+  if (!alumno) return null;
+  actualizar(alumno);
+  await entityManager.flush();
+  return alumno;
 }
 
 /** Crea o actualiza múltiples alumnos en un solo flush. */

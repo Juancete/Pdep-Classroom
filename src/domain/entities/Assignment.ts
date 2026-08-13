@@ -66,7 +66,7 @@ export abstract class Assignment {
   @Property({ type: 'datetime' })
   createdAt: Date = new Date();
 
-  @ManyToOne(() => Comision, { nullable: true })
+  @ManyToOne(() => Comision, { nullable: true, deleteRule: "cascade" })
   comision?: Comision;
 
   /** Etiqueta para el contador "totales" del admin (ej: "Alumnos" / "Grupos"). */

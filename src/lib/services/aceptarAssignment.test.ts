@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PdepUser } from "@/types";
 import {
   Alumno,
+  Comision,
   Entrega,
   GrupalAssignment,
   IndividualAssignment,
@@ -39,6 +40,13 @@ import {
   AlumnoNoRegistradoError,
   AssignmentNoEncontradoError,
 } from "./aceptarAssignment";
+import { AccesoAssignmentProhibidoError } from "./assignmentAuthorization";
+
+function makeComision(id = "c1"): Comision {
+  const comision = new Comision(2026, "sheet-test");
+  comision.id = id;
+  return comision;
+}
 
 function makeUser(overrides?: Partial<PdepUser>): PdepUser {
   return {
@@ -62,6 +70,7 @@ function makeAssignment(overrides?: Partial<IndividualAssignment & GrupalAssignm
   assignment.paradigma = "funcional";
   assignment.slug = "kata-funcional";
   assignment.createdAt = new Date("2026-01-01");
+  assignment.comision = makeComision();
   return Object.assign(assignment, overrides);
 }
 
@@ -73,6 +82,7 @@ function makeAlumno(overrides?: Partial<Alumno>): Alumno {
   alumno.nombre = "Juan";
   alumno.apellido = "García";
   alumno.email = "juan@example.com";
+  alumno.comision = makeComision();
   return Object.assign(alumno, overrides);
 }
 
@@ -146,10 +156,10 @@ describe("aceptarAssignment", () => {
     );
   });
 
-  it("falla si el alumno individual no existe en DB", async () => {
+  it("mantiene el requisito funcional de alumno para un admin que acepta un TP individual", async () => {
     mockGetAlumnoByGithub.mockResolvedValue(null);
 
-    await expect(aceptarAssignment("a1", makeUser())).rejects.toBeInstanceOf(
+    await expect(aceptarAssignment("a1", makeUser({ isAdmin: true }))).rejects.toBeInstanceOf(
       AlumnoNoRegistradoError
     );
 
@@ -166,7 +176,7 @@ describe("aceptarAssignment", () => {
 
     await aceptarAssignment("a1", makeUser());
 
-    expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
+    expect(mockGetAlumnoByGithub).toHaveBeenCalledWith("juangarcia");
     expect(mockCreateOrGetEntrega).toHaveBeenCalledWith(
       expect.objectContaining({
         assignmentId: "a1",
@@ -217,5 +227,38 @@ describe("aceptarAssignment", () => {
     mockCrearEntrega.mockRejectedValue(new Error("GitHub caído"));
 
     await expect(aceptarAssignment("a1", makeUser())).rejects.toThrow("GitHub caído");
+  });
+
+  it("rechaza un alumno de otra comisión antes de consultar entregas o GitHub", async () => {
+    mockGetAlumnoByGithub.mockResolvedValue(
+      makeAlumno({ comision: makeComision("c2") })
+    );
+
+    await expect(aceptarAssignment("a1", makeUser())).rejects.toBeInstanceOf(
+      AccesoAssignmentProhibidoError
+    );
+
+    expect(mockGetEntregaDeUsuario).not.toHaveBeenCalled();
+    expect(mockRepoExists).not.toHaveBeenCalled();
+    expect(mockCrearEntrega).not.toHaveBeenCalled();
+    expect(mockCreateOrGetEntrega).not.toHaveBeenCalled();
+  });
+
+  it("rechaza para alumnos un assignment histórico sin comisión", async () => {
+    mockGetAssignment.mockResolvedValue(makeAssignment({ comision: undefined }));
+
+    await expect(aceptarAssignment("a1", makeUser())).rejects.toBeInstanceOf(
+      AccesoAssignmentProhibidoError
+    );
+  });
+
+  it("permite acceso global al administrador", async () => {
+    mockGetAlumnoByGithub.mockResolvedValue(
+      makeAlumno({ comision: makeComision("c2") })
+    );
+
+    await expect(
+      aceptarAssignment("a1", makeUser({ isAdmin: true }))
+    ).resolves.toBeInstanceOf(Entrega);
   });
 });

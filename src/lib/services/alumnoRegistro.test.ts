@@ -280,31 +280,8 @@ describe("confirmarYProcesarAlumno", () => {
     );
   });
 
-  it("pasa emailPrevio: undefined cuando el alumno no existe en DB antes de confirmar", async () => {
-    mockGetAlumnoByGithub.mockResolvedValue(null);
+  it("no consulta el email previo: la reconciliación usa el estado persistido", async () => {
     await confirmarYProcesarAlumno(validInput);
-    expect(mockEjecutarHooksPostConfirmacion).toHaveBeenCalledWith(
-      expect.objectContaining({ emailPrevio: undefined }),
-      expect.any(Array)
-    );
-  });
-
-  it("pasa el email previo del alumno existente para que el hook lo des-suscriba si cambió", async () => {
-    mockGetAlumnoByGithub.mockResolvedValue({ email: "viejo@gmail.com" });
-    await confirmarYProcesarAlumno(validInput);
-    expect(mockEjecutarHooksPostConfirmacion).toHaveBeenCalledWith(
-      expect.objectContaining({ emailPrevio: "viejo@gmail.com" }),
-      expect.any(Array)
-    );
-  });
-
-  it("lee el email previo ANTES de confirmar (upsertAlumno pisa el email en DB)", async () => {
-    mockGetAlumnoByGithub.mockResolvedValue({ email: "viejo@gmail.com" });
-    await confirmarYProcesarAlumno(validInput);
-    const ordenLlamadas = [
-      mockGetAlumnoByGithub.mock.invocationCallOrder[0],
-      mockUpsertAlumno.mock.invocationCallOrder[0],
-    ];
-    expect(ordenLlamadas[0]).toBeLessThan(ordenLlamadas[1]);
+    expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/session";
+import { getCurrentUser } from "@/lib/session";
 import { GrupoNoAsignadoError } from "@/domain/entities";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { internalServerError } from "@/lib/api-errors";
@@ -8,13 +8,15 @@ import {
   AlumnoNoRegistradoError,
   AssignmentNoEncontradoError,
 } from "@/lib/services/aceptarAssignment";
+import { AccesoAssignmentProhibidoError } from "@/lib/services/assignmentAuthorization";
 
-export async function POST(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
-    const user = await requireUser();
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
 
     if (!checkRateLimit(`${user.githubUsername}:${params.id}`)) {
       return NextResponse.json(
@@ -28,6 +30,9 @@ export async function POST(
   } catch (error) {
     if (error instanceof AssignmentNoEncontradoError) {
       return NextResponse.json({ error: error.message }, { status: 404 });
+    }
+    if (error instanceof AccesoAssignmentProhibidoError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
     }
     if (error instanceof GrupoNoAsignadoError || error instanceof AlumnoNoRegistradoError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
