@@ -9,13 +9,12 @@ import {
 } from "@/lib/repositories";
 import { addCollaborators, crearEntrega, repoExists } from "@/lib/github";
 import { buildRepoName } from "@/lib/naming";
+import {
+  AssignmentNoEncontradoError,
+  autorizarAccesoAssignment,
+} from "./assignmentAuthorization";
 
-export class AssignmentNoEncontradoError extends Error {
-  constructor(public readonly assignmentId: string) {
-    super("Assignment no encontrado");
-    this.name = "AssignmentNoEncontradoError";
-  }
-}
+export { AssignmentNoEncontradoError } from "./assignmentAuthorization";
 
 export class AlumnoNoRegistradoError extends Error {
   constructor(public readonly githubUsername: string) {
@@ -33,8 +32,12 @@ export async function aceptarAssignment(
   assignmentId: string,
   user: PdepUser
 ): Promise<Entrega> {
-  const assignment = await getAssignment(assignmentId);
+  const [assignment, alumno] = await Promise.all([
+    getAssignment(assignmentId),
+    getAlumnoByGithub(user.githubUsername, true),
+  ]);
   if (!assignment) throw new AssignmentNoEncontradoError(assignmentId);
+  autorizarAccesoAssignment(user, alumno, assignment);
 
   const existente = await getEntregaDeUsuario(assignment.id, user.githubUsername);
   if (existente) return existente;
@@ -45,7 +48,6 @@ export async function aceptarAssignment(
   );
 
   const { usernames, grupoId } = participantes;
-  const alumno = grupoId ? null : await getAlumnoByGithub(user.githubUsername);
   if (!grupoId && !alumno) throw new AlumnoNoRegistradoError(user.githubUsername);
 
   const repoName = buildRepoName({ slug: assignment.slug, usernames, grupoId });
@@ -55,7 +57,7 @@ export async function aceptarAssignment(
       repoName: createdRepoName,
       repoUrl,
       githubUsernames: usernames,
-      alumnoId: alumno?.id,
+      alumnoId: grupoId ? undefined : alumno?.id,
       grupoId,
     });
 
