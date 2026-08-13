@@ -3,15 +3,14 @@ import type { ComisionFormState } from "./actions";
 
 // ── Mocks ────────────────────────────────────────────────────
 
-const mockUseFormState = vi.fn();
+const mockUseActionState = vi.fn();
 const mockFetchSheetNames = vi.fn();
 
-vi.mock("react-dom", async () => {
-  const actual = await vi.importActual<typeof import("react-dom")>("react-dom");
+vi.mock("react", async () => {
+  const actual = await vi.importActual<typeof import("react")>("react");
   return {
     ...actual,
-    useFormState: (...args: unknown[]) => mockUseFormState(...args),
-    useFormStatus: () => ({ pending: false }),
+    useActionState: (...args: unknown[]) => mockUseActionState(...args),
   };
 });
 
@@ -26,13 +25,13 @@ import { ComisionForm } from "./comision-form";
 const noop = vi.fn();
 
 function noErrorState() {
-  mockUseFormState.mockImplementation(
+  mockUseActionState.mockImplementation(
     (_action: unknown, initial: ComisionFormState) => [initial, noop]
   );
 }
 
 function errorState(errors: Record<string, string[]>) {
-  mockUseFormState.mockReturnValue([{ ok: false, errors }, noop]);
+  mockUseActionState.mockReturnValue([{ ok: false, errors }, noop]);
 }
 
 // Los labels no tienen htmlFor — usamos name selector

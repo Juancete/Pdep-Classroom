@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useFormState } from "react-dom";
+import { useActionState, useState } from "react";
+import Link from "next/link";
 import { PARADIGMAS } from "@/types";
 import { GRUPAL_MIN_MAX_INTEGRANTES } from "@/domain/entities/domain-constants";
 import type { AssignmentFormState } from "@/lib/assignment-schema";
@@ -129,7 +129,7 @@ export function AssignmentForm({
   defaultValues = {},
   submitLabel,
 }: Props) {
-  const [state, formAction] = useFormState(action, null);
+  const [state, formAction] = useActionState(action, null);
   const errors = state?.errors ?? {};
 
   const [tipo, setTipo] = useState(defaultValues.tipo ?? "individual");
@@ -315,12 +315,12 @@ export function AssignmentForm({
       {/* Submit */}
       <div className="flex flex-col sm:flex-row gap-3 pt-2">
         <SubmitButton label={submitLabel} />
-        <a
+        <Link
           href="/admin/assignments"
           className="px-5 py-2 rounded-lg text-sm font-medium text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors text-center"
         >
           Cancelar
-        </a>
+        </Link>
       </div>
     </form>
   );

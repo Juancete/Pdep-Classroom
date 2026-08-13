@@ -24,10 +24,8 @@ function serializarGrupo(grupo: Grupo) {
   };
 }
 
-export async function POST(
-  _req: Request,
-  { params }: { params: { id: string; grupoId: string } }
-) {
+export async function POST(_req: Request, props: { params: Promise<{ id: string; grupoId: string }> }) {
+  const params = await props.params;
   try {
     const user = await getCurrentUser();
     if (!user) {

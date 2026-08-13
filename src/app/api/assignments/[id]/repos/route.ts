@@ -3,10 +3,8 @@ import { guardAdmin } from "@/lib/api-auth";
 import { getAssignment, getEntregas, clearReposDeAssignment } from "@/lib/repositories";
 import { deleteRepo } from "@/lib/github";
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const unauthorized = await guardAdmin();
   if (unauthorized) return unauthorized;
 

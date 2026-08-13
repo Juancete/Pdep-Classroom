@@ -14,11 +14,12 @@ import type { GrupoAdminResumen, AlumnoSinGrupoResumen } from "./grupos-panel";
 import { GrupalAssignment, Alumno } from "@/domain/entities";
 import type { Grupo } from "@/domain/entities";
 
-export default async function AssignmentDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function AssignmentDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   await requireAdmin();
 
   const assignment = await getAssignment(params.id);

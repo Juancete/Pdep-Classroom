@@ -15,11 +15,12 @@ import { SyncGruposButton } from "../../sync-grupos-button";
 import { SyncGoogleGroupsButton } from "../../sync-google-groups-button";
 import { isGoogleGroupsConfigured } from "@/lib/googleGroups";
 
-export default async function EditComisionPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function EditComisionPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   await requireAdmin();
 
   const comision = await getComision(params.id);

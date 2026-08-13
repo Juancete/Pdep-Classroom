@@ -16,7 +16,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: latest
+          version: 10.33.2
 
       - uses: actions/setup-node@v4
         with:
@@ -25,8 +25,17 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Audit production dependencies
+        run: pnpm audit:prod
+
+      - name: Run lint
+        run: pnpm lint
+
       - name: Run tests with coverage
         run: pnpm test:coverage
+
+      - name: Build application
+        run: pnpm build
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -70,7 +79,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: latest
+          version: 10.33.2
 
       - uses: actions/setup-node@v4
         with:

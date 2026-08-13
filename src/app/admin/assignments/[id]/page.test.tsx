@@ -172,46 +172,46 @@ describe("Admin Assignment Detail Page", () => {
 
   it("siempre llama a requireAdmin", async () => {
     mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
-    await AssignmentDetailPage({ params: { id: "a1" } });
+    await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
     expect(mockRequireAdmin).toHaveBeenCalledOnce();
   });
 
   it("redirige a /admin/assignments si el assignment no existe", async () => {
     mockGetAssignment.mockResolvedValue(null);
     await expect(
-      AssignmentDetailPage({ params: { id: "no-existe" } })
+      AssignmentDetailPage({ params: Promise.resolve({ id: "no-existe" }) })
     ).rejects.toThrow("redirect");
     expect(mockRedirect).toHaveBeenCalledWith("/admin/assignments");
   });
 
   it("consulta el assignment con el id correcto", async () => {
     mockGetAssignment.mockResolvedValue(makeIndividualAssignment({ id: "tp-logico" }));
-    await AssignmentDetailPage({ params: { id: "tp-logico" } });
+    await AssignmentDetailPage({ params: Promise.resolve({ id: "tp-logico" }) });
     expect(mockGetAssignment).toHaveBeenCalledWith("tp-logico");
   });
 
   describe("contenido del assignment", () => {
     it("muestra el título del assignment", async () => {
       mockGetAssignment.mockResolvedValue(makeIndividualAssignment({ titulo: "TP Lógico" }));
-      const element = await AssignmentDetailPage({ params: { id: "a1" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).toContain("TP Lógico");
     });
 
     it("muestra el paradigma del assignment", async () => {
       mockGetAssignment.mockResolvedValue(makeIndividualAssignment({ paradigma: "logico" }));
-      const element = await AssignmentDetailPage({ params: { id: "a1" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).toContain("logico");
     });
 
     it("muestra el tipo del assignment", async () => {
       mockGetAssignment.mockResolvedValue(makeIndividualAssignment({ tipo: "individual" }));
-      const element = await AssignmentDetailPage({ params: { id: "a1" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).toContain("individual");
     });
 
     it("muestra el templateRepo", async () => {
       mockGetAssignment.mockResolvedValue(makeIndividualAssignment({ templateRepo: "mi-template" }));
-      const element = await AssignmentDetailPage({ params: { id: "a1" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).toContain("mi-template");
     });
 
@@ -219,13 +219,13 @@ describe("Admin Assignment Detail Page", () => {
       mockGetAssignment.mockResolvedValue(
         makeIndividualAssignment({ descripcion: "Una descripción muy detallada" })
       );
-      const element = await AssignmentDetailPage({ params: { id: "a1" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).toContain("Una descripción muy detallada");
     });
 
     it("no muestra la descripción cuando no está presente", async () => {
       mockGetAssignment.mockResolvedValue(makeIndividualAssignment({ descripcion: undefined }));
-      const element = await AssignmentDetailPage({ params: { id: "a1" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).not.toContain("Una descripción");
     });
 
@@ -233,7 +233,7 @@ describe("Admin Assignment Detail Page", () => {
       mockGetAssignment.mockResolvedValue(
         makeIndividualAssignment({ deadline: new Date("2026-06-30") })
       );
-      const element = await AssignmentDetailPage({ params: { id: "a1" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       const html = renderToStaticMarkup(element);
       expect(html).toContain("Deadline");
       expect(html).toContain("2026");
@@ -241,19 +241,19 @@ describe("Admin Assignment Detail Page", () => {
 
     it("no muestra el deadline cuando no está presente", async () => {
       mockGetAssignment.mockResolvedValue(makeIndividualAssignment({ deadline: undefined }));
-      const element = await AssignmentDetailPage({ params: { id: "a1" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).not.toContain("Deadline");
     });
 
     it("muestra el link de volver", async () => {
       mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
-      const element = await AssignmentDetailPage({ params: { id: "a1" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).toContain('href="/admin/assignments"');
     });
 
     it("muestra el link de editar", async () => {
       mockGetAssignment.mockResolvedValue(makeIndividualAssignment({ id: "a1" }));
-      const element = await AssignmentDetailPage({ params: { id: "a1" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).toContain('href="/admin/assignments/a1/edit"');
     });
   });
@@ -261,14 +261,14 @@ describe("Admin Assignment Detail Page", () => {
   describe("queries al repositorio", () => {
     it("siempre consulta alumnos (para nombres y conteo individual)", async () => {
       mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
-      await AssignmentDetailPage({ params: { id: "a1" } });
+      await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(mockGetAlumnos).toHaveBeenCalledOnce();
       expect(mockGetGruposDeAssignment).not.toHaveBeenCalled();
     });
 
     it("consulta alumnos y grupos del assignment para el tipo grupal", async () => {
       mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
-      await AssignmentDetailPage({ params: { id: "a2" } });
+      await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
       expect(mockGetAlumnos).toHaveBeenCalledOnce();
       expect(mockGetGruposDeAssignment).toHaveBeenCalledWith("a2");
     });
@@ -277,13 +277,13 @@ describe("Admin Assignment Detail Page", () => {
   describe("contadores", () => {
     it('muestra "Alumnos" como etiqueta del total para individual', async () => {
       mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
-      const element = await AssignmentDetailPage({ params: { id: "a1" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).toContain("Alumnos");
     });
 
     it('muestra "Grupos" como etiqueta del total para grupal', async () => {
       mockGetAssignment.mockResolvedValue(makeGrupalAssignment());
-      const element = await AssignmentDetailPage({ params: { id: "a2" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
       expect(renderToStaticMarkup(element)).toContain("Grupos");
     });
 
@@ -293,7 +293,7 @@ describe("Admin Assignment Detail Page", () => {
         makeEntrega({ id: "e1" }),
         makeEntrega({ id: "e2", githubUsernames: ["usuario2"] }),
       ]);
-      const element = await AssignmentDetailPage({ params: { id: "a1" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).toContain(">2<");
     });
 
@@ -306,7 +306,7 @@ describe("Admin Assignment Detail Page", () => {
         makeAlumno({ id: "al3", githubUsername: "usuario3" }),
       ]);
       // 3 alumnos - 1 entrega = 2 pendientes
-      const element = await AssignmentDetailPage({ params: { id: "a1" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).toContain(">2<");
     });
 
@@ -320,7 +320,7 @@ describe("Admin Assignment Detail Page", () => {
         makeGrupo({ id: "g4" }),
       ]);
       // 4 grupos - 1 entrega = 3 pendientes
-      const element = await AssignmentDetailPage({ params: { id: "a2" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
       expect(renderToStaticMarkup(element)).toContain(">3<");
     });
 
@@ -328,7 +328,7 @@ describe("Admin Assignment Detail Page", () => {
       mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
       mockGetEntregas.mockResolvedValue([makeEntrega(), makeEntrega({ id: "e2" })]);
       mockGetAlumnos.mockResolvedValue([makeAlumno()]);
-      const element = await AssignmentDetailPage({ params: { id: "a1" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).toContain(">0<");
     });
   });
@@ -341,7 +341,7 @@ describe("Admin Assignment Detail Page", () => {
         makeEntrega({ id: "e2", githubUsernames: ["usuario2"] }),
         makeEntrega({ id: "e3", githubUsernames: ["usuario3"] }),
       ]);
-      const element = await AssignmentDetailPage({ params: { id: "a1" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).toContain('data-count="3"');
     });
 
@@ -352,7 +352,7 @@ describe("Admin Assignment Detail Page", () => {
         makeAlumno({ githubUsername: "usuario1", apellido: "García", nombre: "Juan" }),
       ]);
       await expect(
-        AssignmentDetailPage({ params: { id: "a1" } })
+        AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) })
       ).resolves.toBeDefined();
     });
   });
@@ -360,13 +360,13 @@ describe("Admin Assignment Detail Page", () => {
   describe("panel de grupos (assignments grupales)", () => {
     it("no muestra GruposPanel para assignments individuales", async () => {
       mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
-      const element = await AssignmentDetailPage({ params: { id: "a1" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).not.toContain("grupos-panel");
     });
 
     it("muestra GruposPanel para assignments grupales", async () => {
       mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
-      const element = await AssignmentDetailPage({ params: { id: "a2" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
       expect(renderToStaticMarkup(element)).toContain('data-testid="grupos-panel"');
     });
 
@@ -374,7 +374,7 @@ describe("Admin Assignment Detail Page", () => {
       mockGetAssignment.mockResolvedValue(
         makeGrupalAssignment({ id: "a2", inscripcionesCerradas: true })
       );
-      const element = await AssignmentDetailPage({ params: { id: "a2" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
       expect(renderToStaticMarkup(element)).toContain('data-cerradas="true"');
     });
 
@@ -382,7 +382,7 @@ describe("Admin Assignment Detail Page", () => {
       mockGetAssignment.mockResolvedValue(
         makeGrupalAssignment({ id: "a2", inscripcionesCerradas: false })
       );
-      const element = await AssignmentDetailPage({ params: { id: "a2" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
       expect(renderToStaticMarkup(element)).toContain('data-cerradas="false"');
     });
 
@@ -392,7 +392,7 @@ describe("Admin Assignment Detail Page", () => {
         makeGrupo({ id: "g1" }),
         makeGrupo({ id: "g2" }),
       ]);
-      const element = await AssignmentDetailPage({ params: { id: "a2" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
       expect(renderToStaticMarkup(element)).toContain('data-grupos="2"');
     });
 
@@ -421,13 +421,13 @@ describe("Admin Assignment Detail Page", () => {
       };
       mockGetGruposDeAssignment.mockResolvedValue([grupoConMiembro]);
 
-      const element = await AssignmentDetailPage({ params: { id: "a2" } });
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
       expect(renderToStaticMarkup(element)).toContain('data-sin-grupo="2"');
     });
 
     it("no llama a getGruposDeAssignment para assignments individuales", async () => {
       mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
-      await AssignmentDetailPage({ params: { id: "a1" } });
+      await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(mockGetGruposDeAssignment).not.toHaveBeenCalled();
     });
   });

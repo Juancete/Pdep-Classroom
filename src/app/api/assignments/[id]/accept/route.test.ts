@@ -72,18 +72,18 @@ describe("POST /api/assignments/[id]/accept", () => {
 
   it("devuelve 429 cuando el rate limit está activo", async () => {
     mockCheckRateLimit.mockReturnValue(false);
-    const response = await POST(makeRequest(), { params: { id: "a1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(429);
     expect(mockAceptarAssignment).not.toHaveBeenCalled();
   });
 
   it("pasa la clave correcta al rate limiter", async () => {
-    await POST(makeRequest(), { params: { id: "a1" } });
+    await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(mockCheckRateLimit).toHaveBeenCalledWith("juangarcia:a1");
   });
 
   it("devuelve 200 con la entrega del servicio", async () => {
-    const response = await POST(makeRequest(), { params: { id: "a1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.repoName).toBe("kata-funcional-juangarcia");
@@ -96,8 +96,8 @@ describe("POST /api/assignments/[id]/accept", () => {
     const entrega = makeEntrega();
     mockAceptarAssignment.mockResolvedValue(entrega);
 
-    const firstResponse = await POST(makeRequest(), { params: { id: "a1" } });
-    const secondResponse = await POST(makeRequest(), { params: { id: "a1" } });
+    const firstResponse = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
+    const secondResponse = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
 
     expect(firstResponse.status).toBe(200);
     expect(secondResponse.status).toBe(200);
@@ -120,8 +120,8 @@ describe("POST /api/assignments/[id]/accept", () => {
     mockAceptarAssignment.mockResolvedValue(entrega);
 
     const [firstResponse, secondResponse] = await Promise.all([
-      POST(makeRequest(), { params: { id: "a1" } }),
-      POST(makeRequest(), { params: { id: "a1" } }),
+      POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) }),
+      POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) }),
     ]);
 
     expect(firstResponse.status).toBe(200);
@@ -136,7 +136,7 @@ describe("POST /api/assignments/[id]/accept", () => {
 
   it("devuelve 404 si el assignment no existe", async () => {
     mockAceptarAssignment.mockRejectedValue(new FakeAssignmentNoEncontradoError("Assignment no encontrado"));
-    const response = await POST(makeRequest(), { params: { id: "no-existe" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "no-existe" }) });
     expect(response.status).toBe(404);
   });
 
@@ -144,25 +144,25 @@ describe("POST /api/assignments/[id]/accept", () => {
     mockAceptarAssignment.mockRejectedValue(
       new AccesoAssignmentProhibidoError("a1")
     );
-    const response = await POST(makeRequest(), { params: { id: "a1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(403);
   });
 
   it("devuelve 400 si assignment grupal y el usuario no tiene grupo", async () => {
     mockAceptarAssignment.mockRejectedValue(new GrupoNoAsignadoError("a1", "juangarcia"));
-    const response = await POST(makeRequest(), { params: { id: "a1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(400);
   });
 
   it("devuelve 400 si el alumno no está registrado para una entrega individual", async () => {
     mockAceptarAssignment.mockRejectedValue(new FakeAlumnoNoRegistradoError("Completá tu registro"));
-    const response = await POST(makeRequest(), { params: { id: "a1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(400);
   });
 
   it("devuelve 401 si no hay sesión", async () => {
     mockGetCurrentUser.mockResolvedValue(null);
-    const response = await POST(makeRequest(), { params: { id: "a1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(401);
   });
 });

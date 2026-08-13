@@ -3,11 +3,12 @@ import { getGrupos } from "@/lib/repositories";
 import { PARADIGMAS } from "@/types";
 import type { Paradigma } from "@/types";
 
-export default async function AdminGruposPage({
-  searchParams,
-}: {
-  searchParams: { paradigma?: string };
-}) {
+export default async function AdminGruposPage(
+  props: {
+    searchParams: Promise<{ paradigma?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireAdmin();
 
   const paradigmaFilter = PARADIGMAS.includes(
