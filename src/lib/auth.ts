@@ -3,10 +3,9 @@ import { authConfig } from "./auth.config";
 import { onSignIn } from "./auth.events";
 
 // Los `events` viven en `auth.events.ts` (no en `auth.config.ts`) porque
-// importan servicios que tocan MikroORM. El middleware instancia NextAuth
-// con `authConfig` directamente y corre en edge runtime — separar los
-// eventos garantiza que ese grafo de imports no se acople al bundle del
-// middleware.
+// importan servicios que tocan MikroORM. El proxy instancia NextAuth con
+// `authConfig` directamente; separar los eventos evita acoplar ese grafo de
+// imports al límite de red y mantiene liviana la validación de cada request.
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
   events: {

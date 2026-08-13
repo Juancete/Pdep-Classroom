@@ -70,13 +70,13 @@ describe("DELETE /api/assignments/[id]/repos", () => {
     mockGuardAdmin.mockResolvedValue(
       new Response(JSON.stringify({ error: "No autorizado" }), { status: 401 })
     );
-    const response = await DELETE(makeRequest(), { params: { id: "a1" } });
+    const response = await DELETE(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(401);
   });
 
   it("devuelve 404 si el assignment no existe", async () => {
     mockGetAssignment.mockResolvedValue(null);
-    const response = await DELETE(makeRequest(), { params: { id: "no-existe" } });
+    const response = await DELETE(makeRequest(), { params: Promise.resolve({ id: "no-existe" }) });
     expect(response.status).toBe(404);
     const data = await response.json();
     expect(data.error).toContain("no encontrado");
@@ -89,7 +89,7 @@ describe("DELETE /api/assignments/[id]/repos", () => {
       makeEntrega("kata-funcional-alumno2"),
     ]);
 
-    const response = await DELETE(makeRequest(), { params: { id: "a1" } });
+    const response = await DELETE(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
 
     expect(response.status).toBe(200);
     const data = await response.json();
@@ -104,7 +104,7 @@ describe("DELETE /api/assignments/[id]/repos", () => {
       makeEntrega("kata-funcional-alumno2"),
     ]);
 
-    await DELETE(makeRequest(), { params: { id: "a1" } });
+    await DELETE(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
 
     expect(mockDeleteRepo).toHaveBeenCalledTimes(2);
     expect(mockDeleteRepo).toHaveBeenCalledWith("kata-funcional-alumno1");
@@ -118,7 +118,7 @@ describe("DELETE /api/assignments/[id]/repos", () => {
       makeEntrega(undefined), // pendiente, sin repo
     ]);
 
-    const response = await DELETE(makeRequest(), { params: { id: "a1" } });
+    const response = await DELETE(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
 
     const data = await response.json();
     expect(data.deleted).toBe(1);
@@ -130,7 +130,7 @@ describe("DELETE /api/assignments/[id]/repos", () => {
     mockGetAssignment.mockResolvedValue(makeAssignment());
     mockGetEntregas.mockResolvedValue([]);
 
-    const response = await DELETE(makeRequest(), { params: { id: "a1" } });
+    const response = await DELETE(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
 
     expect(response.status).toBe(200);
     const data = await response.json();
@@ -143,7 +143,7 @@ describe("DELETE /api/assignments/[id]/repos", () => {
     mockGetAssignment.mockResolvedValue(makeAssignment({ id: "tp-logico" }));
     mockGetEntregas.mockResolvedValue([]);
 
-    await DELETE(makeRequest(), { params: { id: "tp-logico" } });
+    await DELETE(makeRequest(), { params: Promise.resolve({ id: "tp-logico" }) });
 
     expect(mockGetEntregas).toHaveBeenCalledWith("tp-logico");
   });
@@ -152,7 +152,7 @@ describe("DELETE /api/assignments/[id]/repos", () => {
     mockGetAssignment.mockResolvedValue(makeAssignment({ id: "a1" }));
     mockGetEntregas.mockResolvedValue([makeEntrega("kata-funcional-alumno1")]);
 
-    await DELETE(makeRequest(), { params: { id: "a1" } });
+    await DELETE(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
 
     expect(mockClearReposDeAssignment).toHaveBeenCalledWith("a1");
   });
@@ -161,7 +161,7 @@ describe("DELETE /api/assignments/[id]/repos", () => {
     mockGetAssignment.mockResolvedValue(makeAssignment());
     mockGetEntregas.mockResolvedValue([makeEntrega(undefined)]);
 
-    await DELETE(makeRequest(), { params: { id: "a1" } });
+    await DELETE(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
 
     expect(mockClearReposDeAssignment).not.toHaveBeenCalled();
   });

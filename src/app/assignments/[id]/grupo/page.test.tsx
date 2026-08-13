@@ -125,20 +125,20 @@ describe("GrupoPage", () => {
 
   it("llama a notFound si el assignment no existe", async () => {
     mockGetAssignment.mockResolvedValue(null);
-    await expect(GrupoPage({ params: { id: "a1" } })).rejects.toThrow("NOT_FOUND");
+    await expect(GrupoPage({ params: Promise.resolve({ id: "a1" }) })).rejects.toThrow("NOT_FOUND");
   });
 
   it("llama a notFound si el assignment es individual", async () => {
     const individual = new IndividualAssignment();
     individual.id = "a1";
     mockGetAssignment.mockResolvedValue(individual);
-    await expect(GrupoPage({ params: { id: "a1" } })).rejects.toThrow("NOT_FOUND");
+    await expect(GrupoPage({ params: Promise.resolve({ id: "a1" }) })).rejects.toThrow("NOT_FOUND");
   });
 
   it("llama a notFound para acceso directo desde otra comisión", async () => {
     mockGetAlumnoByGithub.mockResolvedValue(makeAlumno("c2"));
 
-    await expect(GrupoPage({ params: { id: "a1" } })).rejects.toThrow("NOT_FOUND");
+    await expect(GrupoPage({ params: Promise.resolve({ id: "a1" }) })).rejects.toThrow("NOT_FOUND");
 
     expect(mockGetGruposDeAssignment).not.toHaveBeenCalled();
   });
@@ -146,20 +146,20 @@ describe("GrupoPage", () => {
   it("permite acceso global al administrador", async () => {
     mockRequireUser.mockResolvedValue(makeUser({ isAdmin: true }));
 
-    const element = await GrupoPage({ params: { id: "a1" } });
+    const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
 
     expect(renderToStaticMarkup(element)).toContain("TP Grupal");
     expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
   });
 
   it("muestra el título del assignment", async () => {
-    const element = await GrupoPage({ params: { id: "a1" } });
+    const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element);
     expect(html).toContain("TP Grupal");
   });
 
   it("muestra maxIntegrantes y paradigma en el subtítulo", async () => {
-    const element = await GrupoPage({ params: { id: "a1" } });
+    const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element);
     expect(html).toContain("3 integrantes");
     expect(html).toContain("objetos");
@@ -169,7 +169,7 @@ describe("GrupoPage", () => {
     mockGetGruposDeAssignment.mockResolvedValue([
       makeGrupo("g1", ["bob", "cora"]),
     ]);
-    const element = await GrupoPage({ params: { id: "a1" } });
+    const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element);
     expect(html).toContain("data-testid=\"grupo-selector\"");
     expect(html).not.toContain("data-testid=\"mi-grupo\"");
@@ -179,7 +179,7 @@ describe("GrupoPage", () => {
     mockGetGruposDeAssignment.mockResolvedValue([
       makeGrupo("g1", ["ana", "bob"], 3, "Los Lambdas"),
     ]);
-    const element = await GrupoPage({ params: { id: "a1" } });
+    const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element);
     expect(html).toContain("data-testid=\"mi-grupo\"");
     expect(html).toContain("Los Lambdas");
@@ -191,7 +191,7 @@ describe("GrupoPage", () => {
       makeGrupo("g1", ["ana"], 3, "Los Lambdas"),
     ]);
     mockGetEntregaDeUsuario.mockResolvedValue(null);
-    const element = await GrupoPage({ params: { id: "a1" } });
+    const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element);
     expect(html).toContain("data-tiene-entrega=\"false\"");
   });
@@ -201,7 +201,7 @@ describe("GrupoPage", () => {
       makeGrupo("g1", ["ana"], 3, "Los Lambdas"),
     ]);
     mockGetEntregaDeUsuario.mockResolvedValue({ id: "e1", repoUrl: "https://github.com/x" });
-    const element = await GrupoPage({ params: { id: "a1" } });
+    const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element);
     expect(html).toContain("data-tiene-entrega=\"true\"");
   });
@@ -210,7 +210,7 @@ describe("GrupoPage", () => {
     mockGetAssignment.mockResolvedValue(
       makeGrupalAssignment({ inscripcionesCerradas: true })
     );
-    const element = await GrupoPage({ params: { id: "a1" } });
+    const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element);
     expect(html).toContain("data-cerradas=\"true\"");
   });
@@ -219,7 +219,7 @@ describe("GrupoPage", () => {
     mockGetGruposDeAssignment.mockResolvedValue([
       makeGrupo("g1", ["bob", "cora"]),
     ]);
-    await GrupoPage({ params: { id: "a1" } });
+    await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
     expect(mockGetEntregaDeUsuario).not.toHaveBeenCalled();
   });
 });

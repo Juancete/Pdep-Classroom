@@ -8,10 +8,8 @@ const InscripcionesSchema = z.object({
   cerrada: z.boolean(),
 });
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const unauthorized = await guardAdmin();
   if (unauthorized) return unauthorized;
 

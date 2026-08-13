@@ -490,7 +490,7 @@ src/
 │       ├── EntregaRepository.ts
 │       └── GrupoRepository.ts
 ├── types/index.ts                             # ColumnConfig, PdepUser, tipos del dominio
-└── middleware.ts                              # Auth middleware (protege rutas /admin, /dashboard)
+└── proxy.ts                                   # Auth proxy (protege rutas /admin, /dashboard)
 ```
 
 ## Tests

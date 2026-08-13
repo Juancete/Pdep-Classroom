@@ -3,10 +3,8 @@ import { guardAdmin } from "@/lib/api-auth";
 import { getAssignment, deleteAssignment, updateAssignment } from "@/lib/repositories";
 import { AssignmentBaseSchema } from "@/lib/assignment-schema";
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const unauthorized = await guardAdmin();
   if (unauthorized) return unauthorized;
 
@@ -19,10 +17,8 @@ export async function DELETE(
   return NextResponse.json({ ok: true });
 }
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const unauthorized = await guardAdmin();
   if (unauthorized) return unauthorized;
 

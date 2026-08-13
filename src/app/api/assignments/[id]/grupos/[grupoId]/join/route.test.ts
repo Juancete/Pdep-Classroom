@@ -74,7 +74,7 @@ describe("POST /api/assignments/[id]/grupos/[grupoId]/join", () => {
   });
 
   it("devuelve 200 con el grupo actualizado", async () => {
-    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.id).toBe("g1");
@@ -82,7 +82,7 @@ describe("POST /api/assignments/[id]/grupos/[grupoId]/join", () => {
   });
 
   it("llama a unirseAGrupo con grupoId y alumnoId", async () => {
-    await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
     expect(mockUnirseAGrupo).toHaveBeenCalledWith({
       assignmentId: "a1",
       grupoId: "g1",
@@ -94,7 +94,7 @@ describe("POST /api/assignments/[id]/grupos/[grupoId]/join", () => {
   it("propaga el contexto administrativo confiable a la transacción", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser({ isAdmin: true }));
 
-    await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
 
     expect(mockUnirseAGrupo).toHaveBeenCalledWith(
       expect.objectContaining({ esAdmin: true })
@@ -103,14 +103,14 @@ describe("POST /api/assignments/[id]/grupos/[grupoId]/join", () => {
 
   it("devuelve 403 si el alumno no está registrado", async () => {
     mockGetAlumnoByGithub.mockResolvedValue(null);
-    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
     expect(response.status).toBe(403);
     expect(mockUnirseAGrupo).not.toHaveBeenCalled();
   });
 
   it("devuelve 409 si las inscripciones están cerradas", async () => {
     mockUnirseAGrupo.mockRejectedValue(new InscripcionesCerradasError("a1"));
-    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
     expect(response.status).toBe(409);
   });
 
@@ -118,31 +118,31 @@ describe("POST /api/assignments/[id]/grupos/[grupoId]/join", () => {
     mockUnirseAGrupo.mockRejectedValue(
       new AlumnoYaEnGrupoDelAssignmentError("a1", "ana")
     );
-    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
     expect(response.status).toBe(409);
   });
 
   it("devuelve 409 si el grupo está lleno", async () => {
     mockUnirseAGrupo.mockRejectedValue(new GrupoLlenoError("g1", 3));
-    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
     expect(response.status).toBe(409);
   });
 
   it("devuelve 404 si el grupo no pertenece al assignment de la URL", async () => {
     mockUnirseAGrupo.mockRejectedValue(new GrupoNoEncontradoError("a1", "g1"));
-    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
     expect(response.status).toBe(404);
   });
 
   it("devuelve 403 si la autorización transaccional rechaza la comisión", async () => {
     mockUnirseAGrupo.mockRejectedValue(new AccesoAssignmentProhibidoError("a1"));
-    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
     expect(response.status).toBe(403);
   });
 
   it("devuelve 500 para errores inesperados", async () => {
     mockUnirseAGrupo.mockRejectedValue(new Error("DB exploded"));
-    const response = await POST(makeRequest(), { params: { id: "a1", grupoId: "g1" } });
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
     expect(response.status).toBe(500);
   });
 });

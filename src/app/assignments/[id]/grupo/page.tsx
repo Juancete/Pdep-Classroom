@@ -12,11 +12,12 @@ import { MiGrupo } from "./mi-grupo";
 import type { GrupoResumen } from "./mi-grupo";
 import { autorizarAccesoAssignment } from "@/lib/services/assignmentAuthorization";
 
-export default async function GrupoPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function GrupoPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const user = await requireUser();
 
   const [assignment, alumno] = await Promise.all([

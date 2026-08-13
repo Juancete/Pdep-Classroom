@@ -10,10 +10,8 @@ import {
 } from "@/lib/services/aceptarAssignment";
 import { AccesoAssignmentProhibidoError } from "@/lib/services/assignmentAuthorization";
 
-export async function POST(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const user = await getCurrentUser();
     if (!user) {
