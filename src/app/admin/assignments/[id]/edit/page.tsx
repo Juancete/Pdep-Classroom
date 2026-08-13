@@ -4,11 +4,12 @@ import { listarTemplates } from "@/lib/github";
 import { redirect } from "next/navigation";
 import { AssignmentForm } from "../../assignment-form";
 import { actualizarAssignment } from "../../actions";
-export default async function EditAssignmentPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function EditAssignmentPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   await requireAdmin();
 
   const assignment = await getAssignment(params.id);

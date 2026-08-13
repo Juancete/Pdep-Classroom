@@ -2,14 +2,21 @@ import { render, screen } from "@testing-library/react";
 
 // ── Mocks ─────────────────────────────────────────────────────
 
-const mockUseFormState = vi.fn();
+const mockUseActionState = vi.fn();
 const mockUseFormStatus = vi.fn();
+
+vi.mock("react", async () => {
+  const actual = await vi.importActual<typeof import("react")>("react");
+  return {
+    ...actual,
+    useActionState: (...args: unknown[]) => mockUseActionState(...args),
+  };
+});
 
 vi.mock("react-dom", async () => {
   const actual = await vi.importActual<typeof import("react-dom")>("react-dom");
   return {
     ...actual,
-    useFormState: (...args: unknown[]) => mockUseFormState(...args),
     useFormStatus: () => mockUseFormStatus(),
   };
 });
@@ -25,7 +32,7 @@ import { SyncGruposButton } from "./sync-grupos-button";
 const noop = vi.fn();
 
 function idleState() {
-  mockUseFormState.mockReturnValue([{ status: "idle" }, noop]);
+  mockUseActionState.mockReturnValue([{ status: "idle" }, noop]);
 }
 
 // ── Tests ─────────────────────────────────────────────────────
@@ -59,7 +66,7 @@ describe("SyncGruposButton", () => {
 
   describe("estado ok", () => {
     it("muestra cuántos quedaron resueltos", () => {
-      mockUseFormState.mockReturnValue([
+      mockUseActionState.mockReturnValue([
         { status: "ok", sincronizados: 5, aunConError: 0 },
         noop,
       ]);
@@ -69,7 +76,7 @@ describe("SyncGruposButton", () => {
     });
 
     it("muestra cuántos quedaron con error además de los resueltos", () => {
-      mockUseFormState.mockReturnValue([
+      mockUseActionState.mockReturnValue([
         { status: "ok", sincronizados: 3, aunConError: 2 },
         noop,
       ]);
@@ -81,7 +88,7 @@ describe("SyncGruposButton", () => {
 
   describe("estado error", () => {
     it("muestra el mensaje de error", () => {
-      mockUseFormState.mockReturnValue([
+      mockUseActionState.mockReturnValue([
         { status: "error", message: "Comisión no encontrada" },
         noop,
       ]);

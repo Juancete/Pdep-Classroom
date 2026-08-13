@@ -2,14 +2,21 @@ import { render, screen } from "@testing-library/react";
 
 // ── Mocks ─────────────────────────────────────────────────────
 
-const mockUseFormState = vi.fn();
+const mockUseActionState = vi.fn();
 const mockUseFormStatus = vi.fn();
+
+vi.mock("react", async () => {
+  const actual = await vi.importActual<typeof import("react")>("react");
+  return {
+    ...actual,
+    useActionState: (...args: unknown[]) => mockUseActionState(...args),
+  };
+});
 
 vi.mock("react-dom", async () => {
   const actual = await vi.importActual<typeof import("react-dom")>("react-dom");
   return {
     ...actual,
-    useFormState: (...args: unknown[]) => mockUseFormState(...args),
     useFormStatus: () => mockUseFormStatus(),
   };
 });
@@ -25,7 +32,7 @@ import { SyncButton } from "./sync-button";
 const noop = vi.fn();
 
 function idleState() {
-  mockUseFormState.mockReturnValue([{ status: "idle" }, noop]);
+  mockUseActionState.mockReturnValue([{ status: "idle" }, noop]);
 }
 
 // ── Tests ─────────────────────────────────────────────────────
@@ -57,13 +64,13 @@ describe("SyncButton", () => {
 
   describe("estado ok", () => {
     it("muestra el conteo de alumnos sincronizados", () => {
-      mockUseFormState.mockReturnValue([{ status: "ok", sincronizados: 7 }, noop]);
+      mockUseActionState.mockReturnValue([{ status: "ok", sincronizados: 7 }, noop]);
       render(<SyncButton comisionId="c1" />);
       expect(screen.getByText("7 sincronizados")).toBeInTheDocument();
     });
 
     it("no muestra mensaje de error", () => {
-      mockUseFormState.mockReturnValue([{ status: "ok", sincronizados: 3 }, noop]);
+      mockUseActionState.mockReturnValue([{ status: "ok", sincronizados: 3 }, noop]);
       render(<SyncButton comisionId="c1" />);
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
@@ -71,7 +78,7 @@ describe("SyncButton", () => {
 
   describe("estado error", () => {
     it("muestra el mensaje de error", () => {
-      mockUseFormState.mockReturnValue([
+      mockUseActionState.mockReturnValue([
         { status: "error", message: "No se pudo leer la planilla" },
         noop,
       ]);
@@ -80,7 +87,7 @@ describe("SyncButton", () => {
     });
 
     it("no muestra conteo de sincronizados", () => {
-      mockUseFormState.mockReturnValue([
+      mockUseActionState.mockReturnValue([
         { status: "error", message: "Error" },
         noop,
       ]);

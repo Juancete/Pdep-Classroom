@@ -1,6 +1,7 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 import {
   sincronizarGoogleGroupsDeLaComision,
   type SyncGoogleGroupState,
@@ -24,7 +25,7 @@ export function SyncGoogleGroupsButton({
 }: {
   comisionId: string;
 }) {
-  const [state, action] = useFormState<SyncGoogleGroupState, FormData>(
+  const [state, action] = useActionState<SyncGoogleGroupState, FormData>(
     sincronizarGoogleGroupsDeLaComision,
     { status: "idle" }
   );
