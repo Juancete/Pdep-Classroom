@@ -21,6 +21,7 @@ function nuevoGrupo(maxIntegrantes: number, miembros: Alumno[] = []): Grupo {
   const grupo = new Grupo();
   grupo.id = "g1";
   grupo.nombre = "Los Lambdas";
+  grupo.nombreNormalizado = "los-lambdas";
   grupo.paradigma = "funcional";
   grupo.maxIntegrantes = maxIntegrantes;
   grupo.creadoPor = miembros[0]?.githubUsername ?? "alguien";

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PdepUser } from "@/types";
 import { Entrega, GrupoNoAsignadoError } from "@/domain/entities";
 import { AccesoAssignmentProhibidoError } from "@/lib/services/assignmentAuthorization";
+import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
 const {
   mockGetCurrentUser,
@@ -158,6 +159,22 @@ describe("POST /api/assignments/[id]/accept", () => {
     mockAceptarAssignment.mockRejectedValue(new FakeAlumnoNoRegistradoError("Completá tu registro"));
     const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(400);
+  });
+
+  it("devuelve 400 si el nombre completo del repositorio supera el límite", async () => {
+    mockAceptarAssignment.mockRejectedValue(
+      new NombreRepositorioDemasiadoLargoError("a".repeat(101))
+    );
+
+    const response = await POST(makeRequest(), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error:
+        "El nombre del repositorio generado supera el límite de 100 caracteres de GitHub.",
+    });
   });
 
   it("devuelve 401 si no hay sesión", async () => {

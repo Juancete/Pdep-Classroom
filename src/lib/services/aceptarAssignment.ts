@@ -47,10 +47,21 @@ export async function aceptarAssignment(
     getGrupoDeAlumnoEnAssignment
   );
 
-  const { usernames, grupoId } = participantes;
+  const { usernames, grupoId, grupoNombreNormalizado } = participantes;
   if (!grupoId && !alumno) throw new AlumnoNoRegistradoError(user.githubUsername);
 
-  const repoName = buildRepoName({ slug: assignment.slug, usernames, grupoId });
+  if (grupoId && !grupoNombreNormalizado) {
+    throw new Error(`El grupo ${grupoId} no tiene un nombre normalizado.`);
+  }
+  const repoName = grupoId
+    ? buildRepoName({
+        slug: assignment.slug,
+        grupoNombreNormalizado,
+      })
+    : buildRepoName({
+        slug: assignment.slug,
+        githubUsername: usernames[0]!,
+      });
   const createLocalEntrega = (createdRepoName: string, repoUrl: string) =>
     createOrGetEntrega({
       assignmentId: assignment.id,
@@ -69,9 +80,8 @@ export async function aceptarAssignment(
   try {
     const resultado = await crearEntrega({
       templateRepo: assignment.nombreDelTemplate(),
-      slug: assignment.slug,
+      repoName,
       usernames,
-      grupoId,
       descripcion: `${assignment.titulo} — PdeP`,
     });
     return createLocalEntrega(resultado.repoName, resultado.repoUrl);

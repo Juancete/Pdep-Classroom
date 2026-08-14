@@ -55,6 +55,7 @@ import {
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
   NombreGrupoDuplicadoError,
+  NombreGrupoInvalidoError,
   GrupoLlenoError,
   AssignmentNoGrupalError,
 } from "@/domain/entities";
@@ -65,6 +66,7 @@ import {
   AssignmentNoEncontradoError,
   GrupoNoEncontradoError,
 } from "@/lib/services/assignmentAuthorization";
+import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -90,6 +92,7 @@ function fakeComision(id = "c1"): Comision {
 function fakeGrupal(overrides: Partial<GrupalAssignment> = {}): GrupalAssignment {
   const grupal = new GrupalAssignment();
   grupal.id = "a1";
+  grupal.slug = "tp-funcional";
   grupal.paradigma = "funcional";
   grupal.maxIntegrantes = 3;
   grupal.inscripcionesCerradas = false;
@@ -107,6 +110,7 @@ function fakeGrupo(
   const grupo = new Grupo();
   grupo.id = id;
   grupo.nombre = `grupo-${id}`;
+  grupo.nombreNormalizado = `grupo-${id}`;
   grupo.paradigma = assignment.paradigma;
   grupo.assignment = assignment;
   grupo.maxIntegrantes = maxIntegrantes;
@@ -134,7 +138,7 @@ function uniqueMembershipError(): Error {
 function uniqueGroupNameError(): Error {
   return Object.assign(
     new Error(
-      'duplicate key value violates unique constraint "grupo_assignment_nombre_paradigma_unique_idx"'
+      'duplicate key value violates unique constraint "grupo_assignment_nombre_normalizado_unique_idx"'
     ),
     { code: "23505" }
   );
@@ -175,11 +179,12 @@ describe("crearGrupo", () => {
     const grupo = await crearGrupo({
       assignmentId: "a1",
       alumnoId: "alumno-ana",
-      nombre: "Los Lambdas",
+      nombre: "  Los Lógicos ++  ",
       esAdmin: false,
     });
 
-    expect(grupo.nombre).toBe("Los Lambdas");
+    expect(grupo.nombre).toBe("Los Lógicos ++");
+    expect(grupo.nombreNormalizado).toBe("los-logicos");
     expect(grupo.paradigma).toBe("funcional");
     expect(grupo.maxIntegrantes).toBe(3);
     expect(grupo.assignment).toBe(assignment);
@@ -187,6 +192,37 @@ describe("crearGrupo", () => {
     expect(grupo.alumnos.contains(ana)).toBe(true);
     expect(mockTx.persist).toHaveBeenCalledWith(grupo);
     expect(mockTx.flush).toHaveBeenCalled();
+  });
+
+  it("rechaza un nombre que queda vacío después de normalizar", async () => {
+    await expect(
+      crearGrupo({
+        assignmentId: "a1",
+        alumnoId: "alumno-ana",
+        nombre: " +++ ",
+        esAdmin: false,
+      })
+    ).rejects.toBeInstanceOf(NombreGrupoInvalidoError);
+
+    expect(getEM).not.toHaveBeenCalled();
+  });
+
+  it("rechaza un nombre que haría superar el límite del repositorio", async () => {
+    mockTx.findOne.mockResolvedValueOnce(
+      fakeGrupal({ slug: "a".repeat(90) })
+    );
+
+    await expect(
+      crearGrupo({
+        assignmentId: "a1",
+        alumnoId: "alumno-ana",
+        nombre: "b".repeat(10),
+        esAdmin: false,
+      })
+    ).rejects.toBeInstanceOf(NombreRepositorioDemasiadoLargoError);
+
+    expect(mockTx.findOneOrFail).not.toHaveBeenCalled();
+    expect(mockTx.persist).not.toHaveBeenCalled();
   });
 
   it("lanza AssignmentNoEncontradoError si el assignment no existe", async () => {
@@ -505,6 +541,23 @@ describe("unirseAGrupo", () => {
 });
 
 describe("upsertGrupoConMiembro", () => {
+  it("rechaza antes de persistir un nombre de Sheets que supera el límite del repositorio", async () => {
+    const assignment = fakeGrupal({ slug: "a".repeat(90) });
+    const ana = fakeAlumno("alumno-ana", "ana");
+
+    await expect(
+      upsertGrupoConMiembro({
+        nombreGrupo: "b".repeat(10),
+        paradigma: "funcional",
+        assignment,
+        alumno: ana,
+      })
+    ).rejects.toBeInstanceOf(NombreRepositorioDemasiadoLargoError);
+
+    expect(getEM).not.toHaveBeenCalled();
+    expect(mockTx.persist).not.toHaveBeenCalled();
+  });
+
   it("bloquea el grupo, valida las invariantes y agrega al alumno", async () => {
     const assignment = fakeGrupal();
     const ana = fakeAlumno("alumno-ana", "ana");
@@ -525,8 +578,7 @@ describe("upsertGrupoConMiembro", () => {
       1,
       Grupo,
       {
-        nombre: grupo.nombre,
-        paradigma: "funcional",
+        nombreNormalizado: grupo.nombreNormalizado,
         assignment: { id: "a1" },
       },
       { lockMode: LockMode.PESSIMISTIC_WRITE }
@@ -603,6 +655,7 @@ describe("upsertGrupoConMiembro", () => {
     const ana = fakeAlumno("alumno-ana", "ana");
     const ganador = fakeGrupo("g-ganador", assignment, []);
     ganador.nombre = "Los Lambdas";
+    ganador.nombreNormalizado = "los-lambdas";
     mockTx.findOne
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
@@ -627,6 +680,27 @@ describe("upsertGrupoConMiembro", () => {
       { refresh: true }
     );
     expect(ganador.alumnos.contains(ana)).toBe(true);
+  });
+
+  it("rechaza nombres distintos que generan el mismo identificador", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const existente = fakeGrupo("g1", assignment, []);
+    existente.nombre = "Los Lógicos";
+    existente.nombreNormalizado = "los-logicos";
+    mockTx.findOne.mockResolvedValueOnce(existente);
+
+    await expect(
+      upsertGrupoConMiembro({
+        nombreGrupo: "Los Logicos!",
+        paradigma: "funcional",
+        assignment,
+        alumno: ana,
+      })
+    ).rejects.toBeInstanceOf(NombreGrupoDuplicadoError);
+
+    expect(mockTx.populate).not.toHaveBeenCalled();
+    expect(mockTx.flush).not.toHaveBeenCalled();
   });
 
   it("devuelve un conflicto explícito si el reintento también colisiona", async () => {

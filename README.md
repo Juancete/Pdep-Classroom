@@ -406,7 +406,12 @@ Una vez en producción, entrar como admin y crear al menos una comisión activa 
 
 Los repos se crean con la convención:
 - Individual: `{slug}-{github-username}` → `kata-funcional-juangarcia`
-- Grupal: `{slug}-{grupo-id}` → `tp-funcional-los-lambdas`
+- Grupal: `{slug}-{nombre-grupo-normalizado}` → `tp-funcional-los-lambdas`
+
+El nombre grupal se normaliza a minúsculas, sin acentos y con guiones en
+lugar de espacios o caracteres especiales. Por ejemplo, `Los Lógicos ++`
+genera `los-logicos`. Dos nombres del mismo assignment que generen el mismo
+identificador se consideran duplicados.
 
 ## Estructura del proyecto
 
