@@ -8,6 +8,16 @@ export async function getEntregas(assignmentId?: string): Promise<Entrega[]> {
   return entityManager.find(Entrega, where, { populate: ["assignment", "grupo"] });
 }
 
+// Conteo puntual vía agregación SQL — a diferencia de getEntregaCountsByAssignment()
+// más abajo, no carga las entregas en memoria. Lo usa la guarda de "¿tiene
+// entregas?" al despublicar un assignment.
+export async function contarEntregasDeAssignment(
+  assignmentId: string
+): Promise<number> {
+  const entityManager = await getEM();
+  return entityManager.count(Entrega, { assignment: { id: assignmentId } });
+}
+
 // Devuelve todas las entregas de un usuario de una sola query,
 // indexadas por assignmentId para lookup O(1) en el template.
 export async function getEntregasDeUsuario(

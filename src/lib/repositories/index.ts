@@ -28,6 +28,7 @@ export {
   updateAssignment,
   deleteAssignment,
   setInscripcionesCerradas,
+  cambiarEstadoAssignment,
   ComisionActivaRequeridaError,
 } from "./AssignmentRepository";
 
@@ -40,6 +41,7 @@ export {
   getEntregaCountsByAssignment,
   getActiveRepoCountsByAssignment,
   getEntregasConRepoActivo,
+  contarEntregasDeAssignment,
   createEntrega,
   createOrGetEntrega,
 } from "./EntregaRepository";
