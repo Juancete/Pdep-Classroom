@@ -12,6 +12,7 @@ function fakeAlumno(github: string): Alumno {
 function fakeGrupo(id: string, usernames: string[]): Grupo {
   return {
     id,
+    nombreNormalizado: `nombre-${id}`,
     alumnos: { getItems: () => usernames.map(fakeAlumno) },
     usernamesDeMiembros: () => usernames,
     usernamesCanonicos: () => usernames.map(Alumno.normalizarUsername),
@@ -110,13 +111,17 @@ describe("GrupalAssignment", () => {
     expect(getAlumnos).not.toHaveBeenCalled();
   });
 
-  it("resolverParticipantesPara devuelve los usernames del grupo y su id", async () => {
+  it("resolverParticipantesPara devuelve miembros, id y nombre normalizado", async () => {
     const grupal = nuevoGrupal();
     const buscar = vi.fn().mockResolvedValue(
       fakeGrupo("los-lambdas", ["ana", "bob"])
     );
     const participantes = await grupal.resolverParticipantesPara({ githubUsername: "ana" }, buscar);
-    expect(participantes).toEqual({ usernames: ["ana", "bob"], grupoId: "los-lambdas" });
+    expect(participantes).toEqual({
+      usernames: ["ana", "bob"],
+      grupoId: "los-lambdas",
+      grupoNombreNormalizado: "nombre-los-lambdas",
+    });
     expect(buscar).toHaveBeenCalledWith("a1", "ana");
   });
 

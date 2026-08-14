@@ -4,18 +4,17 @@
 /**
  * Genera el nombre del repo para una entrega.
  * Individual: `{slug}-{username}`
- * Grupal: `{slug}-{grupoId}`
+ * Grupal: `{slug}-{nombreGrupoNormalizado}`
  */
-export function buildRepoName(opts: {
-  slug: string;
-  usernames: string[];
-  grupoId?: string;
-}): string {
-  const suffix = opts.grupoId
-    ? opts.grupoId
-    : opts.usernames.length === 1
-      ? opts.usernames[0]
-      : opts.usernames.slice(0, 3).join("-");
+export function buildRepoName(
+  opts:
+    | { slug: string; githubUsername: string }
+    | { slug: string; grupoNombreNormalizado: string }
+): string {
+  const suffix =
+    "grupoNombreNormalizado" in opts
+      ? opts.grupoNombreNormalizado
+      : opts.githubUsername;
 
   return `${opts.slug}-${suffix}`.toLowerCase();
 }

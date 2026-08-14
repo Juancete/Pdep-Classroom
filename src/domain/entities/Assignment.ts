@@ -30,10 +30,17 @@ export type BuscadorDeGrupoDelAlumno = (
   githubUsername: string
 ) => Promise<Grupo | null>;
 
-export interface ParticipantesResueltos {
-  usernames: string[];
-  grupoId?: string;
-}
+export type ParticipantesResueltos =
+  | {
+      usernames: string[];
+      grupoId?: undefined;
+      grupoNombreNormalizado?: undefined;
+    }
+  | {
+      usernames: string[];
+      grupoId: string;
+      grupoNombreNormalizado: string;
+    };
 
 // Single Table Inheritance: todos los assignments en una sola tabla,
 // discriminados por la columna `tipo`

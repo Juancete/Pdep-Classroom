@@ -96,9 +96,14 @@ function makeEntrega(overrides?: Partial<Entrega>): Entrega {
   return Object.assign(entrega, overrides);
 }
 
-function makeGrupo(githubUsernames: string[], id = "los-lambdas") {
+function makeGrupo(
+  githubUsernames: string[],
+  id = "grupo-uuid-1",
+  nombreNormalizado = "los-lambdas"
+) {
   return {
     id,
+    nombreNormalizado,
     usernamesDeMiembros: () => githubUsernames,
   };
 }
@@ -142,7 +147,7 @@ describe("aceptarAssignment", () => {
     expect(mockCrearEntrega).toHaveBeenCalledWith(
       expect.objectContaining({
         templateRepo: "kata-template",
-        slug: "kata-funcional",
+        repoName: "kata-funcional-juangarcia",
         usernames: ["juangarcia"],
       })
     );
@@ -177,11 +182,18 @@ describe("aceptarAssignment", () => {
     await aceptarAssignment("a1", makeUser());
 
     expect(mockGetAlumnoByGithub).toHaveBeenCalledWith("juangarcia");
+    expect(mockCrearEntrega).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoName: "kata-funcional-los-lambdas",
+        usernames: ["juangarcia", "mariaperez"],
+      })
+    );
     expect(mockCreateOrGetEntrega).toHaveBeenCalledWith(
       expect.objectContaining({
         assignmentId: "a1",
         alumnoId: undefined,
-        grupoId: "los-lambdas",
+        grupoId: "grupo-uuid-1",
+        repoName: "kata-funcional-los-lambdas",
         githubUsernames: ["juangarcia", "mariaperez"],
       })
     );

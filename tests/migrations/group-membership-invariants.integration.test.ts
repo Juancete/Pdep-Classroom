@@ -23,6 +23,7 @@ vi.mock("@/lib/db", () => ({
 import {
   AlumnoYaEnGrupoDelAssignmentError,
   GrupoLlenoError,
+  NombreGrupoDuplicadoError,
 } from "../../src/domain/entities";
 import {
   crearGrupo,
@@ -35,6 +36,9 @@ const PREVIOUS_MIGRATION =
   "Migration20260610120000_add_google_group_state_to_alumno";
 const MEMBERSHIP_MIGRATION =
   "Migration20260813190000_group_membership_invariants";
+const GROUP_REPO_NAMING_MIGRATION =
+  "Migration20260814160000_group_repo_name";
+let groupRepoNamingReady = false;
 
 function getSafeTestDatabaseUrl(): string {
   const value = process.env.MIGRATION_TEST_DATABASE_URL;
@@ -113,12 +117,28 @@ async function seedGroups(
   }
 
   for (const [index, grupoId] of grupoIds.entries()) {
-    await connection.execute(
-      `insert into "grupo"
-        ("id", "nombre", "paradigma", "max_integrantes", "creado_por", "assignment_id")
-       values (?, ?, 'funcional', ?, 'test', ?)`,
-      [grupoId, `Grupo ${index}`, options.maxIntegrantes, assignmentId]
-    );
+    if (groupRepoNamingReady) {
+      await connection.execute(
+        `insert into "grupo"
+          ("id", "nombre", "nombre_normalizado", "paradigma",
+           "max_integrantes", "creado_por", "assignment_id")
+         values (?, ?, ?, 'funcional', ?, 'test', ?)`,
+        [
+          grupoId,
+          `Grupo ${index}`,
+          `grupo-${index}`,
+          options.maxIntegrantes,
+          assignmentId,
+        ]
+      );
+    } else {
+      await connection.execute(
+        `insert into "grupo"
+          ("id", "nombre", "paradigma", "max_integrantes", "creado_por", "assignment_id")
+         values (?, ?, 'funcional', ?, 'test', ?)`,
+        [grupoId, `Grupo ${index}`, options.maxIntegrantes, assignmentId]
+      );
+    }
   }
 
   return { comisionId, assignmentId, alumnoIds, grupoIds };
@@ -129,6 +149,7 @@ function expectOneConcurrentConflict(
   ErrorType:
     | typeof AlumnoYaEnGrupoDelAssignmentError
     | typeof GrupoLlenoError
+    | typeof NombreGrupoDuplicadoError
 ): void {
   expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
   const rejected = results.filter(
@@ -270,14 +291,87 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
       'drop constraint "grupo_alumnos_grupo_assignment_foreign"'
     );
     expect(up).not.toContain('drop constraint "grupo_id_assignment_unique"');
-    expect(up).not.toContain(
-      'drop constraint "grupo_assignment_nombre_paradigma_unique_idx"'
-    );
   });
 
   beforeEach(async () => {
     if (!migrationReady) return;
     await orm.em.getConnection().execute('truncate table "comision" cascade');
+  });
+
+  it("rechaza nombres históricos que normalizan a vacío", async () => {
+    const seed = await seedGroups(orm, {
+      alumnos: 0,
+      grupos: 1,
+      maxIntegrantes: 2,
+    });
+    const connection = orm.em.getConnection();
+    await connection.execute(
+      `update "grupo" set "nombre" = '+++' where "id" = ?`,
+      [seed.grupoIds[0]]
+    );
+
+    await expect(
+      orm.getMigrator().up({ to: GROUP_REPO_NAMING_MIGRATION })
+    ).rejects.toThrow("no contiene letras ni números");
+
+    const columns = await connection.execute<{ column_name: string }[]>(
+      `select column_name from information_schema.columns
+       where table_name = 'grupo' and column_name = 'nombre_normalizado'`
+    );
+    expect(columns).toEqual([]);
+  });
+
+  it("rechaza nombres históricos distintos que generan el mismo identificador", async () => {
+    const seed = await seedGroups(orm, {
+      alumnos: 0,
+      grupos: 2,
+      maxIntegrantes: 2,
+    });
+    const connection = orm.em.getConnection();
+    await connection.execute(
+      `update "grupo" set "nombre" = case "id"
+         when ? then 'Los Lógicos'
+         else 'los-logicos!'
+       end
+       where "assignment_id" = ?`,
+      [seed.grupoIds[0], seed.assignmentId]
+    );
+
+    await expect(
+      orm.getMigrator().up({ to: GROUP_REPO_NAMING_MIGRATION })
+    ).rejects.toThrow("hay nombres que generan el mismo identificador");
+  });
+
+  it("migra nombres, revierte y deja el schema final alineado", async () => {
+    const seed = await seedGroups(orm, {
+      alumnos: 0,
+      grupos: 1,
+      maxIntegrantes: 2,
+    });
+    const connection = orm.em.getConnection();
+    await connection.execute(
+      `update "grupo" set "nombre" = 'Los Lógicos ++' where "id" = ?`,
+      [seed.grupoIds[0]]
+    );
+
+    await orm.getMigrator().up({ to: GROUP_REPO_NAMING_MIGRATION });
+    const rows = await connection.execute<{ nombre_normalizado: string }[]>(
+      `select "nombre_normalizado" from "grupo" where "id" = ?`,
+      [seed.grupoIds[0]]
+    );
+    expect(rows).toEqual([{ nombre_normalizado: "los-logicos" }]);
+
+    await orm.getMigrator().down({ migrations: [GROUP_REPO_NAMING_MIGRATION] });
+    const columnsAfterDown = await connection.execute<{ column_name: string }[]>(
+      `select column_name from information_schema.columns
+       where table_name = 'grupo' and column_name = 'nombre_normalizado'`
+    );
+    expect(columnsAfterDown).toEqual([]);
+
+    await orm.getMigrator().up({ to: GROUP_REPO_NAMING_MIGRATION });
+    groupRepoNamingReady = true;
+    const { up } = await orm.getSchemaGenerator().getUpdateSchemaMigrationSQL();
+    expect(up).not.toContain('alter table "grupo"');
   });
 
   it("serializa dos joins que compiten por el último cupo", async () => {
@@ -434,5 +528,33 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
       [seed.assignmentId, seed.assignmentId]
     );
     expect(rows[0]).toEqual({ grupos: "1", membresias: "2" });
+  });
+
+  it("rechaza dos creaciones concurrentes cuyos nombres normalizan igual", async () => {
+    const seed = await seedGroups(orm, {
+      alumnos: 2,
+      grupos: 0,
+      maxIntegrantes: 3,
+    });
+
+    const results = await Promise.allSettled(
+      ["Los Lógicos", "los-logicos!"].map((nombre, index) =>
+        crearGrupo({
+          assignmentId: seed.assignmentId,
+          alumnoId: seed.alumnoIds[index]!,
+          nombre,
+          esAdmin: false,
+        })
+      )
+    );
+
+    expectOneConcurrentConflict(results, NombreGrupoDuplicadoError);
+    const grupos = await orm.em.getConnection().execute<
+      { nombre_normalizado: string }[]
+    >(
+      `select "nombre_normalizado" from "grupo" where "assignment_id" = ?`,
+      [seed.assignmentId]
+    );
+    expect(grupos).toEqual([{ nombre_normalizado: "los-logicos" }]);
   });
 });

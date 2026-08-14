@@ -8,9 +8,11 @@ import {
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
   NombreGrupoDuplicadoError,
+  NombreGrupoInvalidoError,
   AssignmentNoGrupalError,
 } from "@/domain/entities";
 import type { Paradigma } from "@/types";
+import { slugify } from "@/lib/naming";
 import {
   AssignmentNoEncontradoError,
   GrupoNoEncontradoError,
@@ -21,7 +23,17 @@ import { extractDbErrorCode, UNIQUE_VIOLATION } from "./db-errors";
 const INSCRIPCION_UNICA_CONSTRAINT =
   "grupo_alumnos_assignment_alumno_unique_idx";
 const NOMBRE_GRUPO_UNICO_CONSTRAINT =
-  "grupo_assignment_nombre_paradigma_unique_idx";
+  "grupo_assignment_nombre_normalizado_unique_idx";
+
+function prepararNombreGrupo(nombre: string): {
+  nombre: string;
+  nombreNormalizado: string;
+} {
+  const nombreVisible = nombre.trim();
+  const nombreNormalizado = slugify(nombreVisible);
+  if (!nombreNormalizado) throw new NombreGrupoInvalidoError(nombre);
+  return { nombre: nombreVisible, nombreNormalizado };
+}
 
 function esViolacionDeRestriccionUnica(
   error: unknown,
@@ -137,7 +149,8 @@ export async function crearGrupo(params: {
   nombre: string;
   esAdmin: boolean;
 }): Promise<Grupo> {
-  const { assignmentId, alumnoId, nombre, esAdmin } = params;
+  const { assignmentId, alumnoId, esAdmin } = params;
+  const { nombre, nombreNormalizado } = prepararNombreGrupo(params.nombre);
   const entityManager = await getEM();
 
   return traducirConflictoDeNombreGrupo(assignmentId, nombre, () =>
@@ -182,6 +195,7 @@ export async function crearGrupo(params: {
 
           const grupo = new Grupo();
           grupo.nombre = nombre;
+          grupo.nombreNormalizado = nombreNormalizado;
           grupo.paradigma = assignment.paradigma;
           grupo.assignment = assignment;
           grupo.maxIntegrantes = assignment.maxIntegrantes;
@@ -297,7 +311,10 @@ async function ejecutarUpsertGrupoConMiembro(params: {
   assignment: GrupalAssignment;
   alumno: Alumno;
 }): Promise<Grupo> {
-  const { nombreGrupo, paradigma, assignment, alumno } = params;
+  const { paradigma, assignment, alumno } = params;
+  const { nombre: nombreGrupo, nombreNormalizado } = prepararNombreGrupo(
+    params.nombreGrupo
+  );
   const entityManager = await getEM();
 
   return traducirConflictoDeInscripcion(
@@ -308,8 +325,7 @@ async function ejecutarUpsertGrupoConMiembro(params: {
         const existente = await transaction.findOne(
           Grupo,
           {
-            nombre: nombreGrupo,
-            paradigma,
+            nombreNormalizado,
             assignment: { id: assignment.id },
           },
           { lockMode: LockMode.PESSIMISTIC_WRITE }
@@ -317,11 +333,18 @@ async function ejecutarUpsertGrupoConMiembro(params: {
 
         let grupo: Grupo;
         if (existente) {
+          if (existente.nombre !== nombreGrupo) {
+            throw new NombreGrupoDuplicadoError(
+              assignment.id,
+              nombreGrupo
+            );
+          }
           grupo = existente;
           await transaction.populate(grupo, ["alumnos"], { refresh: true });
         } else {
           grupo = new Grupo();
           grupo.nombre = nombreGrupo;
+          grupo.nombreNormalizado = nombreNormalizado;
           grupo.paradigma = paradigma;
           grupo.assignment = assignment;
           grupo.maxIntegrantes = assignment.maxIntegrantes;
