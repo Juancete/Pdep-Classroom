@@ -33,6 +33,12 @@ const ACCIONES: Record<
   },
 };
 
+function formatearFechaAuditoria(fecha: string): string {
+  return new Date(fecha).toLocaleDateString("es-AR", {
+    timeZone: "America/Argentina/Buenos_Aires",
+  });
+}
+
 export function EstadoPanel({
   assignmentId,
   estado: initialEstado,
@@ -54,6 +60,12 @@ export function EstadoPanel({
 }) {
   const router = useRouter();
   const { loading, error, call } = useApiCall();
+  // router.refresh() vuelve a ejecutar el Server Component padre, pero como
+  // este panel ya está montado, useState no resincroniza solo con las props
+  // nuevas. En vez de un efecto que dispare un setState extra (cascading
+  // render), el padre monta este componente con `key={estado}`: cuando el
+  // estado real cambia, React lo remonta con las props frescas del servidor
+  // en vez de arrastrar el estado local viejo.
   const [estado, setEstado] = useState(initialEstado);
   const [acciones, setAcciones] = useState(accionesDisponibles);
 
@@ -74,10 +86,10 @@ export function EstadoPanel({
     });
 
     if (resultado) {
+      // Transición inmediata para feedback instantáneo; el efecto de arriba
+      // la reemplaza por los valores reales en cuanto router.refresh() trae
+      // las props actualizadas del servidor.
       setEstado(resultado.estado);
-      // Refleja la única transición desde el nuevo estado que puede
-      // ofrecerse sin volver a consultar al servidor: volver al estado
-      // anterior deja de tener sentido, así que se recalcula al refrescar.
       setAcciones([]);
       router.refresh();
     }
@@ -114,14 +126,14 @@ export function EstadoPanel({
         <p className="text-xs text-gray-400 mt-3">
           {publicadoEn && (
             <>
-              Publicado el {new Date(publicadoEn).toLocaleDateString("es-AR")}
+              Publicado el {formatearFechaAuditoria(publicadoEn)}
               {publicadoPor ? ` por @${publicadoPor}` : ""}
             </>
           )}
           {publicadoEn && archivadoEn && " — "}
           {archivadoEn && (
             <>
-              Archivado el {new Date(archivadoEn).toLocaleDateString("es-AR")}
+              Archivado el {formatearFechaAuditoria(archivadoEn)}
               {archivadoPor ? ` por @${archivadoPor}` : ""}
             </>
           )}

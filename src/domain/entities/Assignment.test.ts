@@ -260,6 +260,18 @@ describe("Assignment — ciclo de vida", () => {
     expect(individual.permiteAccionesDeAlumno()).toBe(true);
   });
 
+  it("publicar un assignment ya publicado no resella la auditoría", () => {
+    const individual = new IndividualAssignment();
+    individual.id = "a1";
+    individual.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+    const publicadoEnOriginal = individual.publicadoEn;
+
+    individual.transicionarA("publicado", { tieneEntregas: false }, "docente2");
+
+    expect(individual.publicadoPor).toBe("docente1");
+    expect(individual.publicadoEn).toBe(publicadoEnOriginal);
+  });
+
   it("despublicar sin entregas vuelve a borrador", () => {
     const individual = new IndividualAssignment();
     individual.id = "a1";

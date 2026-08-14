@@ -48,6 +48,23 @@ export type ParticipantesResueltos =
       grupoNombreNormalizado: string;
     };
 
+// Errores de dominio sobre la existencia/disponibilidad de un assignment.
+// Viven acá (no en la capa de servicios) para que los repositorios puedan
+// lanzarlos sin importar hacia arriba desde `@/lib/services`.
+export class AssignmentNoEncontradoError extends Error {
+  constructor(public readonly assignmentId: string) {
+    super("Assignment no encontrado");
+    this.name = "AssignmentNoEncontradoError";
+  }
+}
+
+export class AssignmentNoDisponibleError extends Error {
+  constructor(public readonly assignmentId: string) {
+    super("Este TP no está disponible.");
+    this.name = "AssignmentNoDisponibleError";
+  }
+}
+
 // Single Table Inheritance: todos los assignments en una sola tabla,
 // discriminados por la columna `tipo`
 @Entity({ discriminatorColumn: "tipo", abstract: true })
@@ -126,14 +143,20 @@ export abstract class Assignment {
     contexto: ContextoTransicionEstado,
     porUsuario: string
   ): void {
+    const estadoAnterior = this.estadoNombre;
     const nuevoEstado = this.estado.transicionarA(this.id, destino, contexto);
     this.estadoNombre = nuevoEstado.nombre;
 
-    if (destino === "publicado") {
+    // Pedir de nuevo el mismo estado (ej. "publicar" un TP ya publicado) es un
+    // no-op: no resella la auditoría, para no pisar quién y cuándo lo publicó
+    // o archivó realmente con el usuario que hizo el click redundante.
+    if (nuevoEstado.nombre === estadoAnterior) return;
+
+    if (nuevoEstado.nombre === "publicado") {
       this.publicadoEn = new Date();
       this.publicadoPor = porUsuario;
     }
-    if (destino === "archivado") {
+    if (nuevoEstado.nombre === "archivado") {
       this.archivadoEn = new Date();
       this.archivadoPor = porUsuario;
     }
