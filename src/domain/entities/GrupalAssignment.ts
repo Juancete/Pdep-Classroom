@@ -44,7 +44,7 @@ export class GrupalAssignment extends Assignment {
   }
 
   aceptaNuevasInscripciones(): boolean {
-    return !this.inscripcionesCerradas;
+    return this.permiteAccionesDeAlumno() && !this.inscripcionesCerradas;
   }
 
   async totalEsperado(fuentes: FuentesDeConteo): Promise<number> {

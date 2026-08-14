@@ -13,6 +13,14 @@ export type {
   ParticipantesResueltos,
   BuscadorDeGrupoDelAlumno,
 } from "./Assignment";
+export {
+  EstadoAssignment,
+  TransicionDeEstadoInvalidaError,
+  transicionesDisponibles,
+  NOMBRES_ESTADO_ASSIGNMENT,
+  type NombreEstadoAssignment,
+  type ContextoTransicionEstado,
+} from "./EstadoAssignment";
 export { IndividualAssignment } from "./IndividualAssignment";
 export { GrupalAssignment, GrupoNoAsignadoError } from "./GrupalAssignment";
 export {

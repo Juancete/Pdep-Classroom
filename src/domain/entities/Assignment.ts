@@ -10,6 +10,11 @@ import { Comision } from "./Comision";
 import type { Alumno } from "./Alumno";
 import type { Grupo } from "./Grupo";
 import type { Paradigma, TipoAssignment } from "@/types";
+import {
+  EstadoAssignment,
+  type ContextoTransicionEstado,
+  type NombreEstadoAssignment,
+} from "./EstadoAssignment";
 
 // Dependencias de lectura que las subclases pueden usar desde sus métodos
 // polimórficos — se pasan como parámetro para que las entidades no importen
@@ -75,6 +80,62 @@ export abstract class Assignment {
 
   @ManyToOne(() => Comision, { nullable: true, deleteRule: "cascade" })
   comision?: Comision;
+
+  // Ciclo de vida: borrador (solo admin) → publicado (visible para alumnos)
+  // → archivado (histórico, preserva entregas). Ver EstadoAssignment.ts para
+  // las reglas de visibilidad y transición — acá solo vive la columna
+  // persistida y su resolución al objeto Strategy correspondiente.
+  @Enum({ items: ["borrador", "publicado", "archivado"] })
+  estadoNombre: NombreEstadoAssignment = "borrador";
+
+  @Property({ nullable: true, type: "datetime" })
+  publicadoEn?: Date;
+
+  @Property({ nullable: true, type: "string" })
+  publicadoPor?: string;
+
+  @Property({ nullable: true, type: "datetime" })
+  archivadoEn?: Date;
+
+  @Property({ nullable: true, type: "string" })
+  archivadoPor?: string;
+
+  get estado(): EstadoAssignment {
+    return EstadoAssignment.desdeNombre(this.estadoNombre);
+  }
+
+  /** `true` si un alumno con o sin entrega debe ver este assignment en su dashboard. */
+  esVisibleParaAlumno(tieneEntrega: boolean): boolean {
+    return this.estado.esVisibleParaAlumno(tieneEntrega);
+  }
+
+  /** `true` si el estado actual habilita aceptar el TP o gestionar grupos. */
+  permiteAccionesDeAlumno(): boolean {
+    return this.estado.permiteAccionesDeAlumno();
+  }
+
+  /**
+   * Aplica la transición de estado, validando contra las reglas del estado
+   * actual, y sella la auditoría (quién y cuándo publicó/archivó). Lanza
+   * `TransicionDeEstadoInvalidaError` si la transición no está permitida.
+   */
+  transicionarA(
+    destino: NombreEstadoAssignment,
+    contexto: ContextoTransicionEstado,
+    porUsuario: string
+  ): void {
+    const nuevoEstado = this.estado.transicionarA(this.id, destino, contexto);
+    this.estadoNombre = nuevoEstado.nombre;
+
+    if (destino === "publicado") {
+      this.publicadoEn = new Date();
+      this.publicadoPor = porUsuario;
+    }
+    if (destino === "archivado") {
+      this.archivadoEn = new Date();
+      this.archivadoPor = porUsuario;
+    }
+  }
 
   /** Etiqueta para el contador "totales" del admin (ej: "Alumnos" / "Grupos"). */
   abstract etiquetaTotales(): string;

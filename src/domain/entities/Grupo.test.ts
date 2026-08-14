@@ -197,6 +197,9 @@ describe("GrupalAssignment.aceptaNuevasInscripciones", () => {
     const grupal = new GrupalAssignment();
     grupal.id = "a1";
     grupal.maxIntegrantes = 3;
+    // Publicado por defecto: aceptar inscripciones requiere que el
+    // assignment esté disponible. El test de estado en borrador vive abajo.
+    grupal.transicionarA("publicado", { tieneEntregas: false }, "docente1");
     return grupal;
   }
 
@@ -207,6 +210,13 @@ describe("GrupalAssignment.aceptaNuevasInscripciones", () => {
   it("rechaza cuando el docente cerró las inscripciones", () => {
     const grupal = nuevoGrupal();
     grupal.inscripcionesCerradas = true;
+    expect(grupal.aceptaNuevasInscripciones()).toBe(false);
+  });
+
+  it("rechaza mientras el assignment no esté publicado", () => {
+    const grupal = new GrupalAssignment();
+    grupal.id = "a1";
+    grupal.maxIntegrantes = 3;
     expect(grupal.aceptaNuevasInscripciones()).toBe(false);
   });
 });

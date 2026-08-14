@@ -44,6 +44,8 @@ export const DEFAULT_COLUMN_CONFIG: ColumnConfig = {
 
 export type TipoAssignment = "individual" | "grupal";
 
+export type { NombreEstadoAssignment } from "@/domain/entities/EstadoAssignment";
+
 // ── Session extendida ───────────────────────────────────────
 
 export interface PdepUser {
