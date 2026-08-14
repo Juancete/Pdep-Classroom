@@ -8,7 +8,17 @@ vi.mock("next/navigation", () => ({
 
 import { DeleteReposButton } from "./delete-repos-button";
 
-function mockResponse(ok: boolean, data: object = {}) {
+const successResult = {
+  ok: true,
+  operationId: "op-1",
+  attempted: 2,
+  deleted: 2,
+  alreadyAbsent: 0,
+  failed: 0,
+  results: [],
+};
+
+function mockResponse(ok: boolean, data: object = successResult) {
   return { ok, json: async () => data };
 }
 
@@ -106,5 +116,49 @@ describe("DeleteReposButton", () => {
     await user.click(screen.getByRole("button"));
 
     expect(await screen.findByText("No se pudo eliminar")).toBeInTheDocument();
+  });
+
+  it("muestra el resumen al completar todos los borrados", async () => {
+    const user = userEvent.setup();
+    vi.mocked(confirm).mockReturnValue(true);
+    vi.mocked(fetch).mockResolvedValue(mockResponse(true) as Response);
+
+    render(<DeleteReposButton assignmentId="a1" activeRepoCount={2} />);
+    await user.click(screen.getByRole("button"));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Se confirmaron 2 de 2 repositorios"
+    );
+  });
+
+  it("muestra los fallidos y permite reintentarlos", async () => {
+    const user = userEvent.setup();
+    vi.mocked(confirm).mockReturnValue(true);
+    vi.mocked(fetch).mockResolvedValue(
+      mockResponse(true, {
+        ...successResult,
+        ok: false,
+        attempted: 2,
+        deleted: 1,
+        failed: 1,
+        results: [
+          {
+            entregaId: "e2",
+            repoName: "tp-bob",
+            status: "failed",
+            error: "GitHub no disponible",
+          },
+        ],
+      }) as Response
+    );
+
+    render(<DeleteReposButton assignmentId="a1" activeRepoCount={2} />);
+    await user.click(screen.getByRole("button"));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Fallaron 1; podés reintentarlos"
+    );
+    expect(screen.getByText(/tp-bob/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reintentar fallidos (2)" })).toBeInTheDocument();
   });
 });

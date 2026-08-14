@@ -24,3 +24,7 @@ export {
   AssignmentNoGrupalError,
 } from "./Grupo";
 export { Entrega } from "./Entrega";
+export {
+  RepoDeletionAttempt,
+  type RepoDeletionStatus,
+} from "./RepoDeletionAttempt";

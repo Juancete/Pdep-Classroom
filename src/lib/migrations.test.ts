@@ -93,6 +93,25 @@ describe("migrations", () => {
     expect(migration).toContain("hay nombres y paradigmas duplicados");
   });
 
+  it("crea una auditoría durable para cada intento de borrado de repos", () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        "migrations",
+        "Migration20260814140000_repo_deletion_audit.ts"
+      ),
+      "utf8"
+    );
+
+    expect(migration).toContain('create table "repo_deletion_attempt"');
+    expect(migration).toContain('"operation_id" uuid not null');
+    expect(migration).toContain("'pending', 'deleted', 'already_absent', 'failed'");
+    expect(migration).toContain(
+      'repo_deletion_attempt_assignment_started_idx'
+    );
+    expect(migration).not.toContain("foreign key");
+  });
+
   it("mantiene el snapshot alineado con Google Groups y las cascadas", () => {
     const snapshot = JSON.parse(
       readFileSync(
@@ -107,6 +126,9 @@ describe("migrations", () => {
     const grupo = snapshot.tables.find((table) => table.name === "grupo");
     const grupoAlumnos = snapshot.tables.find(
       (table) => table.name === "grupo_alumnos"
+    );
+    const repoDeletionAttempt = snapshot.tables.find(
+      (table) => table.name === "repo_deletion_attempt"
     );
 
     expect(alumno?.columns.google_group_emails_pendientes_baja).toMatchObject({
@@ -141,5 +163,8 @@ describe("migrations", () => {
     expect(grupoAlumnos?.foreignKeys).toHaveProperty(
       "grupo_alumnos_grupo_assignment_foreign"
     );
+    expect(repoDeletionAttempt?.columns).toHaveProperty("operation_id");
+    expect(repoDeletionAttempt?.columns).toHaveProperty("requested_by");
+    expect(repoDeletionAttempt?.foreignKeys).toEqual({});
   });
 });
