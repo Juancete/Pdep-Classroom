@@ -1,6 +1,7 @@
 import {
   Entity,
   Enum,
+  Index,
   ManyToOne,
   PrimaryKey,
   Property,
@@ -50,6 +51,7 @@ export type ParticipantesResueltos =
 // Single Table Inheritance: todos los assignments en una sola tabla,
 // discriminados por la columna `tipo`
 @Entity({ discriminatorColumn: "tipo", abstract: true })
+@Index({ name: "assignment_estado_nombre_index", properties: ["estadoNombre"] })
 export abstract class Assignment {
   @PrimaryKey({ type: "uuid" })
   id: string = randomUUID();
