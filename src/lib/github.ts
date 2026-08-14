@@ -173,12 +173,15 @@ export async function listarReposDeAssignment(
 
 // ── Eliminar un repo ─────────────────────────────────────────
 
-export async function deleteRepo(repoName: string): Promise<void> {
+export type DeleteRepoResult = "deleted" | "already_absent";
+
+export async function deleteRepo(repoName: string): Promise<DeleteRepoResult> {
   const octokit = getOctokit();
   try {
     await octokit.repos.delete({ owner: ORG, repo: repoName });
+    return "deleted";
   } catch (error) {
-    if (isRequestError(error) && error.status === 404) return;
+    if (isRequestError(error) && error.status === 404) return "already_absent";
     handleOctokitError(error);
   }
 }

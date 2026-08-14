@@ -12,6 +12,7 @@ const mockGetAssignment = vi.fn();
 const mockGetEntregas = vi.fn();
 const mockGetAlumnos = vi.fn();
 const mockGetGruposDeAssignment = vi.fn();
+const mockGetRepoDeletionHistory = vi.fn();
 const mockRedirect = vi.fn();
 
 vi.mock("@/lib/session", () => ({
@@ -23,6 +24,8 @@ vi.mock("@/lib/repositories", () => ({
   getEntregas: (id: string) => mockGetEntregas(id),
   getAlumnos: () => mockGetAlumnos(),
   getGruposDeAssignment: (id: string) => mockGetGruposDeAssignment(id),
+  getRepoDeletionHistory: (id: string, page: number) =>
+    mockGetRepoDeletionHistory(id, page),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -168,6 +171,35 @@ describe("Admin Assignment Detail Page", () => {
     mockGetEntregas.mockResolvedValue([]);
     mockGetAlumnos.mockResolvedValue([]);
     mockGetGruposDeAssignment.mockResolvedValue([]);
+    mockGetRepoDeletionHistory.mockResolvedValue({
+      items: [],
+      page: 1,
+      pageSize: 25,
+      total: 0,
+      totalPages: 1,
+    });
+  });
+
+  it("normaliza y consulta la página solicitada del historial", async () => {
+    mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
+
+    await AssignmentDetailPage({
+      params: Promise.resolve({ id: "a1" }),
+      searchParams: Promise.resolve({ repoDeletionPage: "3" }),
+    });
+
+    expect(mockGetRepoDeletionHistory).toHaveBeenCalledWith("a1", 3);
+  });
+
+  it("normaliza una página inválida a la primera", async () => {
+    mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
+
+    await AssignmentDetailPage({
+      params: Promise.resolve({ id: "a1" }),
+      searchParams: Promise.resolve({ repoDeletionPage: "3-invalida" }),
+    });
+
+    expect(mockGetRepoDeletionHistory).toHaveBeenCalledWith("a1", 1);
   });
 
   it("siempre llama a requireAdmin", async () => {

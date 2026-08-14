@@ -4,6 +4,7 @@ import {
   getEntregas,
   getAlumnos,
   getGruposDeAssignment,
+  getRepoDeletionHistory,
 } from "@/lib/repositories";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -13,22 +14,35 @@ import { GruposPanel } from "./grupos-panel";
 import type { GrupoAdminResumen, AlumnoSinGrupoResumen } from "./grupos-panel";
 import { GrupalAssignment, Alumno } from "@/domain/entities";
 import type { Grupo } from "@/domain/entities";
+import { RepoDeletionHistory } from "./repo-deletion-history";
 
 export default async function AssignmentDetailPage(
   props: {
     params: Promise<{ id: string }>;
+    searchParams?: Promise<{ repoDeletionPage?: string | string[] }>;
   }
 ) {
-  const params = await props.params;
+  const emptySearchParams: { repoDeletionPage?: string | string[] } = {};
+  const [params, searchParams] = await Promise.all([
+    props.params,
+    props.searchParams ?? Promise.resolve(emptySearchParams),
+  ]);
   await requireAdmin();
 
   const assignment = await getAssignment(params.id);
   if (!assignment) redirect("/admin/assignments");
 
   const gruposPromise = assignment.cargarGruposCon(getGruposDeAssignment);
+  const rawHistoryPage = Array.isArray(searchParams.repoDeletionPage)
+    ? searchParams.repoDeletionPage[0]
+    : searchParams.repoDeletionPage;
+  const parsedHistoryPage = Number(rawHistoryPage ?? 1);
+  const historyPage = Number.isInteger(parsedHistoryPage) && parsedHistoryPage > 0
+    ? parsedHistoryPage
+    : 1;
 
   const alumnosPromise = getAlumnos();
-  const [entregas, alumnos, grupos, total] = await Promise.all([
+  const [entregas, alumnos, grupos, total, deletionHistory] = await Promise.all([
     getEntregas(params.id),
     alumnosPromise,
     gruposPromise,
@@ -36,6 +50,7 @@ export default async function AssignmentDetailPage(
       getAlumnosDelCurso: () => alumnosPromise,
       getGruposDeAssignment: (_assignmentId: string) => gruposPromise,
     }),
+    getRepoDeletionHistory(params.id, historyPage),
   ]);
 
   const aceptadas = entregas.length;
@@ -109,7 +124,11 @@ export default async function AssignmentDetailPage(
         <div className="flex items-center gap-3">
           <DeleteReposButton
             assignmentId={assignment.id}
-            activeRepoCount={entregas.filter((entrega) => entrega.hasRepo()).length}
+            activeRepoCount={
+              entregas.filter(
+                (entrega) => Boolean(entrega.repoName) && !entrega.repoDeleted
+              ).length
+            }
           />
           <Link
             href={`/admin/assignments/${assignment.id}/edit`}
@@ -166,6 +185,11 @@ export default async function AssignmentDetailPage(
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <EntregasTable entregas={entregaRows} />
       </div>
+
+      <RepoDeletionHistory
+        assignmentId={assignment.id}
+        history={deletionHistory}
+      />
 
       {gruposPanel}
     </div>
