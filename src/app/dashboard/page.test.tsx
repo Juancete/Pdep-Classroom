@@ -78,6 +78,9 @@ function makeAssignment(overrides?: Partial<IndividualAssignment>): IndividualAs
   assignment.paradigma = "funcional";
   assignment.slug = "kata-funcional";
   assignment.createdAt = new Date();
+  // Publicado por defecto: el dashboard de alumno solo muestra lo visible.
+  // Los tests de ciclo de vida overridean `estadoNombre` explícitamente.
+  assignment.transicionarA("publicado", { tieneEntregas: false }, "docente1");
   return Object.assign(assignment, overrides);
 }
 
@@ -92,6 +95,7 @@ function makeGrupalAssignment(overrides?: Partial<GrupalAssignment>): GrupalAssi
   assignment.slug = "tp-grupal";
   assignment.maxIntegrantes = 3;
   assignment.createdAt = new Date();
+  assignment.transicionarA("publicado", { tieneEntregas: false }, "docente1");
   return Object.assign(assignment, overrides);
 }
 
@@ -422,6 +426,76 @@ describe("Dashboard page", () => {
 
       await DashboardPage();
       expect(mockGetGruposDeAlumno).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("ciclo de vida", () => {
+    beforeEach(() => {
+      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
+      mockGetAlumnoByGithub.mockResolvedValue(
+        makeAlumno({ registroConfirmadoEn: { id: "c1" } as any })
+      );
+      mockGetGruposDeAlumno.mockResolvedValue(new Map());
+    });
+
+    it("muestra un archivado con entrega: badge, link al repo, sin botón de aceptar", async () => {
+      const archivado = makeAssignment({ id: "a-archivado" });
+      archivado.transicionarA("archivado", { tieneEntregas: true }, "docente1");
+      const entrega = makeEntrega({ repoUrl: "https://github.com/pdep/a-archivado" });
+      mockGetAssignmentsDeComision.mockResolvedValue([archivado]);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map([["a-archivado", entrega]]));
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain('data-testid="estado-badge"');
+      expect(html).toContain("Archivado");
+      expect(html).toContain("Ir al repo");
+      expect(html).not.toContain('data-testid="accept-button"');
+      expect(html).not.toContain("Elegir grupo");
+    });
+
+    it("no muestra un archivado sin entrega", async () => {
+      const archivado = makeAssignment({ id: "a-archivado", titulo: "TP Archivado" });
+      archivado.transicionarA("archivado", { tieneEntregas: false }, "docente1");
+      mockGetAssignmentsDeComision.mockResolvedValue([archivado]);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).not.toContain("TP Archivado");
+    });
+
+    it("no muestra un assignment en borrador", async () => {
+      const borrador = makeAssignment({ id: "a-borrador", titulo: "TP Borrador" });
+      borrador.estadoNombre = "borrador";
+      mockGetAssignmentsDeComision.mockResolvedValue([borrador]);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).not.toContain("TP Borrador");
+    });
+
+    it("no muestra badge para assignments publicados", async () => {
+      const publicado = makeAssignment({ id: "a-publicado" });
+      mockGetAssignmentsDeComision.mockResolvedValue([publicado]);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).not.toContain('data-testid="estado-badge"');
+    });
+
+    it("el admin ve assignments en cualquier estado, incluido borrador", async () => {
+      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: true }));
+      const borrador = makeAssignment({ id: "a-borrador", titulo: "TP Borrador Admin" });
+      borrador.estadoNombre = "borrador";
+      mockGetAssignments.mockResolvedValue([borrador]);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("TP Borrador Admin");
     });
   });
 

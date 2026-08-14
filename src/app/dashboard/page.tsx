@@ -10,6 +10,7 @@ import {
 import { AcceptButton } from "./accept-button";
 import { redirect } from "next/navigation";
 import type { Grupo } from "@/domain/entities";
+import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -46,7 +47,15 @@ export default async function DashboardPage() {
       assignment,
       entrega: entregasMap.get(assignment.id) ?? null,
       grupo: gruposMap.get(assignment.id) ?? null,
-    }));
+    }))
+    // Filtro fino de estado, del lado del alumno: la query de
+    // getAssignmentsDeComision ya excluye los borradores; acá se resuelve
+    // "un archivado solo se ve si ya tenés entrega" (decisión de negocio que
+    // depende de datos por-alumno, no solo del estado). El admin ve todo.
+    .filter(
+      ({ assignment, entrega }) =>
+        user.isAdmin || assignment.esVisibleParaAlumno(entrega !== null)
+    );
 
   return (
     <div>
@@ -76,6 +85,9 @@ export default async function DashboardPage() {
                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
                     {assignment.tipo}
                   </span>
+                  {assignment.estadoNombre !== "publicado" && (
+                    <EstadoAssignmentBadge estado={assignment.estadoNombre} />
+                  )}
                 </div>
                 {assignment.descripcion && (
                   <p className="text-sm text-gray-500">
