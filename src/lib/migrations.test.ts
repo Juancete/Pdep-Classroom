@@ -80,6 +80,9 @@ describe("migrations", () => {
       'create unique index "grupo_alumnos_assignment_alumno_unique_idx"'
     );
     expect(migration).toContain(
+      'constraint "grupo_assignment_nombre_paradigma_unique_idx" unique ("assignment_id", "nombre", "paradigma")'
+    );
+    expect(migration).toContain(
       'constraint "grupo_alumnos_grupo_assignment_foreign"'
     );
     expect(migration).toContain(
@@ -87,6 +90,7 @@ describe("migrations", () => {
     );
     expect(migration).toContain("hay alumnos en mas de un grupo");
     expect(migration).toContain("hay grupos con mas alumnos");
+    expect(migration).toContain("hay nombres y paradigmas duplicados");
   });
 
   it("mantiene el snapshot alineado con Google Groups y las cascadas", () => {
@@ -122,6 +126,11 @@ describe("migrations", () => {
     ).toBe("cascade");
     expect(grupo?.indexes).toContainEqual(
       expect.objectContaining({ keyName: "grupo_id_assignment_unique" })
+    );
+    expect(grupo?.indexes).toContainEqual(
+      expect.objectContaining({
+        keyName: "grupo_assignment_nombre_paradigma_unique_idx",
+      })
     );
     expect(grupoAlumnos?.columns).toHaveProperty("assignment_id");
     expect(grupoAlumnos?.indexes).toContainEqual(

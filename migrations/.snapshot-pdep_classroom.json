@@ -1141,6 +1141,18 @@
           "keyName": "grupo_id_assignment_unique",
           "unique": true,
           "primary": false
+        },
+        {
+          "columnNames": [
+            "assignment_id",
+            "nombre",
+            "paradigma"
+          ],
+          "composite": true,
+          "constraint": true,
+          "keyName": "grupo_assignment_nombre_paradigma_unique_idx",
+          "unique": true,
+          "primary": false
         }
       ],
       "checks": [],

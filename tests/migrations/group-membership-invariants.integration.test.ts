@@ -207,6 +207,25 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
     await connection.execute('truncate table "comision" cascade');
   });
 
+  it("rechaza grupos históricos con nombre y paradigma duplicados", async () => {
+    const seed = await seedGroups(orm, {
+      alumnos: 0,
+      grupos: 2,
+      maxIntegrantes: 2,
+    });
+    const connection = orm.em.getConnection();
+    await connection.execute(
+      `update "grupo" set "nombre" = 'Los Lambdas' where "assignment_id" = ?`,
+      [seed.assignmentId]
+    );
+
+    await expect(
+      orm.getMigrator().up({ to: MEMBERSHIP_MIGRATION })
+    ).rejects.toThrow("hay nombres y paradigmas duplicados");
+
+    await connection.execute('truncate table "comision" cascade');
+  });
+
   it("migra, completa assignment_id mediante trigger y revierte limpiamente", async () => {
     const seed = await seedGroups(orm, {
       alumnos: 1,
@@ -235,6 +254,25 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
 
     await orm.getMigrator().up({ to: MEMBERSHIP_MIGRATION });
     migrationReady = true;
+  });
+
+  it("el schema diff preserva los objetos manuales del pivot", async () => {
+    const { up } = await orm
+      .getSchemaGenerator()
+      .getUpdateSchemaMigrationSQL();
+
+    expect(up).not.toContain('drop table if exists "grupo_alumnos"');
+    expect(up).not.toContain('drop column "assignment_id"');
+    expect(up).not.toContain(
+      'drop index "grupo_alumnos_assignment_alumno_unique_idx"'
+    );
+    expect(up).not.toContain(
+      'drop constraint "grupo_alumnos_grupo_assignment_foreign"'
+    );
+    expect(up).not.toContain('drop constraint "grupo_id_assignment_unique"');
+    expect(up).not.toContain(
+      'drop constraint "grupo_assignment_nombre_paradigma_unique_idx"'
+    );
   });
 
   beforeEach(async () => {
@@ -358,5 +396,43 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
       [seed.assignmentId, seed.alumnoIds[0]]
     );
     expect(Number(memberships[0]?.count)).toBe(1);
+  });
+
+  it("unifica dos upserts concurrentes con el mismo nombre de grupo", async () => {
+    const seed = await seedGroups(orm, {
+      alumnos: 2,
+      grupos: 0,
+      maxIntegrantes: 3,
+    });
+
+    const sync = async (alumnoId: string) => {
+      const em = orm.em.fork();
+      const [assignment, alumno] = await Promise.all([
+        em.findOneOrFail(GrupalAssignment, { id: seed.assignmentId }),
+        em.findOneOrFail(Alumno, { id: alumnoId }),
+      ]);
+      return upsertGrupoConMiembro({
+        nombreGrupo: "Los Lambdas",
+        paradigma: "funcional",
+        assignment,
+        alumno,
+      });
+    };
+
+    const grupos = await Promise.all(seed.alumnoIds.map(sync));
+
+    expect(new Set(grupos.map((grupo) => grupo.id)).size).toBe(1);
+    const rows = await orm.em.getConnection().execute<
+      { grupos: string; membresias: string }[]
+    >(
+      `select
+         (select count(*) from "grupo"
+          where "assignment_id" = ? and "nombre" = 'Los Lambdas'
+            and "paradigma" = 'funcional') as grupos,
+         (select count(*) from "grupo_alumnos"
+          where "assignment_id" = ?) as membresias`,
+      [seed.assignmentId, seed.assignmentId]
+    );
+    expect(rows[0]).toEqual({ grupos: "1", membresias: "2" });
   });
 });

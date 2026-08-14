@@ -46,4 +46,27 @@ describe("ORM metadata", () => {
 
     await orm.close(true);
   });
+
+  it("preserva el pivot de grupos administrado por migraciones", async () => {
+    const orm = await MikroORM.init({ ...testConfig, connect: false });
+    const meta = orm.getMetadata();
+    const grupo = meta.get("Grupo");
+
+    expect(grupo.properties.alumnos.pivotTable).toBe("grupo_alumnos");
+    expect(grupo.uniques).toContainEqual(
+      expect.objectContaining({
+        name: "grupo_id_assignment_unique",
+        properties: ["id", "assignment"],
+      })
+    );
+    expect(grupo.uniques).toContainEqual(
+      expect.objectContaining({
+        name: "grupo_assignment_nombre_paradigma_unique_idx",
+        properties: ["assignment", "nombre", "paradigma"],
+      })
+    );
+    expect(config.schemaGenerator?.skipTables).toContain("grupo_alumnos");
+
+    await orm.close(true);
+  });
 });

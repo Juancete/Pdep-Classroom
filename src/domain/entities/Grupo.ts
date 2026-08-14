@@ -6,6 +6,7 @@ import {
   ManyToOne,
   PrimaryKey,
   Property,
+  Unique,
 } from "@mikro-orm/core";
 import { randomUUID } from "crypto";
 import { Alumno } from "./Alumno";
@@ -33,6 +34,16 @@ export class AlumnoYaEnGrupoDelAssignmentError extends Error {
   }
 }
 
+export class NombreGrupoDuplicadoError extends Error {
+  constructor(
+    public readonly assignmentId: string,
+    public readonly nombre: string
+  ) {
+    super(`Ya existe un grupo llamado "${nombre}" para este TP.`);
+    this.name = "NombreGrupoDuplicadoError";
+  }
+}
+
 export class GrupoLlenoError extends Error {
   constructor(
     public readonly grupoId: string,
@@ -51,6 +62,14 @@ export class AssignmentNoGrupalError extends Error {
 }
 
 @Entity()
+@Unique({
+  name: "grupo_id_assignment_unique",
+  properties: ["id", "assignment"],
+})
+@Unique({
+  name: "grupo_assignment_nombre_paradigma_unique_idx",
+  properties: ["assignment", "nombre", "paradigma"],
+})
 export class Grupo {
   @PrimaryKey({ type: "uuid" })
   id: string = randomUUID();
@@ -61,7 +80,7 @@ export class Grupo {
   @Enum({ items: ["funcional", "logico", "objetos"] })
   paradigma!: Paradigma;
 
-  @ManyToMany(() => Alumno)
+  @ManyToMany({ entity: () => Alumno, pivotTable: "grupo_alumnos" })
   alumnos = new Collection<Alumno>(this);
 
   @Property({ type: 'integer' })

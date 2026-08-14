@@ -24,6 +24,15 @@ export class Migration20260813190000_group_membership_invariants extends Migrati
         ) then
           raise exception 'No se pueden garantizar los cupos: hay grupos con mas alumnos que max_integrantes.';
         end if;
+
+        if exists (
+          select 1
+          from "grupo"
+          group by "assignment_id", "nombre", "paradigma"
+          having count(*) > 1
+        ) then
+          raise exception 'No se puede garantizar la unicidad de grupos: hay nombres y paradigmas duplicados dentro de un assignment.';
+        end if;
       end $$;
     `);
 
@@ -37,6 +46,7 @@ export class Migration20260813190000_group_membership_invariants extends Migrati
     this.addSql(`alter table "grupo_alumnos" alter column "assignment_id" set not null;`);
 
     this.addSql(`alter table "grupo" add constraint "grupo_id_assignment_unique" unique ("id", "assignment_id");`);
+    this.addSql(`alter table "grupo" add constraint "grupo_assignment_nombre_paradigma_unique_idx" unique ("assignment_id", "nombre", "paradigma");`);
     this.addSql(`alter table "grupo_alumnos" add constraint "grupo_alumnos_grupo_assignment_foreign" foreign key ("grupo_id", "assignment_id") references "grupo" ("id", "assignment_id") on update cascade on delete cascade;`);
     this.addSql(`create unique index "grupo_alumnos_assignment_alumno_unique_idx" on "grupo_alumnos" ("assignment_id", "alumno_id");`);
 
@@ -63,6 +73,7 @@ export class Migration20260813190000_group_membership_invariants extends Migrati
     this.addSql(`drop function if exists "completar_assignment_grupo_alumnos"();`);
     this.addSql(`drop index if exists "grupo_alumnos_assignment_alumno_unique_idx";`);
     this.addSql(`alter table "grupo_alumnos" drop constraint if exists "grupo_alumnos_grupo_assignment_foreign";`);
+    this.addSql(`alter table "grupo" drop constraint if exists "grupo_assignment_nombre_paradigma_unique_idx";`);
     this.addSql(`alter table "grupo" drop constraint if exists "grupo_id_assignment_unique";`);
     this.addSql(`alter table "grupo_alumnos" drop column "assignment_id";`);
   }
