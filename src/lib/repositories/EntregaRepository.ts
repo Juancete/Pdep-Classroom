@@ -100,13 +100,15 @@ export async function getActiveRepoCountsByAssignment(): Promise<Map<string, num
   return map;
 }
 
-export async function clearReposDeAssignment(assignmentId: string): Promise<void> {
+export async function getEntregasConRepoActivo(
+  assignmentId: string
+): Promise<Entrega[]> {
   const entityManager = await getEM();
-  const entregas = await entityManager.find(Entrega, { assignment: { id: assignmentId } });
-  for (const entrega of entregas) {
-    entrega.repoDeleted = true;
-  }
-  await entityManager.flush();
+  return entityManager.find(Entrega, {
+    assignment: { id: assignmentId },
+    repoDeleted: false,
+    repoName: { $ne: null },
+  });
 }
 
 export async function createEntrega(data: {

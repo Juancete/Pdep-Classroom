@@ -39,10 +39,19 @@ export {
   getEntregaLogica,
   getEntregaCountsByAssignment,
   getActiveRepoCountsByAssignment,
+  getEntregasConRepoActivo,
   createEntrega,
   createOrGetEntrega,
-  clearReposDeAssignment,
 } from "./EntregaRepository";
+
+export {
+  iniciarIntentoBorradoRepo,
+  completarIntentoBorradoRepo,
+  fallarIntentoBorradoRepo,
+  getRepoDeletionHistory,
+  conLockBorradoReposAssignment,
+  type RepoDeletionHistoryPage,
+} from "./RepoDeletionAttemptRepository";
 
 export {
   getGrupos,

@@ -17,6 +17,7 @@ import {
   GrupalAssignment,
   Grupo,
   Entrega,
+  RepoDeletionAttempt,
 } from "./src/domain/entities";
 
 export default defineConfig({
@@ -27,7 +28,16 @@ export default defineConfig({
   },
 
   // Entidades
-  entities: [Alumno, Comision, Assignment, IndividualAssignment, GrupalAssignment, Grupo, Entrega],
+  entities: [
+    Alumno,
+    Comision,
+    Assignment,
+    IndividualAssignment,
+    GrupalAssignment,
+    Grupo,
+    Entrega,
+    RepoDeletionAttempt,
+  ],
 
   // Usa reflect-metadata en runtime (funciona en webpack/RSC sin necesitar
   // leer archivos .ts desde el filesystem).

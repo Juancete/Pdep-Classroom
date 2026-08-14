@@ -17,6 +17,7 @@ import { Alumno, Assignment, Entrega, Grupo } from "@/domain/entities";
 import {
   createEntrega,
   createOrGetEntrega,
+  getEntregasConRepoActivo,
   getEntregaLogica,
 } from "./EntregaRepository";
 
@@ -148,5 +149,18 @@ describe("EntregaRepository", () => {
         alumnoId: "alumno-1",
       })
     ).resolves.toBe(existing);
+  });
+
+  it("devuelve solo entregas activas que conservan repoName", async () => {
+    const activa = new Entrega();
+    activa.repoName = "tp-ana";
+    mockEm.find.mockResolvedValue([activa]);
+
+    await expect(getEntregasConRepoActivo("a1")).resolves.toEqual([activa]);
+    expect(mockEm.find).toHaveBeenCalledWith(Entrega, {
+      assignment: { id: "a1" },
+      repoDeleted: false,
+      repoName: { $ne: null },
+    });
   });
 });
