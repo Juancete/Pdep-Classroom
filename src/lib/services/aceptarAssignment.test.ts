@@ -38,6 +38,7 @@ vi.mock("@/lib/github", () => ({
 import {
   aceptarAssignment,
   AlumnoNoRegistradoError,
+  AssignmentNoDisponibleError,
   AssignmentNoEncontradoError,
 } from "./aceptarAssignment";
 import { AccesoAssignmentProhibidoError } from "./assignmentAuthorization";
@@ -72,6 +73,10 @@ function makeAssignment(overrides?: Partial<IndividualAssignment & GrupalAssignm
   assignment.slug = "kata-funcional";
   assignment.createdAt = new Date("2026-01-01");
   assignment.comision = makeComision();
+  // Publicado por defecto: la mayoría de estos tests ejercitan el camino
+  // feliz de aceptar, que requiere que el assignment esté disponible. Los
+  // tests de ciclo de vida overridean `estadoNombre` explícitamente.
+  assignment.transicionarA("publicado", { tieneEntregas: false }, "docente1");
   return Object.assign(assignment, overrides);
 }
 
@@ -288,6 +293,41 @@ describe("aceptarAssignment", () => {
     mockGetAlumnoByGithub.mockResolvedValue(
       makeAlumno({ comision: makeComision("c2") })
     );
+
+    await expect(
+      aceptarAssignment("a1", makeUser({ isAdmin: true }))
+    ).resolves.toBeInstanceOf(Entrega);
+  });
+
+  it("rechaza aceptar un assignment en borrador y no toca GitHub", async () => {
+    const borrador = makeAssignment();
+    borrador.estadoNombre = "borrador";
+    mockGetAssignment.mockResolvedValue(borrador);
+
+    await expect(aceptarAssignment("a1", makeUser())).rejects.toBeInstanceOf(
+      AssignmentNoDisponibleError
+    );
+
+    expect(mockGetEntregaDeUsuario).not.toHaveBeenCalled();
+    expect(mockCrearEntrega).not.toHaveBeenCalled();
+  });
+
+  it("rechaza aceptar un assignment archivado y no toca GitHub", async () => {
+    const archivado = makeAssignment();
+    archivado.transicionarA("archivado", { tieneEntregas: false }, "docente1");
+    mockGetAssignment.mockResolvedValue(archivado);
+
+    await expect(aceptarAssignment("a1", makeUser())).rejects.toBeInstanceOf(
+      AssignmentNoDisponibleError
+    );
+
+    expect(mockCrearEntrega).not.toHaveBeenCalled();
+  });
+
+  it("permite al administrador aceptar un assignment en borrador", async () => {
+    const borrador = makeAssignment();
+    borrador.estadoNombre = "borrador";
+    mockGetAssignment.mockResolvedValue(borrador);
 
     await expect(
       aceptarAssignment("a1", makeUser({ isAdmin: true }))

@@ -16,7 +16,7 @@ import { buildRepoName, slugify } from "@/lib/naming";
 import {
   AssignmentNoEncontradoError,
   GrupoNoEncontradoError,
-  autorizarAccesoAssignment,
+  autorizarAccionSobreAssignment,
 } from "@/lib/services/assignmentAuthorization";
 import { extractDbErrorCode, UNIQUE_VIOLATION } from "./db-errors";
 
@@ -176,7 +176,7 @@ export async function crearGrupo(params: {
         { id: alumnoId },
         { populate: ["comision"] }
       );
-      autorizarAccesoAssignment({ isAdmin: esAdmin }, alumno, assignment);
+      autorizarAccionSobreAssignment({ isAdmin: esAdmin }, alumno, assignment);
 
       return traducirConflictoDeInscripcion(
         assignmentId,
@@ -251,7 +251,7 @@ export async function unirseAGrupo(params: {
       { id: alumnoId },
       { populate: ["comision"] }
     );
-    autorizarAccesoAssignment({ isAdmin: esAdmin }, alumno, assignment);
+    autorizarAccionSobreAssignment({ isAdmin: esAdmin }, alumno, assignment);
 
     return traducirConflictoDeInscripcion(
       assignmentId,

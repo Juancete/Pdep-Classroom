@@ -9,7 +9,10 @@ import {
   AlumnoNoRegistradoError,
   AssignmentNoEncontradoError,
 } from "@/lib/services/aceptarAssignment";
-import { AccesoAssignmentProhibidoError } from "@/lib/services/assignmentAuthorization";
+import {
+  AccesoAssignmentProhibidoError,
+  AssignmentNoDisponibleError,
+} from "@/lib/services/assignmentAuthorization";
 
 export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -33,6 +36,9 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
     if (error instanceof AccesoAssignmentProhibidoError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    if (error instanceof AssignmentNoDisponibleError) {
       return NextResponse.json({ error: error.message }, { status: 403 });
     }
     if (
