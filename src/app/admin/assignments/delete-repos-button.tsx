@@ -49,7 +49,7 @@ export function DeleteReposButton({
     : 0;
 
   return (
-    <span className="inline-flex max-w-md flex-col items-start gap-2">
+    <div className="inline-flex max-w-md flex-col items-start gap-2">
       {activeRepoCount > 0 && (
         <button
           onClick={handleDelete}
@@ -63,34 +63,43 @@ export function DeleteReposButton({
               : `Borrar todos los repos (${activeRepoCount})`}
         </button>
       )}
-      {error && <span className="text-red-600 text-sm">{error}</span>}
-      {result && (
-        <span
-          role="status"
-          className={`rounded-md px-3 py-2 text-sm ${
-            result.ok
-              ? "bg-green-50 text-green-800"
-              : "bg-amber-50 text-amber-900"
-          }`}
-        >
-          {result.ok ? (
-            <>Se confirmaron {confirmed} de {result.attempted} repositorios.</>
-          ) : (
-            <>
-              Se confirmaron {confirmed} de {result.attempted} repositorios.
-              Fallaron {result.failed}; podés reintentarlos.
-              <ul className="mt-1 list-disc pl-5">
-                {failedResults?.map((item) => (
-                  <li key={item.entregaId}>
-                    <span className="font-mono">{item.repoName}</span>
-                    {item.error ? `: ${item.error}` : ""}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </span>
-      )}
-    </span>
+      {error && <div className="text-red-600 text-sm">{error}</div>}
+      <div
+        role="status"
+        aria-live="polite"
+        className={
+          result
+            ? `rounded-md px-3 py-2 text-sm ${
+                result.ok
+                  ? "bg-green-50 text-green-800"
+                  : "bg-amber-50 text-amber-900"
+              }`
+            : undefined
+        }
+      >
+        {result && (
+          <>
+            {result.ok ? (
+              <>
+                Se confirmaron {confirmed} de {result.attempted} repositorios.
+              </>
+            ) : (
+              <>
+                Se confirmaron {confirmed} de {result.attempted} repositorios.
+                Fallaron {result.failed}; podés reintentarlos.
+                <ul className="mt-1 list-disc pl-5">
+                  {failedResults?.map((item) => (
+                    <li key={item.entregaId}>
+                      <span className="font-mono">{item.repoName}</span>
+                      {item.error ? `: ${item.error}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   );
 }

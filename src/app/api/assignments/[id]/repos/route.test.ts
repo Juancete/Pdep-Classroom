@@ -4,6 +4,7 @@ import type { PdepUser } from "@/types";
 const mockGetCurrentUser = vi.fn();
 const mockGetAssignment = vi.fn();
 const mockBorrarRepositorios = vi.fn();
+const mockConLock = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
@@ -11,6 +12,10 @@ vi.mock("@/lib/session", () => ({
 
 vi.mock("@/lib/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
+  conLockBorradoReposAssignment: (
+    assignmentId: string,
+    operation: () => Promise<unknown>
+  ) => mockConLock(assignmentId, operation),
 }));
 
 vi.mock("@/lib/services/borrarRepositoriosDeAssignment", () => ({
@@ -53,6 +58,10 @@ describe("DELETE /api/assignments/[id]/repos", () => {
     mockGetCurrentUser.mockResolvedValue(admin());
     mockGetAssignment.mockResolvedValue({ id: "a1" });
     mockBorrarRepositorios.mockResolvedValue(result());
+    mockConLock.mockImplementation(
+      async (_assignmentId: string, operation: () => Promise<unknown>) =>
+        operation()
+    );
   });
 
   it.each([
@@ -87,6 +96,7 @@ describe("DELETE /api/assignments/[id]/repos", () => {
       assignmentId: "a1",
       requestedBy: "docente",
     });
+    expect(mockConLock).toHaveBeenCalledWith("a1", expect.any(Function));
   });
 
   it("devuelve 200 con el resumen de éxito", async () => {
@@ -142,5 +152,20 @@ describe("DELETE /api/assignments/[id]/repos", () => {
     });
 
     expect(response.status).toBe(500);
+  });
+
+  it("devuelve un 500 genérico si falla el borrado", async () => {
+    mockBorrarRepositorios.mockRejectedValue(
+      new Error("GitHub devolvió información interna")
+    );
+
+    const response = await DELETE(makeRequest(), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body).toEqual({ error: "Error interno del servidor" });
+    expect(JSON.stringify(body)).not.toContain("información interna");
   });
 });
