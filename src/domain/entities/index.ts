@@ -7,7 +7,11 @@ export {
   type EstadoGoogleGroup,
 } from "./Alumno";
 export { Comision } from "./Comision";
-export { Assignment } from "./Assignment";
+export {
+  Assignment,
+  AssignmentNoEncontradoError,
+  AssignmentNoDisponibleError,
+} from "./Assignment";
 export type {
   FuentesDeConteo,
   ParticipantesResueltos,
@@ -31,6 +35,7 @@ export {
   NombreGrupoInvalidoError,
   GrupoLlenoError,
   AssignmentNoGrupalError,
+  GrupoNoEncontradoError,
 } from "./Grupo";
 export { Entrega } from "./Entrega";
 export {

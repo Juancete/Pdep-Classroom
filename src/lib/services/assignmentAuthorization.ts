@@ -1,33 +1,21 @@
-import type { Alumno, Assignment } from "@/domain/entities";
+import {
+  AssignmentNoEncontradoError,
+  AssignmentNoDisponibleError,
+  GrupoNoEncontradoError,
+  type Alumno,
+  type Assignment,
+} from "@/domain/entities";
 
-export class AssignmentNoEncontradoError extends Error {
-  constructor(public readonly assignmentId: string) {
-    super("Assignment no encontrado");
-    this.name = "AssignmentNoEncontradoError";
-  }
-}
+// Reexportados desde el dominio: son errores sobre la existencia/disponibilidad
+// de assignments y grupos, no decisiones de política — los repositorios los
+// lanzan directamente y no deberían importar hacia arriba desde `@/lib/services`.
+// Se reexportan acá para no romper los imports existentes de este módulo.
+export { AssignmentNoEncontradoError, AssignmentNoDisponibleError, GrupoNoEncontradoError };
 
 export class AccesoAssignmentProhibidoError extends Error {
   constructor(public readonly assignmentId: string) {
     super("No tenés acceso a este assignment");
     this.name = "AccesoAssignmentProhibidoError";
-  }
-}
-
-export class GrupoNoEncontradoError extends Error {
-  constructor(
-    public readonly assignmentId: string,
-    public readonly grupoId: string
-  ) {
-    super("Grupo no encontrado");
-    this.name = "GrupoNoEncontradoError";
-  }
-}
-
-export class AssignmentNoDisponibleError extends Error {
-  constructor(public readonly assignmentId: string) {
-    super("Este TP no está disponible.");
-    this.name = "AssignmentNoDisponibleError";
   }
 }
 

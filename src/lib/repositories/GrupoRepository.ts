@@ -5,6 +5,8 @@ import {
   Alumno,
   GrupalAssignment,
   Assignment,
+  AssignmentNoEncontradoError,
+  GrupoNoEncontradoError,
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
   NombreGrupoDuplicadoError,
@@ -13,11 +15,7 @@ import {
 } from "@/domain/entities";
 import type { Paradigma } from "@/types";
 import { buildRepoName, slugify } from "@/lib/naming";
-import {
-  AssignmentNoEncontradoError,
-  GrupoNoEncontradoError,
-  autorizarAccionSobreAssignment,
-} from "@/lib/services/assignmentAuthorization";
+import { autorizarAccionSobreAssignment } from "@/lib/services/assignmentAuthorization";
 import { extractDbErrorCode, UNIQUE_VIOLATION } from "./db-errors";
 
 const INSCRIPCION_UNICA_CONSTRAINT =
