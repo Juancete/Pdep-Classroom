@@ -41,6 +41,7 @@ import {
   AssignmentNoEncontradoError,
 } from "./aceptarAssignment";
 import { AccesoAssignmentProhibidoError } from "./assignmentAuthorization";
+import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
 function makeComision(id = "c1"): Comision {
   const comision = new Comision(2026, "sheet-test");
@@ -159,6 +160,25 @@ describe("aceptarAssignment", () => {
         repoName: "kata-funcional-juangarcia",
       })
     );
+  });
+
+  it("rechaza una entrega individual cuyo nombre completo supera el límite", async () => {
+    mockGetAssignment.mockResolvedValue(
+      makeAssignment({ slug: "a".repeat(90) })
+    );
+    mockGetAlumnoByGithub.mockResolvedValue(
+      makeAlumno({ githubUsername: "b".repeat(10) })
+    );
+
+    await expect(
+      aceptarAssignment(
+        "a1",
+        makeUser({ githubUsername: "b".repeat(10) })
+      )
+    ).rejects.toBeInstanceOf(NombreRepositorioDemasiadoLargoError);
+
+    expect(mockRepoExists).not.toHaveBeenCalled();
+    expect(mockCrearEntrega).not.toHaveBeenCalled();
   });
 
   it("mantiene el requisito funcional de alumno para un admin que acepta un TP individual", async () => {
