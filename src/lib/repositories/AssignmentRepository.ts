@@ -7,7 +7,9 @@ import {
 } from "@/domain/entities";
 import type { AssignmentFormData } from "@/lib/assignment-schema";
 import { slugify } from "@/lib/naming";
-import type { Paradigma } from "@/types";
+import type { NombreEstadoAssignment, Paradigma } from "@/types";
+import { contarEntregasDeAssignment } from "./EntregaRepository";
+import { AssignmentNoEncontradoError } from "@/lib/services/assignmentAuthorization";
 
 export class ComisionActivaRequeridaError extends Error {
   constructor() {
@@ -16,11 +18,21 @@ export class ComisionActivaRequeridaError extends Error {
   }
 }
 
-export async function getAssignments(): Promise<Assignment[]> {
+// Estados en los que un assignment puede aparecer en superficies de alumno.
+// Borrador nunca; el filtrado fino de "archivado solo si tiene entrega" lo
+// hace el caller (dashboard, /api/assignments) con `esVisibleParaAlumno`.
+const ESTADOS_VISIBLES_PARA_ALUMNO: NombreEstadoAssignment[] = [
+  "publicado",
+  "archivado",
+];
+
+export async function getAssignments(filtro?: {
+  estado?: NombreEstadoAssignment;
+}): Promise<Assignment[]> {
   const entityManager = await getEM();
   return entityManager.find(
     Assignment,
-    {},
+    filtro?.estado ? { estadoNombre: filtro.estado } : {},
     { orderBy: { createdAt: "DESC" }, populate: ["comision"] }
   );
 }
@@ -31,7 +43,10 @@ export async function getAssignmentsDeComision(
   const entityManager = await getEM();
   return entityManager.find(
     Assignment,
-    { comision: { id: comisionId } },
+    {
+      comision: { id: comisionId },
+      estadoNombre: { $in: ESTADOS_VISIBLES_PARA_ALUMNO },
+    },
     { orderBy: { createdAt: "DESC" } }
   );
 }
@@ -103,6 +118,29 @@ export async function setInscripcionesCerradas(
   const assignment = await entityManager.findOne(GrupalAssignment, { id: assignmentId });
   if (!assignment) return null;
   assignment.inscripcionesCerradas = cerradas;
+  await entityManager.flush();
+  return assignment;
+}
+
+/**
+ * Aplica una transición de ciclo de vida. Cuenta las entregas del assignment
+ * para que `Assignment.transicionarA` pueda evaluar la guarda de despublicar
+ * (bloqueada si hay entregas). Lanza `AssignmentNoEncontradoError` si no
+ * existe y deja propagar `TransicionDeEstadoInvalidaError` si la transición
+ * no está permitida — en ese caso no se persiste ningún cambio.
+ */
+export async function cambiarEstadoAssignment(
+  assignmentId: string,
+  destino: NombreEstadoAssignment,
+  porUsuario: string
+): Promise<Assignment> {
+  const entityManager = await getEM();
+  const assignment = await entityManager.findOne(Assignment, { id: assignmentId });
+  if (!assignment) throw new AssignmentNoEncontradoError(assignmentId);
+
+  const tieneEntregas = (await contarEntregasDeAssignment(assignmentId)) > 0;
+  assignment.transicionarA(destino, { tieneEntregas }, porUsuario);
+
   await entityManager.flush();
   return assignment;
 }

@@ -24,6 +24,13 @@ export class GrupoNoEncontradoError extends Error {
   }
 }
 
+export class AssignmentNoDisponibleError extends Error {
+  constructor(public readonly assignmentId: string) {
+    super("Este TP no está disponible.");
+    this.name = "AssignmentNoDisponibleError";
+  }
+}
+
 /**
  * Política única de acceso académico a un assignment.
  *
@@ -43,5 +50,25 @@ export function autorizarAccesoAssignment(
     alumno.comision?.id !== assignment.comision.id
   ) {
     throw new AccesoAssignmentProhibidoError(assignment.id);
+  }
+}
+
+/**
+ * Acceso académico más habilitación por estado: además de pertenecer a la
+ * comisión, el assignment tiene que estar en un estado que permita que un
+ * alumno actúe sobre él (aceptar, crear grupo, unirse a un grupo). Los
+ * administradores conservan el alcance global de `autorizarAccesoAssignment`
+ * — pueden operar sobre un borrador para probar el flujo antes de publicar.
+ */
+export function autorizarAccionSobreAssignment(
+  user: { isAdmin: boolean },
+  alumno: Alumno | null,
+  assignment: Assignment
+): void {
+  autorizarAccesoAssignment(user, alumno, assignment);
+  if (user.isAdmin) return;
+
+  if (!assignment.permiteAccionesDeAlumno()) {
+    throw new AssignmentNoDisponibleError(assignment.id);
   }
 }
