@@ -44,6 +44,7 @@ export {
   contarEntregasDeAssignment,
   createEntrega,
   createOrGetEntrega,
+  crearEntregaSiAssignmentDisponible,
 } from "./EntregaRepository";
 
 export {

@@ -1,25 +1,44 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockEm = {
+const mockEm: {
+  find: ReturnType<typeof vi.fn>;
+  findOne: ReturnType<typeof vi.fn>;
+  findOneOrFail: ReturnType<typeof vi.fn>;
+  getReference: ReturnType<typeof vi.fn>;
+  persist: ReturnType<typeof vi.fn>;
+  flush: ReturnType<typeof vi.fn>;
+  transactional: ReturnType<typeof vi.fn>;
+} = {
   find: vi.fn(),
   findOne: vi.fn(),
   findOneOrFail: vi.fn(),
   getReference: vi.fn(),
   persist: vi.fn(),
   flush: vi.fn(),
+  transactional: vi.fn(),
 };
+mockEm.transactional.mockImplementation(
+  async (callback: (transaction: typeof mockEm) => unknown) => callback(mockEm)
+);
 
 vi.mock("@/lib/db", () => ({
   getEM: vi.fn(async () => mockEm),
 }));
 
+import { LockMode } from "@mikro-orm/core";
 import { Alumno, Assignment, Entrega, Grupo } from "@/domain/entities";
+import { AssignmentNoDisponibleError } from "@/lib/services/assignmentAuthorization";
 import {
   createEntrega,
   createOrGetEntrega,
+  crearEntregaSiAssignmentDisponible,
   getEntregasConRepoActivo,
   getEntregaLogica,
 } from "./EntregaRepository";
+
+function fakeAssignmentDisponible(disponible: boolean) {
+  return { permiteAccionesDeAlumno: () => disponible };
+}
 
 describe("EntregaRepository", () => {
   beforeEach(() => {
@@ -149,6 +168,76 @@ describe("EntregaRepository", () => {
         alumnoId: "alumno-1",
       })
     ).resolves.toBe(existing);
+  });
+
+  describe("crearEntregaSiAssignmentDisponible", () => {
+    it("crea la entrega cuando el assignment está disponible para el alumno", async () => {
+      mockEm.findOne
+        .mockResolvedValueOnce(fakeAssignmentDisponible(true)) // lock del assignment
+        .mockResolvedValueOnce(null) // repo lookup
+        .mockResolvedValueOnce(null); // lógica lookup
+
+      await crearEntregaSiAssignmentDisponible(
+        {
+          assignmentId: "a1",
+          repoName: "kata-juan",
+          repoUrl: "https://github.com/org/kata-juan",
+          githubUsernames: ["juan"],
+          alumnoId: "alumno-1",
+        },
+        false
+      );
+
+      expect(mockEm.transactional).toHaveBeenCalled();
+      expect(mockEm.findOne).toHaveBeenNthCalledWith(
+        1,
+        Assignment,
+        { id: "a1" },
+        { lockMode: LockMode.PESSIMISTIC_WRITE }
+      );
+      expect(mockEm.persist).toHaveBeenCalled();
+    });
+
+    it("rechaza con AssignmentNoDisponibleError si el estado cambió bajo el lock y no es admin", async () => {
+      mockEm.findOne.mockResolvedValueOnce(fakeAssignmentDisponible(false));
+
+      await expect(
+        crearEntregaSiAssignmentDisponible(
+          {
+            assignmentId: "a1",
+            repoName: "kata-juan",
+            repoUrl: "https://github.com/org/kata-juan",
+            githubUsernames: ["juan"],
+            alumnoId: "alumno-1",
+          },
+          false
+        )
+      ).rejects.toBeInstanceOf(AssignmentNoDisponibleError);
+
+      expect(mockEm.persist).not.toHaveBeenCalled();
+    });
+
+    it("permite al admin crear la entrega aunque el assignment no esté disponible", async () => {
+      mockEm.findOne
+        .mockResolvedValueOnce(fakeAssignmentDisponible(false)) // lock del assignment
+        .mockResolvedValueOnce(null) // repo lookup
+        .mockResolvedValueOnce(null); // lógica lookup
+
+      await expect(
+        crearEntregaSiAssignmentDisponible(
+          {
+            assignmentId: "a1",
+            repoName: "kata-juan",
+            repoUrl: "https://github.com/org/kata-juan",
+            githubUsernames: ["juan"],
+            alumnoId: "alumno-1",
+          },
+          true
+        )
+      ).resolves.toBeDefined();
+
+      expect(mockEm.persist).toHaveBeenCalled();
+    });
   });
 
   it("devuelve solo entregas activas que conservan repoName", async () => {
