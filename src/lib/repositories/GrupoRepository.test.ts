@@ -17,6 +17,7 @@ import config from "../../../mikro-orm.config";
 type MockTx = {
   findOne: ReturnType<typeof vi.fn>;
   findOneOrFail: ReturnType<typeof vi.fn>;
+  populate: ReturnType<typeof vi.fn>;
   persist: ReturnType<typeof vi.fn>;
   flush: ReturnType<typeof vi.fn>;
 };
@@ -24,6 +25,7 @@ type MockTx = {
 const mockTx: MockTx = {
   findOne: vi.fn(),
   findOneOrFail: vi.fn(),
+  populate: vi.fn(),
   persist: vi.fn(),
   flush: vi.fn(),
 };
@@ -39,7 +41,12 @@ vi.mock("@/lib/db", () => ({
 
 // ── Imports después del mock ─────────────────────────────────
 
-import { crearGrupo, unirseAGrupo } from "./GrupoRepository";
+import {
+  crearGrupo,
+  unirseAGrupo,
+  upsertGrupoConMiembro,
+} from "./GrupoRepository";
+import { getEM } from "@/lib/db";
 import {
   Grupo,
   Alumno,
@@ -47,11 +54,12 @@ import {
   GrupalAssignment,
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
+  NombreGrupoDuplicadoError,
   GrupoLlenoError,
   AssignmentNoGrupalError,
 } from "@/domain/entities";
 import { IndividualAssignment } from "@/domain/entities/IndividualAssignment";
-import type { Collection } from "@mikro-orm/core";
+import { LockMode, type Collection } from "@mikro-orm/core";
 import {
   AccesoAssignmentProhibidoError,
   AssignmentNoEncontradoError,
@@ -112,6 +120,24 @@ function fakeGrupo(
     },
   } as unknown as Collection<Alumno>;
   return grupo;
+}
+
+function uniqueMembershipError(): Error {
+  return Object.assign(
+    new Error(
+      'duplicate key value violates unique constraint "grupo_alumnos_assignment_alumno_unique_idx"'
+    ),
+    { code: "23505" }
+  );
+}
+
+function uniqueGroupNameError(): Error {
+  return Object.assign(
+    new Error(
+      'duplicate key value violates unique constraint "grupo_assignment_nombre_paradigma_unique_idx"'
+    ),
+    { code: "23505" }
+  );
 }
 
 let orm: MikroORM;
@@ -245,6 +271,52 @@ describe("crearGrupo", () => {
       })
     ).resolves.toBeInstanceOf(Grupo);
   });
+
+  it("traduce el conflicto concurrente de inscripción única", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    mockTx.findOne
+      .mockResolvedValueOnce(assignment)
+      .mockResolvedValueOnce(null);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.flush.mockRejectedValueOnce(uniqueMembershipError());
+
+    await expect(
+      crearGrupo({
+        assignmentId: "a1",
+        alumnoId: "alumno-ana",
+        nombre: "Los Lambdas",
+        esAdmin: false,
+      })
+    ).rejects.toMatchObject({
+      constructor: AlumnoYaEnGrupoDelAssignmentError,
+      assignmentId: "a1",
+      githubUsername: "ana",
+    });
+  });
+
+  it("traduce el conflicto concurrente por nombre de grupo duplicado", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    mockTx.findOne
+      .mockResolvedValueOnce(assignment)
+      .mockResolvedValueOnce(null);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.flush.mockRejectedValueOnce(uniqueGroupNameError());
+
+    await expect(
+      crearGrupo({
+        assignmentId: "a1",
+        alumnoId: "alumno-ana",
+        nombre: "Los Lambdas",
+        esAdmin: false,
+      })
+    ).rejects.toMatchObject({
+      constructor: NombreGrupoDuplicadoError,
+      assignmentId: "a1",
+      nombre: "Los Lambdas",
+    });
+  });
 });
 
 // ── unirseAGrupo ────────────────────────────────────────────
@@ -282,7 +354,12 @@ describe("unirseAGrupo", () => {
       1,
       Grupo,
       { id: "g1", assignment: { id: "a1" } },
-      { populate: ["alumnos", "assignment.comision"] }
+      { lockMode: LockMode.PESSIMISTIC_WRITE }
+    );
+    expect(mockTx.populate).toHaveBeenCalledWith(
+      grupo,
+      ["alumnos", "assignment.comision"],
+      { refresh: true }
     );
     expect(grupo.alumnos.contains(ana)).toBe(true);
     expect(mockTx.flush).toHaveBeenCalled();
@@ -400,5 +477,177 @@ describe("unirseAGrupo", () => {
     ).resolves.toBe(grupo);
 
     expect(mockTx.flush).toHaveBeenCalled();
+  });
+
+  it("traduce el conflicto concurrente al unirse a dos grupos", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupo = fakeGrupo("g1", assignment, []);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupo)
+      .mockResolvedValueOnce(null);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.flush.mockRejectedValueOnce(uniqueMembershipError());
+
+    await expect(
+      unirseAGrupo({
+        assignmentId: "a1",
+        grupoId: "g1",
+        alumnoId: "alumno-ana",
+        esAdmin: false,
+      })
+    ).rejects.toMatchObject({
+      constructor: AlumnoYaEnGrupoDelAssignmentError,
+      assignmentId: "a1",
+      githubUsername: "ana",
+    });
+  });
+});
+
+describe("upsertGrupoConMiembro", () => {
+  it("bloquea el grupo, valida las invariantes y agrega al alumno", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupo = fakeGrupo("g1", assignment, []);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupo)
+      .mockResolvedValueOnce(null);
+
+    const result = await upsertGrupoConMiembro({
+      nombreGrupo: grupo.nombre,
+      paradigma: "funcional",
+      assignment,
+      alumno: ana,
+    });
+
+    expect(result).toBe(grupo);
+    expect(mockTx.findOne).toHaveBeenNthCalledWith(
+      1,
+      Grupo,
+      {
+        nombre: grupo.nombre,
+        paradigma: "funcional",
+        assignment: { id: "a1" },
+      },
+      { lockMode: LockMode.PESSIMISTIC_WRITE }
+    );
+    expect(mockTx.populate).toHaveBeenCalledWith(
+      grupo,
+      ["alumnos"],
+      { refresh: true }
+    );
+    expect(grupo.alumnos.contains(ana)).toBe(true);
+    expect(mockTx.flush).toHaveBeenCalled();
+  });
+
+  it("rechaza un alumno que ya pertenece a otro grupo del assignment", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const destino = fakeGrupo("g1", assignment, []);
+    const otro = fakeGrupo("g2", assignment, [ana]);
+    mockTx.findOne
+      .mockResolvedValueOnce(destino)
+      .mockResolvedValueOnce(otro);
+
+    await expect(
+      upsertGrupoConMiembro({
+        nombreGrupo: destino.nombre,
+        paradigma: "funcional",
+        assignment,
+        alumno: ana,
+      })
+    ).rejects.toBeInstanceOf(AlumnoYaEnGrupoDelAssignmentError);
+    expect(mockTx.flush).not.toHaveBeenCalled();
+  });
+
+  it("respeta el cupo del grupo al sincronizar desde Sheets", async () => {
+    const assignment = fakeGrupal({ maxIntegrantes: 1 });
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const bob = fakeAlumno("alumno-bob", "bob");
+    const lleno = fakeGrupo("g1", assignment, [bob], 1);
+    mockTx.findOne
+      .mockResolvedValueOnce(lleno)
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      upsertGrupoConMiembro({
+        nombreGrupo: lleno.nombre,
+        paradigma: "funcional",
+        assignment,
+        alumno: ana,
+      })
+    ).rejects.toBeInstanceOf(GrupoLlenoError);
+  });
+
+  it("traduce la restricción única si otra transacción gana la carrera", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupo = fakeGrupo("g1", assignment, []);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupo)
+      .mockResolvedValueOnce(null);
+    mockTx.flush.mockRejectedValueOnce(uniqueMembershipError());
+
+    await expect(
+      upsertGrupoConMiembro({
+        nombreGrupo: grupo.nombre,
+        paradigma: "funcional",
+        assignment,
+        alumno: ana,
+      })
+    ).rejects.toBeInstanceOf(AlumnoYaEnGrupoDelAssignmentError);
+  });
+
+  it("reintenta con un EM nuevo si otra transacción crea el mismo grupo", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const ganador = fakeGrupo("g-ganador", assignment, []);
+    ganador.nombre = "Los Lambdas";
+    mockTx.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(ganador)
+      .mockResolvedValueOnce(null);
+    mockTx.flush.mockRejectedValueOnce(uniqueGroupNameError());
+
+    await expect(
+      upsertGrupoConMiembro({
+        nombreGrupo: "Los Lambdas",
+        paradigma: "funcional",
+        assignment,
+        alumno: ana,
+      })
+    ).resolves.toBe(ganador);
+
+    expect(getEM).toHaveBeenCalledTimes(2);
+    expect(mockEm.transactional).toHaveBeenCalledTimes(2);
+    expect(mockTx.populate).toHaveBeenCalledWith(
+      ganador,
+      ["alumnos"],
+      { refresh: true }
+    );
+    expect(ganador.alumnos.contains(ana)).toBe(true);
+  });
+
+  it("devuelve un conflicto explícito si el reintento también colisiona", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    mockTx.findOne.mockResolvedValue(null);
+    mockTx.flush.mockRejectedValue(uniqueGroupNameError());
+
+    await expect(
+      upsertGrupoConMiembro({
+        nombreGrupo: "Los Lambdas",
+        paradigma: "funcional",
+        assignment,
+        alumno: ana,
+      })
+    ).rejects.toMatchObject({
+      constructor: NombreGrupoDuplicadoError,
+      assignmentId: "a1",
+      nombre: "Los Lambdas",
+    });
+
+    expect(getEM).toHaveBeenCalledTimes(2);
   });
 });

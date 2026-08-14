@@ -5,6 +5,7 @@ import { join } from "path";
 type SnapshotTable = {
   name: string;
   columns: Record<string, { default?: string; nullable?: boolean }>;
+  indexes: Array<{ keyName: string }>;
   foreignKeys: Record<string, { deleteRule?: string }>;
 };
 
@@ -65,6 +66,33 @@ describe("migrations", () => {
     expect(migration).toContain('"google_group_ultimo_error"');
   });
 
+  it("garantiza membresía única por assignment y prepara el locking de cupos", () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        "migrations",
+        "Migration20260813190000_group_membership_invariants.ts"
+      ),
+      "utf8"
+    );
+
+    expect(migration).toContain(
+      'create unique index "grupo_alumnos_assignment_alumno_unique_idx"'
+    );
+    expect(migration).toContain(
+      'constraint "grupo_assignment_nombre_paradigma_unique_idx" unique ("assignment_id", "nombre", "paradigma")'
+    );
+    expect(migration).toContain(
+      'constraint "grupo_alumnos_grupo_assignment_foreign"'
+    );
+    expect(migration).toContain(
+      'create trigger "grupo_alumnos_completar_assignment"'
+    );
+    expect(migration).toContain("hay alumnos en mas de un grupo");
+    expect(migration).toContain("hay grupos con mas alumnos");
+    expect(migration).toContain("hay nombres y paradigmas duplicados");
+  });
+
   it("mantiene el snapshot alineado con Google Groups y las cascadas", () => {
     const snapshot = JSON.parse(
       readFileSync(
@@ -75,6 +103,10 @@ describe("migrations", () => {
     const alumno = snapshot.tables.find((table) => table.name === "alumno");
     const assignment = snapshot.tables.find(
       (table) => table.name === "assignment"
+    );
+    const grupo = snapshot.tables.find((table) => table.name === "grupo");
+    const grupoAlumnos = snapshot.tables.find(
+      (table) => table.name === "grupo_alumnos"
     );
 
     expect(alumno?.columns.google_group_emails_pendientes_baja).toMatchObject({
@@ -92,5 +124,22 @@ describe("migrations", () => {
     expect(
       assignment?.foreignKeys.assignment_comision_id_foreign.deleteRule
     ).toBe("cascade");
+    expect(grupo?.indexes).toContainEqual(
+      expect.objectContaining({ keyName: "grupo_id_assignment_unique" })
+    );
+    expect(grupo?.indexes).toContainEqual(
+      expect.objectContaining({
+        keyName: "grupo_assignment_nombre_paradigma_unique_idx",
+      })
+    );
+    expect(grupoAlumnos?.columns).toHaveProperty("assignment_id");
+    expect(grupoAlumnos?.indexes).toContainEqual(
+      expect.objectContaining({
+        keyName: "grupo_alumnos_assignment_alumno_unique_idx",
+      })
+    );
+    expect(grupoAlumnos?.foreignKeys).toHaveProperty(
+      "grupo_alumnos_grupo_assignment_foreign"
+    );
   });
 });

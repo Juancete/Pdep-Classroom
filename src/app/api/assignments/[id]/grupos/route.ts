@@ -11,6 +11,7 @@ import {
   AssignmentNoGrupalError,
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
+  NombreGrupoDuplicadoError,
 } from "@/domain/entities";
 import { internalServerError } from "@/lib/api-errors";
 import type { Grupo } from "@/domain/entities";
@@ -124,6 +125,9 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         { error: "Ya estás en un grupo para este TP" },
         { status: 409 }
       );
+    }
+    if (error instanceof NombreGrupoDuplicadoError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
     }
     return internalServerError("POST /api/assignments/[id]/grupos", error, {
       assignmentId: params.id,
