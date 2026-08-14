@@ -75,6 +75,8 @@ function makeGrupalAssignment(overrides = {}): GrupalAssignment {
   assignment.maxIntegrantes = 3;
   assignment.inscripcionesCerradas = false;
   assignment.comision = { id: "c1" } as never;
+  // Publicado por defecto: la página exige que el assignment esté disponible.
+  assignment.transicionarA("publicado", { tieneEntregas: false }, "docente1");
   return Object.assign(assignment, overrides);
 }
 

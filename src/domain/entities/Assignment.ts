@@ -1,6 +1,7 @@
 import {
   Entity,
   Enum,
+  Index,
   ManyToOne,
   PrimaryKey,
   Property,
@@ -10,6 +11,11 @@ import { Comision } from "./Comision";
 import type { Alumno } from "./Alumno";
 import type { Grupo } from "./Grupo";
 import type { Paradigma, TipoAssignment } from "@/types";
+import {
+  EstadoAssignment,
+  type ContextoTransicionEstado,
+  type NombreEstadoAssignment,
+} from "./EstadoAssignment";
 
 // Dependencias de lectura que las subclases pueden usar desde sus métodos
 // polimórficos — se pasan como parámetro para que las entidades no importen
@@ -42,9 +48,27 @@ export type ParticipantesResueltos =
       grupoNombreNormalizado: string;
     };
 
+// Errores de dominio sobre la existencia/disponibilidad de un assignment.
+// Viven acá (no en la capa de servicios) para que los repositorios puedan
+// lanzarlos sin importar hacia arriba desde `@/lib/services`.
+export class AssignmentNoEncontradoError extends Error {
+  constructor(public readonly assignmentId: string) {
+    super("Assignment no encontrado");
+    this.name = "AssignmentNoEncontradoError";
+  }
+}
+
+export class AssignmentNoDisponibleError extends Error {
+  constructor(public readonly assignmentId: string) {
+    super("Este TP no está disponible.");
+    this.name = "AssignmentNoDisponibleError";
+  }
+}
+
 // Single Table Inheritance: todos los assignments en una sola tabla,
 // discriminados por la columna `tipo`
 @Entity({ discriminatorColumn: "tipo", abstract: true })
+@Index({ name: "assignment_estado_nombre_index", properties: ["estadoNombre"] })
 export abstract class Assignment {
   @PrimaryKey({ type: "uuid" })
   id: string = randomUUID();
@@ -75,6 +99,68 @@ export abstract class Assignment {
 
   @ManyToOne(() => Comision, { nullable: true, deleteRule: "cascade" })
   comision?: Comision;
+
+  // Ciclo de vida: borrador (solo admin) → publicado (visible para alumnos)
+  // → archivado (histórico, preserva entregas). Ver EstadoAssignment.ts para
+  // las reglas de visibilidad y transición — acá solo vive la columna
+  // persistida y su resolución al objeto Strategy correspondiente.
+  @Enum({ items: ["borrador", "publicado", "archivado"] })
+  estadoNombre: NombreEstadoAssignment = "borrador";
+
+  @Property({ nullable: true, type: "datetime" })
+  publicadoEn?: Date;
+
+  @Property({ nullable: true, type: "string" })
+  publicadoPor?: string;
+
+  @Property({ nullable: true, type: "datetime" })
+  archivadoEn?: Date;
+
+  @Property({ nullable: true, type: "string" })
+  archivadoPor?: string;
+
+  get estado(): EstadoAssignment {
+    return EstadoAssignment.desdeNombre(this.estadoNombre);
+  }
+
+  /** `true` si un alumno con o sin entrega debe ver este assignment en su dashboard. */
+  esVisibleParaAlumno(tieneEntrega: boolean): boolean {
+    return this.estado.esVisibleParaAlumno(tieneEntrega);
+  }
+
+  /** `true` si el estado actual habilita aceptar el TP o gestionar grupos. */
+  permiteAccionesDeAlumno(): boolean {
+    return this.estado.permiteAccionesDeAlumno();
+  }
+
+  /**
+   * Aplica la transición de estado, validando contra las reglas del estado
+   * actual, y sella la auditoría (quién y cuándo publicó/archivó). Lanza
+   * `TransicionDeEstadoInvalidaError` si la transición no está permitida.
+   */
+  transicionarA(
+    destino: NombreEstadoAssignment,
+    contexto: ContextoTransicionEstado,
+    porUsuario: string
+  ): void {
+    const estadoAnterior = this.estadoNombre;
+    const nuevoEstado = this.estado.transicionarA(this.id, destino, contexto);
+    this.estadoNombre = nuevoEstado.nombre;
+
+    // Pedir de nuevo el mismo estado (ej. "publicar" un TP ya publicado) es un
+    // no-op: no resella la auditoría, para no pisar quién y cuándo lo publicó
+    // o archivó realmente con el usuario que hizo el click redundante.
+    if (nuevoEstado.nombre === estadoAnterior) return;
+
+    if (nuevoEstado.nombre === "publicado") {
+      this.publicadoEn = new Date();
+      this.publicadoPor = porUsuario;
+    }
+    if (nuevoEstado.nombre === "archivado") {
+      this.archivadoEn = new Date();
+      this.archivadoPor = porUsuario;
+    }
+  }
 
   /** Etiqueta para el contador "totales" del admin (ej: "Alumnos" / "Grupos"). */
   abstract etiquetaTotales(): string;

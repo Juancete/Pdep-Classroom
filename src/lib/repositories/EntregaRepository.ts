@@ -1,11 +1,29 @@
 import { getEM } from "@/lib/db";
+import { LockMode } from "@mikro-orm/core";
+import type { EntityManager } from "@mikro-orm/postgresql";
 import { extractDbErrorCode, UNIQUE_VIOLATION } from "./db-errors";
-import { Alumno, Assignment, Grupo, Entrega } from "@/domain/entities";
+import {
+  Alumno,
+  Assignment,
+  AssignmentNoDisponibleError,
+  Grupo,
+  Entrega,
+} from "@/domain/entities";
 
 export async function getEntregas(assignmentId?: string): Promise<Entrega[]> {
   const entityManager = await getEM();
   const where = assignmentId ? { assignment: { id: assignmentId } } : {};
   return entityManager.find(Entrega, where, { populate: ["assignment", "grupo"] });
+}
+
+// Conteo puntual vía agregación SQL — a diferencia de getEntregaCountsByAssignment()
+// más abajo, no carga las entregas en memoria. Lo usa la guarda de "¿tiene
+// entregas?" al despublicar un assignment.
+export async function contarEntregasDeAssignment(
+  assignmentId: string
+): Promise<number> {
+  const entityManager = await getEM();
+  return entityManager.count(Entrega, { assignment: { id: assignmentId } });
 }
 
 // Devuelve todas las entregas de un usuario de una sola query,
@@ -40,8 +58,11 @@ export async function getEntregaDeUsuario(
   );
 }
 
-export async function getEntregaByRepoName(repoName: string): Promise<Entrega | null> {
-  const entityManager = await getEM();
+export async function getEntregaByRepoName(
+  repoName: string,
+  em?: EntityManager
+): Promise<Entrega | null> {
+  const entityManager = em ?? (await getEM());
   return entityManager.findOne(
     Entrega,
     { repoName },
@@ -49,12 +70,15 @@ export async function getEntregaByRepoName(repoName: string): Promise<Entrega | 
   );
 }
 
-export async function getEntregaLogica(data: {
-  assignmentId: string;
-  alumnoId?: string;
-  grupoId?: string;
-}): Promise<Entrega | null> {
-  const entityManager = await getEM();
+export async function getEntregaLogica(
+  data: {
+    assignmentId: string;
+    alumnoId?: string;
+    grupoId?: string;
+  },
+  em?: EntityManager
+): Promise<Entrega | null> {
+  const entityManager = em ?? (await getEM());
   if (data.grupoId) {
     return entityManager.findOne(
       Entrega,
@@ -111,15 +135,18 @@ export async function getEntregasConRepoActivo(
   });
 }
 
-export async function createEntrega(data: {
-  assignmentId: string;
-  repoName: string;
-  repoUrl: string;
-  githubUsernames: string[];
-  alumnoId?: string;
-  grupoId?: string;
-}): Promise<Entrega> {
-  const entityManager = await getEM();
+export async function createEntrega(
+  data: {
+    assignmentId: string;
+    repoName: string;
+    repoUrl: string;
+    githubUsernames: string[];
+    alumnoId?: string;
+    grupoId?: string;
+  },
+  em?: EntityManager
+): Promise<Entrega> {
+  const entityManager = em ?? (await getEM());
 
   const assignment = await entityManager.findOneOrFail(Assignment, { id: data.assignmentId });
 
@@ -148,39 +175,84 @@ function isUniqueViolation(error: unknown): boolean {
   return code === UNIQUE_VIOLATION || /unique constraint|duplicate key/i.test(error.message);
 }
 
-async function findExistingEntrega(data: {
-  assignmentId: string;
-  repoName: string;
-  alumnoId?: string;
-  grupoId?: string;
-}): Promise<Entrega | null> {
-  const entrega = await getEntregaByRepoName(data.repoName);
+async function findExistingEntrega(
+  data: {
+    assignmentId: string;
+    repoName: string;
+    alumnoId?: string;
+    grupoId?: string;
+  },
+  em?: EntityManager
+): Promise<Entrega | null> {
+  const entrega = await getEntregaByRepoName(data.repoName, em);
   if (entrega?.assignment?.id === data.assignmentId) return entrega;
 
-  return getEntregaLogica({
-    assignmentId: data.assignmentId,
-    alumnoId: data.alumnoId,
-    grupoId: data.grupoId,
-  });
+  return getEntregaLogica(
+    {
+      assignmentId: data.assignmentId,
+      alumnoId: data.alumnoId,
+      grupoId: data.grupoId,
+    },
+    em
+  );
 }
 
-export async function createOrGetEntrega(data: {
-  assignmentId: string;
-  repoName: string;
-  repoUrl: string;
-  githubUsernames: string[];
-  alumnoId?: string;
-  grupoId?: string;
-}): Promise<Entrega> {
-  const existing = await findExistingEntrega(data);
+export async function createOrGetEntrega(
+  data: {
+    assignmentId: string;
+    repoName: string;
+    repoUrl: string;
+    githubUsernames: string[];
+    alumnoId?: string;
+    grupoId?: string;
+  },
+  em?: EntityManager
+): Promise<Entrega> {
+  const existing = await findExistingEntrega(data, em);
   if (existing) return existing;
 
   try {
-    return await createEntrega(data);
+    return await createEntrega(data, em);
   } catch (error) {
     if (!isUniqueViolation(error)) throw error;
-    const reconciled = await findExistingEntrega(data);
+    const reconciled = await findExistingEntrega(data, em);
     if (reconciled) return reconciled;
     throw error;
   }
+}
+
+/**
+ * Crea la entrega dentro de una transacción que primero bloquea el
+ * assignment (mismo LockMode que cambiarEstadoAssignment) y vuelve a validar
+ * que el estado siga habilitando la aceptación. Cierra la ventana entre el
+ * chequeo inicial de aceptarAssignment (antes de las llamadas a GitHub, que
+ * no pueden vivir dentro de una transacción de DB) y la persistencia final:
+ * si un admin despublica el assignment mientras un alumno lo está aceptando,
+ * quien llegue segundo a este lock ve el estado real y actúa en consecuencia.
+ */
+export async function crearEntregaSiAssignmentDisponible(
+  data: {
+    assignmentId: string;
+    repoName: string;
+    repoUrl: string;
+    githubUsernames: string[];
+    alumnoId?: string;
+    grupoId?: string;
+  },
+  esAdmin: boolean
+): Promise<Entrega> {
+  const entityManager = await getEM();
+
+  return entityManager.transactional(async (transaction) => {
+    const assignment = await transaction.findOne(
+      Assignment,
+      { id: data.assignmentId },
+      { lockMode: LockMode.PESSIMISTIC_WRITE }
+    );
+    if (!esAdmin && !assignment?.permiteAccionesDeAlumno()) {
+      throw new AssignmentNoDisponibleError(data.assignmentId);
+    }
+
+    return createOrGetEntrega(data, transaction);
+  });
 }
