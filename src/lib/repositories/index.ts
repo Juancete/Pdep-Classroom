@@ -49,6 +49,7 @@ export {
   completarIntentoBorradoRepo,
   fallarIntentoBorradoRepo,
   getRepoDeletionHistory,
+  conLockBorradoReposAssignment,
   type RepoDeletionHistoryPage,
 } from "./RepoDeletionAttemptRepository";
 

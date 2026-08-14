@@ -33,6 +33,7 @@ function mensajeOperativo(error: unknown): string {
   const message = error instanceof Error ? error.message : "Error desconocido";
   return message
     .replace(/\b(?:github_pat|gh[pousr])_[A-Za-z0-9_]+\b/g, "[REDACTED]")
+    .replace(/\bBearer\s+\S+/gi, "Bearer [REDACTED]")
     .replace(
       /\b(authorization|token|password|cookie)(\s*[:=]\s*)\S+/gi,
       "$1$2[REDACTED]"
@@ -120,15 +121,25 @@ async function borrarRepositorio(data: {
       status: githubResult,
     });
   } catch (error) {
+    const persistenceError =
+      "GitHub respondió, pero no se pudo guardar el resultado. Reintentá.";
     logger.error(
       { err: error, attemptId, operationId, assignmentId, repoName, requestedBy, githubResult },
       "GitHub respondió al borrado, pero no se pudo persistir el resultado"
     );
+    try {
+      await fallarIntentoBorradoRepo(attemptId, persistenceError);
+    } catch (auditError) {
+      logger.error(
+        { err: auditError, attemptId, operationId, assignmentId, repoName },
+        "No se pudo cerrar como fallido el intento de borrado"
+      );
+    }
     return {
       entregaId: entrega.id,
       repoName,
       status: "failed",
-      error: "GitHub respondió, pero no se pudo guardar el resultado. Reintentá.",
+      error: persistenceError,
     };
   }
 

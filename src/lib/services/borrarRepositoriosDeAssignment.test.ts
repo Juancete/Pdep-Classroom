@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Entrega } from "@/domain/entities";
 
+const { mockLoggerError } = vi.hoisted(() => ({
+  mockLoggerError: vi.fn(),
+}));
+
 const mockDeleteRepo = vi.fn();
 const mockGetActive = vi.fn();
 const mockStart = vi.fn();
@@ -20,7 +24,7 @@ vi.mock("@/lib/repositories", () => ({
 }));
 
 vi.mock("@/lib/logger", () => ({
-  logger: { info: vi.fn(), error: vi.fn() },
+  logger: { info: vi.fn(), error: mockLoggerError },
 }));
 
 import { borrarRepositoriosDeAssignment } from "./borrarRepositoriosDeAssignment";
@@ -127,6 +131,26 @@ describe("borrarRepositoriosDeAssignment", () => {
     );
   });
 
+  it("redacta credenciales presentadas como Bearer", async () => {
+    mockGetActive.mockResolvedValue([entrega(1)]);
+    mockDeleteRepo.mockRejectedValue(
+      new Error("GitHub rechazó Bearer secreto123")
+    );
+
+    const result = await borrarRepositoriosDeAssignment({
+      assignmentId: "a1",
+      requestedBy: "docente",
+    });
+
+    expect(result.results[0]?.error).toBe(
+      "GitHub rechazó Bearer [REDACTED]"
+    );
+    expect(mockFail).toHaveBeenCalledWith(
+      expect.any(String),
+      "GitHub rechazó Bearer [REDACTED]"
+    );
+  });
+
   it("no toca GitHub si no puede iniciar la auditoría", async () => {
     mockGetActive.mockResolvedValue([entrega(1)]);
     mockStart.mockRejectedValue(new Error("DB caída"));
@@ -140,7 +164,7 @@ describe("borrarRepositoriosDeAssignment", () => {
     expect(mockDeleteRepo).not.toHaveBeenCalled();
   });
 
-  it("reporta un resultado incierto si GitHub respondió pero falla la persistencia", async () => {
+  it("marca el intento como fallido si GitHub respondió pero falla la persistencia", async () => {
     mockGetActive.mockResolvedValue([entrega(1)]);
     mockComplete.mockRejectedValue(new Error("DB caída"));
 
@@ -153,7 +177,30 @@ describe("borrarRepositoriosDeAssignment", () => {
       status: "failed",
       error: expect.stringContaining("no se pudo guardar"),
     });
-    expect(mockFail).not.toHaveBeenCalled();
+    expect(mockFail).toHaveBeenCalledWith(
+      expect.any(String),
+      "GitHub respondió, pero no se pudo guardar el resultado. Reintentá."
+    );
+  });
+
+  it("conserva la respuesta fallida si tampoco puede cerrar el intento", async () => {
+    mockGetActive.mockResolvedValue([entrega(1)]);
+    mockComplete.mockRejectedValue(new Error("DB caída"));
+    mockFail.mockRejectedValue(new Error("DB sigue caída"));
+
+    const result = await borrarRepositoriosDeAssignment({
+      assignmentId: "a1",
+      requestedBy: "docente",
+    });
+
+    expect(result.results[0]).toMatchObject({
+      status: "failed",
+      error: expect.stringContaining("no se pudo guardar"),
+    });
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      expect.objectContaining({ err: expect.any(Error) }),
+      "No se pudo cerrar como fallido el intento de borrado"
+    );
   });
 
   it("un reintento converge cuando GitHub informa que el repo ya no existe", async () => {

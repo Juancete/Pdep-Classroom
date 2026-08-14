@@ -104,11 +104,11 @@ export async function getEntregasConRepoActivo(
   assignmentId: string
 ): Promise<Entrega[]> {
   const entityManager = await getEM();
-  const entregas = await entityManager.find(Entrega, {
+  return entityManager.find(Entrega, {
     assignment: { id: assignmentId },
     repoDeleted: false,
+    repoName: { $ne: null },
   });
-  return entregas.filter((entrega) => Boolean(entrega.repoName));
 }
 
 export async function createEntrega(data: {

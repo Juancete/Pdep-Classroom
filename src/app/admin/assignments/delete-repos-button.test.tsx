@@ -45,6 +45,7 @@ describe("DeleteReposButton", () => {
     expect(
       screen.getByRole("button", { name: "Borrar todos los repos (5)" })
     ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
   it("usa 'repo' en singular con 1 repo en el confirm", async () => {
@@ -126,7 +127,8 @@ describe("DeleteReposButton", () => {
     render(<DeleteReposButton assignmentId="a1" activeRepoCount={2} />);
     await user.click(screen.getByRole("button"));
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
+    await screen.findByText(/Se confirmaron 2 de 2 repositorios/);
+    expect(screen.getByRole("status")).toHaveTextContent(
       "Se confirmaron 2 de 2 repositorios"
     );
   });
@@ -155,10 +157,15 @@ describe("DeleteReposButton", () => {
     render(<DeleteReposButton assignmentId="a1" activeRepoCount={2} />);
     await user.click(screen.getByRole("button"));
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
+    await screen.findByText(/Fallaron 1; podés reintentarlos/);
+    expect(screen.getByRole("status")).toHaveTextContent(
       "Fallaron 1; podés reintentarlos"
     );
-    expect(screen.getByText(/tp-bob/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reintentar fallidos (2)" })).toBeInTheDocument();
+    expect(screen.getByText(/tp-bob/).closest("li")).toHaveTextContent(
+      "tp-bob: GitHub no disponible"
+    );
+    expect(
+      screen.getByRole("button", { name: "Reintentar fallidos (2)" })
+    ).toBeInTheDocument();
   });
 });

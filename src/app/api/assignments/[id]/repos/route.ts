@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
-import { getAssignment } from "@/lib/repositories";
+import {
+  conLockBorradoReposAssignment,
+  getAssignment,
+} from "@/lib/repositories";
 import { borrarRepositoriosDeAssignment } from "@/lib/services/borrarRepositoriosDeAssignment";
 import { internalServerError } from "@/lib/api-errors";
 
@@ -20,10 +23,12 @@ export async function DELETE(_req: Request, props: { params: Promise<{ id: strin
       );
     }
 
-    const result = await borrarRepositoriosDeAssignment({
-      assignmentId: params.id,
-      requestedBy: user.githubUsername,
-    });
+    const result = await conLockBorradoReposAssignment(params.id, () =>
+      borrarRepositoriosDeAssignment({
+        assignmentId: params.id,
+        requestedBy: user.githubUsername,
+      })
+    );
 
     return NextResponse.json(result);
   } catch (error) {

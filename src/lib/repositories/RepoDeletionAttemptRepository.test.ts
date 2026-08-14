@@ -4,7 +4,9 @@ import { QueryOrder } from "@mikro-orm/core";
 const mockTx = {
   findOneOrFail: vi.fn(),
   flush: vi.fn(),
+  getConnection: vi.fn(),
 };
+const mockExecute = vi.fn();
 
 const mockEm = {
   persist: vi.fn(),
@@ -23,6 +25,7 @@ vi.mock("@/lib/db", () => ({
 
 import { Entrega, RepoDeletionAttempt } from "@/domain/entities";
 import {
+  conLockBorradoReposAssignment,
   completarIntentoBorradoRepo,
   fallarIntentoBorradoRepo,
   getRepoDeletionHistory,
@@ -34,9 +37,41 @@ describe("RepoDeletionAttemptRepository", () => {
     vi.clearAllMocks();
     mockEm.flush.mockResolvedValue(undefined);
     mockTx.flush.mockResolvedValue(undefined);
+    mockTx.getConnection.mockReturnValue({ execute: mockExecute });
     mockEm.transactional.mockImplementation(
       async (callback: (transaction: typeof mockTx) => unknown) => callback(mockTx)
     );
+  });
+
+  it("mantiene un lock transaccional durante la operación de un assignment", async () => {
+    mockExecute.mockResolvedValue(undefined);
+    const operation = vi.fn(async () => "resultado");
+
+    await expect(
+      conLockBorradoReposAssignment("a1", operation)
+    ).resolves.toBe("resultado");
+
+    expect(mockExecute).toHaveBeenCalledWith(
+      "select pg_advisory_xact_lock(hashtextextended(?, 0))",
+      ["repo-deletion:a1"]
+    );
+    expect(mockExecute.mock.invocationCallOrder[0]).toBeLessThan(
+      operation.mock.invocationCallOrder[0]!
+    );
+  });
+
+  it("usa una clave distinta para cada assignment", async () => {
+    mockExecute.mockResolvedValue(undefined);
+
+    await conLockBorradoReposAssignment("a1", async () => undefined);
+    await conLockBorradoReposAssignment("a2", async () => undefined);
+
+    expect(mockExecute).toHaveBeenNthCalledWith(1, expect.any(String), [
+      "repo-deletion:a1",
+    ]);
+    expect(mockExecute).toHaveBeenNthCalledWith(2, expect.any(String), [
+      "repo-deletion:a2",
+    ]);
   });
 
   it("crea un intento pendiente con actor y contexto completo", async () => {

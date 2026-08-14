@@ -14,6 +14,20 @@ export type RepoDeletionHistoryPage = {
   totalPages: number;
 };
 
+export async function conLockBorradoReposAssignment<T>(
+  assignmentId: string,
+  operation: () => Promise<T>
+): Promise<T> {
+  const entityManager = await getEM();
+  return entityManager.transactional(async (transaction) => {
+    await transaction.getConnection().execute(
+      "select pg_advisory_xact_lock(hashtextextended(?, 0))",
+      [`repo-deletion:${assignmentId}`]
+    );
+    return operation();
+  });
+}
+
 export async function iniciarIntentoBorradoRepo(data: {
   operationId: string;
   assignmentId: string;
