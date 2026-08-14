@@ -20,9 +20,9 @@ import {
   DataEmpty,
 } from "@/app/components/DataTable";
 
-export default async function AdminAssignmentsPage(
-  props: { searchParams?: Promise<{ estado?: string }> } = {}
-) {
+export default async function AdminAssignmentsPage(props: {
+  searchParams?: Promise<{ estado?: string }>;
+}) {
   const emptySearchParams: { estado?: string } = {};
   const searchParams = await (props.searchParams ?? Promise.resolve(emptySearchParams));
   await requireAdmin();
