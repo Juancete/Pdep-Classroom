@@ -12,8 +12,10 @@ import {
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
   NombreGrupoDuplicadoError,
+  NombreGrupoInvalidoError,
 } from "@/domain/entities";
 import { internalServerError } from "@/lib/api-errors";
+import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 import type { Grupo } from "@/domain/entities";
 import {
   AccesoAssignmentProhibidoError,
@@ -22,7 +24,7 @@ import {
 } from "@/lib/services/assignmentAuthorization";
 
 const CrearGrupoSchema = z.object({
-  nombre: z.string().min(1).max(100),
+  nombre: z.string().trim().min(1).max(100),
 });
 
 function serializarGrupo(grupo: Grupo) {
@@ -128,6 +130,12 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     }
     if (error instanceof NombreGrupoDuplicadoError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    if (
+      error instanceof NombreGrupoInvalidoError ||
+      error instanceof NombreRepositorioDemasiadoLargoError
+    ) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
     return internalServerError("POST /api/assignments/[id]/grupos", error, {
       assignmentId: params.id,

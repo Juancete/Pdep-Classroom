@@ -112,6 +112,24 @@ describe("migrations", () => {
     expect(migration).not.toContain("foreign key");
   });
 
+  it("persiste y garantiza el nombre normalizado de cada grupo", () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        "migrations",
+        "Migration20260814160000_group_repo_name.ts"
+      ),
+      "utf8"
+    );
+
+    expect(migration).toContain('add column "nombre_normalizado"');
+    expect(migration).toContain(
+      'constraint "grupo_assignment_nombre_normalizado_unique_idx"'
+    );
+    expect(migration).toContain("no contiene letras ni números");
+    expect(migration).toContain("hay nombres que generan el mismo identificador");
+  });
+
   it("mantiene el snapshot alineado con Google Groups y las cascadas", () => {
     const snapshot = JSON.parse(
       readFileSync(
@@ -151,9 +169,10 @@ describe("migrations", () => {
     );
     expect(grupo?.indexes).toContainEqual(
       expect.objectContaining({
-        keyName: "grupo_assignment_nombre_paradigma_unique_idx",
+        keyName: "grupo_assignment_nombre_normalizado_unique_idx",
       })
     );
+    expect(grupo?.columns).toHaveProperty("nombre_normalizado");
     expect(grupoAlumnos?.columns).toHaveProperty("assignment_id");
     expect(grupoAlumnos?.indexes).toContainEqual(
       expect.objectContaining({

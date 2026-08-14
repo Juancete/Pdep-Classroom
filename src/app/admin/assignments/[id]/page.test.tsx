@@ -145,6 +145,7 @@ function makeGrupo(overrides?: Partial<Grupo>): Grupo {
   const grupo = new Grupo();
   grupo.id = "g1";
   grupo.nombre = "Grupo 1";
+  grupo.nombreNormalizado = "grupo-1";
   grupo.paradigma = "objetos";
   grupo.maxIntegrantes = 3;
   grupo.creadoPor = "usuario1";

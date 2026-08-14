@@ -62,6 +62,7 @@ export class GrupalAssignment extends Assignment {
     return {
       usernames: grupo.usernamesDeMiembros(),
       grupoId: grupo.id,
+      grupoNombreNormalizado: grupo.nombreNormalizado,
     };
   }
 

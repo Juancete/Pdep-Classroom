@@ -79,8 +79,8 @@ describe("ORM metadata", () => {
     );
     expect(grupo.uniques).toContainEqual(
       expect.objectContaining({
-        name: "grupo_assignment_nombre_paradigma_unique_idx",
-        properties: ["assignment", "nombre", "paradigma"],
+        name: "grupo_assignment_nombre_normalizado_unique_idx",
+        properties: ["assignment", "nombreNormalizado"],
       })
     );
     expect(config.schemaGenerator?.skipTables).toContain("grupo_alumnos");

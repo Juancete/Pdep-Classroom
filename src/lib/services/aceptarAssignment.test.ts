@@ -41,6 +41,7 @@ import {
   AssignmentNoEncontradoError,
 } from "./aceptarAssignment";
 import { AccesoAssignmentProhibidoError } from "./assignmentAuthorization";
+import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
 function makeComision(id = "c1"): Comision {
   const comision = new Comision(2026, "sheet-test");
@@ -96,9 +97,14 @@ function makeEntrega(overrides?: Partial<Entrega>): Entrega {
   return Object.assign(entrega, overrides);
 }
 
-function makeGrupo(githubUsernames: string[], id = "los-lambdas") {
+function makeGrupo(
+  githubUsernames: string[],
+  id = "grupo-uuid-1",
+  nombreNormalizado = "los-lambdas"
+) {
   return {
     id,
+    nombreNormalizado,
     usernamesDeMiembros: () => githubUsernames,
   };
 }
@@ -142,7 +148,7 @@ describe("aceptarAssignment", () => {
     expect(mockCrearEntrega).toHaveBeenCalledWith(
       expect.objectContaining({
         templateRepo: "kata-template",
-        slug: "kata-funcional",
+        repoName: "kata-funcional-juangarcia",
         usernames: ["juangarcia"],
       })
     );
@@ -154,6 +160,25 @@ describe("aceptarAssignment", () => {
         repoName: "kata-funcional-juangarcia",
       })
     );
+  });
+
+  it("rechaza una entrega individual cuyo nombre completo supera el límite", async () => {
+    mockGetAssignment.mockResolvedValue(
+      makeAssignment({ slug: "a".repeat(90) })
+    );
+    mockGetAlumnoByGithub.mockResolvedValue(
+      makeAlumno({ githubUsername: "b".repeat(10) })
+    );
+
+    await expect(
+      aceptarAssignment(
+        "a1",
+        makeUser({ githubUsername: "b".repeat(10) })
+      )
+    ).rejects.toBeInstanceOf(NombreRepositorioDemasiadoLargoError);
+
+    expect(mockRepoExists).not.toHaveBeenCalled();
+    expect(mockCrearEntrega).not.toHaveBeenCalled();
   });
 
   it("mantiene el requisito funcional de alumno para un admin que acepta un TP individual", async () => {
@@ -177,11 +202,18 @@ describe("aceptarAssignment", () => {
     await aceptarAssignment("a1", makeUser());
 
     expect(mockGetAlumnoByGithub).toHaveBeenCalledWith("juangarcia");
+    expect(mockCrearEntrega).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoName: "kata-funcional-los-lambdas",
+        usernames: ["juangarcia", "mariaperez"],
+      })
+    );
     expect(mockCreateOrGetEntrega).toHaveBeenCalledWith(
       expect.objectContaining({
         assignmentId: "a1",
         alumnoId: undefined,
-        grupoId: "los-lambdas",
+        grupoId: "grupo-uuid-1",
+        repoName: "kata-funcional-los-lambdas",
         githubUsernames: ["juangarcia", "mariaperez"],
       })
     );

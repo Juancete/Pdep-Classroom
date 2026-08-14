@@ -39,8 +39,17 @@ export class NombreGrupoDuplicadoError extends Error {
     public readonly assignmentId: string,
     public readonly nombre: string
   ) {
-    super(`Ya existe un grupo llamado "${nombre}" para este TP.`);
+    super(
+      `Ya existe un grupo con el mismo nombre o identificador normalizado que "${nombre}" para este TP.`
+    );
     this.name = "NombreGrupoDuplicadoError";
+  }
+}
+
+export class NombreGrupoInvalidoError extends Error {
+  constructor(public readonly nombre: string) {
+    super("El nombre del grupo debe incluir al menos una letra o un número.");
+    this.name = "NombreGrupoInvalidoError";
   }
 }
 
@@ -67,8 +76,8 @@ export class AssignmentNoGrupalError extends Error {
   properties: ["id", "assignment"],
 })
 @Unique({
-  name: "grupo_assignment_nombre_paradigma_unique_idx",
-  properties: ["assignment", "nombre", "paradigma"],
+  name: "grupo_assignment_nombre_normalizado_unique_idx",
+  properties: ["assignment", "nombreNormalizado"],
 })
 export class Grupo {
   @PrimaryKey({ type: "uuid" })
@@ -76,6 +85,9 @@ export class Grupo {
 
   @Property({ type: 'string' })
   nombre!: string;
+
+  @Property({ type: "string" })
+  nombreNormalizado!: string;
 
   @Enum({ items: ["funcional", "logico", "objetos"] })
   paradigma!: Paradigma;

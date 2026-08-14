@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/session";
 import { GrupoNoAsignadoError } from "@/domain/entities";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { internalServerError } from "@/lib/api-errors";
+import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 import {
   aceptarAssignment,
   AlumnoNoRegistradoError,
@@ -34,7 +35,11 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
     if (error instanceof AccesoAssignmentProhibidoError) {
       return NextResponse.json({ error: error.message }, { status: 403 });
     }
-    if (error instanceof GrupoNoAsignadoError || error instanceof AlumnoNoRegistradoError) {
+    if (
+      error instanceof GrupoNoAsignadoError ||
+      error instanceof AlumnoNoRegistradoError ||
+      error instanceof NombreRepositorioDemasiadoLargoError
+    ) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     return internalServerError(
