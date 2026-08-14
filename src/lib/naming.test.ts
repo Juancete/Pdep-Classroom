@@ -6,39 +6,26 @@ import { buildRepoName, slugify, extractTemplateName } from "./naming";
 describe("buildRepoName", () => {
   it("individual: slug-username", () => {
     expect(
-      buildRepoName({ slug: "kata-funcional", usernames: ["juangarcia"] })
+      buildRepoName({ slug: "kata-funcional", githubUsername: "juangarcia" })
     ).toBe("kata-funcional-juangarcia");
   });
 
-  it("grupal con grupoId: slug-grupoid", () => {
+  it("grupal con nombre normalizado: slug-nombregrupo", () => {
     expect(
       buildRepoName({
         slug: "tp-funcional",
-        usernames: ["juangarcia", "mariaperez"],
-        grupoId: "los-lambdas",
+        grupoNombreNormalizado: "los-lambdas",
       })
     ).toBe("tp-funcional-los-lambdas");
   });
 
-  it("grupal sin grupoId: slug-usuario1-usuario2-usuario3 (max 3)", () => {
-    expect(
-      buildRepoName({
-        slug: "tp-logico",
-        usernames: ["alice", "bob", "charlie", "diana"],
-      })
-    ).toBe("tp-logico-alice-bob-charlie");
-  });
-
   it("normaliza a lowercase", () => {
     expect(
-      buildRepoName({ slug: "Kata-Funcional", usernames: ["JuanGarcia"] })
+      buildRepoName({
+        slug: "Kata-Funcional",
+        githubUsername: "JuanGarcia",
+      })
     ).toBe("kata-funcional-juangarcia");
-  });
-
-  it("grupal con un solo miembro sin grupoId", () => {
-    expect(
-      buildRepoName({ slug: "tp-objetos", usernames: ["solo"] })
-    ).toBe("tp-objetos-solo");
   });
 });
 
@@ -69,6 +56,10 @@ describe("slugify", () => {
 
   it("string vacío devuelve vacío", () => {
     expect(slugify("")).toBe("");
+  });
+
+  it("solo caracteres no permitidos devuelve vacío", () => {
+    expect(slugify("  +++ /._  ")).toBe("");
   });
 });
 

@@ -9,6 +9,7 @@ import {
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
   NombreGrupoDuplicadoError,
+  NombreGrupoInvalidoError,
 } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
@@ -230,7 +231,21 @@ describe("POST /api/assignments/[id]/grupos", () => {
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({
-      error: 'Ya existe un grupo llamado "Los Lambdas" para este TP.',
+      error:
+        'Ya existe un grupo con el mismo nombre o identificador normalizado que "Los Lambdas" para este TP.',
+    });
+  });
+
+  it("devuelve 400 si el nombre no genera un identificador válido", async () => {
+    mockCrearGrupo.mockRejectedValue(new NombreGrupoInvalidoError("+++"));
+
+    const response = await POST(makeRequest({ nombre: "+++" }), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "El nombre del grupo debe incluir al menos una letra o un número.",
     });
   });
 

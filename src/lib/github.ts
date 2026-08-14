@@ -1,6 +1,6 @@
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
-import { buildRepoName, extractTemplateName } from "./naming";
+import { extractTemplateName } from "./naming";
 import { handleOctokitError, isRequestError } from "./github-errors";
 
 const ORG = process.env.GITHUB_ORG ?? "pdep-mn-utn";
@@ -119,29 +119,22 @@ export async function addCollaborators(
 
 export async function crearEntrega(opts: {
   templateRepo: string;
-  slug: string;
+  repoName: string;
   usernames: string[];
-  grupoId?: string;
   descripcion?: string;
 }): Promise<{ repoUrl: string; repoName: string }> {
-  const repoName = buildRepoName({
-    slug: opts.slug,
-    usernames: opts.usernames,
-    grupoId: opts.grupoId,
-  });
-
   const templateName = extractTemplateName(opts.templateRepo);
 
   const { repoUrl } = await createRepoFromTemplate({
     templateRepo: templateName,
-    newRepoName: repoName,
+    newRepoName: opts.repoName,
     description: opts.descripcion,
     isPrivate: true,
   });
 
-  await addCollaborators(repoName, opts.usernames);
+  await addCollaborators(opts.repoName, opts.usernames);
 
-  return { repoUrl, repoName };
+  return { repoUrl, repoName: opts.repoName };
 }
 
 // ── Listar repos de un assignment ───────────────────────────
