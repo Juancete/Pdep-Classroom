@@ -4,6 +4,7 @@ import { listarTemplates } from "@/lib/github";
 import { redirect } from "next/navigation";
 import { AssignmentForm } from "../../assignment-form";
 import { actualizarAssignment } from "../../actions";
+import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
 export default async function EditAssignmentPage(
   props: {
     params: Promise<{ id: string }>;
@@ -19,7 +20,10 @@ export default async function EditAssignmentPage(
 
   return (
     <div className="max-w-xl">
-      <h1 className="text-2xl font-bold mb-6">Editar Assignment</h1>
+      <div className="flex items-center gap-3 mb-6">
+        <h1 className="text-2xl font-bold">Editar Assignment</h1>
+        <EstadoAssignmentBadge estado={assignment.estadoNombre} />
+      </div>
       <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
         Comisión:{" "}
         <span className="font-medium text-gray-800">
@@ -27,6 +31,8 @@ export default async function EditAssignmentPage(
             ? `${assignment.comision.anio} (${assignment.comision.activa ? "Activa" : "Histórica"})`
             : "Sin comisión"}
         </span>
+        {" · "}
+        El estado se cambia desde el detalle del assignment, no en este formulario.
       </div>
       <AssignmentForm
         action={actualizarAssignment}
