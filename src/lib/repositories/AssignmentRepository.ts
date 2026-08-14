@@ -1,15 +1,16 @@
 import { getEM, deleteEntity } from "@/lib/db";
+import { LockMode } from "@mikro-orm/core";
 import {
   Assignment,
+  AssignmentNoEncontradoError,
   Comision,
+  Entrega,
   IndividualAssignment,
   GrupalAssignment,
 } from "@/domain/entities";
 import type { AssignmentFormData } from "@/lib/assignment-schema";
 import { slugify } from "@/lib/naming";
 import type { NombreEstadoAssignment, Paradigma } from "@/types";
-import { contarEntregasDeAssignment } from "./EntregaRepository";
-import { AssignmentNoEncontradoError } from "@/lib/services/assignmentAuthorization";
 
 export class ComisionActivaRequeridaError extends Error {
   constructor() {
@@ -123,11 +124,14 @@ export async function setInscripcionesCerradas(
 }
 
 /**
- * Aplica una transición de ciclo de vida. Cuenta las entregas del assignment
- * para que `Assignment.transicionarA` pueda evaluar la guarda de despublicar
- * (bloqueada si hay entregas). Lanza `AssignmentNoEncontradoError` si no
- * existe y deja propagar `TransicionDeEstadoInvalidaError` si la transición
- * no está permitida — en ese caso no se persiste ningún cambio.
+ * Aplica una transición de ciclo de vida. Bloquea el assignment
+ * (PESSIMISTIC_WRITE) y cuenta sus entregas dentro de la misma transacción
+ * para que la guarda de despublicar (bloqueada si hay entregas) vea un
+ * estado consistente aunque un alumno esté aceptando el assignment en
+ * paralelo — ver `crearEntregaSiAssignmentDisponible`, que toma el mismo
+ * lock del otro lado de esa carrera. Lanza `AssignmentNoEncontradoError` si
+ * no existe y deja propagar `TransicionDeEstadoInvalidaError` si la
+ * transición no está permitida — en ese caso no se persiste ningún cambio.
  */
 export async function cambiarEstadoAssignment(
   assignmentId: string,
@@ -135,12 +139,20 @@ export async function cambiarEstadoAssignment(
   porUsuario: string
 ): Promise<Assignment> {
   const entityManager = await getEM();
-  const assignment = await entityManager.findOne(Assignment, { id: assignmentId });
-  if (!assignment) throw new AssignmentNoEncontradoError(assignmentId);
 
-  const tieneEntregas = (await contarEntregasDeAssignment(assignmentId)) > 0;
-  assignment.transicionarA(destino, { tieneEntregas }, porUsuario);
+  return entityManager.transactional(async (transaction) => {
+    const assignment = await transaction.findOne(
+      Assignment,
+      { id: assignmentId },
+      { lockMode: LockMode.PESSIMISTIC_WRITE }
+    );
+    if (!assignment) throw new AssignmentNoEncontradoError(assignmentId);
 
-  await entityManager.flush();
-  return assignment;
+    const tieneEntregas =
+      (await transaction.count(Entrega, { assignment: { id: assignmentId } })) > 0;
+    assignment.transicionarA(destino, { tieneEntregas }, porUsuario);
+
+    await transaction.flush();
+    return assignment;
+  });
 }

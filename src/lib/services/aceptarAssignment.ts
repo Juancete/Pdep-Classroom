@@ -5,7 +5,7 @@ import {
   getAssignment,
   getEntregaDeUsuario,
   getGrupoDeAlumnoEnAssignment,
-  createOrGetEntrega,
+  crearEntregaSiAssignmentDisponible,
 } from "@/lib/repositories";
 import { addCollaborators, crearEntrega, repoExists } from "@/lib/github";
 import { buildRepoName } from "@/lib/naming";
@@ -66,14 +66,17 @@ export async function aceptarAssignment(
         githubUsername: usernames[0]!,
       });
   const createLocalEntrega = (createdRepoName: string, repoUrl: string) =>
-    createOrGetEntrega({
-      assignmentId: assignment.id,
-      repoName: createdRepoName,
-      repoUrl,
-      githubUsernames: usernames,
-      alumnoId: grupoId ? undefined : alumno?.id,
-      grupoId,
-    });
+    crearEntregaSiAssignmentDisponible(
+      {
+        assignmentId: assignment.id,
+        repoName: createdRepoName,
+        repoUrl,
+        githubUsernames: usernames,
+        alumnoId: grupoId ? undefined : alumno?.id,
+        grupoId,
+      },
+      user.isAdmin
+    );
 
   if (await repoExists(repoName)) {
     await addCollaborators(repoName, usernames);

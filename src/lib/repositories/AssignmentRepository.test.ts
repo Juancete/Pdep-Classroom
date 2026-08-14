@@ -1,12 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockEm = {
+const mockEm: {
+  find: ReturnType<typeof vi.fn>;
+  findOne: ReturnType<typeof vi.fn>;
+  count: ReturnType<typeof vi.fn>;
+  persist: ReturnType<typeof vi.fn>;
+  flush: ReturnType<typeof vi.fn>;
+  transactional: ReturnType<typeof vi.fn>;
+} = {
   find: vi.fn(),
   findOne: vi.fn(),
   count: vi.fn(),
   persist: vi.fn(),
   flush: vi.fn(),
+  transactional: vi.fn(),
 };
+mockEm.transactional.mockImplementation(
+  async (callback: (transaction: typeof mockEm) => unknown) => callback(mockEm)
+);
 
 vi.mock("@/lib/db", () => ({
   getEM: vi.fn(async () => mockEm),
@@ -21,6 +32,7 @@ import {
   getAssignmentsDeComision,
 } from "./AssignmentRepository";
 import { Assignment, Comision, IndividualAssignment } from "@/domain/entities";
+import { LockMode } from "@mikro-orm/core";
 import { AssignmentNoEncontradoError } from "@/lib/services/assignmentAuthorization";
 import { TransicionDeEstadoInvalidaError } from "@/domain/entities/EstadoAssignment";
 
@@ -142,6 +154,20 @@ describe("AssignmentRepository", () => {
       expect(assignment.estadoNombre).toBe("publicado");
       expect(assignment.publicadoPor).toBe("docente1");
       expect(mockEm.flush).toHaveBeenCalled();
+    });
+
+    it("corre dentro de una transacción y bloquea el assignment con PESSIMISTIC_WRITE", async () => {
+      mockEm.findOne.mockResolvedValueOnce(fakeAssignment());
+      mockEm.count.mockResolvedValueOnce(0);
+
+      await cambiarEstadoAssignment("a1", "publicado", "docente1");
+
+      expect(mockEm.transactional).toHaveBeenCalled();
+      expect(mockEm.findOne).toHaveBeenCalledWith(
+        Assignment,
+        { id: "a1" },
+        { lockMode: LockMode.PESSIMISTIC_WRITE }
+      );
     });
 
     it("lanza AssignmentNoEncontradoError si no existe", async () => {
