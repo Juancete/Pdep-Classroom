@@ -7,12 +7,24 @@ export {
   type EstadoGoogleGroup,
 } from "./Alumno";
 export { Comision } from "./Comision";
-export { Assignment } from "./Assignment";
+export {
+  Assignment,
+  AssignmentNoEncontradoError,
+  AssignmentNoDisponibleError,
+} from "./Assignment";
 export type {
   FuentesDeConteo,
   ParticipantesResueltos,
   BuscadorDeGrupoDelAlumno,
 } from "./Assignment";
+export {
+  EstadoAssignment,
+  TransicionDeEstadoInvalidaError,
+  transicionesDisponibles,
+  NOMBRES_ESTADO_ASSIGNMENT,
+  type NombreEstadoAssignment,
+  type ContextoTransicionEstado,
+} from "./EstadoAssignment";
 export { IndividualAssignment } from "./IndividualAssignment";
 export { GrupalAssignment, GrupoNoAsignadoError } from "./GrupalAssignment";
 export {
@@ -23,6 +35,7 @@ export {
   NombreGrupoInvalidoError,
   GrupoLlenoError,
   AssignmentNoGrupalError,
+  GrupoNoEncontradoError,
 } from "./Grupo";
 export { Entrega } from "./Entrega";
 export {

@@ -1,26 +1,21 @@
-import type { Alumno, Assignment } from "@/domain/entities";
+import {
+  AssignmentNoEncontradoError,
+  AssignmentNoDisponibleError,
+  GrupoNoEncontradoError,
+  type Alumno,
+  type Assignment,
+} from "@/domain/entities";
 
-export class AssignmentNoEncontradoError extends Error {
-  constructor(public readonly assignmentId: string) {
-    super("Assignment no encontrado");
-    this.name = "AssignmentNoEncontradoError";
-  }
-}
+// Reexportados desde el dominio: son errores sobre la existencia/disponibilidad
+// de assignments y grupos, no decisiones de política — los repositorios los
+// lanzan directamente y no deberían importar hacia arriba desde `@/lib/services`.
+// Se reexportan acá para no romper los imports existentes de este módulo.
+export { AssignmentNoEncontradoError, AssignmentNoDisponibleError, GrupoNoEncontradoError };
 
 export class AccesoAssignmentProhibidoError extends Error {
   constructor(public readonly assignmentId: string) {
     super("No tenés acceso a este assignment");
     this.name = "AccesoAssignmentProhibidoError";
-  }
-}
-
-export class GrupoNoEncontradoError extends Error {
-  constructor(
-    public readonly assignmentId: string,
-    public readonly grupoId: string
-  ) {
-    super("Grupo no encontrado");
-    this.name = "GrupoNoEncontradoError";
   }
 }
 
@@ -43,5 +38,25 @@ export function autorizarAccesoAssignment(
     alumno.comision?.id !== assignment.comision.id
   ) {
     throw new AccesoAssignmentProhibidoError(assignment.id);
+  }
+}
+
+/**
+ * Acceso académico más habilitación por estado: además de pertenecer a la
+ * comisión, el assignment tiene que estar en un estado que permita que un
+ * alumno actúe sobre él (aceptar, crear grupo, unirse a un grupo). Los
+ * administradores conservan el alcance global de `autorizarAccesoAssignment`
+ * — pueden operar sobre un borrador para probar el flujo antes de publicar.
+ */
+export function autorizarAccionSobreAssignment(
+  user: { isAdmin: boolean },
+  alumno: Alumno | null,
+  assignment: Assignment
+): void {
+  autorizarAccesoAssignment(user, alumno, assignment);
+  if (user.isAdmin) return;
+
+  if (!assignment.permiteAccionesDeAlumno()) {
+    throw new AssignmentNoDisponibleError(assignment.id);
   }
 }

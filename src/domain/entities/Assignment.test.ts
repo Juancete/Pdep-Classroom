@@ -4,6 +4,7 @@ import { GrupalAssignment, GrupoNoAsignadoError } from "./GrupalAssignment";
 import type { Assignment } from "./Assignment";
 import { Alumno } from "./Alumno";
 import type { Grupo } from "./Grupo";
+import { TransicionDeEstadoInvalidaError } from "./EstadoAssignment";
 
 function fakeAlumno(github: string): Alumno {
   return Object.assign(new Alumno(), { githubUsername: github });
@@ -236,5 +237,99 @@ describe("Assignment.aplicarCamposExtra", () => {
     grupal.maxIntegrantes = 3;
     grupal.aplicarCamposExtra({});
     expect(grupal.maxIntegrantes).toBe(3);
+  });
+});
+
+describe("Assignment — ciclo de vida", () => {
+  it("nace en borrador, no visible y sin acciones habilitadas", () => {
+    const individual = new IndividualAssignment();
+    expect(individual.estadoNombre).toBe("borrador");
+    expect(individual.esVisibleParaAlumno(false)).toBe(false);
+    expect(individual.esVisibleParaAlumno(true)).toBe(false);
+    expect(individual.permiteAccionesDeAlumno()).toBe(false);
+  });
+
+  it("publicar sella publicadoEn y publicadoPor", () => {
+    const individual = new IndividualAssignment();
+    individual.id = "a1";
+    individual.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+    expect(individual.estadoNombre).toBe("publicado");
+    expect(individual.publicadoPor).toBe("docente1");
+    expect(individual.publicadoEn).toBeInstanceOf(Date);
+    expect(individual.esVisibleParaAlumno(false)).toBe(true);
+    expect(individual.permiteAccionesDeAlumno()).toBe(true);
+  });
+
+  it("publicar un assignment ya publicado no resella la auditoría", () => {
+    const individual = new IndividualAssignment();
+    individual.id = "a1";
+    individual.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+    const publicadoEnOriginal = individual.publicadoEn;
+
+    individual.transicionarA("publicado", { tieneEntregas: false }, "docente2");
+
+    expect(individual.publicadoPor).toBe("docente1");
+    expect(individual.publicadoEn).toBe(publicadoEnOriginal);
+  });
+
+  it("despublicar sin entregas vuelve a borrador", () => {
+    const individual = new IndividualAssignment();
+    individual.id = "a1";
+    individual.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+    individual.transicionarA("borrador", { tieneEntregas: false }, "docente1");
+    expect(individual.estadoNombre).toBe("borrador");
+  });
+
+  it("despublicar con entregas lanza TransicionDeEstadoInvalidaError", () => {
+    const individual = new IndividualAssignment();
+    individual.id = "a1";
+    individual.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+    expect(() =>
+      individual.transicionarA("borrador", { tieneEntregas: true }, "docente1")
+    ).toThrow(TransicionDeEstadoInvalidaError);
+    expect(individual.estadoNombre).toBe("publicado");
+  });
+
+  it("archivar sella archivadoEn y archivadoPor, y solo es visible con entrega", () => {
+    const individual = new IndividualAssignment();
+    individual.id = "a1";
+    individual.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+    individual.transicionarA("archivado", { tieneEntregas: true }, "docente1");
+    expect(individual.estadoNombre).toBe("archivado");
+    expect(individual.archivadoPor).toBe("docente1");
+    expect(individual.archivadoEn).toBeInstanceOf(Date);
+    expect(individual.esVisibleParaAlumno(true)).toBe(true);
+    expect(individual.esVisibleParaAlumno(false)).toBe(false);
+    expect(individual.permiteAccionesDeAlumno()).toBe(false);
+  });
+
+  it("un archivado puede volver a publicarse pero no a borrador", () => {
+    const individual = new IndividualAssignment();
+    individual.id = "a1";
+    individual.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+    individual.transicionarA("archivado", { tieneEntregas: false }, "docente1");
+
+    expect(() =>
+      individual.transicionarA("borrador", { tieneEntregas: false }, "docente1")
+    ).toThrow(TransicionDeEstadoInvalidaError);
+
+    individual.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+    expect(individual.estadoNombre).toBe("publicado");
+  });
+
+  it("GrupalAssignment.aceptaNuevasInscripciones exige estado publicado además de inscripciones abiertas", () => {
+    const grupal = new GrupalAssignment();
+    grupal.id = "a1";
+    expect(grupal.aceptaNuevasInscripciones()).toBe(false); // borrador
+
+    grupal.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+    expect(grupal.aceptaNuevasInscripciones()).toBe(true);
+
+    grupal.inscripcionesCerradas = true;
+    expect(grupal.aceptaNuevasInscripciones()).toBe(false);
+
+    grupal.inscripcionesCerradas = false;
+    grupal.transicionarA("archivado", { tieneEntregas: false }, "docente1");
+    expect(grupal.aceptaNuevasInscripciones()).toBe(false);
   });
 });

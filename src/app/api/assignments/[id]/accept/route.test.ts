@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PdepUser } from "@/types";
 import { Entrega, GrupoNoAsignadoError } from "@/domain/entities";
-import { AccesoAssignmentProhibidoError } from "@/lib/services/assignmentAuthorization";
+import {
+  AccesoAssignmentProhibidoError,
+  AssignmentNoDisponibleError,
+} from "@/lib/services/assignmentAuthorization";
 import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
 const {
@@ -144,6 +147,14 @@ describe("POST /api/assignments/[id]/accept", () => {
   it("devuelve 403 si el alumno pertenece a otra comisión", async () => {
     mockAceptarAssignment.mockRejectedValue(
       new AccesoAssignmentProhibidoError("a1")
+    );
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
+    expect(response.status).toBe(403);
+  });
+
+  it("devuelve 403 si el assignment no está publicado", async () => {
+    mockAceptarAssignment.mockRejectedValue(
+      new AssignmentNoDisponibleError("a1")
     );
     const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(403);

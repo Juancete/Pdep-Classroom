@@ -125,6 +125,20 @@ describe("PATCH /api/assignments/[id]", () => {
     expect(mockUpdateAssignment).toHaveBeenCalledWith("a1", { paradigma: "logico" });
   });
 
+  it("ignora un campo estado en el body: el ciclo de vida solo cambia por su propio endpoint", async () => {
+    mockGetAssignment.mockResolvedValue(makeAssignment());
+    mockUpdateAssignment.mockResolvedValue(makeAssignment());
+
+    const request = makeRequest("PATCH", {
+      titulo: "Nuevo título",
+      estado: "publicado",
+    });
+    await PATCH(request, { params: Promise.resolve({ id: "a1" }) });
+    expect(mockUpdateAssignment).toHaveBeenCalledWith("a1", {
+      titulo: "Nuevo título",
+    });
+  });
+
   it("devuelve 400 con formErrors cuando el body no es JSON válido o es null", async () => {
     mockGetAssignment.mockResolvedValue(makeAssignment());
     const request = new Request("http://localhost/api/assignments/a1", {

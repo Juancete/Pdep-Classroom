@@ -13,7 +13,7 @@ const mockGetAssignment = vi.fn();
 const mockGetEntregaDeUsuario = vi.fn();
 const mockGetGrupoDeAlumno = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
-const mockCreateOrGetEntrega = vi.fn();
+const mockCrearEntregaSiAssignmentDisponible = vi.fn();
 const mockCrearEntrega = vi.fn();
 const mockRepoExists = vi.fn();
 const mockAddCollaborators = vi.fn();
@@ -25,7 +25,8 @@ vi.mock("@/lib/repositories", () => ({
   getGrupoDeAlumnoEnAssignment: (assignmentId: string, username: string) =>
     mockGetGrupoDeAlumno(assignmentId, username),
   getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
-  createOrGetEntrega: (data: unknown) => mockCreateOrGetEntrega(data),
+  crearEntregaSiAssignmentDisponible: (data: unknown, esAdmin: boolean) =>
+    mockCrearEntregaSiAssignmentDisponible(data, esAdmin),
 }));
 
 vi.mock("@/lib/github", () => ({
@@ -38,6 +39,7 @@ vi.mock("@/lib/github", () => ({
 import {
   aceptarAssignment,
   AlumnoNoRegistradoError,
+  AssignmentNoDisponibleError,
   AssignmentNoEncontradoError,
 } from "./aceptarAssignment";
 import { AccesoAssignmentProhibidoError } from "./assignmentAuthorization";
@@ -72,6 +74,10 @@ function makeAssignment(overrides?: Partial<IndividualAssignment & GrupalAssignm
   assignment.slug = "kata-funcional";
   assignment.createdAt = new Date("2026-01-01");
   assignment.comision = makeComision();
+  // Publicado por defecto: la mayoría de estos tests ejercitan el camino
+  // feliz de aceptar, que requiere que el assignment esté disponible. Los
+  // tests de ciclo de vida overridean `estadoNombre` explícitamente.
+  assignment.transicionarA("publicado", { tieneEntregas: false }, "docente1");
   return Object.assign(assignment, overrides);
 }
 
@@ -120,7 +126,7 @@ describe("aceptarAssignment", () => {
       repoName: "kata-funcional-juangarcia",
       repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
     });
-    mockCreateOrGetEntrega.mockResolvedValue(makeEntrega());
+    mockCrearEntregaSiAssignmentDisponible.mockResolvedValue(makeEntrega());
   });
 
   it("devuelve la entrega existente sin tocar GitHub", async () => {
@@ -131,7 +137,7 @@ describe("aceptarAssignment", () => {
 
     expect(mockRepoExists).not.toHaveBeenCalled();
     expect(mockCrearEntrega).not.toHaveBeenCalled();
-    expect(mockCreateOrGetEntrega).not.toHaveBeenCalled();
+    expect(mockCrearEntregaSiAssignmentDisponible).not.toHaveBeenCalled();
   });
 
   it("falla con error de dominio si el assignment no existe", async () => {
@@ -152,13 +158,14 @@ describe("aceptarAssignment", () => {
         usernames: ["juangarcia"],
       })
     );
-    expect(mockCreateOrGetEntrega).toHaveBeenCalledWith(
+    expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalledWith(
       expect.objectContaining({
         assignmentId: "a1",
         alumnoId: "alumno-1",
         grupoId: undefined,
         repoName: "kata-funcional-juangarcia",
-      })
+      }),
+      false
     );
   });
 
@@ -208,14 +215,15 @@ describe("aceptarAssignment", () => {
         usernames: ["juangarcia", "mariaperez"],
       })
     );
-    expect(mockCreateOrGetEntrega).toHaveBeenCalledWith(
+    expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalledWith(
       expect.objectContaining({
         assignmentId: "a1",
         alumnoId: undefined,
         grupoId: "grupo-uuid-1",
         repoName: "kata-funcional-los-lambdas",
         githubUsernames: ["juangarcia", "mariaperez"],
-      })
+      }),
+      false
     );
   });
 
@@ -229,11 +237,12 @@ describe("aceptarAssignment", () => {
       "kata-funcional-juangarcia",
       ["juangarcia"]
     );
-    expect(mockCreateOrGetEntrega).toHaveBeenCalledWith(
+    expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalledWith(
       expect.objectContaining({
         repoName: "kata-funcional-juangarcia",
         repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
-      })
+      }),
+      false
     );
   });
 
@@ -249,7 +258,7 @@ describe("aceptarAssignment", () => {
       "kata-funcional-juangarcia",
       ["juangarcia"]
     );
-    expect(mockCreateOrGetEntrega).toHaveBeenCalled();
+    expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalled();
   });
 
   it("propaga el error de GitHub si el repo no existe después del fallo", async () => {
@@ -273,7 +282,7 @@ describe("aceptarAssignment", () => {
     expect(mockGetEntregaDeUsuario).not.toHaveBeenCalled();
     expect(mockRepoExists).not.toHaveBeenCalled();
     expect(mockCrearEntrega).not.toHaveBeenCalled();
-    expect(mockCreateOrGetEntrega).not.toHaveBeenCalled();
+    expect(mockCrearEntregaSiAssignmentDisponible).not.toHaveBeenCalled();
   });
 
   it("rechaza para alumnos un assignment histórico sin comisión", async () => {
@@ -292,5 +301,57 @@ describe("aceptarAssignment", () => {
     await expect(
       aceptarAssignment("a1", makeUser({ isAdmin: true }))
     ).resolves.toBeInstanceOf(Entrega);
+  });
+
+  it("rechaza aceptar un assignment en borrador y no toca GitHub", async () => {
+    const borrador = makeAssignment();
+    borrador.estadoNombre = "borrador";
+    mockGetAssignment.mockResolvedValue(borrador);
+
+    await expect(aceptarAssignment("a1", makeUser())).rejects.toBeInstanceOf(
+      AssignmentNoDisponibleError
+    );
+
+    expect(mockGetEntregaDeUsuario).not.toHaveBeenCalled();
+    expect(mockCrearEntrega).not.toHaveBeenCalled();
+  });
+
+  it("rechaza aceptar un assignment archivado y no toca GitHub", async () => {
+    const archivado = makeAssignment();
+    archivado.transicionarA("archivado", { tieneEntregas: false }, "docente1");
+    mockGetAssignment.mockResolvedValue(archivado);
+
+    await expect(aceptarAssignment("a1", makeUser())).rejects.toBeInstanceOf(
+      AssignmentNoDisponibleError
+    );
+
+    expect(mockCrearEntrega).not.toHaveBeenCalled();
+  });
+
+  it("permite al administrador aceptar un assignment en borrador", async () => {
+    const borrador = makeAssignment();
+    borrador.estadoNombre = "borrador";
+    mockGetAssignment.mockResolvedValue(borrador);
+
+    await expect(
+      aceptarAssignment("a1", makeUser({ isAdmin: true }))
+    ).resolves.toBeInstanceOf(Entrega);
+  });
+
+  it("pasa esAdmin a crearEntregaSiAssignmentDisponible para que revalide bajo lock", async () => {
+    await aceptarAssignment("a1", makeUser({ isAdmin: false }));
+    expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalledWith(
+      expect.any(Object),
+      false
+    );
+
+    mockGetAlumnoByGithub.mockResolvedValue(
+      makeAlumno({ comision: makeComision("c2") })
+    );
+    await aceptarAssignment("a1", makeUser({ isAdmin: true }));
+    expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalledWith(
+      expect.any(Object),
+      true
+    );
   });
 });

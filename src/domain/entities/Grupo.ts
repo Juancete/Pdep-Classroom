@@ -70,6 +70,16 @@ export class AssignmentNoGrupalError extends Error {
   }
 }
 
+export class GrupoNoEncontradoError extends Error {
+  constructor(
+    public readonly assignmentId: string,
+    public readonly grupoId: string
+  ) {
+    super("Grupo no encontrado");
+    this.name = "GrupoNoEncontradoError";
+  }
+}
+
 @Entity()
 @Unique({
   name: "grupo_id_assignment_unique",

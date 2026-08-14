@@ -85,6 +85,28 @@ vi.mock("./grupos-panel", () => ({
   ),
 }));
 
+vi.mock("./estado-panel", () => ({
+  EstadoPanel: ({
+    assignmentId,
+    estado,
+    accionesDisponibles,
+    entregasCount,
+  }: {
+    assignmentId: string;
+    estado: string;
+    accionesDisponibles: string[];
+    entregasCount: number;
+  }) => (
+    <div
+      data-testid="estado-panel"
+      data-assignment={assignmentId}
+      data-estado={estado}
+      data-acciones={accionesDisponibles.join(",")}
+      data-entregas={entregasCount}
+    />
+  ),
+}));
+
 import AssignmentDetailPage from "./page";
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -331,7 +353,9 @@ describe("Admin Assignment Detail Page", () => {
     });
 
     it("calcula correctamente los pendientes para individual", async () => {
-      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
+      mockGetAssignment.mockResolvedValue(
+        makeIndividualAssignment({ estadoNombre: "publicado" })
+      );
       mockGetEntregas.mockResolvedValue([makeEntrega()]);
       mockGetAlumnos.mockResolvedValue([
         makeAlumno({ id: "al1" }),
@@ -344,7 +368,9 @@ describe("Admin Assignment Detail Page", () => {
     });
 
     it("calcula correctamente los pendientes para grupal", async () => {
-      mockGetAssignment.mockResolvedValue(makeGrupalAssignment());
+      mockGetAssignment.mockResolvedValue(
+        makeGrupalAssignment({ estadoNombre: "publicado" })
+      );
       mockGetEntregas.mockResolvedValue([makeEntrega()]);
       mockGetGruposDeAssignment.mockResolvedValue([
         makeGrupo({ id: "g1" }),
@@ -358,11 +384,59 @@ describe("Admin Assignment Detail Page", () => {
     });
 
     it("no muestra pendientes negativos", async () => {
-      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
+      mockGetAssignment.mockResolvedValue(
+        makeIndividualAssignment({ estadoNombre: "publicado" })
+      );
       mockGetEntregas.mockResolvedValue([makeEntrega(), makeEntrega({ id: "e2" })]);
       mockGetAlumnos.mockResolvedValue([makeAlumno()]);
       const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).toContain(">0<");
+    });
+
+    it("oculta Pendientes cuando el assignment está en borrador", async () => {
+      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      expect(renderToStaticMarkup(element)).not.toContain("Pendientes");
+    });
+
+    it("muestra Pendientes cuando el assignment está publicado", async () => {
+      mockGetAssignment.mockResolvedValue(
+        makeIndividualAssignment({ estadoNombre: "publicado" })
+      );
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      expect(renderToStaticMarkup(element)).toContain("Pendientes");
+    });
+  });
+
+  describe("ciclo de vida", () => {
+    it("muestra el badge con el estado del assignment", async () => {
+      mockGetAssignment.mockResolvedValue(
+        makeIndividualAssignment({ estadoNombre: "archivado" })
+      );
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      const markup = renderToStaticMarkup(element);
+      expect(markup).toContain('data-testid="estado-badge"');
+      expect(markup).toContain("Archivado");
+    });
+
+    it("pasa las acciones disponibles y el conteo de entregas al panel de estado", async () => {
+      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
+      mockGetEntregas.mockResolvedValue([makeEntrega()]);
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      const markup = renderToStaticMarkup(element);
+      expect(markup).toContain('data-estado="borrador"');
+      expect(markup).toContain('data-acciones="publicado,archivado"');
+      expect(markup).toContain('data-entregas="1"');
+    });
+
+    it("no ofrece volver a borrador cuando el publicado ya tiene entregas", async () => {
+      mockGetAssignment.mockResolvedValue(
+        makeIndividualAssignment({ estadoNombre: "publicado" })
+      );
+      mockGetEntregas.mockResolvedValue([makeEntrega()]);
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      const markup = renderToStaticMarkup(element);
+      expect(markup).toContain('data-acciones="archivado"');
     });
   });
 

@@ -5,16 +5,19 @@ import {
   getAssignment,
   getEntregaDeUsuario,
   getGrupoDeAlumnoEnAssignment,
-  createOrGetEntrega,
+  crearEntregaSiAssignmentDisponible,
 } from "@/lib/repositories";
 import { addCollaborators, crearEntrega, repoExists } from "@/lib/github";
 import { buildRepoName } from "@/lib/naming";
 import {
   AssignmentNoEncontradoError,
-  autorizarAccesoAssignment,
+  autorizarAccionSobreAssignment,
 } from "./assignmentAuthorization";
 
-export { AssignmentNoEncontradoError } from "./assignmentAuthorization";
+export {
+  AssignmentNoEncontradoError,
+  AssignmentNoDisponibleError,
+} from "./assignmentAuthorization";
 
 export class AlumnoNoRegistradoError extends Error {
   constructor(public readonly githubUsername: string) {
@@ -37,7 +40,7 @@ export async function aceptarAssignment(
     getAlumnoByGithub(user.githubUsername, true),
   ]);
   if (!assignment) throw new AssignmentNoEncontradoError(assignmentId);
-  autorizarAccesoAssignment(user, alumno, assignment);
+  autorizarAccionSobreAssignment(user, alumno, assignment);
 
   const existente = await getEntregaDeUsuario(assignment.id, user.githubUsername);
   if (existente) return existente;
@@ -63,14 +66,17 @@ export async function aceptarAssignment(
         githubUsername: usernames[0]!,
       });
   const createLocalEntrega = (createdRepoName: string, repoUrl: string) =>
-    createOrGetEntrega({
-      assignmentId: assignment.id,
-      repoName: createdRepoName,
-      repoUrl,
-      githubUsernames: usernames,
-      alumnoId: grupoId ? undefined : alumno?.id,
-      grupoId,
-    });
+    crearEntregaSiAssignmentDisponible(
+      {
+        assignmentId: assignment.id,
+        repoName: createdRepoName,
+        repoUrl,
+        githubUsernames: usernames,
+        alumnoId: grupoId ? undefined : alumno?.id,
+        grupoId,
+      },
+      user.isAdmin
+    );
 
   if (await repoExists(repoName)) {
     await addCollaborators(repoName, usernames);

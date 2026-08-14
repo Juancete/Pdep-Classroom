@@ -5,6 +5,8 @@ import {
   Alumno,
   GrupalAssignment,
   Assignment,
+  AssignmentNoEncontradoError,
+  GrupoNoEncontradoError,
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
   NombreGrupoDuplicadoError,
@@ -13,11 +15,7 @@ import {
 } from "@/domain/entities";
 import type { Paradigma } from "@/types";
 import { buildRepoName, slugify } from "@/lib/naming";
-import {
-  AssignmentNoEncontradoError,
-  GrupoNoEncontradoError,
-  autorizarAccesoAssignment,
-} from "@/lib/services/assignmentAuthorization";
+import { autorizarAccionSobreAssignment } from "@/lib/services/assignmentAuthorization";
 import { extractDbErrorCode, UNIQUE_VIOLATION } from "./db-errors";
 
 const INSCRIPCION_UNICA_CONSTRAINT =
@@ -176,7 +174,7 @@ export async function crearGrupo(params: {
         { id: alumnoId },
         { populate: ["comision"] }
       );
-      autorizarAccesoAssignment({ isAdmin: esAdmin }, alumno, assignment);
+      autorizarAccionSobreAssignment({ isAdmin: esAdmin }, alumno, assignment);
 
       return traducirConflictoDeInscripcion(
         assignmentId,
@@ -251,7 +249,7 @@ export async function unirseAGrupo(params: {
       { id: alumnoId },
       { populate: ["comision"] }
     );
-    autorizarAccesoAssignment({ isAdmin: esAdmin }, alumno, assignment);
+    autorizarAccionSobreAssignment({ isAdmin: esAdmin }, alumno, assignment);
 
     return traducirConflictoDeInscripcion(
       assignmentId,

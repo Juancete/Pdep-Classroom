@@ -19,6 +19,7 @@ import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 import type { Grupo } from "@/domain/entities";
 import {
   AccesoAssignmentProhibidoError,
+  AssignmentNoDisponibleError,
   AssignmentNoEncontradoError,
   autorizarAccesoAssignment,
 } from "@/lib/services/assignmentAuthorization";
@@ -108,6 +109,9 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
     if (error instanceof AccesoAssignmentProhibidoError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    if (error instanceof AssignmentNoDisponibleError) {
       return NextResponse.json({ error: error.message }, { status: 403 });
     }
     if (error instanceof AssignmentNoGrupalError) {

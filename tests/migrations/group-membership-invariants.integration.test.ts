@@ -38,7 +38,10 @@ const MEMBERSHIP_MIGRATION =
   "Migration20260813190000_group_membership_invariants";
 const GROUP_REPO_NAMING_MIGRATION =
   "Migration20260814160000_group_repo_name";
+const ASSIGNMENT_LIFECYCLE_MIGRATION =
+  "Migration20260814180000_assignment_lifecycle";
 let groupRepoNamingReady = false;
+let assignmentLifecycleReady = false;
 
 function getSafeTestDatabaseUrl(): string {
   const value = process.env.MIGRATION_TEST_DATABASE_URL;
@@ -91,14 +94,29 @@ async function seedGroups(
      values (?, 2026, ?, false, '{}'::jsonb)`,
     [comisionId, `sheet-${comisionId}`]
   );
-  await connection.execute(
-    `insert into "assignment"
-      ("id", "titulo", "slug", "template_repo", "paradigma", "tipo",
-       "created_at", "comision_id", "max_integrantes", "inscripciones_cerradas")
-     values (?, 'TP concurrente', ?, 'org/template', 'funcional', 'grupal',
-       now(), ?, ?, false)`,
-    [assignmentId, `tp-${assignmentId}`, comisionId, options.maxIntegrantes]
-  );
+  // Una vez migrado el ciclo de vida, crearGrupo/unirseAGrupo exigen que el
+  // assignment esté publicado (autorizarAccionSobreAssignment) — antes de esa
+  // migración la columna todavía no existe en el schema bajo prueba.
+  if (assignmentLifecycleReady) {
+    await connection.execute(
+      `insert into "assignment"
+        ("id", "titulo", "slug", "template_repo", "paradigma", "tipo",
+         "created_at", "comision_id", "max_integrantes", "inscripciones_cerradas",
+         "estado_nombre")
+       values (?, 'TP concurrente', ?, 'org/template', 'funcional', 'grupal',
+         now(), ?, ?, false, 'publicado')`,
+      [assignmentId, `tp-${assignmentId}`, comisionId, options.maxIntegrantes]
+    );
+  } else {
+    await connection.execute(
+      `insert into "assignment"
+        ("id", "titulo", "slug", "template_repo", "paradigma", "tipo",
+         "created_at", "comision_id", "max_integrantes", "inscripciones_cerradas")
+       values (?, 'TP concurrente', ?, 'org/template', 'funcional', 'grupal',
+         now(), ?, ?, false)`,
+      [assignmentId, `tp-${assignmentId}`, comisionId, options.maxIntegrantes]
+    );
+  }
 
   for (const [index, alumnoId] of alumnoIds.entries()) {
     await connection.execute(
@@ -370,8 +388,16 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
 
     await orm.getMigrator().up({ to: GROUP_REPO_NAMING_MIGRATION });
     groupRepoNamingReady = true;
+
+    // Las pruebas de concurrencia de acá en más ejercitan crearGrupo/unirseAGrupo
+    // reales, que ya exigen que el assignment esté publicado (autorizarAccionSobreAssignment).
+    // El schema tiene que estar al día con esa entidad antes de correrlas.
+    await orm.getMigrator().up({ to: ASSIGNMENT_LIFECYCLE_MIGRATION });
+    assignmentLifecycleReady = true;
+
     const { up } = await orm.getSchemaGenerator().getUpdateSchemaMigrationSQL();
     expect(up).not.toContain('alter table "grupo"');
+    expect(up).not.toContain('drop index "assignment_estado_nombre_index"');
   });
 
   it("serializa dos joins que compiten por el último cupo", async () => {
