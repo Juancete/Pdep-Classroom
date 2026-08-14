@@ -46,6 +46,7 @@ import {
   unirseAGrupo,
   upsertGrupoConMiembro,
 } from "./GrupoRepository";
+import { getEM } from "@/lib/db";
 import {
   Grupo,
   Alumno,
@@ -53,6 +54,7 @@ import {
   GrupalAssignment,
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
+  NombreGrupoDuplicadoError,
   GrupoLlenoError,
   AssignmentNoGrupalError,
 } from "@/domain/entities";
@@ -124,6 +126,15 @@ function uniqueMembershipError(): Error {
   return Object.assign(
     new Error(
       'duplicate key value violates unique constraint "grupo_alumnos_assignment_alumno_unique_idx"'
+    ),
+    { code: "23505" }
+  );
+}
+
+function uniqueGroupNameError(): Error {
+  return Object.assign(
+    new Error(
+      'duplicate key value violates unique constraint "grupo_assignment_nombre_paradigma_unique_idx"'
     ),
     { code: "23505" }
   );
@@ -277,7 +288,34 @@ describe("crearGrupo", () => {
         nombre: "Los Lambdas",
         esAdmin: false,
       })
-    ).rejects.toBeInstanceOf(AlumnoYaEnGrupoDelAssignmentError);
+    ).rejects.toMatchObject({
+      constructor: AlumnoYaEnGrupoDelAssignmentError,
+      assignmentId: "a1",
+      githubUsername: "ana",
+    });
+  });
+
+  it("traduce el conflicto concurrente por nombre de grupo duplicado", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    mockTx.findOne
+      .mockResolvedValueOnce(assignment)
+      .mockResolvedValueOnce(null);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.flush.mockRejectedValueOnce(uniqueGroupNameError());
+
+    await expect(
+      crearGrupo({
+        assignmentId: "a1",
+        alumnoId: "alumno-ana",
+        nombre: "Los Lambdas",
+        esAdmin: false,
+      })
+    ).rejects.toMatchObject({
+      constructor: NombreGrupoDuplicadoError,
+      assignmentId: "a1",
+      nombre: "Los Lambdas",
+    });
   });
 });
 
@@ -458,7 +496,11 @@ describe("unirseAGrupo", () => {
         alumnoId: "alumno-ana",
         esAdmin: false,
       })
-    ).rejects.toBeInstanceOf(AlumnoYaEnGrupoDelAssignmentError);
+    ).rejects.toMatchObject({
+      constructor: AlumnoYaEnGrupoDelAssignmentError,
+      assignmentId: "a1",
+      githubUsername: "ana",
+    });
   });
 });
 
@@ -554,5 +596,58 @@ describe("upsertGrupoConMiembro", () => {
         alumno: ana,
       })
     ).rejects.toBeInstanceOf(AlumnoYaEnGrupoDelAssignmentError);
+  });
+
+  it("reintenta con un EM nuevo si otra transacción crea el mismo grupo", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const ganador = fakeGrupo("g-ganador", assignment, []);
+    ganador.nombre = "Los Lambdas";
+    mockTx.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(ganador)
+      .mockResolvedValueOnce(null);
+    mockTx.flush.mockRejectedValueOnce(uniqueGroupNameError());
+
+    await expect(
+      upsertGrupoConMiembro({
+        nombreGrupo: "Los Lambdas",
+        paradigma: "funcional",
+        assignment,
+        alumno: ana,
+      })
+    ).resolves.toBe(ganador);
+
+    expect(getEM).toHaveBeenCalledTimes(2);
+    expect(mockEm.transactional).toHaveBeenCalledTimes(2);
+    expect(mockTx.populate).toHaveBeenCalledWith(
+      ganador,
+      ["alumnos"],
+      { refresh: true }
+    );
+    expect(ganador.alumnos.contains(ana)).toBe(true);
+  });
+
+  it("devuelve un conflicto explícito si el reintento también colisiona", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    mockTx.findOne.mockResolvedValue(null);
+    mockTx.flush.mockRejectedValue(uniqueGroupNameError());
+
+    await expect(
+      upsertGrupoConMiembro({
+        nombreGrupo: "Los Lambdas",
+        paradigma: "funcional",
+        assignment,
+        alumno: ana,
+      })
+    ).rejects.toMatchObject({
+      constructor: NombreGrupoDuplicadoError,
+      assignmentId: "a1",
+      nombre: "Los Lambdas",
+    });
+
+    expect(getEM).toHaveBeenCalledTimes(2);
   });
 });

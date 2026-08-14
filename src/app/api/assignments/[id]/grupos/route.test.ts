@@ -8,6 +8,7 @@ import {
   AssignmentNoGrupalError,
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
+  NombreGrupoDuplicadoError,
 } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
@@ -217,6 +218,20 @@ describe("POST /api/assignments/[id]/grupos", () => {
     mockCrearGrupo.mockRejectedValue(new AlumnoYaEnGrupoDelAssignmentError("a1", "ana"));
     const response = await POST(makeRequest({ nombre: "x" }), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(409);
+  });
+
+  it("devuelve 409 si ya existe un grupo con el mismo nombre", async () => {
+    mockCrearGrupo.mockRejectedValue(
+      new NombreGrupoDuplicadoError("a1", "Los Lambdas")
+    );
+    const response = await POST(makeRequest({ nombre: "Los Lambdas" }), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Ya existe un grupo llamado "Los Lambdas" para este TP.',
+    });
   });
 
   it("devuelve 500 para errores inesperados", async () => {

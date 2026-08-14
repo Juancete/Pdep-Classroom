@@ -7,6 +7,7 @@ import {
   Assignment,
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
+  NombreGrupoDuplicadoError,
   AssignmentNoGrupalError,
 } from "@/domain/entities";
 import type { Paradigma } from "@/types";
@@ -19,15 +20,34 @@ import { extractDbErrorCode, UNIQUE_VIOLATION } from "./db-errors";
 
 const INSCRIPCION_UNICA_CONSTRAINT =
   "grupo_alumnos_assignment_alumno_unique_idx";
+const NOMBRE_GRUPO_UNICO_CONSTRAINT =
+  "grupo_assignment_nombre_paradigma_unique_idx";
 
-function esViolacionDeInscripcionUnica(error: unknown): boolean {
+function esViolacionDeRestriccionUnica(
+  error: unknown,
+  constraint: string
+): boolean {
   if (!(error instanceof Error)) return false;
   const message = `${error.message} ${
     error.cause instanceof Error ? error.cause.message : ""
   }`;
   return (
     extractDbErrorCode(error) === UNIQUE_VIOLATION &&
-    message.includes(INSCRIPCION_UNICA_CONSTRAINT)
+    message.includes(constraint)
+  );
+}
+
+function esViolacionDeInscripcionUnica(error: unknown): boolean {
+  return esViolacionDeRestriccionUnica(
+    error,
+    INSCRIPCION_UNICA_CONSTRAINT
+  );
+}
+
+function esViolacionDeNombreGrupoUnico(error: unknown): boolean {
+  return esViolacionDeRestriccionUnica(
+    error,
+    NOMBRE_GRUPO_UNICO_CONSTRAINT
   );
 }
 
@@ -44,6 +64,21 @@ async function traducirConflictoDeInscripcion<T>(
         assignmentId,
         githubUsername
       );
+    }
+    throw error;
+  }
+}
+
+async function traducirConflictoDeNombreGrupo<T>(
+  assignmentId: string,
+  nombre: string,
+  operation: () => Promise<T>
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (esViolacionDeNombreGrupoUnico(error)) {
+      throw new NombreGrupoDuplicadoError(assignmentId, nombre);
     }
     throw error;
   }
@@ -105,57 +140,60 @@ export async function crearGrupo(params: {
   const { assignmentId, alumnoId, nombre, esAdmin } = params;
   const entityManager = await getEM();
 
-  return traducirConflictoDeInscripcion(
-    assignmentId,
-    alumnoId,
-    () =>
-      entityManager.transactional(async (transaction) => {
-        const assignment = await transaction.findOne(
-          Assignment,
-          { id: assignmentId },
-          { populate: ["comision"] }
-        );
-        if (!assignment) {
-          throw new AssignmentNoEncontradoError(assignmentId);
+  return traducirConflictoDeNombreGrupo(assignmentId, nombre, () =>
+    entityManager.transactional(async (transaction) => {
+      const assignment = await transaction.findOne(
+        Assignment,
+        { id: assignmentId },
+        { populate: ["comision"] }
+      );
+      if (!assignment) {
+        throw new AssignmentNoEncontradoError(assignmentId);
+      }
+      if (!(assignment instanceof GrupalAssignment)) {
+        throw new AssignmentNoGrupalError(assignmentId);
+      }
+
+      const alumno = await transaction.findOneOrFail(
+        Alumno,
+        { id: alumnoId },
+        { populate: ["comision"] }
+      );
+      autorizarAccesoAssignment({ isAdmin: esAdmin }, alumno, assignment);
+
+      return traducirConflictoDeInscripcion(
+        assignmentId,
+        alumno.githubUsername,
+        async () => {
+          if (!assignment.aceptaNuevasInscripciones()) {
+            throw new InscripcionesCerradasError(assignmentId);
+          }
+
+          const yaEnGrupo = await transaction.findOne(Grupo, {
+            assignment: { id: assignmentId },
+            alumnos: { id: alumno.id },
+          });
+          if (yaEnGrupo) {
+            throw new AlumnoYaEnGrupoDelAssignmentError(
+              assignmentId,
+              alumno.githubUsername
+            );
+          }
+
+          const grupo = new Grupo();
+          grupo.nombre = nombre;
+          grupo.paradigma = assignment.paradigma;
+          grupo.assignment = assignment;
+          grupo.maxIntegrantes = assignment.maxIntegrantes;
+          grupo.creadoPor = alumno.githubUsername;
+          grupo.alumnos.add(alumno);
+          transaction.persist(grupo);
+
+          await transaction.flush();
+          return grupo;
         }
-        if (!(assignment instanceof GrupalAssignment)) {
-          throw new AssignmentNoGrupalError(assignmentId);
-        }
-
-        const alumno = await transaction.findOneOrFail(
-          Alumno,
-          { id: alumnoId },
-          { populate: ["comision"] }
-        );
-        autorizarAccesoAssignment({ isAdmin: esAdmin }, alumno, assignment);
-
-        if (!assignment.aceptaNuevasInscripciones()) {
-          throw new InscripcionesCerradasError(assignmentId);
-        }
-
-        const yaEnGrupo = await transaction.findOne(Grupo, {
-          assignment: { id: assignmentId },
-          alumnos: { id: alumno.id },
-        });
-        if (yaEnGrupo) {
-          throw new AlumnoYaEnGrupoDelAssignmentError(
-            assignmentId,
-            alumno.githubUsername
-          );
-        }
-
-        const grupo = new Grupo();
-        grupo.nombre = nombre;
-        grupo.paradigma = assignment.paradigma;
-        grupo.assignment = assignment;
-        grupo.maxIntegrantes = assignment.maxIntegrantes;
-        grupo.creadoPor = alumno.githubUsername;
-        grupo.alumnos.add(alumno);
-        transaction.persist(grupo);
-
-        await transaction.flush();
-        return grupo;
-      })
+      );
+    })
   );
 }
 
@@ -172,35 +210,35 @@ export async function unirseAGrupo(params: {
   const { assignmentId, grupoId, alumnoId, esAdmin } = params;
   const entityManager = await getEM();
 
-  return traducirConflictoDeInscripcion(
-    assignmentId,
-    alumnoId,
-    () =>
-      entityManager.transactional(async (transaction) => {
-        const grupo = await transaction.findOne(
-          Grupo,
-          { id: grupoId, assignment: { id: assignmentId } },
-          { lockMode: LockMode.PESSIMISTIC_WRITE }
-        );
-        if (!grupo) throw new GrupoNoEncontradoError(assignmentId, grupoId);
+  return entityManager.transactional(async (transaction) => {
+    const grupo = await transaction.findOne(
+      Grupo,
+      { id: grupoId, assignment: { id: assignmentId } },
+      { lockMode: LockMode.PESSIMISTIC_WRITE }
+    );
+    if (!grupo) throw new GrupoNoEncontradoError(assignmentId, grupoId);
 
-        // El lock se toma antes de leer la colección. Cuando dos requests compiten
-        // por el último cupo, el segundo carga los miembros recién confirmados por
-        // el primero y vuelve a evaluar el límite con el estado vigente.
-        await transaction.populate(
-          grupo,
-          ["alumnos", "assignment.comision"],
-          { refresh: true }
-        );
+    // El lock se toma antes de leer la colección. Cuando dos requests compiten
+    // por el último cupo, el segundo carga los miembros recién confirmados por
+    // el primero y vuelve a evaluar el límite con el estado vigente.
+    await transaction.populate(
+      grupo,
+      ["alumnos", "assignment.comision"],
+      { refresh: true }
+    );
 
-        const assignment = grupo.assignment;
-        const alumno = await transaction.findOneOrFail(
-          Alumno,
-          { id: alumnoId },
-          { populate: ["comision"] }
-        );
-        autorizarAccesoAssignment({ isAdmin: esAdmin }, alumno, assignment);
+    const assignment = grupo.assignment;
+    const alumno = await transaction.findOneOrFail(
+      Alumno,
+      { id: alumnoId },
+      { populate: ["comision"] }
+    );
+    autorizarAccesoAssignment({ isAdmin: esAdmin }, alumno, assignment);
 
+    return traducirConflictoDeInscripcion(
+      assignmentId,
+      alumno.githubUsername,
+      async () => {
         if (grupo.alumnos.contains(alumno)) {
           return grupo;
         }
@@ -224,14 +262,36 @@ export async function unirseAGrupo(params: {
 
         await transaction.flush();
         return grupo;
-      })
-  );
+      }
+    );
+  });
 }
 
 // Usado por la sincronización desde la planilla: crea el Grupo (nombre +
 // paradigma + assignment) si no existe, y agrega al alumno como miembro
 // si no lo era. Idempotente.
 export async function upsertGrupoConMiembro(params: {
+  nombreGrupo: string;
+  paradigma: Paradigma;
+  assignment: GrupalAssignment;
+  alumno: Alumno;
+}): Promise<Grupo> {
+  try {
+    return await ejecutarUpsertGrupoConMiembro(params);
+  } catch (error) {
+    if (!esViolacionDeNombreGrupoUnico(error)) throw error;
+
+    // La otra transacción ya creó el grupo. Un EM nuevo evita reutilizar el
+    // estado abortado y permite encontrar al ganador en el segundo intento.
+    return traducirConflictoDeNombreGrupo(
+      params.assignment.id,
+      params.nombreGrupo,
+      () => ejecutarUpsertGrupoConMiembro(params)
+    );
+  }
+}
+
+async function ejecutarUpsertGrupoConMiembro(params: {
   nombreGrupo: string;
   paradigma: Paradigma;
   assignment: GrupalAssignment;
