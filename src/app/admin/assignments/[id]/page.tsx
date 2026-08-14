@@ -147,6 +147,10 @@ export default async function AssignmentDetailPage(
       </div>
 
       <EstadoPanel
+        // El estado real es la key: cuando cambia (post router.refresh()),
+        // React remonta el panel en vez de arrastrar el estado local
+        // optimista que quedó tras la transición anterior.
+        key={assignment.estadoNombre}
         assignmentId={assignment.id}
         estado={assignment.estadoNombre}
         accionesDisponibles={accionesDeEstado}

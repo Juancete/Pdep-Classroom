@@ -20,8 +20,16 @@ vi.mock("@/lib/repositories", () => ({
     mockGetEntregasDeUsuario(username),
 }));
 
-function makeAssignment(id: string, esVisiblePara = true) {
-  return { id, esVisibleParaAlumno: () => esVisiblePara };
+// `esVisibleParaAlumno` real depende de si el alumno tiene entrega: el mock
+// respeta ese contrato en vez de devolver un valor fijo, para que los tests
+// verifiquen que route.ts realmente pasa entregasMap.has(id) como argumento.
+function makeAssignment(
+  id: string,
+  esVisiblePara: boolean | ((tieneEntrega: boolean) => boolean) = true
+) {
+  const resolver =
+    typeof esVisiblePara === "function" ? esVisiblePara : () => esVisiblePara;
+  return { id, esVisibleParaAlumno: resolver };
 }
 
 import { GET } from "./route";
@@ -83,6 +91,25 @@ describe("GET /api/assignments", () => {
   it("consulta las entregas del alumno para resolver la visibilidad de archivados", async () => {
     await GET();
     expect(mockGetEntregasDeUsuario).toHaveBeenCalledWith("ana");
+  });
+
+  it("incluye un archivado cuando el alumno tiene entrega, y lo excluye si no", async () => {
+    // esVisibleParaAlumno real: archivado.esVisibleParaAlumno(tieneEntrega) === tieneEntrega
+    mockGetAssignmentsDeComision.mockResolvedValue([
+      makeAssignment("a-archivado-con-entrega", (tieneEntrega) => tieneEntrega),
+      makeAssignment("a-archivado-sin-entrega", (tieneEntrega) => tieneEntrega),
+    ]);
+    mockGetEntregasDeUsuario.mockResolvedValue(
+      new Map([["a-archivado-con-entrega", { id: "e1" }]])
+    );
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.map((assignment: { id: string }) => assignment.id)).toEqual([
+      "a-archivado-con-entrega",
+    ]);
   });
 
   it("devuelve 403 si el usuario no está registrado como alumno", async () => {

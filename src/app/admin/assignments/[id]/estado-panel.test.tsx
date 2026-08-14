@@ -133,4 +133,71 @@ describe("EstadoPanel", () => {
     expect(screen.getByText(/@juancete/)).toBeInTheDocument();
     expect(screen.getByText(/@docente1/)).toBeInTheDocument();
   });
+
+  it("formatea la fecha de auditoría en la zona horaria de Argentina, no la del runner", () => {
+    const originalTz = process.env.TZ;
+    process.env.TZ = "UTC";
+    try {
+      // 2026-03-12T00:00:00Z es 2026-03-11 21:00 en Argentina (UTC-3): sin el
+      // timeZone explícito, un runner en UTC mostraría 12/3 en vez de 11/3.
+      render(
+        <EstadoPanel
+          {...makeProps({
+            estado: "publicado",
+            publicadoEn: "2026-03-12T00:00:00.000Z",
+            publicadoPor: "docente1",
+          })}
+        />
+      );
+      expect(screen.getByText(/11\/3\/2026/)).toBeInTheDocument();
+    } finally {
+      process.env.TZ = originalTz;
+    }
+  });
+
+  it("resincroniza estado y acciones cuando cambian las props tras router.refresh()", () => {
+    // El padre real monta <EstadoPanel key={assignment.estadoNombre} .../> —
+    // el test replica esa key para reproducir el remount tras un cambio real
+    // de estado, no un simple rerender con las mismas props "congeladas".
+    const { rerender } = render(
+      <EstadoPanel
+        key="borrador"
+        {...makeProps({ estado: "borrador", accionesDisponibles: ["publicado"] })}
+      />
+    );
+    expect(screen.getByTestId("accion-publicado")).toBeInTheDocument();
+
+    rerender(
+      <EstadoPanel
+        key="publicado"
+        {...makeProps({ estado: "publicado", accionesDisponibles: ["borrador", "archivado"] })}
+      />
+    );
+
+    expect(screen.getByTestId("estado-badge")).toHaveTextContent("Publicado");
+    expect(screen.getByTestId("accion-borrador")).toBeInTheDocument();
+    expect(screen.getByTestId("accion-archivado")).toBeInTheDocument();
+    expect(screen.queryByTestId("accion-publicado")).not.toBeInTheDocument();
+  });
+
+  it("no resincroniza (ni hace falta) si la key no cambia entre renders", () => {
+    const { rerender } = render(
+      <EstadoPanel
+        key="publicado"
+        {...makeProps({ estado: "publicado", accionesDisponibles: ["archivado"] })}
+      />
+    );
+
+    // Mismo componente montado: las props "congeladas" iniciales siguen
+    // siendo las que ve React, tal como pasaría si el padre no cambiara
+    // la key porque el estado real no cambió.
+    rerender(
+      <EstadoPanel
+        key="publicado"
+        {...makeProps({ estado: "publicado", accionesDisponibles: ["archivado"] })}
+      />
+    );
+
+    expect(screen.getByTestId("accion-archivado")).toBeInTheDocument();
+  });
 });
