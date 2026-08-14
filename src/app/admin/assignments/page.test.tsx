@@ -14,7 +14,7 @@ vi.mock("@/lib/session", () => ({
 }));
 
 vi.mock("@/lib/repositories", () => ({
-  getAssignments: () => mockGetAssignments(),
+  getAssignments: (filtro?: unknown) => mockGetAssignments(filtro),
   getEntregaCountsByAssignment: () => mockGetEntregaCountsByAssignment(),
   getActiveRepoCountsByAssignment: () => mockGetActiveRepoCountsByAssignment(),
 }));
@@ -185,6 +185,7 @@ describe("Admin Assignments page", () => {
       const element = await AdminAssignmentsPage();
       const html = renderToStaticMarkup(element);
       expect(html).toContain("Título");
+      expect(html).toContain("Estado");
       expect(html).toContain("Paradigma");
       expect(html).toContain("Tipo");
       expect(html).toContain("Comisión");
@@ -271,6 +272,46 @@ describe("Admin Assignments page", () => {
       const element = await AdminAssignmentsPage();
       const html = renderToStaticMarkup(element);
       expect(html).toContain("—");
+    });
+  });
+
+  describe("estado", () => {
+    it("muestra el badge de estado por assignment", async () => {
+      mockGetAssignments.mockResolvedValue([
+        makeAssignment({ estadoNombre: "archivado" }),
+      ]);
+      const element = await AdminAssignmentsPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain('data-testid="estado-badge"');
+      expect(html).toContain("Archivado");
+    });
+
+    it("muestra los chips de filtro por estado", async () => {
+      mockGetAssignments.mockResolvedValue([]);
+      const element = await AdminAssignmentsPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("Todos");
+      expect(html).toContain('href="/admin/assignments?estado=borrador"');
+      expect(html).toContain('href="/admin/assignments?estado=publicado"');
+      expect(html).toContain('href="/admin/assignments?estado=archivado"');
+    });
+
+    it("pasa el filtro al repositorio cuando el estado es válido", async () => {
+      mockGetAssignments.mockResolvedValue([]);
+      const element = await AdminAssignmentsPage({
+        searchParams: Promise.resolve({ estado: "archivado" }),
+      });
+      renderToStaticMarkup(element);
+      expect(mockGetAssignments).toHaveBeenCalledWith({ estado: "archivado" });
+    });
+
+    it("ignora un estado desconocido en el query string", async () => {
+      mockGetAssignments.mockResolvedValue([]);
+      const element = await AdminAssignmentsPage({
+        searchParams: Promise.resolve({ estado: "basura" }),
+      });
+      renderToStaticMarkup(element);
+      expect(mockGetAssignments).toHaveBeenCalledWith(undefined);
     });
   });
 });

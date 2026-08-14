@@ -12,9 +12,11 @@ import { EntregasTable } from "./entregas-table";
 import { DeleteReposButton } from "../delete-repos-button";
 import { GruposPanel } from "./grupos-panel";
 import type { GrupoAdminResumen, AlumnoSinGrupoResumen } from "./grupos-panel";
-import { GrupalAssignment, Alumno } from "@/domain/entities";
+import { GrupalAssignment, Alumno, transicionesDisponibles } from "@/domain/entities";
 import type { Grupo } from "@/domain/entities";
 import { RepoDeletionHistory } from "./repo-deletion-history";
+import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
+import { EstadoPanel } from "./estado-panel";
 
 export default async function AssignmentDetailPage(
   props: {
@@ -55,6 +57,10 @@ export default async function AssignmentDetailPage(
 
   const aceptadas = entregas.length;
   const pendientes = Math.max(0, total - aceptadas);
+
+  const accionesDeEstado = transicionesDisponibles(assignment.estado, assignment.id, {
+    tieneEntregas: aceptadas > 0,
+  });
 
   const alumnosPorUsername = new Map<string, Alumno>(
     alumnos.map((alumno) => [alumno.usernameCanonico, alumno])
@@ -120,6 +126,7 @@ export default async function AssignmentDetailPage(
             ← Volver
           </Link>
           <h1 className="text-2xl font-bold">{assignment.titulo}</h1>
+          <EstadoAssignmentBadge estado={assignment.estadoNombre} />
         </div>
         <div className="flex items-center gap-3">
           <DeleteReposButton
@@ -138,6 +145,17 @@ export default async function AssignmentDetailPage(
           </Link>
         </div>
       </div>
+
+      <EstadoPanel
+        assignmentId={assignment.id}
+        estado={assignment.estadoNombre}
+        accionesDisponibles={accionesDeEstado}
+        entregasCount={aceptadas}
+        publicadoEn={assignment.publicadoEn?.toISOString() ?? null}
+        publicadoPor={assignment.publicadoPor ?? null}
+        archivadoEn={assignment.archivadoEn?.toISOString() ?? null}
+        archivadoPor={assignment.archivadoPor ?? null}
+      />
 
       {/* Metadata del assignment */}
       <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
@@ -163,16 +181,22 @@ export default async function AssignmentDetailPage(
         </p>
       </div>
 
-      {/* Contadores */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      {/* Contadores: "Pendientes" no aplica a un borrador, todavía no aceptable. */}
+      <div
+        className={`grid gap-4 mb-6 ${
+          assignment.estadoNombre === "borrador" ? "grid-cols-2" : "grid-cols-3"
+        }`}
+      >
         <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
           <div className="text-3xl font-bold text-pdep-600">{aceptadas}</div>
           <div className="text-sm text-gray-500 mt-1">Aceptadas</div>
         </div>
-        <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
-          <div className="text-3xl font-bold text-amber-600">{pendientes}</div>
-          <div className="text-sm text-gray-500 mt-1">Pendientes</div>
-        </div>
+        {assignment.estadoNombre !== "borrador" && (
+          <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
+            <div className="text-3xl font-bold text-amber-600">{pendientes}</div>
+            <div className="text-sm text-gray-500 mt-1">Pendientes</div>
+          </div>
+        )}
         <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
           <div className="text-3xl font-bold text-gray-600">{total}</div>
           <div className="text-sm text-gray-500 mt-1">
