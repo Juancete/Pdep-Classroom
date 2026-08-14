@@ -1130,6 +1130,29 @@
           "keyName": "grupo_pkey",
           "unique": true,
           "primary": true
+        },
+        {
+          "columnNames": [
+            "id",
+            "assignment_id"
+          ],
+          "composite": true,
+          "constraint": true,
+          "keyName": "grupo_id_assignment_unique",
+          "unique": true,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "assignment_id",
+            "nombre",
+            "paradigma"
+          ],
+          "composite": true,
+          "constraint": true,
+          "keyName": "grupo_assignment_nombre_paradigma_unique_idx",
+          "unique": true,
+          "primary": false
         }
       ],
       "checks": [],
@@ -1184,6 +1207,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "uuid"
+        },
+        "assignment_id": {
+          "name": "assignment_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
         }
       },
       "name": "grupo_alumnos",
@@ -1199,6 +1238,17 @@
           "keyName": "grupo_alumnos_pkey",
           "unique": true,
           "primary": true
+        },
+        {
+          "columnNames": [
+            "assignment_id",
+            "alumno_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "grupo_alumnos_assignment_alumno_unique_idx",
+          "unique": true,
+          "primary": false
         }
       ],
       "checks": [],
@@ -1225,6 +1275,21 @@
           "referencedTableName": "public.grupo",
           "referencedColumnNames": [
             "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "cascade"
+        },
+        "grupo_alumnos_grupo_assignment_foreign": {
+          "columnNames": [
+            "grupo_id",
+            "assignment_id"
+          ],
+          "constraintName": "grupo_alumnos_grupo_assignment_foreign",
+          "localTableName": "public.grupo_alumnos",
+          "referencedTableName": "public.grupo",
+          "referencedColumnNames": [
+            "id",
+            "assignment_id"
           ],
           "updateRule": "cascade",
           "deleteRule": "cascade"

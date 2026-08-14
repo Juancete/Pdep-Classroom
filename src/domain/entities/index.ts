@@ -19,6 +19,7 @@ export {
   Grupo,
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
+  NombreGrupoDuplicadoError,
   GrupoLlenoError,
   AssignmentNoGrupalError,
 } from "./Grupo";
