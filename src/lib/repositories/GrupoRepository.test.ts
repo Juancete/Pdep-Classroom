@@ -66,6 +66,7 @@ import {
   AssignmentNoEncontradoError,
   GrupoNoEncontradoError,
 } from "@/lib/services/assignmentAuthorization";
+import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -91,6 +92,7 @@ function fakeComision(id = "c1"): Comision {
 function fakeGrupal(overrides: Partial<GrupalAssignment> = {}): GrupalAssignment {
   const grupal = new GrupalAssignment();
   grupal.id = "a1";
+  grupal.slug = "tp-funcional";
   grupal.paradigma = "funcional";
   grupal.maxIntegrantes = 3;
   grupal.inscripcionesCerradas = false;
@@ -203,6 +205,24 @@ describe("crearGrupo", () => {
     ).rejects.toBeInstanceOf(NombreGrupoInvalidoError);
 
     expect(getEM).not.toHaveBeenCalled();
+  });
+
+  it("rechaza un nombre que haría superar el límite del repositorio", async () => {
+    mockTx.findOne.mockResolvedValueOnce(
+      fakeGrupal({ slug: "a".repeat(90) })
+    );
+
+    await expect(
+      crearGrupo({
+        assignmentId: "a1",
+        alumnoId: "alumno-ana",
+        nombre: "b".repeat(10),
+        esAdmin: false,
+      })
+    ).rejects.toBeInstanceOf(NombreRepositorioDemasiadoLargoError);
+
+    expect(mockTx.findOneOrFail).not.toHaveBeenCalled();
+    expect(mockTx.persist).not.toHaveBeenCalled();
   });
 
   it("lanza AssignmentNoEncontradoError si el assignment no existe", async () => {
@@ -521,6 +541,23 @@ describe("unirseAGrupo", () => {
 });
 
 describe("upsertGrupoConMiembro", () => {
+  it("rechaza antes de persistir un nombre de Sheets que supera el límite del repositorio", async () => {
+    const assignment = fakeGrupal({ slug: "a".repeat(90) });
+    const ana = fakeAlumno("alumno-ana", "ana");
+
+    await expect(
+      upsertGrupoConMiembro({
+        nombreGrupo: "b".repeat(10),
+        paradigma: "funcional",
+        assignment,
+        alumno: ana,
+      })
+    ).rejects.toBeInstanceOf(NombreRepositorioDemasiadoLargoError);
+
+    expect(getEM).not.toHaveBeenCalled();
+    expect(mockTx.persist).not.toHaveBeenCalled();
+  });
+
   it("bloquea el grupo, valida las invariantes y agrega al alumno", async () => {
     const assignment = fakeGrupal();
     const ana = fakeAlumno("alumno-ana", "ana");

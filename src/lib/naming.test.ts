@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { buildRepoName, slugify, extractTemplateName } from "./naming";
+import {
+  buildRepoName,
+  extractTemplateName,
+  GITHUB_REPO_NAME_MAX_LENGTH,
+  NombreRepositorioDemasiadoLargoError,
+  slugify,
+} from "./naming";
 
 // ── buildRepoName ───────────────────────────────────────────
 
@@ -26,6 +32,35 @@ describe("buildRepoName", () => {
         githubUsername: "JuanGarcia",
       })
     ).toBe("kata-funcional-juangarcia");
+  });
+
+  it("acepta el nombre completo cuando tiene exactamente el límite de GitHub", () => {
+    const repoName = buildRepoName({
+      slug: "a".repeat(90),
+      githubUsername: "b".repeat(9),
+    });
+
+    expect(repoName).toHaveLength(GITHUB_REPO_NAME_MAX_LENGTH);
+  });
+
+  it("rechaza el nombre individual completo cuando supera el límite de GitHub", () => {
+    expect(() =>
+      buildRepoName({
+        slug: "a".repeat(91),
+        githubUsername: "b".repeat(9),
+      })
+    ).toThrow(NombreRepositorioDemasiadoLargoError);
+  });
+
+  it("rechaza el nombre grupal completo cuando supera el límite de GitHub", () => {
+    expect(() =>
+      buildRepoName({
+        slug: "a".repeat(90),
+        grupoNombreNormalizado: "b".repeat(10),
+      })
+    ).toThrow(
+      "El nombre del repositorio generado supera el límite de 100 caracteres de GitHub."
+    );
   });
 });
 

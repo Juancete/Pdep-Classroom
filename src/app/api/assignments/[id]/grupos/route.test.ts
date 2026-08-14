@@ -11,6 +11,7 @@ import {
   NombreGrupoDuplicadoError,
   NombreGrupoInvalidoError,
 } from "@/domain/entities";
+import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -246,6 +247,22 @@ describe("POST /api/assignments/[id]/grupos", () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
       error: "El nombre del grupo debe incluir al menos una letra o un número.",
+    });
+  });
+
+  it("devuelve 400 si el nombre completo del repositorio supera el límite", async () => {
+    mockCrearGrupo.mockRejectedValue(
+      new NombreRepositorioDemasiadoLargoError("a".repeat(101))
+    );
+
+    const response = await POST(makeRequest({ nombre: "Los Lambdas" }), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error:
+        "El nombre del repositorio generado supera el límite de 100 caracteres de GitHub.",
     });
   });
 

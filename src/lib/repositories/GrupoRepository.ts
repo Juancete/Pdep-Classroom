@@ -12,7 +12,7 @@ import {
   AssignmentNoGrupalError,
 } from "@/domain/entities";
 import type { Paradigma } from "@/types";
-import { slugify } from "@/lib/naming";
+import { buildRepoName, slugify } from "@/lib/naming";
 import {
   AssignmentNoEncontradoError,
   GrupoNoEncontradoError,
@@ -166,6 +166,10 @@ export async function crearGrupo(params: {
       if (!(assignment instanceof GrupalAssignment)) {
         throw new AssignmentNoGrupalError(assignmentId);
       }
+      buildRepoName({
+        slug: assignment.slug,
+        grupoNombreNormalizado: nombreNormalizado,
+      });
 
       const alumno = await transaction.findOneOrFail(
         Alumno,
@@ -315,6 +319,10 @@ async function ejecutarUpsertGrupoConMiembro(params: {
   const { nombre: nombreGrupo, nombreNormalizado } = prepararNombreGrupo(
     params.nombreGrupo
   );
+  buildRepoName({
+    slug: assignment.slug,
+    grupoNombreNormalizado: nombreNormalizado,
+  });
   const entityManager = await getEM();
 
   return traducirConflictoDeInscripcion(
