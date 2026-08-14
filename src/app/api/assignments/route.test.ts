@@ -5,6 +5,7 @@ const mockGetCurrentUser = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
 const mockGetAssignments = vi.fn();
 const mockGetAssignmentsDeComision = vi.fn();
+const mockGetEntregasDeUsuario = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
@@ -15,7 +16,13 @@ vi.mock("@/lib/repositories", () => ({
   getAssignments: () => mockGetAssignments(),
   getAssignmentsDeComision: (comisionId: string) =>
     mockGetAssignmentsDeComision(comisionId),
+  getEntregasDeUsuario: (username: string) =>
+    mockGetEntregasDeUsuario(username),
 }));
+
+function makeAssignment(id: string, esVisiblePara = true) {
+  return { id, esVisibleParaAlumno: () => esVisiblePara };
+}
 
 import { GET } from "./route";
 
@@ -37,7 +44,8 @@ describe("GET /api/assignments", () => {
       id: "alumno-ana",
       comision: { id: "c1" },
     });
-    mockGetAssignmentsDeComision.mockResolvedValue([{ id: "a1" }]);
+    mockGetAssignmentsDeComision.mockResolvedValue([makeAssignment("a1")]);
+    mockGetEntregasDeUsuario.mockResolvedValue(new Map());
     mockGetAssignments.mockResolvedValue([{ id: "a1" }, { id: "a2" }]);
   });
 
@@ -57,6 +65,24 @@ describe("GET /api/assignments", () => {
     expect(response.status).toBe(200);
     expect(mockGetAssignmentsDeComision).toHaveBeenCalledWith("c1");
     expect(mockGetAssignments).not.toHaveBeenCalled();
+  });
+
+  it("excluye assignments que el estado del alumno no hace visibles", async () => {
+    mockGetAssignmentsDeComision.mockResolvedValue([
+      makeAssignment("a1", true),
+      makeAssignment("a-oculto", false),
+    ]);
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.map((assignment: { id: string }) => assignment.id)).toEqual(["a1"]);
+  });
+
+  it("consulta las entregas del alumno para resolver la visibilidad de archivados", async () => {
+    await GET();
+    expect(mockGetEntregasDeUsuario).toHaveBeenCalledWith("ana");
   });
 
   it("devuelve 403 si el usuario no está registrado como alumno", async () => {
