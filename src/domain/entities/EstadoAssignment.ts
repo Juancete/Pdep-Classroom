@@ -1,10 +1,10 @@
 export type NombreEstadoAssignment = "borrador" | "publicado" | "archivado";
 
-export const NOMBRES_ESTADO_ASSIGNMENT: NombreEstadoAssignment[] = [
+export const NOMBRES_ESTADO_ASSIGNMENT: readonly NombreEstadoAssignment[] = [
   "borrador",
   "publicado",
   "archivado",
-];
+] as const;
 
 /**
  * Lanzado cuando se pide una transición de estado que la regla del assignment
