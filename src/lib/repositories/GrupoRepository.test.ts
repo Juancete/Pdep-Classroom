@@ -63,6 +63,7 @@ import { IndividualAssignment } from "@/domain/entities/IndividualAssignment";
 import { LockMode, type Collection } from "@mikro-orm/core";
 import {
   AccesoAssignmentProhibidoError,
+  AssignmentNoDisponibleError,
   AssignmentNoEncontradoError,
   GrupoNoEncontradoError,
 } from "@/lib/services/assignmentAuthorization";
@@ -97,6 +98,10 @@ function fakeGrupal(overrides: Partial<GrupalAssignment> = {}): GrupalAssignment
   grupal.maxIntegrantes = 3;
   grupal.inscripcionesCerradas = false;
   grupal.comision = fakeComision();
+  // Publicado por defecto: crear/unirse a grupo requiere que el assignment
+  // esté disponible para el alumno. Los tests de ciclo de vida overridean
+  // `estadoNombre` explícitamente.
+  grupal.transicionarA("publicado", { tieneEntregas: false }, "docente1");
   Object.assign(grupal, overrides);
   return grupal;
 }
@@ -287,6 +292,19 @@ describe("crearGrupo", () => {
     expect(mockEm.transactional).toHaveBeenCalledTimes(1);
     expect(mockTx.persist).not.toHaveBeenCalled();
     expect(mockTx.flush).not.toHaveBeenCalled();
+  });
+
+  it("rechaza crear grupo en un assignment que no está publicado", async () => {
+    const borrador = fakeGrupal();
+    borrador.estadoNombre = "borrador";
+    const ana = fakeAlumno("alumno-ana", "ana");
+    mockTx.findOne.mockResolvedValueOnce(borrador);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+
+    await expect(
+      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x", esAdmin: false })
+    ).rejects.toBeInstanceOf(AssignmentNoDisponibleError);
+    expect(mockTx.persist).not.toHaveBeenCalled();
   });
 
   it("permite crear entre comisiones cuando el contexto es administrador", async () => {
@@ -490,6 +508,25 @@ describe("unirseAGrupo", () => {
     ).rejects.toBeInstanceOf(AccesoAssignmentProhibidoError);
 
     expect(mockEm.transactional).toHaveBeenCalledTimes(1);
+    expect(mockTx.flush).not.toHaveBeenCalled();
+  });
+
+  it("rechaza unirse a un grupo de un assignment archivado", async () => {
+    const archivado = fakeGrupal();
+    archivado.transicionarA("archivado", { tieneEntregas: false }, "docente1");
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupo = fakeGrupo("g1", archivado, []);
+    mockTx.findOne.mockResolvedValueOnce(grupo);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+
+    await expect(
+      unirseAGrupo({
+        assignmentId: "a1",
+        grupoId: "g1",
+        alumnoId: "alumno-ana",
+        esAdmin: false,
+      })
+    ).rejects.toBeInstanceOf(AssignmentNoDisponibleError);
     expect(mockTx.flush).not.toHaveBeenCalled();
   });
 

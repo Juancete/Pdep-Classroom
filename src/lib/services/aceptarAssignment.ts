@@ -11,10 +11,13 @@ import { addCollaborators, crearEntrega, repoExists } from "@/lib/github";
 import { buildRepoName } from "@/lib/naming";
 import {
   AssignmentNoEncontradoError,
-  autorizarAccesoAssignment,
+  autorizarAccionSobreAssignment,
 } from "./assignmentAuthorization";
 
-export { AssignmentNoEncontradoError } from "./assignmentAuthorization";
+export {
+  AssignmentNoEncontradoError,
+  AssignmentNoDisponibleError,
+} from "./assignmentAuthorization";
 
 export class AlumnoNoRegistradoError extends Error {
   constructor(public readonly githubUsername: string) {
@@ -37,7 +40,7 @@ export async function aceptarAssignment(
     getAlumnoByGithub(user.githubUsername, true),
   ]);
   if (!assignment) throw new AssignmentNoEncontradoError(assignmentId);
-  autorizarAccesoAssignment(user, alumno, assignment);
+  autorizarAccionSobreAssignment(user, alumno, assignment);
 
   const existente = await getEntregaDeUsuario(assignment.id, user.githubUsername);
   if (existente) return existente;

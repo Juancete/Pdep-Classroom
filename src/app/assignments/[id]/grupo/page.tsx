@@ -10,7 +10,7 @@ import { GrupalAssignment } from "@/domain/entities";
 import { GrupoSelector } from "./grupo-selector";
 import { MiGrupo } from "./mi-grupo";
 import type { GrupoResumen } from "./mi-grupo";
-import { autorizarAccesoAssignment } from "@/lib/services/assignmentAuthorization";
+import { autorizarAccionSobreAssignment } from "@/lib/services/assignmentAuthorization";
 
 export default async function GrupoPage(
   props: {
@@ -32,7 +32,7 @@ export default async function GrupoPage(
   }
 
   try {
-    autorizarAccesoAssignment(user, alumno, assignment);
+    autorizarAccionSobreAssignment(user, alumno, assignment);
   } catch {
     notFound();
   }
