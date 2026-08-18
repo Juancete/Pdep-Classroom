@@ -16,7 +16,7 @@ import { GrupalAssignment, Alumno, transicionesDisponibles } from "@/domain/enti
 import type { Grupo } from "@/domain/entities";
 import { RepoDeletionHistory } from "./repo-deletion-history";
 import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
-import { EstadoPanel } from "./estado-panel";
+import { EstadoPanel } from "../estado-panel";
 
 export default async function AssignmentDetailPage(
   props: {
