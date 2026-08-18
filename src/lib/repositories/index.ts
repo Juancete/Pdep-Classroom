@@ -76,3 +76,9 @@ export {
   ComisionActivaDuplicadaError,
 } from "./ComisionRepository";
 export type { ComisionFormData } from "./ComisionRepository";
+
+export {
+  registrarCambioDeMembresia,
+  getHistorialDeMembresias,
+  type HistorialDeMembresiasPage,
+} from "./CambioDeMembresiaRepository";
