@@ -19,15 +19,22 @@ type MockTx = {
   findOneOrFail: ReturnType<typeof vi.fn>;
   populate: ReturnType<typeof vi.fn>;
   persist: ReturnType<typeof vi.fn>;
+  remove: ReturnType<typeof vi.fn>;
   flush: ReturnType<typeof vi.fn>;
+  getConnection: ReturnType<typeof vi.fn>;
 };
+
+// Conexión compartida para el advisory lock de salirDeGrupo/moverAlumnoDeGrupo.
+const mockConnection = { execute: vi.fn() };
 
 const mockTx: MockTx = {
   findOne: vi.fn(),
   findOneOrFail: vi.fn(),
   populate: vi.fn(),
   persist: vi.fn(),
+  remove: vi.fn(),
   flush: vi.fn(),
+  getConnection: vi.fn(() => mockConnection),
 };
 
 const mockEm = {
@@ -45,12 +52,15 @@ import {
   crearGrupo,
   unirseAGrupo,
   upsertGrupoConMiembro,
+  salirDeGrupo,
+  moverAlumnoDeGrupo,
 } from "./GrupoRepository";
 import { getEM } from "@/lib/db";
 import {
   Grupo,
   Alumno,
   Comision,
+  Entrega,
   GrupalAssignment,
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
@@ -58,9 +68,12 @@ import {
   NombreGrupoInvalidoError,
   GrupoLlenoError,
   AssignmentNoGrupalError,
+  AlumnoNoEsMiembroDelGrupoError,
+  GrupoConEntregaError,
   DOCENTE,
   ESTUDIANTE,
 } from "@/domain/entities";
+import type { PdepUser } from "@/types";
 import { IndividualAssignment } from "@/domain/entities/IndividualAssignment";
 import { LockMode, type Collection } from "@mikro-orm/core";
 import {
@@ -126,11 +139,20 @@ function fakeGrupo(
   grupo.alumnos = {
     contains: (alumno: Alumno) => items.some((member) => member.id === alumno.id),
     add: (alumno: Alumno) => items.push(alumno),
+    remove: (alumno: Alumno) => {
+      const index = items.findIndex((member) => member.id === alumno.id);
+      if (index !== -1) items.splice(index, 1);
+    },
+    getItems: () => items,
     get length() {
       return items.length;
     },
   } as unknown as Collection<Alumno>;
   return grupo;
+}
+
+function fakeUsuario(githubUsername: string, rol = ESTUDIANTE): PdepUser {
+  return { githubUsername, name: githubUsername, image: "", rol };
 }
 
 function uniqueMembershipError(): Error {
@@ -745,8 +767,15 @@ describe("upsertGrupoConMiembro", () => {
   it("devuelve un conflicto explícito si el reintento también colisiona", async () => {
     const assignment = fakeGrupal();
     const ana = fakeAlumno("alumno-ana", "ana");
-    mockTx.findOne.mockResolvedValue(null);
-    mockTx.flush.mockRejectedValue(uniqueGroupNameError());
+    // El código reintenta con un EM nuevo tras la primera colisión (dos
+    // transacciones ⇒ dos findOne/flush). Se dejan "once" y no permanentes
+    // para no contaminar los tests que corren después en este archivo.
+    mockTx.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    mockTx.flush
+      .mockRejectedValueOnce(uniqueGroupNameError())
+      .mockRejectedValueOnce(uniqueGroupNameError());
 
     await expect(
       upsertGrupoConMiembro({
@@ -762,5 +791,437 @@ describe("upsertGrupoConMiembro", () => {
     });
 
     expect(getEM).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ── salirDeGrupo ────────────────────────────────────────────
+
+describe("salirDeGrupo", () => {
+  it("quita al alumno, flushea y no borra el grupo si no queda vacío", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const bob = fakeAlumno("alumno-bob", "bob");
+    const grupo = fakeGrupo("g1", assignment, [ana, bob]);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupo) // lock del grupo
+      .mockResolvedValueOnce(null); // sin entrega
+
+    const resultado = await salirDeGrupo({
+      assignmentId: "a1",
+      grupoId: "g1",
+      githubUsername: "ana",
+      usuario: fakeUsuario("ana"),
+    });
+
+    expect(resultado).toEqual({ grupo, grupoEliminado: false });
+    expect(grupo.alumnos.contains(ana)).toBe(false);
+    expect(grupo.alumnos.contains(bob)).toBe(true);
+    expect(mockTx.remove).not.toHaveBeenCalled();
+    expect(mockTx.flush).toHaveBeenCalled();
+    expect(mockTx.persist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accion: "baja",
+        origen: "alumno",
+        assignmentId: "a1",
+        alumnoId: "alumno-ana",
+        grupoOrigenId: "g1",
+        grupoOrigenTeniaEntrega: false,
+        grupoOrigenEliminado: false,
+      })
+    );
+  });
+
+  it("lanza GrupoNoEncontradoError si el grupo no pertenece al assignment", async () => {
+    const ana = fakeAlumno("alumno-ana", "ana");
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne.mockResolvedValueOnce(null);
+
+    await expect(
+      salirDeGrupo({
+        assignmentId: "a1",
+        grupoId: "g1",
+        githubUsername: "ana",
+        usuario: fakeUsuario("ana"),
+      })
+    ).rejects.toBeInstanceOf(GrupoNoEncontradoError);
+    expect(mockTx.flush).not.toHaveBeenCalled();
+  });
+
+  it("lanza AlumnoNoEsMiembroDelGrupoError si el alumno no está en el grupo", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupo = fakeGrupo("g1", assignment, [fakeAlumno("alumno-bob", "bob")]);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne.mockResolvedValueOnce(grupo);
+
+    await expect(
+      salirDeGrupo({
+        assignmentId: "a1",
+        grupoId: "g1",
+        githubUsername: "ana",
+        usuario: fakeUsuario("ana"),
+      })
+    ).rejects.toBeInstanceOf(AlumnoNoEsMiembroDelGrupoError);
+    expect(mockTx.flush).not.toHaveBeenCalled();
+  });
+
+  it("rechaza al alumno con inscripciones cerradas, pero permite al docente", async () => {
+    const assignment = fakeGrupal({ inscripcionesCerradas: true });
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupoParaAlumno = fakeGrupo("g1", assignment, [ana, fakeAlumno("alumno-bob", "bob")]);
+
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupoParaAlumno)
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      salirDeGrupo({
+        assignmentId: "a1",
+        grupoId: "g1",
+        githubUsername: "ana",
+        usuario: fakeUsuario("ana"),
+      })
+    ).rejects.toBeInstanceOf(InscripcionesCerradasError);
+
+    const grupoParaDocente = fakeGrupo("g1", assignment, [ana, fakeAlumno("alumno-bob", "bob")]);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupoParaDocente)
+      .mockResolvedValueOnce(null);
+
+    const resultado = await salirDeGrupo({
+      assignmentId: "a1",
+      grupoId: "g1",
+      githubUsername: "ana",
+      usuario: fakeUsuario("ana", DOCENTE),
+    });
+    expect(resultado.grupo).toBe(grupoParaDocente);
+  });
+
+  it("rechaza al alumno si el grupo ya entregó, y no lo borra aunque quede vacío para el docente", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const entregaFake = Object.assign(new Entrega(), { id: "e1" });
+
+    const grupoParaAlumno = fakeGrupo("g1", assignment, [ana]);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupoParaAlumno)
+      .mockResolvedValueOnce(entregaFake);
+
+    await expect(
+      salirDeGrupo({
+        assignmentId: "a1",
+        grupoId: "g1",
+        githubUsername: "ana",
+        usuario: fakeUsuario("ana"),
+      })
+    ).rejects.toBeInstanceOf(GrupoConEntregaError);
+    expect(mockTx.remove).not.toHaveBeenCalled();
+
+    const grupoParaDocente = fakeGrupo("g1", assignment, [ana]);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupoParaDocente)
+      .mockResolvedValueOnce(entregaFake);
+
+    const resultado = await salirDeGrupo({
+      assignmentId: "a1",
+      grupoId: "g1",
+      githubUsername: "ana",
+      usuario: fakeUsuario("ana", DOCENTE),
+    });
+
+    expect(grupoParaDocente.estaVacio()).toBe(true);
+    expect(resultado.grupoEliminado).toBe(false);
+    expect(mockTx.remove).not.toHaveBeenCalled();
+  });
+
+  it("borra el grupo si el alumno era el último integrante y nunca hubo entrega", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupo = fakeGrupo("g1", assignment, [ana]);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupo)
+      .mockResolvedValueOnce(null);
+
+    const resultado = await salirDeGrupo({
+      assignmentId: "a1",
+      grupoId: "g1",
+      githubUsername: "ana",
+      usuario: fakeUsuario("ana"),
+    });
+
+    expect(resultado.grupoEliminado).toBe(true);
+    expect(mockTx.remove).toHaveBeenCalledWith(grupo);
+  });
+
+  it("consulta la entrega recién después de tomar el lock del grupo", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupo = fakeGrupo("g1", assignment, [ana]);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupo)
+      .mockResolvedValueOnce(null);
+
+    await salirDeGrupo({
+      assignmentId: "a1",
+      grupoId: "g1",
+      githubUsername: "ana",
+      usuario: fakeUsuario("ana"),
+    });
+
+    expect(mockTx.findOne).toHaveBeenNthCalledWith(
+      1,
+      Grupo,
+      { id: "g1", assignment: { id: "a1" } },
+      { lockMode: LockMode.PESSIMISTIC_WRITE }
+    );
+    expect(mockTx.findOne).toHaveBeenNthCalledWith(2, Entrega, expect.anything(), expect.anything());
+  });
+
+  it("toma el advisory lock con la clave membresia:{assignmentId}:{alumnoId}", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupo = fakeGrupo("g1", assignment, [ana]);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupo)
+      .mockResolvedValueOnce(null);
+
+    await salirDeGrupo({
+      assignmentId: "a1",
+      grupoId: "g1",
+      githubUsername: "ana",
+      usuario: fakeUsuario("ana"),
+    });
+
+    expect(mockConnection.execute).toHaveBeenCalledWith(
+      "select pg_advisory_xact_lock(hashtextextended(?, 0))",
+      ["membresia:a1:alumno-ana"]
+    );
+  });
+});
+
+// ── moverAlumnoDeGrupo ──────────────────────────────────────
+
+describe("moverAlumnoDeGrupo", () => {
+  it("emite el DELETE del pivot origen antes del INSERT del destino", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupoOrigen = fakeGrupo("g1", assignment, [ana]);
+    const grupoDestino = fakeGrupo("g2", assignment, []);
+
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupoOrigen) // grupoOrigenPrevio (lectura sin lock)
+      .mockResolvedValueOnce(grupoOrigen) // lock de g1
+      .mockResolvedValueOnce(grupoDestino) // lock de g2
+      .mockResolvedValueOnce(null); // sin entrega
+
+    const orden: string[] = [];
+    const removeMemberOriginal = grupoOrigen.removeMember.bind(grupoOrigen);
+    vi.spyOn(grupoOrigen, "removeMember").mockImplementation((alumno) => {
+      orden.push("removeMember");
+      return removeMemberOriginal(alumno);
+    });
+    const addMemberOriginal = grupoDestino.addMember.bind(grupoDestino);
+    vi.spyOn(grupoDestino, "addMember").mockImplementation((alumno) => {
+      orden.push("addMember");
+      return addMemberOriginal(alumno);
+    });
+    mockTx.flush.mockImplementation(async () => {
+      orden.push("flush");
+    });
+
+    await moverAlumnoDeGrupo({
+      assignmentId: "a1",
+      grupoDestinoId: "g2",
+      githubUsername: "ana",
+      usuario: fakeUsuario("ana"),
+    });
+
+    expect(orden).toEqual(["removeMember", "flush", "addMember", "flush", "flush"]);
+  });
+
+  it("da de alta al alumno cuando no tenía grupo en el assignment", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupoDestino = fakeGrupo("g2", assignment, []);
+
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne
+      .mockResolvedValueOnce(null) // sin grupo previo
+      .mockResolvedValueOnce(grupoDestino); // lock destino
+
+    const resultado = await moverAlumnoDeGrupo({
+      assignmentId: "a1",
+      grupoDestinoId: "g2",
+      githubUsername: "ana",
+      usuario: fakeUsuario("ana"),
+    });
+
+    expect(resultado).toEqual({ grupoDestino, grupoOrigenEliminado: false });
+    expect(grupoDestino.alumnos.contains(ana)).toBe(true);
+    expect(mockTx.persist).toHaveBeenCalledWith(
+      expect.objectContaining({ accion: "alta", grupoOrigenId: undefined, grupoDestinoId: "g2" })
+    );
+  });
+
+  it("es idempotente si el alumno ya está en el grupo destino: sin flush ni auditoría", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupo = fakeGrupo("g2", assignment, [ana]);
+
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupo) // grupoOrigenPrevio: ya es este mismo grupo
+      .mockResolvedValueOnce(grupo); // lock del único grupo a bloquear
+
+    const resultado = await moverAlumnoDeGrupo({
+      assignmentId: "a1",
+      grupoDestinoId: "g2",
+      githubUsername: "ana",
+      usuario: fakeUsuario("ana"),
+    });
+
+    expect(resultado).toEqual({ grupoDestino: grupo, grupoOrigenEliminado: false });
+    expect(mockTx.flush).not.toHaveBeenCalled();
+    expect(mockTx.persist).not.toHaveBeenCalled();
+  });
+
+  it("lanza GrupoLlenoError si el grupo destino está completo", async () => {
+    const assignment = fakeGrupal({ maxIntegrantes: 1 });
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const carla = fakeAlumno("alumno-carla", "carla");
+    const grupoOrigen = fakeGrupo("g1", assignment, [ana, carla]);
+    const grupoDestino = fakeGrupo("g2", assignment, [fakeAlumno("alumno-bob", "bob")], 1);
+
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupoOrigen)
+      .mockResolvedValueOnce(grupoOrigen)
+      .mockResolvedValueOnce(grupoDestino)
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      moverAlumnoDeGrupo({
+        assignmentId: "a1",
+        grupoDestinoId: "g2",
+        githubUsername: "ana",
+        usuario: fakeUsuario("ana"),
+      })
+    ).rejects.toBeInstanceOf(GrupoLlenoError);
+
+    // El alumno sigue en su grupo original: el rollback real de Postgres
+    // (verificado contra DB real en el test de integración) es lo que
+    // garantiza esto en producción; acá solo se confirma que el flush del
+    // origen ya había ocurrido antes de que el destino lo rechazara.
+    expect(mockTx.flush).toHaveBeenCalledTimes(1);
+  });
+
+  it("borra el grupo origen si queda vacío y nunca tuvo entrega", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupoOrigen = fakeGrupo("g1", assignment, [ana]);
+    const grupoDestino = fakeGrupo("g2", assignment, []);
+
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupoOrigen)
+      .mockResolvedValueOnce(grupoOrigen)
+      .mockResolvedValueOnce(grupoDestino)
+      .mockResolvedValueOnce(null);
+
+    const resultado = await moverAlumnoDeGrupo({
+      assignmentId: "a1",
+      grupoDestinoId: "g2",
+      githubUsername: "ana",
+      usuario: fakeUsuario("ana"),
+    });
+
+    expect(resultado.grupoOrigenEliminado).toBe(true);
+    expect(mockTx.remove).toHaveBeenCalledWith(grupoOrigen);
+  });
+
+  it("toma el advisory lock con la clave membresia:{assignmentId}:{alumnoId}", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupoDestino = fakeGrupo("g2", assignment, []);
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(grupoDestino);
+
+    await moverAlumnoDeGrupo({
+      assignmentId: "a1",
+      grupoDestinoId: "g2",
+      githubUsername: "ana",
+      usuario: fakeUsuario("ana"),
+    });
+
+    expect(mockConnection.execute).toHaveBeenCalledWith(
+      "select pg_advisory_xact_lock(hashtextextended(?, 0))",
+      ["membresia:a1:alumno-ana"]
+    );
+  });
+
+  it("bloquea los grupos en orden ascendente de id, no por rol origen/destino", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupoOrigen = fakeGrupo("g9", assignment, [ana]);
+    const grupoDestino = fakeGrupo("g2", assignment, []);
+
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupoOrigen) // grupoOrigenPrevio
+      .mockResolvedValueOnce(grupoDestino) // "g2" primero: es el menor
+      .mockResolvedValueOnce(grupoOrigen) // "g9" después
+      .mockResolvedValueOnce(null);
+
+    await moverAlumnoDeGrupo({
+      assignmentId: "a1",
+      grupoDestinoId: "g2",
+      githubUsername: "ana",
+      usuario: fakeUsuario("ana"),
+    });
+
+    expect(mockTx.findOne).toHaveBeenNthCalledWith(
+      2,
+      Grupo,
+      { id: "g2", assignment: { id: "a1" } },
+      { lockMode: LockMode.PESSIMISTIC_WRITE }
+    );
+    expect(mockTx.findOne).toHaveBeenNthCalledWith(
+      3,
+      Grupo,
+      { id: "g9", assignment: { id: "a1" } },
+      { lockMode: LockMode.PESSIMISTIC_WRITE }
+    );
+  });
+
+  it("traduce la violación del índice único de inscripción a AlumnoYaEnGrupoDelAssignmentError", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupoDestino = fakeGrupo("g2", assignment, []);
+
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+    mockTx.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(grupoDestino);
+    mockTx.flush.mockRejectedValueOnce(uniqueMembershipError());
+
+    await expect(
+      moverAlumnoDeGrupo({
+        assignmentId: "a1",
+        grupoDestinoId: "g2",
+        githubUsername: "ana",
+        usuario: fakeUsuario("ana"),
+      })
+    ).rejects.toBeInstanceOf(AlumnoYaEnGrupoDelAssignmentError);
   });
 });
