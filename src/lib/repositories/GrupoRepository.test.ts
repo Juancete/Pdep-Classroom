@@ -220,6 +220,15 @@ describe("crearGrupo", () => {
     expect(grupo.creadoPor).toBe("ana");
     expect(grupo.alumnos.contains(ana)).toBe(true);
     expect(mockTx.persist).toHaveBeenCalledWith(grupo);
+    expect(mockTx.persist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accion: "alta",
+        origen: "alumno",
+        alumnoId: "alumno-ana",
+        grupoDestinoId: grupo.id,
+        realizadoPor: "ana",
+      })
+    );
     expect(mockTx.flush).toHaveBeenCalled();
   });
 
@@ -440,6 +449,15 @@ describe("unirseAGrupo", () => {
       { refresh: true }
     );
     expect(grupo.alumnos.contains(ana)).toBe(true);
+    expect(mockTx.persist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accion: "alta",
+        origen: "alumno",
+        alumnoId: "alumno-ana",
+        grupoDestinoId: "g1",
+        realizadoPor: "ana",
+      })
+    );
     expect(mockTx.flush).toHaveBeenCalled();
   });
 
