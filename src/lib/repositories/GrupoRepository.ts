@@ -210,6 +210,21 @@ export async function crearGrupo(params: {
           grupo.alumnos.add(alumno);
           transaction.persist(grupo);
 
+          // realizadoPor = el propio alumno: crearGrupo es siempre
+          // self-service, no hay un tercero "actuando por" otro acá.
+          await registrarCambioDeMembresia(transaction, {
+            assignmentId,
+            alumnoId: alumno.id,
+            alumnoUsername: alumno.githubUsername,
+            grupoDestinoId: grupo.id,
+            grupoDestinoNombre: grupo.nombre,
+            accion: "alta",
+            origen: rol.origenDeAuditoria(),
+            realizadoPor: alumno.githubUsername,
+            grupoOrigenTeniaEntrega: false,
+            grupoOrigenEliminado: false,
+          });
+
           await transaction.flush();
           return grupo;
         }
@@ -280,6 +295,19 @@ export async function unirseAGrupo(params: {
         }
 
         grupo.addMember(alumno);
+
+        await registrarCambioDeMembresia(transaction, {
+          assignmentId,
+          alumnoId: alumno.id,
+          alumnoUsername: alumno.githubUsername,
+          grupoDestinoId: grupo.id,
+          grupoDestinoNombre: grupo.nombre,
+          accion: "alta",
+          origen: rol.origenDeAuditoria(),
+          realizadoPor: alumno.githubUsername,
+          grupoOrigenTeniaEntrega: false,
+          grupoOrigenEliminado: false,
+        });
 
         await transaction.flush();
         return grupo;
@@ -524,6 +552,12 @@ export async function moverAlumnoDeGrupo(params: {
 // Usado por la sincronización desde la planilla: crea el Grupo (nombre +
 // paradigma + assignment) si no existe, y agrega al alumno como miembro
 // si no lo era. Idempotente.
+//
+// A propósito, sin auditoría en cambio_membresia: no hay un "realizadoPor"
+// humano (la sync corre en background) y correrla para cada fila de la
+// planilla en cada resync masivo generaría ruido, no señal. La limitación
+// real de esta función — que sólo agrega, nunca reconcilia bajas — queda
+// documentada en sincronizarGruposDelAlumno (src/lib/services/grupoSync.ts).
 export async function upsertGrupoConMiembro(params: {
   nombreGrupo: string;
   paradigma: Paradigma;
