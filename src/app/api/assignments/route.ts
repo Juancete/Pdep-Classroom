@@ -13,7 +13,7 @@ export async function GET() {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  if (user.isAdmin) {
+  if (user.rol.puedeAdministrar()) {
     return NextResponse.json(await getAssignments());
   }
 

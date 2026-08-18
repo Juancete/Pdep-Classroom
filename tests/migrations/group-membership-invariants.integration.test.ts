@@ -30,7 +30,7 @@ import {
   unirseAGrupo,
   upsertGrupoConMiembro,
 } from "../../src/lib/repositories/GrupoRepository";
-import { Alumno, GrupalAssignment } from "../../src/domain/entities";
+import { Alumno, GrupalAssignment, ESTUDIANTE } from "../../src/domain/entities";
 
 const PREVIOUS_MIGRATION =
   "Migration20260610120000_add_google_group_state_to_alumno";
@@ -418,7 +418,7 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
           assignmentId: seed.assignmentId,
           grupoId: seed.grupoIds[0]!,
           alumnoId,
-          esAdmin: false,
+          rol: ESTUDIANTE,
         })
       )
     );
@@ -444,7 +444,7 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
           assignmentId: seed.assignmentId,
           grupoId,
           alumnoId: seed.alumnoIds[0]!,
-          esAdmin: false,
+          rol: ESTUDIANTE,
         })
       )
     );
@@ -471,7 +471,7 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
           assignmentId: seed.assignmentId,
           alumnoId: seed.alumnoIds[0]!,
           nombre,
-          esAdmin: false,
+          rol: ESTUDIANTE,
         })
       )
     );
@@ -569,7 +569,7 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
           assignmentId: seed.assignmentId,
           alumnoId: seed.alumnoIds[index]!,
           nombre,
-          esAdmin: false,
+          rol: ESTUDIANTE,
         })
       )
     );

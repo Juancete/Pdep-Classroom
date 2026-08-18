@@ -6,6 +6,8 @@ import {
   Entrega,
   GrupalAssignment,
   IndividualAssignment,
+  DOCENTE,
+  ESTUDIANTE,
   type Assignment,
 } from "@/domain/entities";
 
@@ -25,8 +27,8 @@ vi.mock("@/lib/repositories", () => ({
   getGrupoDeAlumnoEnAssignment: (assignmentId: string, username: string) =>
     mockGetGrupoDeAlumno(assignmentId, username),
   getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
-  crearEntregaSiAssignmentDisponible: (data: unknown, esAdmin: boolean) =>
-    mockCrearEntregaSiAssignmentDisponible(data, esAdmin),
+  crearEntregaSiAssignmentDisponible: (data: unknown, rol: unknown) =>
+    mockCrearEntregaSiAssignmentDisponible(data, rol),
 }));
 
 vi.mock("@/lib/github", () => ({
@@ -56,7 +58,7 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
     githubUsername: "juangarcia",
     name: "Juan García",
     image: "",
-    isAdmin: false,
+    rol: ESTUDIANTE,
     ...overrides,
   };
 }
@@ -165,7 +167,7 @@ describe("aceptarAssignment", () => {
         grupoId: undefined,
         repoName: "kata-funcional-juangarcia",
       }),
-      false
+      ESTUDIANTE
     );
   });
 
@@ -191,7 +193,7 @@ describe("aceptarAssignment", () => {
   it("mantiene el requisito funcional de alumno para un admin que acepta un TP individual", async () => {
     mockGetAlumnoByGithub.mockResolvedValue(null);
 
-    await expect(aceptarAssignment("a1", makeUser({ isAdmin: true }))).rejects.toBeInstanceOf(
+    await expect(aceptarAssignment("a1", makeUser({ rol: DOCENTE }))).rejects.toBeInstanceOf(
       AlumnoNoRegistradoError
     );
 
@@ -223,7 +225,7 @@ describe("aceptarAssignment", () => {
         repoName: "kata-funcional-los-lambdas",
         githubUsernames: ["juangarcia", "mariaperez"],
       }),
-      false
+      ESTUDIANTE
     );
   });
 
@@ -242,7 +244,7 @@ describe("aceptarAssignment", () => {
         repoName: "kata-funcional-juangarcia",
         repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
       }),
-      false
+      ESTUDIANTE
     );
   });
 
@@ -299,7 +301,7 @@ describe("aceptarAssignment", () => {
     );
 
     await expect(
-      aceptarAssignment("a1", makeUser({ isAdmin: true }))
+      aceptarAssignment("a1", makeUser({ rol: DOCENTE }))
     ).resolves.toBeInstanceOf(Entrega);
   });
 
@@ -334,24 +336,24 @@ describe("aceptarAssignment", () => {
     mockGetAssignment.mockResolvedValue(borrador);
 
     await expect(
-      aceptarAssignment("a1", makeUser({ isAdmin: true }))
+      aceptarAssignment("a1", makeUser({ rol: DOCENTE }))
     ).resolves.toBeInstanceOf(Entrega);
   });
 
   it("pasa esAdmin a crearEntregaSiAssignmentDisponible para que revalide bajo lock", async () => {
-    await aceptarAssignment("a1", makeUser({ isAdmin: false }));
+    await aceptarAssignment("a1", makeUser({ rol: ESTUDIANTE }));
     expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalledWith(
       expect.any(Object),
-      false
+      ESTUDIANTE
     );
 
     mockGetAlumnoByGithub.mockResolvedValue(
       makeAlumno({ comision: makeComision("c2") })
     );
-    await aceptarAssignment("a1", makeUser({ isAdmin: true }));
+    await aceptarAssignment("a1", makeUser({ rol: DOCENTE }));
     expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalledWith(
       expect.any(Object),
-      true
+      DOCENTE
     );
   });
 });

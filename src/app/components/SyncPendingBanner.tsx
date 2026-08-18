@@ -13,7 +13,7 @@ import { isGoogleGroupsConfigured } from "@/lib/googleGroups";
  */
 export async function SyncPendingBanner() {
   const user = await getCurrentUser();
-  if (!user || user.isAdmin) return null;
+  if (!user || !user.rol.veBannerDeSincronizacion()) return null;
 
   const alumno = await getAlumnoByGithub(user.githubUsername);
   if (!alumno) return null;

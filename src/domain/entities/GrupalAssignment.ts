@@ -7,6 +7,7 @@ import {
 } from "./Assignment";
 import type { Alumno } from "./Alumno";
 import type { Grupo } from "./Grupo";
+import type { RolDeUsuario } from "./RolDeUsuario";
 import { GRUPAL_MIN_MAX_INTEGRANTES } from "./domain-constants";
 
 // Lanzado cuando un alumno intenta aceptar un TP grupal y no figura en
@@ -66,8 +67,8 @@ export class GrupalAssignment extends Assignment {
     };
   }
 
-  requiereSeleccionDeGrupo(user: { isAdmin: boolean }, grupo: Grupo | null): boolean {
-    return !user.isAdmin && !grupo;
+  requiereSeleccionDeGrupo(user: { rol: RolDeUsuario }, grupo: Grupo | null): boolean {
+    return !user.rol.puedeAdministrar() && !grupo;
   }
 
   alumnosSinGrupo(alumnos: Alumno[], grupos: Grupo[]): Alumno[] {

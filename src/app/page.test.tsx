@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { DOCENTE, ESTUDIANTE } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -41,7 +42,7 @@ describe("Home page", () => {
     it("redirige a /dashboard", async () => {
       mockGetCurrentUser.mockResolvedValue({
         githubUsername: "testuser",
-        isAdmin: false,
+        rol: ESTUDIANTE,
       });
 
       await expect(Home()).rejects.toThrow("REDIRECT:/dashboard");
@@ -51,7 +52,7 @@ describe("Home page", () => {
     it("redirige también si es admin", async () => {
       mockGetCurrentUser.mockResolvedValue({
         githubUsername: "adminuser",
-        isAdmin: true,
+        rol: DOCENTE,
       });
 
       await expect(Home()).rejects.toThrow("REDIRECT:/dashboard");

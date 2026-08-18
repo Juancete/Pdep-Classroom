@@ -45,7 +45,7 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string;
       assignmentId: params.id,
       grupoId: params.grupoId,
       alumnoId: alumno.id,
-      esAdmin: user.isAdmin,
+      rol: user.rol,
     });
 
     return NextResponse.json(serializarGrupo(grupo));

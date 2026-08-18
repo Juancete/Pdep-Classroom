@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { ESTUDIANTE } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -42,7 +43,7 @@ describe("PATCH /api/perfil", () => {
       githubUsername: "juangarcia",
       name: "Juan",
       image: "",
-      isAdmin: false,
+      rol: ESTUDIANTE,
     });
     mockConfirmarYProcesarAlumno.mockResolvedValue({
       ok: true,

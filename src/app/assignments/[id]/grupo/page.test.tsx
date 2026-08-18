@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PdepUser } from "@/types";
-import { GrupalAssignment, IndividualAssignment } from "@/domain/entities";
+import { GrupalAssignment, IndividualAssignment, DOCENTE, ESTUDIANTE } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -61,7 +61,7 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
     githubUsername: "ana",
     name: "Ana García",
     image: "",
-    isAdmin: false,
+    rol: ESTUDIANTE,
     ...overrides,
   };
 }
@@ -146,7 +146,7 @@ describe("GrupoPage", () => {
   });
 
   it("permite acceso global al administrador", async () => {
-    mockRequireUser.mockResolvedValue(makeUser({ isAdmin: true }));
+    mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
 
     const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
 

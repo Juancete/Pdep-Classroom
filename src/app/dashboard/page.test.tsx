@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PdepUser } from "@/types";
-import { Alumno, IndividualAssignment, GrupalAssignment, Entrega } from "@/domain/entities";
+import { Alumno, IndividualAssignment, GrupalAssignment, Entrega, DOCENTE, ESTUDIANTE } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -63,7 +63,7 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
     githubUsername: "testuser",
     name: "Test User",
     image: "",
-    isAdmin: false,
+    rol: ESTUDIANTE,
     ...overrides,
   };
 }
@@ -127,7 +127,7 @@ describe("Dashboard page", () => {
 
   describe("redirecciones", () => {
     it("redirige a /registro si el alumno no existe en la DB y no es admin", async () => {
-      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
+      mockRequireUser.mockResolvedValue(makeUser({ rol: ESTUDIANTE }));
       mockGetAlumnoByGithub.mockResolvedValue(null);
 
       await expect(DashboardPage()).rejects.toThrow("REDIRECT:/registro");
@@ -135,7 +135,7 @@ describe("Dashboard page", () => {
     });
 
     it("redirige a /registro si el alumno confirmó en otra comisión (recursante)", async () => {
-      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
+      mockRequireUser.mockResolvedValue(makeUser({ rol: ESTUDIANTE }));
       mockGetComisionActiva.mockResolvedValue({ id: "c2" });
       mockGetAlumnoByGithub.mockResolvedValue(
         makeAlumno({ registroConfirmadoEn: { id: "c1" } as any })
@@ -145,7 +145,7 @@ describe("Dashboard page", () => {
     });
 
     it("redirige a /registro si el alumno nunca confirmó (registroConfirmadoEn null)", async () => {
-      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
+      mockRequireUser.mockResolvedValue(makeUser({ rol: ESTUDIANTE }));
       mockGetAlumnoByGithub.mockResolvedValue(
         makeAlumno({ registroConfirmadoEn: undefined })
       );
@@ -154,7 +154,7 @@ describe("Dashboard page", () => {
     });
 
     it("no redirige si el alumno confirmó para la comisión activa", async () => {
-      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
+      mockRequireUser.mockResolvedValue(makeUser({ rol: ESTUDIANTE }));
       mockGetAlumnoByGithub.mockResolvedValue(
         makeAlumno({ registroConfirmadoEn: { id: "c1" } as any })
       );
@@ -165,7 +165,7 @@ describe("Dashboard page", () => {
     });
 
     it("consulta assignments de la comisión activa para alumnos", async () => {
-      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
+      mockRequireUser.mockResolvedValue(makeUser({ rol: ESTUDIANTE }));
       mockGetAlumnoByGithub.mockResolvedValue(
         makeAlumno({ registroConfirmadoEn: { id: "c1" } as any })
       );
@@ -180,7 +180,7 @@ describe("Dashboard page", () => {
     });
 
     it("no redirige si no hay comisión activa (deja pasar aunque no haya confirmado)", async () => {
-      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
+      mockRequireUser.mockResolvedValue(makeUser({ rol: ESTUDIANTE }));
       mockGetComisionActiva.mockResolvedValue(null);
       mockGetAlumnoByGithub.mockResolvedValue(null);
 
@@ -191,7 +191,7 @@ describe("Dashboard page", () => {
     });
 
     it("no redirige a /registro aunque no esté registrado si es admin", async () => {
-      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: true }));
+      mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
 
       const element = await DashboardPage();
       expect(element).toBeDefined();
@@ -204,7 +204,7 @@ describe("Dashboard page", () => {
 
   describe("estado vacío", () => {
     beforeEach(() => {
-      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: true }));
+      mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
       mockGetAssignments.mockResolvedValue([]);
     });
 
@@ -217,7 +217,7 @@ describe("Dashboard page", () => {
 
   describe("con assignments", () => {
     beforeEach(() => {
-      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: true }));
+      mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
     });
 
     it("muestra el título del assignment", async () => {
@@ -301,7 +301,7 @@ describe("Dashboard page", () => {
 
   describe("render condicional según entrega", () => {
     beforeEach(() => {
-      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: true }));
+      mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
       mockGetAssignments.mockResolvedValue([makeAssignment()]);
     });
 
@@ -338,7 +338,7 @@ describe("Dashboard page", () => {
 
     it("consulta las entregas usando el username del usuario actual", async () => {
       mockRequireUser.mockResolvedValue(
-        makeUser({ githubUsername: "miusuario", isAdmin: true })
+        makeUser({ githubUsername: "miusuario", rol: DOCENTE })
       );
       mockGetAssignments.mockResolvedValue([makeAssignment({ id: "tp-1" })]);
       mockGetEntregaDeUsuario.mockResolvedValue(new Map());
@@ -350,7 +350,7 @@ describe("Dashboard page", () => {
 
   describe("assignments grupales", () => {
     beforeEach(() => {
-      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
+      mockRequireUser.mockResolvedValue(makeUser({ rol: ESTUDIANTE }));
       mockGetAlumnoByGithub.mockResolvedValue(
         makeAlumno({ registroConfirmadoEn: { id: "c1" } as any })
       );
@@ -420,7 +420,7 @@ describe("Dashboard page", () => {
     });
 
     it("no llama a getGruposDeAlumno si el usuario es admin", async () => {
-      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: true }));
+      mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
       mockGetAssignments.mockResolvedValue([makeGrupalAssignment()]);
       mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
@@ -431,7 +431,7 @@ describe("Dashboard page", () => {
 
   describe("ciclo de vida", () => {
     beforeEach(() => {
-      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: false }));
+      mockRequireUser.mockResolvedValue(makeUser({ rol: ESTUDIANTE }));
       mockGetAlumnoByGithub.mockResolvedValue(
         makeAlumno({ registroConfirmadoEn: { id: "c1" } as any })
       );
@@ -487,7 +487,7 @@ describe("Dashboard page", () => {
     });
 
     it("el admin ve assignments en cualquier estado, incluido borrador", async () => {
-      mockRequireUser.mockResolvedValue(makeUser({ isAdmin: true }));
+      mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
       const borrador = makeAssignment({ id: "a-borrador", titulo: "TP Borrador Admin" });
       borrador.estadoNombre = "borrador";
       mockGetAssignments.mockResolvedValue([borrador]);
@@ -502,7 +502,7 @@ describe("Dashboard page", () => {
   describe("header", () => {
     beforeEach(() => {
       mockRequireUser.mockResolvedValue(
-        makeUser({ githubUsername: "miusuario", isAdmin: true })
+        makeUser({ githubUsername: "miusuario", rol: DOCENTE })
       );
       mockGetAssignments.mockResolvedValue([]);
     });

@@ -1,4 +1,5 @@
 import { getProxyRedirectPath } from "./proxy-authorization";
+import { DOCENTE, ESTUDIANTE } from "@/domain/entities/RolDeUsuario";
 
 function session(isAdmin: boolean) {
   return {
@@ -6,7 +7,7 @@ function session(isAdmin: boolean) {
       githubUsername: isAdmin ? "docente" : "alumno",
       name: "Usuario",
       image: "",
-      isAdmin,
+      rol: isAdmin ? DOCENTE : ESTUDIANTE,
     },
   };
 }

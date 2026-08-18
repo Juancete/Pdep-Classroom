@@ -22,7 +22,7 @@ export default async function GrupoPage(
 
   const [assignment, alumno] = await Promise.all([
     getAssignment(params.id),
-    user.isAdmin
+    user.rol.puedeAdministrar()
       ? Promise.resolve(null)
       : getAlumnoByGithub(user.githubUsername, true),
   ]);
