@@ -9,7 +9,7 @@ const mockRequireUser = vi.fn();
 const mockGetAssignment = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
 const mockGetGruposDeAssignment = vi.fn();
-const mockGetEntregaDeUsuario = vi.fn();
+const mockGetEntregaLogica = vi.fn();
 const mockNotFound = vi.fn(() => { throw new Error("NOT_FOUND"); });
 
 vi.mock("@/lib/session", () => ({
@@ -20,8 +20,7 @@ vi.mock("@/lib/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
   getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
   getGruposDeAssignment: (id: string) => mockGetGruposDeAssignment(id),
-  getEntregaDeUsuario: (assignmentId: string, username: string) =>
-    mockGetEntregaDeUsuario(assignmentId, username),
+  getEntregaLogica: (data: unknown) => mockGetEntregaLogica(data),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -41,11 +40,22 @@ vi.mock("./grupo-selector", () => ({
 }));
 
 vi.mock("./mi-grupo", () => ({
-  MiGrupo: (props: { grupo: { nombre: string }; tieneEntrega: boolean }) => (
+  MiGrupo: (props: {
+    grupo: { nombre: string };
+    tieneEntrega: boolean;
+    githubUsername: string;
+    motivoBloqueo: string | null;
+    esUltimoMiembro: boolean;
+    gruposDisponibles: { id: string; nombre: string }[];
+  }) => (
     <div
       data-testid="mi-grupo"
       data-nombre={props.grupo.nombre}
       data-tiene-entrega={String(props.tieneEntrega)}
+      data-username={props.githubUsername}
+      data-motivo={props.motivoBloqueo ?? ""}
+      data-ultimo={String(props.esUltimoMiembro)}
+      data-disponibles={props.gruposDisponibles.map((grupo) => grupo.id).join(",")}
     >
       MiGrupo
     </div>
@@ -107,6 +117,7 @@ function makeGrupo(
       : `${miembros.length}/${maxIntegrantes} integrantes`,
     contieneA: (username: string) => miembros.some((member) => member.toLowerCase() === username.toLowerCase()),
     usernamesDeMiembros: () => miembros,
+    cantidadMiembros: () => miembros.length,
     alumnos: {
       getItems: () => miembros.map((username) => ({ githubUsername: username })),
     },
@@ -122,7 +133,7 @@ describe("GrupoPage", () => {
     mockGetAssignment.mockResolvedValue(makeGrupalAssignment());
     mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
     mockGetGruposDeAssignment.mockResolvedValue([]);
-    mockGetEntregaDeUsuario.mockResolvedValue(null);
+    mockGetEntregaLogica.mockResolvedValue(null);
   });
 
   it("llama a notFound si el assignment no existe", async () => {
@@ -192,7 +203,7 @@ describe("GrupoPage", () => {
     mockGetGruposDeAssignment.mockResolvedValue([
       makeGrupo("g1", ["ana"], 3, "Los Lambdas"),
     ]);
-    mockGetEntregaDeUsuario.mockResolvedValue(null);
+    mockGetEntregaLogica.mockResolvedValue(null);
     const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element);
     expect(html).toContain("data-tiene-entrega=\"false\"");
@@ -202,7 +213,7 @@ describe("GrupoPage", () => {
     mockGetGruposDeAssignment.mockResolvedValue([
       makeGrupo("g1", ["ana"], 3, "Los Lambdas"),
     ]);
-    mockGetEntregaDeUsuario.mockResolvedValue({ id: "e1", repoUrl: "https://github.com/x" });
+    mockGetEntregaLogica.mockResolvedValue({ id: "e1", repoUrl: "https://github.com/x" });
     const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element);
     expect(html).toContain("data-tiene-entrega=\"true\"");
@@ -222,6 +233,76 @@ describe("GrupoPage", () => {
       makeGrupo("g1", ["bob", "cora"]),
     ]);
     await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
-    expect(mockGetEntregaDeUsuario).not.toHaveBeenCalled();
+    expect(mockGetEntregaLogica).not.toHaveBeenCalled();
+  });
+
+  it("consulta la entrega por grupoId, no por el snapshot de usernames", async () => {
+    mockGetGruposDeAssignment.mockResolvedValue([
+      makeGrupo("g1", ["ana"], 3, "Los Lambdas"),
+    ]);
+    await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
+    expect(mockGetEntregaLogica).toHaveBeenCalledWith({
+      assignmentId: "a1",
+      grupoId: "g1",
+    });
+  });
+
+  it("no bloquea al alumno cuando puede salir/cambiarse", async () => {
+    mockGetGruposDeAssignment.mockResolvedValue([
+      makeGrupo("g1", ["ana", "bob"], 3, "Los Lambdas"),
+    ]);
+    const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
+    const html = renderToStaticMarkup(element);
+    expect(html).toContain('data-motivo=""');
+  });
+
+  it("bloquea al alumno con el mensaje del error de dominio cuando el grupo ya entregó", async () => {
+    mockGetGruposDeAssignment.mockResolvedValue([
+      makeGrupo("g1", ["ana"], 3, "Los Lambdas"),
+    ]);
+    mockGetEntregaLogica.mockResolvedValue({ id: "e1", repoUrl: "https://github.com/x" });
+    const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
+    const html = renderToStaticMarkup(element);
+    expect(html).toContain("El grupo ya entregó");
+  });
+
+  it("nunca bloquea al docente aunque el grupo ya entregó", async () => {
+    mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
+    mockGetGruposDeAssignment.mockResolvedValue([
+      makeGrupo("g1", ["ana"], 3, "Los Lambdas"),
+    ]);
+    mockGetEntregaLogica.mockResolvedValue({ id: "e1", repoUrl: "https://github.com/x" });
+    const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
+    const html = renderToStaticMarkup(element);
+    expect(html).toContain('data-motivo=""');
+  });
+
+  it("marca esUltimoMiembro cuando el alumno está solo en el grupo", async () => {
+    mockGetGruposDeAssignment.mockResolvedValue([
+      makeGrupo("g1", ["ana"], 3, "Los Lambdas"),
+    ]);
+    const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
+    const html = renderToStaticMarkup(element);
+    expect(html).toContain('data-ultimo="true"');
+  });
+
+  it("no marca esUltimoMiembro cuando hay más integrantes", async () => {
+    mockGetGruposDeAssignment.mockResolvedValue([
+      makeGrupo("g1", ["ana", "bob"], 3, "Los Lambdas"),
+    ]);
+    const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
+    const html = renderToStaticMarkup(element);
+    expect(html).toContain('data-ultimo="false"');
+  });
+
+  it("ofrece como destino los grupos con cupo, excluyendo el propio", async () => {
+    mockGetGruposDeAssignment.mockResolvedValue([
+      makeGrupo("g1", ["ana"], 3, "Los Lambdas"),
+      makeGrupo("g2", ["bob"], 3, "Los Monoides"),
+      makeGrupo("g3", ["carla", "dan", "eva"], 3, "Grupo Lleno"),
+    ]);
+    const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
+    const html = renderToStaticMarkup(element);
+    expect(html).toContain('data-disponibles="g2"');
   });
 });
