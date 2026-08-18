@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PdepUser } from "@/types";
+import { DOCENTE, ESTUDIANTE } from "@/domain/entities";
 
 const mockGetCurrentUser = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
@@ -39,7 +40,7 @@ function makeUser(overrides: Partial<PdepUser> = {}): PdepUser {
     githubUsername: "ana",
     name: "Ana",
     image: "",
-    isAdmin: false,
+    rol: ESTUDIANTE,
     ...overrides,
   };
 }
@@ -122,7 +123,7 @@ describe("GET /api/assignments", () => {
   });
 
   it("mantiene el listado global para administradores", async () => {
-    mockGetCurrentUser.mockResolvedValue(makeUser({ isAdmin: true }));
+    mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
 
     const response = await GET();
 

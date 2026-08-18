@@ -58,6 +58,8 @@ import {
   NombreGrupoInvalidoError,
   GrupoLlenoError,
   AssignmentNoGrupalError,
+  DOCENTE,
+  ESTUDIANTE,
 } from "@/domain/entities";
 import { IndividualAssignment } from "@/domain/entities/IndividualAssignment";
 import { LockMode, type Collection } from "@mikro-orm/core";
@@ -185,7 +187,7 @@ describe("crearGrupo", () => {
       assignmentId: "a1",
       alumnoId: "alumno-ana",
       nombre: "  Los Lógicos ++  ",
-      esAdmin: false,
+      rol: ESTUDIANTE,
     });
 
     expect(grupo.nombre).toBe("Los Lógicos ++");
@@ -205,7 +207,7 @@ describe("crearGrupo", () => {
         assignmentId: "a1",
         alumnoId: "alumno-ana",
         nombre: " +++ ",
-        esAdmin: false,
+        rol: ESTUDIANTE,
       })
     ).rejects.toBeInstanceOf(NombreGrupoInvalidoError);
 
@@ -222,7 +224,7 @@ describe("crearGrupo", () => {
         assignmentId: "a1",
         alumnoId: "alumno-ana",
         nombre: "b".repeat(10),
-        esAdmin: false,
+        rol: ESTUDIANTE,
       })
     ).rejects.toBeInstanceOf(NombreRepositorioDemasiadoLargoError);
 
@@ -234,7 +236,7 @@ describe("crearGrupo", () => {
     mockTx.findOne.mockResolvedValueOnce(null);
 
     await expect(
-      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x", esAdmin: false })
+      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x", rol: ESTUDIANTE })
     ).rejects.toBeInstanceOf(AssignmentNoEncontradoError);
   });
 
@@ -244,7 +246,7 @@ describe("crearGrupo", () => {
     mockTx.findOne.mockResolvedValueOnce(individual);
 
     await expect(
-      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x", esAdmin: false })
+      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x", rol: ESTUDIANTE })
     ).rejects.toBeInstanceOf(AssignmentNoGrupalError);
   });
 
@@ -254,7 +256,7 @@ describe("crearGrupo", () => {
     mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
     await expect(
-      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x", esAdmin: false })
+      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x", rol: ESTUDIANTE })
     ).rejects.toBeInstanceOf(InscripcionesCerradasError);
   });
 
@@ -268,7 +270,7 @@ describe("crearGrupo", () => {
     mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
     await expect(
-      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x", esAdmin: false })
+      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x", rol: ESTUDIANTE })
     ).rejects.toBeInstanceOf(AlumnoYaEnGrupoDelAssignmentError);
     expect(mockTx.persist).not.toHaveBeenCalled();
   });
@@ -285,7 +287,7 @@ describe("crearGrupo", () => {
         assignmentId: "a1",
         alumnoId: "alumno-ana",
         nombre: "x",
-        esAdmin: false,
+        rol: ESTUDIANTE,
       })
     ).rejects.toBeInstanceOf(AccesoAssignmentProhibidoError);
 
@@ -302,7 +304,7 @@ describe("crearGrupo", () => {
     mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
     await expect(
-      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x", esAdmin: false })
+      crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x", rol: ESTUDIANTE })
     ).rejects.toBeInstanceOf(AssignmentNoDisponibleError);
     expect(mockTx.persist).not.toHaveBeenCalled();
   });
@@ -321,7 +323,7 @@ describe("crearGrupo", () => {
         assignmentId: "a1",
         alumnoId: "alumno-ana",
         nombre: "x",
-        esAdmin: true,
+        rol: DOCENTE,
       })
     ).resolves.toBeInstanceOf(Grupo);
   });
@@ -340,7 +342,7 @@ describe("crearGrupo", () => {
         assignmentId: "a1",
         alumnoId: "alumno-ana",
         nombre: "Los Lambdas",
-        esAdmin: false,
+        rol: ESTUDIANTE,
       })
     ).rejects.toMatchObject({
       constructor: AlumnoYaEnGrupoDelAssignmentError,
@@ -363,7 +365,7 @@ describe("crearGrupo", () => {
         assignmentId: "a1",
         alumnoId: "alumno-ana",
         nombre: "Los Lambdas",
-        esAdmin: false,
+        rol: ESTUDIANTE,
       })
     ).rejects.toMatchObject({
       constructor: NombreGrupoDuplicadoError,
@@ -384,7 +386,7 @@ describe("unirseAGrupo", () => {
         assignmentId: "a-otro",
         grupoId: "g1",
         alumnoId: "alumno-ana",
-        esAdmin: false,
+        rol: ESTUDIANTE,
       })
     ).rejects.toBeInstanceOf(GrupoNoEncontradoError);
 
@@ -401,7 +403,7 @@ describe("unirseAGrupo", () => {
       .mockResolvedValueOnce(null); // enOtroGrupo
     mockTx.findOneOrFail.mockResolvedValueOnce(ana); // Alumno
 
-    const resultado = await unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", esAdmin: false });
+    const resultado = await unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", rol: ESTUDIANTE });
 
     expect(resultado).toBe(grupo);
     expect(mockTx.findOne).toHaveBeenNthCalledWith(
@@ -426,7 +428,7 @@ describe("unirseAGrupo", () => {
     mockTx.findOne.mockResolvedValueOnce(grupo);
     mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
-    const resultado = await unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", esAdmin: false });
+    const resultado = await unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", rol: ESTUDIANTE });
 
     expect(resultado).toBe(grupo);
     expect(mockTx.flush).not.toHaveBeenCalled();
@@ -440,7 +442,7 @@ describe("unirseAGrupo", () => {
     mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
     await expect(
-      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", esAdmin: false })
+      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", rol: ESTUDIANTE })
     ).rejects.toBeInstanceOf(InscripcionesCerradasError);
   });
 
@@ -455,7 +457,7 @@ describe("unirseAGrupo", () => {
     mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
     await expect(
-      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", esAdmin: false })
+      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", rol: ESTUDIANTE })
     ).rejects.toBeInstanceOf(AlumnoYaEnGrupoDelAssignmentError);
     expect(mockTx.flush).not.toHaveBeenCalled();
   });
@@ -472,7 +474,7 @@ describe("unirseAGrupo", () => {
     mockTx.findOneOrFail.mockResolvedValueOnce(cora);
 
     await expect(
-      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-cora", esAdmin: false })
+      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-cora", rol: ESTUDIANTE })
     ).rejects.toBeInstanceOf(GrupoLlenoError);
   });
 
@@ -485,7 +487,7 @@ describe("unirseAGrupo", () => {
       .mockResolvedValueOnce(null);
     mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
-    await unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", esAdmin: false });
+    await unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", rol: ESTUDIANTE });
 
     expect(mockEm.transactional).toHaveBeenCalledTimes(1);
   });
@@ -503,7 +505,7 @@ describe("unirseAGrupo", () => {
         assignmentId: "a1",
         grupoId: "g1",
         alumnoId: "alumno-ana",
-        esAdmin: false,
+        rol: ESTUDIANTE,
       })
     ).rejects.toBeInstanceOf(AccesoAssignmentProhibidoError);
 
@@ -524,7 +526,7 @@ describe("unirseAGrupo", () => {
         assignmentId: "a1",
         grupoId: "g1",
         alumnoId: "alumno-ana",
-        esAdmin: false,
+        rol: ESTUDIANTE,
       })
     ).rejects.toBeInstanceOf(AssignmentNoDisponibleError);
     expect(mockTx.flush).not.toHaveBeenCalled();
@@ -545,7 +547,7 @@ describe("unirseAGrupo", () => {
         assignmentId: "a1",
         grupoId: "g1",
         alumnoId: "alumno-ana",
-        esAdmin: true,
+        rol: DOCENTE,
       })
     ).resolves.toBe(grupo);
 
@@ -567,7 +569,7 @@ describe("unirseAGrupo", () => {
         assignmentId: "a1",
         grupoId: "g1",
         alumnoId: "alumno-ana",
-        esAdmin: false,
+        rol: ESTUDIANTE,
       })
     ).rejects.toMatchObject({
       constructor: AlumnoYaEnGrupoDelAssignmentError,

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PdepUser } from "@/types";
+import { DOCENTE, ESTUDIANTE } from "@/domain/entities";
 
 const mockGetCurrentUser = vi.fn();
 const mockGetAssignment = vi.fn();
@@ -29,7 +30,7 @@ function admin(): PdepUser {
     githubUsername: "docente",
     name: "Docente",
     image: "",
-    isAdmin: true,
+    rol: DOCENTE,
   };
 }
 
@@ -66,7 +67,7 @@ describe("DELETE /api/assignments/[id]/repos", () => {
 
   it.each([
     ["sin sesión", null],
-    ["sin rol admin", { ...admin(), isAdmin: false }],
+    ["sin rol admin", { ...admin(), rol: ESTUDIANTE }],
   ])("devuelve 401 %s", async (_case, user) => {
     mockGetCurrentUser.mockResolvedValue(user);
 

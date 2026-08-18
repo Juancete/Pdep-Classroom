@@ -7,7 +7,7 @@ import { NavMenu, type NavLink } from "./nav-menu";
 export async function Nav() {
   const user = await getCurrentUser();
   const alumno =
-    user && !user.isAdmin
+    user && user.rol.veBannerDeSincronizacion()
       ? await getAlumnoByGithub(user.githubUsername).catch(() => null)
       : null;
   const hasPendingSync = Boolean(
@@ -15,17 +15,7 @@ export async function Nav() {
   );
 
   const links: NavLink[] = user
-    ? [
-        { href: "/dashboard", label: "Mis TPs" },
-        ...(user.isAdmin
-          ? [
-              { href: "/admin/assignments", label: "Assignments" },
-              { href: "/admin/grupos", label: "Grupos" },
-              { href: "/admin/comisiones", label: "Comisiones" },
-              { href: "/admin/alumnos", label: "Alumnos" },
-            ]
-          : []),
-      ]
+    ? [{ href: "/dashboard", label: "Mis TPs" }, ...user.rol.itemsDeNavegacion()]
     : [];
 
   return (
@@ -40,7 +30,7 @@ export async function Nav() {
             links={links}
             username={user.githubUsername}
             image={user.image}
-            isAdmin={user.isAdmin}
+            isAdmin={user.rol.puedeAdministrar()}
             hasPendingSync={hasPendingSync}
           />
         )}

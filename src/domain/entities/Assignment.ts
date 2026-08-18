@@ -16,6 +16,7 @@ import {
   type ContextoTransicionEstado,
   type NombreEstadoAssignment,
 } from "./EstadoAssignment";
+import type { RolDeUsuario } from "./RolDeUsuario";
 
 // Dependencias de lectura que las subclases pueden usar desde sus métodos
 // polimórficos — se pasan como parámetro para que las entidades no importen
@@ -186,7 +187,7 @@ export abstract class Assignment {
    * `true` cuando el alumno debe elegir un grupo antes de poder aceptar el TP.
    * Individual: siempre `false`. Grupal: `true` cuando no es admin y no tiene grupo.
    */
-  abstract requiereSeleccionDeGrupo(user: { isAdmin: boolean }, grupo: Grupo | null): boolean;
+  abstract requiereSeleccionDeGrupo(user: { rol: RolDeUsuario }, grupo: Grupo | null): boolean;
 
   /**
    * Alumnos del curso que todavía no están en ningún grupo de este assignment.

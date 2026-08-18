@@ -16,7 +16,7 @@ export default async function DashboardPage() {
   const user = await requireUser();
   let comisionActivaId: string | null = null;
 
-  if (!user.isAdmin) {
+  if (!user.rol.puedeAdministrar()) {
     const [alumno, comisionActiva] = await Promise.all([
       getAlumnoByGithub(user.githubUsername),
       getComisionActiva(),
@@ -27,12 +27,12 @@ export default async function DashboardPage() {
     }
   }
 
-  const gruposPromise: Promise<Map<string, Grupo>> = user.isAdmin
+  const gruposPromise: Promise<Map<string, Grupo>> = user.rol.puedeAdministrar()
     ? Promise.resolve(new Map())
     : getGruposDeAlumno(user.githubUsername);
 
   const [assignments, entregasMap, gruposMap] = await Promise.all([
-    user.isAdmin
+    user.rol.puedeAdministrar()
       ? getAssignments()
       : comisionActivaId
         ? getAssignmentsDeComision(comisionActivaId)
@@ -54,7 +54,7 @@ export default async function DashboardPage() {
     // depende de datos por-alumno, no solo del estado). El admin ve todo.
     .filter(
       ({ assignment, entrega }) =>
-        user.isAdmin || assignment.esVisibleParaAlumno(entrega !== null)
+        user.rol.puedeAdministrar() || assignment.esVisibleParaAlumno(entrega !== null)
     );
 
   return (

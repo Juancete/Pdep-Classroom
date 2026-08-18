@@ -42,3 +42,11 @@ export {
   RepoDeletionAttempt,
   type RepoDeletionStatus,
 } from "./RepoDeletionAttempt";
+export {
+  RolDeUsuario,
+  DOCENTE,
+  ESTUDIANTE,
+  resolverRol,
+  AccesoAssignmentProhibidoError,
+  type ItemDeNavegacion,
+} from "./RolDeUsuario";

@@ -1,4 +1,5 @@
 import { normalizarGithubUsername } from "@/domain/entities/domain-constants";
+import type { RolDeUsuario } from "@/domain/entities/RolDeUsuario";
 export { normalizarGithubUsername };
 
 // ── Paradigmas ──────────────────────────────────────────────
@@ -52,7 +53,7 @@ export interface PdepUser {
   githubUsername: string;
   name: string;
   image: string;
-  isAdmin: boolean;
+  rol: RolDeUsuario;
 }
 
 export function usernameCanonicoDe(user: PdepUser): string {

@@ -6,6 +6,7 @@ import {
   autorizarAccionSobreAssignment,
 } from "./assignmentAuthorization";
 import { IndividualAssignment } from "@/domain/entities/IndividualAssignment";
+import { DOCENTE, ESTUDIANTE } from "@/domain/entities/RolDeUsuario";
 
 function makeAssignment(comisionId: string | null = "c1") {
   return {
@@ -33,7 +34,7 @@ describe("autorizarAccesoAssignment", () => {
   it("permite al alumno de la misma comisión", () => {
     expect(() =>
       autorizarAccesoAssignment(
-        { isAdmin: false },
+        { rol: ESTUDIANTE },
         makeAlumno("c1"),
         makeAssignment("c1")
       )
@@ -43,7 +44,7 @@ describe("autorizarAccesoAssignment", () => {
   it("rechaza al alumno de otra comisión", () => {
     expect(() =>
       autorizarAccesoAssignment(
-        { isAdmin: false },
+        { rol: ESTUDIANTE },
         makeAlumno("c2"),
         makeAssignment("c1")
       )
@@ -53,7 +54,7 @@ describe("autorizarAccesoAssignment", () => {
   it("rechaza usuarios comunes sin alumno registrado", () => {
     expect(() =>
       autorizarAccesoAssignment(
-        { isAdmin: false },
+        { rol: ESTUDIANTE },
         null,
         makeAssignment("c1")
       )
@@ -63,7 +64,7 @@ describe("autorizarAccesoAssignment", () => {
   it("rechaza para alumnos los assignments históricos sin comisión", () => {
     expect(() =>
       autorizarAccesoAssignment(
-        { isAdmin: false },
+        { rol: ESTUDIANTE },
         makeAlumno("c1"),
         makeAssignment(null)
       )
@@ -73,7 +74,7 @@ describe("autorizarAccesoAssignment", () => {
   it("permite acceso global a administradores", () => {
     expect(() =>
       autorizarAccesoAssignment(
-        { isAdmin: true },
+        { rol: DOCENTE },
         null,
         makeAssignment(null)
       )
@@ -85,7 +86,7 @@ describe("autorizarAccionSobreAssignment", () => {
   it("permite al alumno de la comisión sobre un assignment publicado", () => {
     expect(() =>
       autorizarAccionSobreAssignment(
-        { isAdmin: false },
+        { rol: ESTUDIANTE },
         makeAlumno("c1"),
         makeAssignmentPublicado("c1")
       )
@@ -97,7 +98,7 @@ describe("autorizarAccionSobreAssignment", () => {
     borrador.id = "a1";
     borrador.comision = { id: "c1" } as never;
     expect(() =>
-      autorizarAccionSobreAssignment({ isAdmin: false }, makeAlumno("c1"), borrador)
+      autorizarAccionSobreAssignment({ rol: ESTUDIANTE }, makeAlumno("c1"), borrador)
     ).toThrow(AssignmentNoDisponibleError);
   });
 
@@ -108,14 +109,14 @@ describe("autorizarAccionSobreAssignment", () => {
     archivado.transicionarA("publicado", { tieneEntregas: false }, "docente1");
     archivado.transicionarA("archivado", { tieneEntregas: false }, "docente1");
     expect(() =>
-      autorizarAccionSobreAssignment({ isAdmin: false }, makeAlumno("c1"), archivado)
+      autorizarAccionSobreAssignment({ rol: ESTUDIANTE }, makeAlumno("c1"), archivado)
     ).toThrow(AssignmentNoDisponibleError);
   });
 
   it("prioriza el rechazo por comisión sobre el de estado", () => {
     expect(() =>
       autorizarAccionSobreAssignment(
-        { isAdmin: false },
+        { rol: ESTUDIANTE },
         makeAlumno("c2"),
         makeAssignmentPublicado("c1")
       )
@@ -126,7 +127,7 @@ describe("autorizarAccionSobreAssignment", () => {
     const borrador = new IndividualAssignment();
     borrador.id = "a1";
     expect(() =>
-      autorizarAccionSobreAssignment({ isAdmin: true }, null, borrador)
+      autorizarAccionSobreAssignment({ rol: DOCENTE }, null, borrador)
     ).not.toThrow();
   });
 });

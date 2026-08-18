@@ -49,7 +49,7 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
 
     const [assignment, alumno] = await Promise.all([
       getAssignment(params.id),
-      user.isAdmin
+      user.rol.puedeAdministrar()
         ? Promise.resolve(null)
         : getAlumnoByGithub(user.githubUsername, true),
     ]);
@@ -100,7 +100,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       assignmentId: params.id,
       alumnoId: alumno.id,
       nombre: parsed.data.nombre,
-      esAdmin: user.isAdmin,
+      rol: user.rol,
     });
 
     return NextResponse.json(serializarGrupo(grupo), { status: 201 });

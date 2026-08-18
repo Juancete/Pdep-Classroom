@@ -1,6 +1,7 @@
 import GitHub from "next-auth/providers/github";
 import type { NextAuthConfig } from "next-auth";
 import type { PdepUser } from "@/types";
+import { resolverRol } from "@/domain/entities/RolDeUsuario";
 
 const adminUsernames = (process.env.ADMIN_GITHUB_USERNAMES ?? "")
   .split(",")
@@ -30,7 +31,7 @@ export const authConfig: NextAuthConfig = {
         githubUsername: ghUser,
         name: session.user?.name ?? ghUser,
         image: session.user?.image ?? "",
-        isAdmin: adminUsernames.includes(ghUser.toLowerCase()),
+        rol: resolverRol(ghUser, adminUsernames),
       };
       (session as unknown as { pdepUser: PdepUser }).pdepUser = pdepUser;
       return session;

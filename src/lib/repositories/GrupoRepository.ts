@@ -12,6 +12,7 @@ import {
   NombreGrupoDuplicadoError,
   NombreGrupoInvalidoError,
   AssignmentNoGrupalError,
+  type RolDeUsuario,
 } from "@/domain/entities";
 import type { Paradigma } from "@/types";
 import { buildRepoName, slugify } from "@/lib/naming";
@@ -145,9 +146,9 @@ export async function crearGrupo(params: {
   assignmentId: string;
   alumnoId: string;
   nombre: string;
-  esAdmin: boolean;
+  rol: RolDeUsuario;
 }): Promise<Grupo> {
-  const { assignmentId, alumnoId, esAdmin } = params;
+  const { assignmentId, alumnoId, rol } = params;
   const { nombre, nombreNormalizado } = prepararNombreGrupo(params.nombre);
   const entityManager = await getEM();
 
@@ -174,7 +175,7 @@ export async function crearGrupo(params: {
         { id: alumnoId },
         { populate: ["comision"] }
       );
-      autorizarAccionSobreAssignment({ isAdmin: esAdmin }, alumno, assignment);
+      autorizarAccionSobreAssignment({ rol }, alumno, assignment);
 
       return traducirConflictoDeInscripcion(
         assignmentId,
@@ -221,9 +222,9 @@ export async function unirseAGrupo(params: {
   assignmentId: string;
   grupoId: string;
   alumnoId: string;
-  esAdmin: boolean;
+  rol: RolDeUsuario;
 }): Promise<Grupo> {
-  const { assignmentId, grupoId, alumnoId, esAdmin } = params;
+  const { assignmentId, grupoId, alumnoId, rol } = params;
   const entityManager = await getEM();
 
   return entityManager.transactional(async (transaction) => {
@@ -249,7 +250,7 @@ export async function unirseAGrupo(params: {
       { id: alumnoId },
       { populate: ["comision"] }
     );
-    autorizarAccionSobreAssignment({ isAdmin: esAdmin }, alumno, assignment);
+    autorizarAccionSobreAssignment({ rol }, alumno, assignment);
 
     return traducirConflictoDeInscripcion(
       assignmentId,
