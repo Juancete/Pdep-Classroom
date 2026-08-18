@@ -130,6 +130,31 @@ describe("migrations", () => {
     expect(migration).toContain("hay nombres que generan el mismo identificador");
   });
 
+  it("crea una auditoría durable para cada cambio de integrantes de un grupo", () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        "migrations",
+        "Migration20260818120000_membership_audit.ts"
+      ),
+      "utf8"
+    );
+
+    expect(migration).toContain('create table "cambio_membresia"');
+    expect(migration).toContain(
+      "'alta', 'baja', 'cambio'"
+    );
+    expect(migration).toContain("'alumno', 'docente'");
+    expect(migration).toContain(
+      'cambio_membresia_assignment_creado_idx'
+    );
+    expect(migration).toContain(
+      'cambio_membresia_alumno_creado_idx'
+    );
+    expect(migration).toContain('drop table if exists "cambio_membresia"');
+    expect(migration).not.toContain("foreign key");
+  });
+
   it("mantiene el snapshot alineado con Google Groups y las cascadas", () => {
     const snapshot = JSON.parse(
       readFileSync(
@@ -147,6 +172,10 @@ describe("migrations", () => {
     );
     const repoDeletionAttempt = snapshot.tables.find(
       (table) => table.name === "repo_deletion_attempt"
+    );
+    const entrega = snapshot.tables.find((table) => table.name === "entrega");
+    const cambioMembresia = snapshot.tables.find(
+      (table) => table.name === "cambio_membresia"
     );
 
     expect(alumno?.columns.google_group_emails_pendientes_baja).toMatchObject({
@@ -185,5 +214,23 @@ describe("migrations", () => {
     expect(repoDeletionAttempt?.columns).toHaveProperty("operation_id");
     expect(repoDeletionAttempt?.columns).toHaveProperty("requested_by");
     expect(repoDeletionAttempt?.foreignKeys).toEqual({});
+    expect(
+      entrega?.foreignKeys.entrega_grupo_id_foreign.deleteRule
+    ).toBe("set null");
+    expect(cambioMembresia?.columns).toHaveProperty("assignment_id");
+    expect(cambioMembresia?.columns).toHaveProperty("alumno_id");
+    expect(cambioMembresia?.columns).toHaveProperty("grupo_origen_id");
+    expect(cambioMembresia?.columns).toHaveProperty("grupo_destino_id");
+    expect(cambioMembresia?.indexes).toContainEqual(
+      expect.objectContaining({
+        keyName: "cambio_membresia_assignment_creado_idx",
+      })
+    );
+    expect(cambioMembresia?.indexes).toContainEqual(
+      expect.objectContaining({
+        keyName: "cambio_membresia_alumno_creado_idx",
+      })
+    );
+    expect(cambioMembresia?.foreignKeys).toEqual({});
   });
 });

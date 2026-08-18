@@ -45,6 +45,10 @@ export {
   type RepoDeletionStatus,
 } from "./RepoDeletionAttempt";
 export {
+  CambioDeMembresia,
+  type AccionCambioMembresia,
+} from "./CambioDeMembresia";
+export {
   RolDeUsuario,
   DOCENTE,
   ESTUDIANTE,

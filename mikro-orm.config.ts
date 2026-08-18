@@ -18,6 +18,7 @@ import {
   Grupo,
   Entrega,
   RepoDeletionAttempt,
+  CambioDeMembresia,
 } from "./src/domain/entities";
 
 export default defineConfig({
@@ -37,6 +38,7 @@ export default defineConfig({
     Grupo,
     Entrega,
     RepoDeletionAttempt,
+    CambioDeMembresia,
   ],
 
   // Usa reflect-metadata en runtime (funciona en webpack/RSC sin necesitar

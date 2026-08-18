@@ -21,8 +21,11 @@ export class Entrega {
   @ManyToOne(() => Alumno, { nullable: true })
   alumno?: Alumno;
 
-  // Grupal: grupo al que pertenece la entrega
-  @ManyToOne(() => Grupo, { nullable: true })
+  // Grupal: grupo al que pertenece la entrega. `deleteRule: "set null"`
+  // explícito (era el default implícito de MikroORM para un `@ManyToOne`
+  // nullable, ya vigente en la base) — un grupo puede borrarse sin arrastrar
+  // la entrega: el registro histórico se preserva con `grupo` en null.
+  @ManyToOne(() => Grupo, { nullable: true, deleteRule: "set null" })
   grupo?: Grupo;
 
   // Todos los usernames con acceso al repo (denormalizado para queries rápidas)
