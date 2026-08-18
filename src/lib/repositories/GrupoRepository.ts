@@ -1,5 +1,5 @@
 import { getEM } from "@/lib/db";
-import { LockMode } from "@mikro-orm/core";
+import { LockMode, type EntityManager } from "@mikro-orm/core";
 import {
   Grupo,
   Alumno,
@@ -12,12 +12,15 @@ import {
   NombreGrupoDuplicadoError,
   NombreGrupoInvalidoError,
   AssignmentNoGrupalError,
+  AlumnoNoEsMiembroDelGrupoError,
   type RolDeUsuario,
 } from "@/domain/entities";
-import type { Paradigma } from "@/types";
+import type { Paradigma, PdepUser } from "@/types";
 import { buildRepoName, slugify } from "@/lib/naming";
 import { autorizarAccionSobreAssignment } from "@/lib/services/assignmentAuthorization";
 import { extractDbErrorCode, UNIQUE_VIOLATION } from "./db-errors";
+import { getEntregaLogica } from "./EntregaRepository";
+import { registrarCambioDeMembresia } from "./CambioDeMembresiaRepository";
 
 const INSCRIPCION_UNICA_CONSTRAINT =
   "grupo_alumnos_assignment_alumno_unique_idx";
@@ -281,6 +284,237 @@ export async function unirseAGrupo(params: {
         return grupo;
       }
     );
+  });
+}
+
+// Serializa dos cambios de membresía del mismo alumno en el mismo assignment
+// (salir, cambiarse) sin tomar un row lock sobre `alumno`. Importante: NO usar
+// LockMode.PESSIMISTIC_WRITE sobre la fila de `alumno` acá — `unirseAGrupo`
+// toma FOR UPDATE sobre `grupo` y luego, al insertar en el pivot, la FK le
+// hace tomar FOR KEY SHARE sobre `alumno`. Si esta función tomara FOR UPDATE
+// sobre `alumno` primero y luego sobre `grupo`, el orden de locks quedaría
+// invertido entre las dos funciones y produciría un deadlock real entre un
+// join concurrente y un cambio de grupo.
+async function lockearMembresia(
+  transaction: EntityManager,
+  assignmentId: string,
+  alumnoId: string
+): Promise<void> {
+  await transaction
+    .getConnection()
+    .execute("select pg_advisory_xact_lock(hashtextextended(?, 0))", [
+      `membresia:${assignmentId}:${alumnoId}`,
+    ]);
+}
+
+// Saca al alumno de su grupo. Atómico: el chequeo de si el grupo ya entregó
+// se hace DESPUÉS de tomar el lock del grupo, para cerrar la carrera contra
+// `crearEntregaSiAssignmentDisponible` (que bloquea el `assignment`, no el
+// `grupo`): si la salida llega primero, el insert de la entrega queda
+// esperando el lock y al commitear la salida con el grupo ya borrado, el
+// insert falla por la FK — no se acepta el TP de un grupo inexistente. Si la
+// entrega llega primero, la salida la ve al re-leer bajo el lock y la
+// rechaza (o la deja pasar si es el docente) sin borrar nada.
+//
+// Si el alumno era el último integrante y el grupo nunca tuvo entrega, el
+// grupo se borra en la misma transacción — libera su `nombreNormalizado`.
+export async function salirDeGrupo(params: {
+  assignmentId: string;
+  grupoId: string;
+  githubUsername: string;
+  usuario: PdepUser;
+  motivo?: string;
+}): Promise<{ grupo: Grupo; grupoEliminado: boolean }> {
+  const { assignmentId, grupoId, githubUsername, usuario, motivo } = params;
+  const entityManager = await getEM();
+
+  return entityManager.transactional(async (transaction) => {
+    const alumno = await transaction.findOneOrFail(Alumno, {
+      githubUsername: { $ilike: githubUsername },
+    });
+
+    await lockearMembresia(transaction, assignmentId, alumno.id);
+
+    const grupo = await transaction.findOne(
+      Grupo,
+      { id: grupoId, assignment: { id: assignmentId } },
+      { lockMode: LockMode.PESSIMISTIC_WRITE }
+    );
+    if (!grupo) throw new GrupoNoEncontradoError(assignmentId, grupoId);
+
+    await transaction.populate(
+      grupo,
+      ["alumnos", "assignment.comision"],
+      { refresh: true }
+    );
+
+    if (!grupo.alumnos.contains(alumno)) {
+      throw new AlumnoNoEsMiembroDelGrupoError(grupo.id, githubUsername);
+    }
+
+    const entrega = await getEntregaLogica(
+      { assignmentId, grupoId: grupo.id },
+      transaction
+    );
+    const grupoTieneEntrega = !!entrega;
+
+    usuario.rol.autorizarCambioDeMembresia({
+      assignment: grupo.assignment,
+      grupo,
+      grupoTieneEntrega,
+    });
+
+    grupo.removeMember(alumno);
+
+    const grupoEliminado = grupo.estaVacio() && !grupoTieneEntrega;
+    if (grupoEliminado) transaction.remove(grupo);
+
+    await registrarCambioDeMembresia(transaction, {
+      assignmentId,
+      alumnoId: alumno.id,
+      alumnoUsername: alumno.githubUsername,
+      grupoOrigenId: grupo.id,
+      grupoOrigenNombre: grupo.nombre,
+      accion: "baja",
+      origen: usuario.rol.origenDeAuditoria(),
+      realizadoPor: usuario.githubUsername,
+      grupoOrigenTeniaEntrega: grupoTieneEntrega,
+      grupoOrigenEliminado: grupoEliminado,
+      motivo,
+    });
+
+    await transaction.flush();
+    return { grupo, grupoEliminado };
+  });
+}
+
+// Mueve al alumno a `grupoDestinoId`: alta si no tenía grupo en el
+// assignment, cambio si tenía uno, no-op idempotente si ya está en el
+// destino. Cubre los tres casos administrativos con una sola operación.
+//
+// Atómico y no compuesto de salir() + unirse(): si `unirse` fallara por cupo
+// después de un `salir` ya confirmado, el alumno quedaría sin grupo (y si
+// era el último integrante, su grupo original ya se habría borrado) —
+// pérdida irreversible. El orden inverso es imposible: el índice único
+// `grupo_alumnos_assignment_alumno_unique_idx` rechaza la segunda inserción
+// mientras la primera sigue viva. Acá, si el destino está lleno, el rollback
+// de la transacción entera devuelve al alumno a su grupo original.
+//
+// Los dos grupos (origen y destino) se bloquean en orden ascendente de id,
+// nunca por rol (origen/destino): dos llamadas concurrentes que intercambian
+// posiciones (A: G1→G2 mientras B: G2→G1) bloquean en el mismo orden global
+// y no pueden formar un ciclo de espera.
+export async function moverAlumnoDeGrupo(params: {
+  assignmentId: string;
+  grupoDestinoId: string;
+  githubUsername: string;
+  usuario: PdepUser;
+  motivo?: string;
+}): Promise<{ grupoDestino: Grupo; grupoOrigenEliminado: boolean }> {
+  const { assignmentId, grupoDestinoId, githubUsername, usuario, motivo } = params;
+  const entityManager = await getEM();
+
+  return entityManager.transactional(async (transaction) => {
+    const alumno = await transaction.findOneOrFail(Alumno, {
+      githubUsername: { $ilike: githubUsername },
+    });
+
+    await lockearMembresia(transaction, assignmentId, alumno.id);
+
+    // Lectura sin lock: solo para saber si hace falta bloquear un segundo
+    // grupo y en qué orden. El advisory lock ya serializa cualquier otra
+    // llamada a salirDeGrupo/moverAlumnoDeGrupo para este mismo alumno; un
+    // unirseAGrupo concurrente e independiente queda cubierto por el índice
+    // único de `grupo_alumnos`, que revienta el `addMember` de más abajo si
+    // el estado cambió entre esta lectura y el lock.
+    const grupoOrigenPrevio = await transaction.findOne(Grupo, {
+      assignment: { id: assignmentId },
+      alumnos: { id: alumno.id },
+    });
+
+    const idsAOrdenar =
+      grupoOrigenPrevio && grupoOrigenPrevio.id !== grupoDestinoId
+        ? [grupoOrigenPrevio.id, grupoDestinoId].sort()
+        : [grupoDestinoId];
+
+    const gruposBloqueados = new Map<string, Grupo>();
+    for (const id of idsAOrdenar) {
+      const grupo = await transaction.findOne(
+        Grupo,
+        { id, assignment: { id: assignmentId } },
+        { lockMode: LockMode.PESSIMISTIC_WRITE }
+      );
+      if (!grupo) throw new GrupoNoEncontradoError(assignmentId, id);
+      await transaction.populate(
+        grupo,
+        ["alumnos", "assignment.comision"],
+        { refresh: true }
+      );
+      gruposBloqueados.set(id, grupo);
+    }
+
+    const grupoDestino = gruposBloqueados.get(grupoDestinoId)!;
+    const grupoOrigen = grupoOrigenPrevio
+      ? gruposBloqueados.get(grupoOrigenPrevio.id)
+      : undefined;
+
+    if (grupoOrigen && grupoOrigen.id === grupoDestino.id) {
+      return { grupoDestino, grupoOrigenEliminado: false };
+    }
+
+    const entregaOrigen = grupoOrigen
+      ? await getEntregaLogica(
+          { assignmentId, grupoId: grupoOrigen.id },
+          transaction
+        )
+      : null;
+    const grupoOrigenTeniaEntrega = !!entregaOrigen;
+
+    usuario.rol.autorizarCambioDeMembresia({
+      assignment: grupoDestino.assignment,
+      grupo: grupoOrigen ?? grupoDestino,
+      grupoTieneEntrega: grupoOrigenTeniaEntrega,
+    });
+
+    let grupoOrigenEliminado = false;
+    if (grupoOrigen) {
+      grupoOrigen.removeMember(alumno);
+      grupoOrigenEliminado = grupoOrigen.estaVacio() && !grupoOrigenTeniaEntrega;
+      if (grupoOrigenEliminado) transaction.remove(grupoOrigen);
+      // El DELETE del pivot origen tiene que emitirse antes del INSERT del
+      // destino, o el índice único (assignment_id, alumno_id) revienta: la
+      // UnitOfWork no garantiza ese orden entre colecciones de dos entidades
+      // distintas dentro del mismo flush.
+      await transaction.flush();
+    }
+
+    await traducirConflictoDeInscripcion(
+      assignmentId,
+      alumno.githubUsername,
+      async () => {
+        grupoDestino.addMember(alumno);
+        await transaction.flush();
+      }
+    );
+
+    await registrarCambioDeMembresia(transaction, {
+      assignmentId,
+      alumnoId: alumno.id,
+      alumnoUsername: alumno.githubUsername,
+      grupoOrigenId: grupoOrigen?.id,
+      grupoOrigenNombre: grupoOrigen?.nombre,
+      grupoDestinoId: grupoDestino.id,
+      grupoDestinoNombre: grupoDestino.nombre,
+      accion: grupoOrigen ? "cambio" : "alta",
+      origen: usuario.rol.origenDeAuditoria(),
+      realizadoPor: usuario.githubUsername,
+      grupoOrigenTeniaEntrega,
+      grupoOrigenEliminado,
+      motivo,
+    });
+    await transaction.flush();
+
+    return { grupoDestino, grupoOrigenEliminado };
   });
 }
 

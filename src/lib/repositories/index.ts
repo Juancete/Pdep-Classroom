@@ -64,6 +64,8 @@ export {
   crearGrupo,
   unirseAGrupo,
   upsertGrupoConMiembro,
+  salirDeGrupo,
+  moverAlumnoDeGrupo,
 } from "./GrupoRepository";
 
 export {
