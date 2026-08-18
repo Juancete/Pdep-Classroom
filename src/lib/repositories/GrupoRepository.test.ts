@@ -21,11 +21,11 @@ type MockTx = {
   persist: ReturnType<typeof vi.fn>;
   remove: ReturnType<typeof vi.fn>;
   flush: ReturnType<typeof vi.fn>;
-  getConnection: ReturnType<typeof vi.fn>;
+  // `execute`, no `getConnection().execute`: este último no hereda el
+  // contexto de transacción activo en MikroORM (ver GrupoRepository.ts,
+  // lockearMembresia) — el mock imita la API que el código real usa.
+  execute: ReturnType<typeof vi.fn>;
 };
-
-// Conexión compartida para el advisory lock de salirDeGrupo/moverAlumnoDeGrupo.
-const mockConnection = { execute: vi.fn() };
 
 const mockTx: MockTx = {
   findOne: vi.fn(),
@@ -34,7 +34,7 @@ const mockTx: MockTx = {
   persist: vi.fn(),
   remove: vi.fn(),
   flush: vi.fn(),
-  getConnection: vi.fn(() => mockConnection),
+  execute: vi.fn(),
 };
 
 const mockEm = {
@@ -1000,7 +1000,7 @@ describe("salirDeGrupo", () => {
       usuario: fakeUsuario("ana"),
     });
 
-    expect(mockConnection.execute).toHaveBeenCalledWith(
+    expect(mockTx.execute).toHaveBeenCalledWith(
       "select pg_advisory_xact_lock(hashtextextended(?, 0))",
       ["membresia:a1:alumno-ana"]
     );
@@ -1164,7 +1164,7 @@ describe("moverAlumnoDeGrupo", () => {
       usuario: fakeUsuario("ana"),
     });
 
-    expect(mockConnection.execute).toHaveBeenCalledWith(
+    expect(mockTx.execute).toHaveBeenCalledWith(
       "select pg_advisory_xact_lock(hashtextextended(?, 0))",
       ["membresia:a1:alumno-ana"]
     );
