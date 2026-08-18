@@ -85,7 +85,7 @@ vi.mock("./grupos-panel", () => ({
   ),
 }));
 
-vi.mock("./estado-panel", () => ({
+vi.mock("../estado-panel", () => ({
   EstadoPanel: ({
     assignmentId,
     estado,

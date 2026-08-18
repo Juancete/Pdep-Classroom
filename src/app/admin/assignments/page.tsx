@@ -7,9 +7,12 @@ import {
 import Link from "next/link";
 import { DeleteAssignmentButton } from "./delete-button";
 import { DeleteReposButton } from "./delete-repos-button";
-import { NOMBRES_ESTADO_ASSIGNMENT } from "@/domain/entities";
+import { EstadoQuickActions } from "./estado-quick-actions";
+import { NOMBRES_ESTADO_ASSIGNMENT, transicionesDisponibles } from "@/domain/entities";
 import type { NombreEstadoAssignment } from "@/types";
 import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
+import { IconLink } from "@/app/components/IconLink";
+import { EyeIcon, PencilIcon } from "@/app/components/icons";
 import {
   DataTable,
   DataHeader,
@@ -91,8 +94,8 @@ export default async function AdminAssignmentsPage(props: {
         </DataEmpty>
       ) : (
         <DataTable
-          columns="2fr 100px 1fr 1fr 1fr 1.5fr 90px 110px 180px"
-          minWidth="1200px"
+          columns="2fr 100px 1fr 1fr 1fr 1.5fr 90px 110px 220px"
+          minWidth="1240px"
         >
           <DataHeader>
             <DataHeaderCell>Título</DataHeaderCell>
@@ -158,24 +161,38 @@ export default async function AdminAssignmentsPage(props: {
                   </span>
                 </DataCell>
                 <DataCell label="">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <Link
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <IconLink
                       href={`/admin/assignments/${assignment.id}`}
-                      className="text-gray-500 hover:text-gray-700 text-xs font-medium"
-                    >
-                      Ver
-                    </Link>
-                    <Link
+                      label="Ver"
+                      Icon={EyeIcon}
+                    />
+                    <IconLink
                       href={`/admin/assignments/${assignment.id}/edit`}
-                      className="text-pdep-600 hover:text-pdep-800 text-xs font-medium"
-                    >
-                      Editar
-                    </Link>
+                      label="Editar"
+                      Icon={PencilIcon}
+                    />
+                    <EstadoQuickActions
+                      // El estado real es la key: ver comentario homólogo en
+                      // admin/assignments/[id]/page.tsx.
+                      key={assignment.estadoNombre}
+                      assignmentId={assignment.id}
+                      accionesDisponibles={transicionesDisponibles(
+                        assignment.estado,
+                        assignment.id,
+                        { tieneEntregas: (entregasCounts.get(assignment.id) ?? 0) > 0 }
+                      )}
+                    />
                     <DeleteReposButton
                       assignmentId={assignment.id}
                       activeRepoCount={activeRepoCounts.get(assignment.id) ?? 0}
+                      compact
                     />
-                    <DeleteAssignmentButton id={assignment.id} titulo={assignment.titulo} />
+                    <DeleteAssignmentButton
+                      id={assignment.id}
+                      titulo={assignment.titulo}
+                      compact
+                    />
                   </div>
                 </DataCell>
               </DataRow>
