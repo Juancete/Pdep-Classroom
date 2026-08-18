@@ -56,46 +56,36 @@ export function DeleteReposButton({
     ? `Reintentar fallidos (${activeRepoCount})`
     : `Borrar todos los repos (${activeRepoCount})`;
 
-  const resultStatus = (
-    <div
-      role="status"
-      aria-live="polite"
-      className={
-        result
-          ? `rounded-md px-3 py-2 text-sm ${
-              result.ok ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-900"
-            }`
-          : undefined
-      }
-    >
-      {result && (
+  const resultContent = result && (
+    <>
+      {result.ok ? (
         <>
-          {result.ok ? (
-            <>
-              Se confirmaron {confirmed} de {result.attempted} repositorios.
-            </>
-          ) : (
-            <>
-              Se confirmaron {confirmed} de {result.attempted} repositorios.
-              Fallaron {result.failed}; podés reintentarlos.
-              <ul className="mt-1 list-disc pl-5">
-                {failedResults?.map((item) => (
-                  <li key={item.entregaId}>
-                    <span className="font-mono">{item.repoName}</span>
-                    {item.error ? `: ${item.error}` : ""}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
+          Se confirmaron {confirmed} de {result.attempted} repositorios.
+        </>
+      ) : (
+        <>
+          Se confirmaron {confirmed} de {result.attempted} repositorios.
+          Fallaron {result.failed}; podés reintentarlos.
+          <ul className="mt-1 list-disc pl-5">
+            {failedResults?.map((item) => (
+              <li key={item.entregaId}>
+                <span className="font-mono">{item.repoName}</span>
+                {item.error ? `: ${item.error}` : ""}
+              </li>
+            ))}
+          </ul>
         </>
       )}
-    </div>
+    </>
   );
 
   if (compact) {
+    // Sin `gap-*` acá: a diferencia de la versión completa (que vive sola en
+    // su propia fila), este botón es un ícono más entre otros de la misma
+    // altura en la grilla — un gap reservado incluso con el status vacío lo
+    // desalinea verticalmente respecto a sus hermanos.
     return (
-      <div className="inline-flex flex-col items-start gap-2">
+      <div className="inline-flex flex-col items-start">
         {activeRepoCount > 0 && (
           <button
             onClick={handleDelete}
@@ -111,8 +101,20 @@ export function DeleteReposButton({
             )}
           </button>
         )}
-        {error && <div className="text-red-600 text-sm">{error}</div>}
-        {resultStatus}
+        {error && <div className="text-red-600 text-sm mt-2">{error}</div>}
+        <div
+          role="status"
+          aria-live="polite"
+          className={
+            result
+              ? `mt-2 rounded-md px-3 py-2 text-sm ${
+                  result.ok ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-900"
+                }`
+              : undefined
+          }
+        >
+          {resultContent}
+        </div>
       </div>
     );
   }
@@ -129,7 +131,19 @@ export function DeleteReposButton({
         </button>
       )}
       {error && <div className="text-red-600 text-sm">{error}</div>}
-      {resultStatus}
+      <div
+        role="status"
+        aria-live="polite"
+        className={
+          result
+            ? `rounded-md px-3 py-2 text-sm ${
+                result.ok ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-900"
+              }`
+            : undefined
+        }
+      >
+        {resultContent}
+      </div>
     </div>
   );
 }
