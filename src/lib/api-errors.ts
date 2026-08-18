@@ -11,6 +11,8 @@ import {
   NombreGrupoDuplicadoError,
   NombreGrupoInvalidoError,
   GrupoLlenoError,
+  AlumnoNoEsMiembroDelGrupoError,
+  GrupoConEntregaError,
 } from "@/domain/entities";
 import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
@@ -72,6 +74,8 @@ function getRespuestasPorError(): Map<ConstructorDeError, RespuestaDeError> {
       [AlumnoYaEnGrupoDelAssignmentError, { status: 409, mensaje: "Ya estás en un grupo para este TP" }],
       [GrupoLlenoError, { status: 409, mensaje: "El grupo ya está completo" }],
       [NombreGrupoDuplicadoError, { status: 409 }],
+      [GrupoConEntregaError, { status: 409 }],
+      [AlumnoNoEsMiembroDelGrupoError, { status: 409 }],
     ]);
   }
   return respuestasPorError;

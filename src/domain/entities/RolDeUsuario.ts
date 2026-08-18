@@ -1,6 +1,9 @@
 import type { Alumno } from "./Alumno";
 import type { Assignment } from "./Assignment";
 import { AssignmentNoDisponibleError } from "./Assignment";
+import type { GrupalAssignment } from "./GrupalAssignment";
+import type { Grupo } from "./Grupo";
+import { InscripcionesCerradasError, GrupoConEntregaError } from "./Grupo";
 
 // Lanzado cuando un alumno intenta acceder a un assignment fuera de su
 // comisión (o sin estar registrado). El handler HTTP lo traduce a 403.
@@ -14,6 +17,15 @@ export class AccesoAssignmentProhibidoError extends Error {
 }
 
 export type ItemDeNavegacion = { href: string; label: string };
+
+export type OrigenCambioMembresia = "alumno" | "docente";
+
+/** Contexto que necesita evaluar una autorización de cambio de membresía. */
+export interface ContextoDeMembresia {
+  assignment: GrupalAssignment;
+  grupo: Grupo;
+  grupoTieneEntrega: boolean;
+}
 
 /**
  * Rol de un usuario dentro del sistema, modelado como Strategy en vez de un
@@ -53,6 +65,36 @@ export abstract class RolDeUsuario {
 
   /** `true` si este rol debe ver el banner de sincronización pendiente. */
   abstract veBannerDeSincronizacion(): boolean;
+
+  /**
+   * Autoriza que este rol modifique la composición de un grupo (salir,
+   * cambiarse, o que el docente mueva/quite integrantes). Docente: resuelve
+   * siempre — la UI es la que advierte con un `confirm()` sobre el repo y
+   * los colaboradores. Alumno: exige inscripciones abiertas y que el grupo
+   * no tenga entrega todavía.
+   */
+  abstract autorizarCambioDeMembresia(contexto: ContextoDeMembresia): void;
+
+  /** Valor a persistir en la auditoría de membresías: quién originó el cambio. */
+  abstract origenDeAuditoria(): OrigenCambioMembresia;
+
+  /**
+   * Sondea `autorizarCambioDeMembresia` sin ejecutarla: devuelve el motivo
+   * del bloqueo, o `null` si el cambio está permitido. Mismo idioma que
+   * `transicionesDisponibles` para el ciclo de vida de un assignment — la UI
+   * y el servidor no pueden divergir, porque el texto que ve el alumno ES el
+   * `message` del error que el servidor tiraría si igual manda el request.
+   */
+  motivoDeBloqueoDeMembresia(contexto: ContextoDeMembresia): string | null {
+    try {
+      this.autorizarCambioDeMembresia(contexto);
+      return null;
+    } catch (error) {
+      return error instanceof Error
+        ? error.message
+        : "No se puede modificar el grupo.";
+    }
+  }
 }
 
 class Docente extends RolDeUsuario {
@@ -79,6 +121,15 @@ class Docente extends RolDeUsuario {
 
   veBannerDeSincronizacion(): boolean {
     return false;
+  }
+
+  autorizarCambioDeMembresia(): void {
+    // El docente resuelve siempre; la UI advierte con confirm() sobre el
+    // repo y los colaboradores desincronizados cuando el grupo ya entregó.
+  }
+
+  origenDeAuditoria(): OrigenCambioMembresia {
+    return "docente";
   }
 }
 
@@ -110,6 +161,19 @@ class Estudiante extends RolDeUsuario {
 
   veBannerDeSincronizacion(): boolean {
     return true;
+  }
+
+  autorizarCambioDeMembresia({ assignment, grupo, grupoTieneEntrega }: ContextoDeMembresia): void {
+    if (!assignment.aceptaNuevasInscripciones()) {
+      throw new InscripcionesCerradasError(assignment.id);
+    }
+    if (grupoTieneEntrega) {
+      throw new GrupoConEntregaError(grupo.id);
+    }
+  }
+
+  origenDeAuditoria(): OrigenCambioMembresia {
+    return "alumno";
   }
 }
 

@@ -80,6 +80,28 @@ export class GrupoNoEncontradoError extends Error {
   }
 }
 
+// Errores de negocio de la administración de integrantes (issue #50):
+// salir, cambiarse y moverse entre grupos.
+
+export class AlumnoNoEsMiembroDelGrupoError extends Error {
+  constructor(
+    public readonly grupoId: string,
+    public readonly githubUsername: string
+  ) {
+    super(`@${githubUsername} no es integrante de este grupo.`);
+    this.name = "AlumnoNoEsMiembroDelGrupoError";
+  }
+}
+
+export class GrupoConEntregaError extends Error {
+  constructor(public readonly grupoId: string) {
+    super(
+      "El grupo ya entregó: el repositorio está creado y los cambios de integrantes los tiene que resolver el docente."
+    );
+    this.name = "GrupoConEntregaError";
+  }
+}
+
 @Entity()
 @Unique({
   name: "grupo_id_assignment_unique",
@@ -140,6 +162,17 @@ export class Grupo {
       .some((alumno) => alumno.usernameCanonico === canonico);
   }
 
+  miembroConUsername(githubUsername: string): Alumno | undefined {
+    const canonico = Alumno.normalizarUsername(githubUsername);
+    return this.alumnos
+      .getItems()
+      .find((alumno) => alumno.usernameCanonico === canonico);
+  }
+
+  estaVacio(): boolean {
+    return this.alumnos.length === 0;
+  }
+
   usernamesDeMiembros(): string[] {
     return this.alumnos.getItems().map((alumno) => alumno.githubUsername);
   }
@@ -160,5 +193,12 @@ export class Grupo {
       throw new GrupoLlenoError(this.id, this.maxIntegrantes);
     }
     this.alumnos.add(alumno);
+  }
+
+  removeMember(alumno: Alumno): void {
+    if (!this.alumnos.contains(alumno)) {
+      throw new AlumnoNoEsMiembroDelGrupoError(this.id, alumno.githubUsername);
+    }
+    this.alumnos.remove(alumno);
   }
 }

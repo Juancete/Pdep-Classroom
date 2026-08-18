@@ -36,6 +36,8 @@ export {
   GrupoLlenoError,
   AssignmentNoGrupalError,
   GrupoNoEncontradoError,
+  AlumnoNoEsMiembroDelGrupoError,
+  GrupoConEntregaError,
 } from "./Grupo";
 export { Entrega } from "./Entrega";
 export {
@@ -49,4 +51,6 @@ export {
   resolverRol,
   AccesoAssignmentProhibidoError,
   type ItemDeNavegacion,
+  type ContextoDeMembresia,
+  type OrigenCambioMembresia,
 } from "./RolDeUsuario";
