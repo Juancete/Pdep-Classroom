@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PdepUser } from "@/types";
-import { Alumno } from "@/domain/entities";
+import { Alumno, ESTUDIANTE } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -68,7 +68,7 @@ function makeSession(githubUsername: string) {
     githubUsername,
     name: "Test User",
     image: "",
-    isAdmin: false,
+    rol: ESTUDIANTE,
   };
   return {
     pdepUser,

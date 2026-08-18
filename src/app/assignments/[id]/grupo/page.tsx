@@ -4,7 +4,7 @@ import {
   getAssignment,
   getAlumnoByGithub,
   getGruposDeAssignment,
-  getEntregaDeUsuario,
+  getEntregaLogica,
 } from "@/lib/repositories";
 import { GrupalAssignment } from "@/domain/entities";
 import { GrupoSelector } from "./grupo-selector";
@@ -22,7 +22,7 @@ export default async function GrupoPage(
 
   const [assignment, alumno] = await Promise.all([
     getAssignment(params.id),
-    user.isAdmin
+    user.rol.puedeAdministrar()
       ? Promise.resolve(null)
       : getAlumnoByGithub(user.githubUsername, true),
   ]);
@@ -41,8 +41,11 @@ export default async function GrupoPage(
 
   const miGrupo = grupos.find((grupo) => grupo.contieneA(user.githubUsername));
 
+  // getEntregaLogica busca por grupoId, no por el snapshot de usernames de
+  // la entrega: un alumno agregado al grupo después de aceptar el TP también
+  // cuenta como "el grupo ya entregó" (getEntregaDeUsuario no lo vería).
   const entrega = miGrupo
-    ? await getEntregaDeUsuario(assignment.id, user.githubUsername)
+    ? await getEntregaLogica({ assignmentId: assignment.id, grupoId: miGrupo.id })
     : null;
 
   function serializar(grupo: (typeof grupos)[number]): GrupoResumen {
@@ -56,6 +59,20 @@ export default async function GrupoPage(
       miembros: grupo.usernamesDeMiembros(),
     };
   }
+
+  const motivoBloqueo = miGrupo
+    ? user.rol.motivoDeBloqueoDeMembresia({
+        assignment,
+        grupo: miGrupo,
+        grupoTieneEntrega: !!entrega,
+      })
+    : null;
+
+  const gruposDisponibles = miGrupo
+    ? grupos
+        .filter((grupo) => grupo.id !== miGrupo.id && !grupo.estaLleno())
+        .map((grupo) => ({ id: grupo.id, nombre: grupo.nombre }))
+    : [];
 
   return (
     <div>
@@ -78,6 +95,10 @@ export default async function GrupoPage(
           grupo={serializar(miGrupo)}
           assignmentId={params.id}
           tieneEntrega={!!entrega}
+          githubUsername={user.githubUsername}
+          motivoBloqueo={motivoBloqueo}
+          esUltimoMiembro={miGrupo.cantidadMiembros() === 1}
+          gruposDisponibles={gruposDisponibles}
         />
       ) : (
         <GrupoSelector

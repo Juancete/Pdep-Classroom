@@ -10,6 +10,8 @@ import {
   AlumnoYaEnGrupoDelAssignmentError,
   NombreGrupoDuplicadoError,
   NombreGrupoInvalidoError,
+  DOCENTE,
+  ESTUDIANTE,
 } from "@/domain/entities";
 import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
@@ -41,7 +43,7 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
     githubUsername: "ana",
     name: "Ana García",
     image: "",
-    isAdmin: false,
+    rol: ESTUDIANTE,
     ...overrides,
   };
 }
@@ -128,7 +130,7 @@ describe("GET /api/assignments/[id]/grupos", () => {
   });
 
   it("permite acceso global al administrador", async () => {
-    mockGetCurrentUser.mockResolvedValue(makeUser({ isAdmin: true }));
+    mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
 
     const response = await GET(makeRequest(undefined, "GET"), { params: Promise.resolve({ id: "a1" }) });
 
@@ -166,17 +168,17 @@ describe("POST /api/assignments/[id]/grupos", () => {
       assignmentId: "a1",
       alumnoId: "alumno-ana",
       nombre: "Los Lambdas",
-      esAdmin: false,
+      rol: ESTUDIANTE,
     });
   });
 
   it("propaga el contexto administrativo confiable a la transacción", async () => {
-    mockGetCurrentUser.mockResolvedValue(makeUser({ isAdmin: true }));
+    mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
 
     await POST(makeRequest({ nombre: "Los Lambdas" }), { params: Promise.resolve({ id: "a1" }) });
 
     expect(mockCrearGrupo).toHaveBeenCalledWith(
-      expect.objectContaining({ esAdmin: true })
+      expect.objectContaining({ rol: DOCENTE })
     );
   });
 

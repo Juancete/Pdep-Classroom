@@ -17,7 +17,7 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
     // githubUsername del admin para sellar la auditoría de la transición
     // (mismo patrón que DELETE /api/assignments/[id]/repos).
     const user = await getCurrentUser();
-    if (!user?.isAdmin) {
+    if (!user?.rol.puedeAdministrar()) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 

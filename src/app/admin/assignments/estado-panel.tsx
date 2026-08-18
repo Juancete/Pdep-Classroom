@@ -2,36 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useApiCall } from "@/app/hooks/useApiCall";
 import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
+import { SpinnerIcon } from "@/app/components/icons";
+import { ACCIONES_ESTADO } from "./estado-acciones";
+import { useTransicionDeEstado } from "./useTransicionDeEstado";
 import type { NombreEstadoAssignment } from "@/types";
-
-// Config por acción: texto del botón, consecuencia explicada en el confirm()
-// y estilo — dato, no rama de lógica. El destino habilitado por estado ya
-// llega calculado desde el servidor (`transicionesDisponibles`).
-const ACCIONES: Record<
-  NombreEstadoAssignment,
-  { etiquetaBoton: string; confirmacion: string; className: string }
-> = {
-  borrador: {
-    etiquetaBoton: "Volver a borrador",
-    confirmacion:
-      "El TP deja de estar visible para los alumnos. Solo se puede porque todavía no tiene entregas.",
-    className: "bg-gray-600 text-white hover:bg-gray-700",
-  },
-  publicado: {
-    etiquetaBoton: "Publicar",
-    confirmacion:
-      "El TP va a quedar visible para los alumnos de la comisión, que van a poder aceptarlo y crear sus repos.",
-    className: "bg-green-600 text-white hover:bg-green-700",
-  },
-  archivado: {
-    etiquetaBoton: "Archivar",
-    confirmacion:
-      "Los alumnos sin entrega dejan de ver el TP. Los que ya entregaron lo siguen viendo, archivado, con acceso a su repo. No se borran repos ni entregas. Una vez archivado, ya no se puede despublicar.",
-    className: "bg-amber-600 text-white hover:bg-amber-700",
-  },
-};
 
 function formatearFechaAuditoria(fecha: string): string {
   return new Date(fecha).toLocaleDateString("es-AR", {
@@ -59,7 +34,7 @@ export function EstadoPanel({
   archivadoPor: string | null;
 }) {
   const router = useRouter();
-  const { loading, error, call } = useApiCall();
+  const { transicionar, loading, error } = useTransicionDeEstado(assignmentId);
   // router.refresh() vuelve a ejecutar el Server Component padre, pero como
   // este panel ya está montado, useState no resincroniza solo con las props
   // nuevas. En vez de un efecto que dispare un setState extra (cascading
@@ -70,26 +45,14 @@ export function EstadoPanel({
   const [acciones, setAcciones] = useState(accionesDisponibles);
 
   async function handleTransicion(destino: NombreEstadoAssignment) {
-    if (!confirm(ACCIONES[destino].confirmacion)) return;
+    if (!confirm(ACCIONES_ESTADO[destino].confirmacion)) return;
 
-    const resultado = await call(async () => {
-      const response = await fetch(`/api/assignments/${assignmentId}/estado`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estado: destino }),
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.error ?? `Error ${response.status}`);
-      }
-      return (await response.json()) as { estado: NombreEstadoAssignment };
-    });
-
-    if (resultado) {
+    const nuevoEstado = await transicionar(destino);
+    if (nuevoEstado) {
       // Transición inmediata para feedback instantáneo; el efecto de arriba
       // la reemplaza por los valores reales en cuanto router.refresh() trae
       // las props actualizadas del servidor.
-      setEstado(resultado.estado);
+      setEstado(nuevoEstado);
       setAcciones([]);
       router.refresh();
     }
@@ -103,17 +66,21 @@ export function EstadoPanel({
           <EstadoAssignmentBadge estado={estado} />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {acciones.map((destino) => (
-            <button
-              key={destino}
-              onClick={() => handleTransicion(destino)}
-              disabled={loading}
-              data-testid={`accion-${destino}`}
-              className={`text-sm px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${ACCIONES[destino].className}`}
-            >
-              {ACCIONES[destino].etiquetaBoton}
-            </button>
-          ))}
+          {acciones.map((destino) => {
+            const { etiquetaBoton, className, Icon } = ACCIONES_ESTADO[destino];
+            return (
+              <button
+                key={destino}
+                onClick={() => handleTransicion(destino)}
+                disabled={loading}
+                data-testid={`accion-${destino}`}
+                className={`inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
+              >
+                {loading ? <SpinnerIcon className="w-4 h-4 animate-spin" /> : <Icon className="w-4 h-4" />}
+                {etiquetaBoton}
+              </button>
+            );
+          })}
           {estado === "publicado" && !acciones.includes("borrador") && (
             <span className="text-xs text-gray-500">
               Con entregas ({entregasCount}) solo se puede archivar.

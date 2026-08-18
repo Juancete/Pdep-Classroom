@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Alumno } from "@/domain/entities";
+import { Alumno, DOCENTE, ESTUDIANTE } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -56,7 +56,7 @@ describe("SyncPendingBanner", () => {
   it("no renderiza nada si el usuario es admin (no aplica)", async () => {
     mockGetCurrentUser.mockResolvedValue({
       githubUsername: "juangarcia",
-      isAdmin: true,
+      rol: DOCENTE,
     });
     const banner = await SyncPendingBanner();
     expect(banner).toBeNull();
@@ -66,7 +66,7 @@ describe("SyncPendingBanner", () => {
   it("no renderiza nada si el alumno no existe en DB", async () => {
     mockGetCurrentUser.mockResolvedValue({
       githubUsername: "juangarcia",
-      isAdmin: false,
+      rol: ESTUDIANTE,
     });
     mockGetAlumnoByGithub.mockResolvedValue(null);
     const banner = await SyncPendingBanner();
@@ -76,7 +76,7 @@ describe("SyncPendingBanner", () => {
   it("no renderiza nada si ningún flag está prendido", async () => {
     mockGetCurrentUser.mockResolvedValue({
       githubUsername: "juangarcia",
-      isAdmin: false,
+      rol: ESTUDIANTE,
     });
     mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
     const banner = await SyncPendingBanner();
@@ -86,7 +86,7 @@ describe("SyncPendingBanner", () => {
   it("renderiza el banner cuando gruposSyncFallidoEn está prendido", async () => {
     mockGetCurrentUser.mockResolvedValue({
       githubUsername: "juangarcia",
-      isAdmin: false,
+      rol: ESTUDIANTE,
     });
     mockGetAlumnoByGithub.mockResolvedValue(
       makeAlumno({ gruposSyncFallidoEn: new Date("2026-04-01") })
@@ -103,7 +103,7 @@ describe("SyncPendingBanner", () => {
   it("renderiza el banner cuando alumnoSyncFallidoEn está prendido", async () => {
     mockGetCurrentUser.mockResolvedValue({
       githubUsername: "juangarcia",
-      isAdmin: false,
+      rol: ESTUDIANTE,
     });
     mockGetAlumnoByGithub.mockResolvedValue(
       makeAlumno({ alumnoSyncFallidoEn: new Date("2026-04-01") })
@@ -118,7 +118,7 @@ describe("SyncPendingBanner", () => {
   it("renderiza mensaje combinado cuando ambos flags están prendidos", async () => {
     mockGetCurrentUser.mockResolvedValue({
       githubUsername: "juangarcia",
-      isAdmin: false,
+      rol: ESTUDIANTE,
     });
     mockGetAlumnoByGithub.mockResolvedValue(
       makeAlumno({
@@ -138,7 +138,7 @@ describe("SyncPendingBanner", () => {
     mockIsGoogleGroupsConfigured.mockReturnValue(true);
     mockGetCurrentUser.mockResolvedValue({
       githubUsername: "juangarcia",
-      isAdmin: false,
+      rol: ESTUDIANTE,
     });
     mockGetAlumnoByGithub.mockResolvedValue(
       makeAlumno({ googleGroupEstado: "fallido" })

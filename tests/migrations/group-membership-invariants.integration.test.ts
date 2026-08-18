@@ -30,7 +30,12 @@ import {
   unirseAGrupo,
   upsertGrupoConMiembro,
 } from "../../src/lib/repositories/GrupoRepository";
-import { Alumno, GrupalAssignment } from "../../src/domain/entities";
+import { Alumno, GrupalAssignment, ESTUDIANTE } from "../../src/domain/entities";
+import type { PdepUser } from "../../src/types";
+
+function fakeUsuario(githubUsername: string): PdepUser {
+  return { githubUsername, name: githubUsername, image: "", rol: ESTUDIANTE };
+}
 
 const PREVIOUS_MIGRATION =
   "Migration20260610120000_add_google_group_state_to_alumno";
@@ -38,8 +43,6 @@ const MEMBERSHIP_MIGRATION =
   "Migration20260813190000_group_membership_invariants";
 const GROUP_REPO_NAMING_MIGRATION =
   "Migration20260814160000_group_repo_name";
-const ASSIGNMENT_LIFECYCLE_MIGRATION =
-  "Migration20260814180000_assignment_lifecycle";
 let groupRepoNamingReady = false;
 let assignmentLifecycleReady = false;
 
@@ -390,9 +393,10 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
     groupRepoNamingReady = true;
 
     // Las pruebas de concurrencia de acá en más ejercitan crearGrupo/unirseAGrupo
-    // reales, que ya exigen que el assignment esté publicado (autorizarAccionSobreAssignment).
-    // El schema tiene que estar al día con esa entidad antes de correrlas.
-    await orm.getMigrator().up({ to: ASSIGNMENT_LIFECYCLE_MIGRATION });
+    // reales, que ya exigen que el assignment esté publicado (autorizarAccionSobreAssignment)
+    // y persisten un registro de auditoría en cambio_membresia — hay que migrar
+    // hasta el final, no sólo hasta el ciclo de vida de assignment.
+    await orm.getMigrator().up();
     assignmentLifecycleReady = true;
 
     const { up } = await orm.getSchemaGenerator().getUpdateSchemaMigrationSQL();
@@ -418,7 +422,7 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
           assignmentId: seed.assignmentId,
           grupoId: seed.grupoIds[0]!,
           alumnoId,
-          esAdmin: false,
+          usuario: fakeUsuario(alumnoId),
         })
       )
     );
@@ -444,7 +448,7 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
           assignmentId: seed.assignmentId,
           grupoId,
           alumnoId: seed.alumnoIds[0]!,
-          esAdmin: false,
+          usuario: fakeUsuario(seed.alumnoIds[0]!),
         })
       )
     );
@@ -471,7 +475,7 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
           assignmentId: seed.assignmentId,
           alumnoId: seed.alumnoIds[0]!,
           nombre,
-          esAdmin: false,
+          rol: ESTUDIANTE,
         })
       )
     );
@@ -569,7 +573,7 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
           assignmentId: seed.assignmentId,
           alumnoId: seed.alumnoIds[index]!,
           nombre,
-          esAdmin: false,
+          rol: ESTUDIANTE,
         })
       )
     );

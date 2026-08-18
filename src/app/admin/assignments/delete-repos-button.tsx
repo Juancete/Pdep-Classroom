@@ -3,14 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApiCall } from "@/app/hooks/useApiCall";
+import { FolderMinusIcon, SpinnerIcon } from "@/app/components/icons";
 import type { DeleteAssignmentReposResult } from "@/lib/services/borrarRepositoriosDeAssignment";
 
 export function DeleteReposButton({
   assignmentId,
   activeRepoCount,
+  compact = false,
 }: {
   assignmentId: string;
   activeRepoCount: number;
+  /** Ícono solo, sin el texto del botón — para filas angostas de tabla. */
+  compact?: boolean;
 }) {
   const router = useRouter();
   const { loading, error, call } = useApiCall();
@@ -48,6 +52,73 @@ export function DeleteReposButton({
     ? result.deleted + result.alreadyAbsent
     : 0;
 
+  const triggerLabel = result?.failed
+    ? `Reintentar fallidos (${activeRepoCount})`
+    : `Borrar todos los repos (${activeRepoCount})`;
+
+  const resultContent = result && (
+    <>
+      {result.ok ? (
+        <>
+          Se confirmaron {confirmed} de {result.attempted} repositorios.
+        </>
+      ) : (
+        <>
+          Se confirmaron {confirmed} de {result.attempted} repositorios.
+          Fallaron {result.failed}; podés reintentarlos.
+          <ul className="mt-1 list-disc pl-5">
+            {failedResults?.map((item) => (
+              <li key={item.entregaId}>
+                <span className="font-mono">{item.repoName}</span>
+                {item.error ? `: ${item.error}` : ""}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </>
+  );
+
+  if (compact) {
+    // Sin `gap-*` acá: a diferencia de la versión completa (que vive sola en
+    // su propia fila), este botón es un ícono más entre otros de la misma
+    // altura en la grilla — un gap reservado incluso con el status vacío lo
+    // desalinea verticalmente respecto a sus hermanos.
+    return (
+      <div className="inline-flex flex-col items-start">
+        {activeRepoCount > 0 && (
+          <button
+            onClick={handleDelete}
+            disabled={loading}
+            title={triggerLabel}
+            aria-label={triggerLabel}
+            className="inline-flex items-center justify-center p-1.5 rounded-md text-red-600 hover:text-red-800 hover:bg-red-50 transition-colors disabled:opacity-50"
+          >
+            {loading ? (
+              <SpinnerIcon className="w-4 h-4 animate-spin" />
+            ) : (
+              <FolderMinusIcon className="w-4 h-4" />
+            )}
+          </button>
+        )}
+        {error && <div className="text-red-600 text-sm mt-2">{error}</div>}
+        <div
+          role="status"
+          aria-live="polite"
+          className={
+            result
+              ? `mt-2 rounded-md px-3 py-2 text-sm ${
+                  result.ok ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-900"
+                }`
+              : undefined
+          }
+        >
+          {resultContent}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="inline-flex max-w-md flex-col items-start gap-2">
       {activeRepoCount > 0 && (
@@ -56,11 +127,7 @@ export function DeleteReposButton({
           disabled={loading}
           className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
         >
-          {loading
-            ? "Eliminando repos…"
-            : result?.failed
-              ? `Reintentar fallidos (${activeRepoCount})`
-              : `Borrar todos los repos (${activeRepoCount})`}
+          {loading ? "Eliminando repos…" : triggerLabel}
         </button>
       )}
       {error && <div className="text-red-600 text-sm">{error}</div>}
@@ -70,35 +137,12 @@ export function DeleteReposButton({
         className={
           result
             ? `rounded-md px-3 py-2 text-sm ${
-                result.ok
-                  ? "bg-green-50 text-green-800"
-                  : "bg-amber-50 text-amber-900"
+                result.ok ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-900"
               }`
             : undefined
         }
       >
-        {result && (
-          <>
-            {result.ok ? (
-              <>
-                Se confirmaron {confirmed} de {result.attempted} repositorios.
-              </>
-            ) : (
-              <>
-                Se confirmaron {confirmed} de {result.attempted} repositorios.
-                Fallaron {result.failed}; podés reintentarlos.
-                <ul className="mt-1 list-disc pl-5">
-                  {failedResults?.map((item) => (
-                    <li key={item.entregaId}>
-                      <span className="font-mono">{item.repoName}</span>
-                      {item.error ? `: ${item.error}` : ""}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </>
-        )}
+        {resultContent}
       </div>
     </div>
   );

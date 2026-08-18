@@ -36,9 +36,25 @@ export {
   GrupoLlenoError,
   AssignmentNoGrupalError,
   GrupoNoEncontradoError,
+  AlumnoNoEsMiembroDelGrupoError,
+  GrupoConEntregaError,
 } from "./Grupo";
 export { Entrega } from "./Entrega";
 export {
   RepoDeletionAttempt,
   type RepoDeletionStatus,
 } from "./RepoDeletionAttempt";
+export {
+  CambioDeMembresia,
+  type AccionCambioMembresia,
+} from "./CambioDeMembresia";
+export {
+  RolDeUsuario,
+  DOCENTE,
+  ESTUDIANTE,
+  resolverRol,
+  AccesoAssignmentProhibidoError,
+  type ItemDeNavegacion,
+  type ContextoDeMembresia,
+  type OrigenCambioMembresia,
+} from "./RolDeUsuario";

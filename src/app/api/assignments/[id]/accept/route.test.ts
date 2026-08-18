@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PdepUser } from "@/types";
-import { Entrega, GrupoNoAsignadoError } from "@/domain/entities";
+import { Entrega, GrupoNoAsignadoError, ESTUDIANTE } from "@/domain/entities";
 import {
   AccesoAssignmentProhibidoError,
   AssignmentNoDisponibleError,
@@ -45,7 +45,7 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
     githubUsername: "juangarcia",
     name: "Juan García",
     image: "",
-    isAdmin: false,
+    rol: ESTUDIANTE,
     ...overrides,
   };
 }

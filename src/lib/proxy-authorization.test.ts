@@ -1,4 +1,5 @@
 import { getProxyRedirectPath } from "./proxy-authorization";
+import { DOCENTE, ESTUDIANTE } from "@/domain/entities/RolDeUsuario";
 
 function session(isAdmin: boolean) {
   return {
@@ -6,7 +7,7 @@ function session(isAdmin: boolean) {
       githubUsername: isAdmin ? "docente" : "alumno",
       name: "Usuario",
       image: "",
-      isAdmin,
+      rol: isAdmin ? DOCENTE : ESTUDIANTE,
     },
   };
 }
@@ -34,5 +35,12 @@ describe("proxy authorization", () => {
     expect(
       getProxyRedirectPath({ session: session(false), pathname: "/dashboard" })
     ).toBeNull();
+  });
+
+  it("redirige a /dashboard (sin romper) si la sesión tiene pdepUser pero sin rol", () => {
+    const sessionSinRol = { pdepUser: { githubUsername: "alumno", name: "Usuario", image: "" } };
+    expect(
+      getProxyRedirectPath({ session: sessionSinRol, pathname: "/admin/assignments" })
+    ).toBe("/dashboard");
   });
 });

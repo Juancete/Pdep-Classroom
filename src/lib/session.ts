@@ -17,6 +17,6 @@ export async function requireUser(): Promise<PdepUser> {
 export async function requireAdmin(): Promise<PdepUser> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (!user.isAdmin) redirect("/dashboard");
+  if (!user.rol.puedeAdministrar()) redirect("/dashboard");
   return user;
 }

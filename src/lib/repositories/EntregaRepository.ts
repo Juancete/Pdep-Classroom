@@ -8,6 +8,7 @@ import {
   AssignmentNoDisponibleError,
   Grupo,
   Entrega,
+  type RolDeUsuario,
 } from "@/domain/entities";
 
 export async function getEntregas(assignmentId?: string): Promise<Entrega[]> {
@@ -239,7 +240,7 @@ export async function crearEntregaSiAssignmentDisponible(
     alumnoId?: string;
     grupoId?: string;
   },
-  esAdmin: boolean
+  rol: RolDeUsuario
 ): Promise<Entrega> {
   const entityManager = await getEM();
 
@@ -249,7 +250,7 @@ export async function crearEntregaSiAssignmentDisponible(
       { id: data.assignmentId },
       { lockMode: LockMode.PESSIMISTIC_WRITE }
     );
-    if (!esAdmin && !assignment?.permiteAccionesDeAlumno()) {
+    if (!rol.puedeAdministrar() && !assignment?.permiteAccionesDeAlumno()) {
       throw new AssignmentNoDisponibleError(data.assignmentId);
     }
 

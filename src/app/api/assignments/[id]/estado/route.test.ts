@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { DOCENTE, ESTUDIANTE } from "@/domain/entities/RolDeUsuario";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -60,7 +61,7 @@ describe("PATCH /api/assignments/[id]/estado", () => {
     vi.clearAllMocks();
     mockGetCurrentUser.mockResolvedValue({
       githubUsername: "docente1",
-      isAdmin: true,
+      rol: DOCENTE,
     });
     mockCambiarEstadoAssignment.mockResolvedValue(makeAssignment());
   });
@@ -77,7 +78,7 @@ describe("PATCH /api/assignments/[id]/estado", () => {
   it("devuelve 401 si el usuario no es admin", async () => {
     mockGetCurrentUser.mockResolvedValue({
       githubUsername: "ana",
-      isAdmin: false,
+      rol: ESTUDIANTE,
     });
     const response = await PATCH(makeRequest({ estado: "publicado" }), {
       params: Promise.resolve({ id: "a1" }),
