@@ -402,6 +402,7 @@ describe("Dashboard page", () => {
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
       expect(html).toContain("Los Lambdas");
+      expect(html).toContain('href="/assignments/tp-g1/grupo"');
     });
 
     it("muestra 'Ir al repo' cuando ya tiene entrega, aunque tenga grupo", async () => {

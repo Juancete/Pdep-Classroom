@@ -105,8 +105,14 @@ export default async function DashboardPage() {
                   </p>
                 )}
                 {grupo && !entrega && (
-                  <p className="text-xs text-blue-600 mt-1">
-                    Grupo: <span className="font-medium">{grupo.nombre}</span>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Grupo:{" "}
+                    <a
+                      href={`/assignments/${assignment.id}/grupo`}
+                      className="font-medium text-blue-600 hover:underline"
+                    >
+                      {grupo.nombre}
+                    </a>
                   </p>
                 )}
               </div>
