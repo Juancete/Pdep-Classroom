@@ -408,6 +408,34 @@ describe("GruposPanel", () => {
       });
       await waitFor(() => expect(mockRouterRefresh).toHaveBeenCalled());
     });
+
+    it("la confirmación también advierte cuando el grupo destino ya entregó", async () => {
+      const user = userEvent.setup();
+      const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+      render(
+        <GruposPanel
+          assignmentId="a1"
+          inscripcionesCerradas={false}
+          grupos={[
+            makeGrupo({ id: "g1" }),
+            makeGrupo({
+              id: "g2",
+              nombre: "Los Monoides",
+              miembros: [],
+              tieneEntrega: true,
+            }),
+          ]}
+          alumnosSinGrupo={[]}
+        />
+      );
+
+      await user.selectOptions(screen.getAllByRole("combobox")[0], "g2");
+      await user.click(screen.getAllByRole("button", { name: /^mover$/i })[0]);
+
+      expect(confirmSpy).toHaveBeenCalledWith(
+        expect.stringContaining("grupo destino ya entregó")
+      );
+    });
   });
 
   describe("agregar alumno sin grupo", () => {

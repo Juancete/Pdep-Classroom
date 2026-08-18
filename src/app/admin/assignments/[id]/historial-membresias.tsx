@@ -28,12 +28,20 @@ function formatearFecha(fecha: Date | string): string {
 export function HistorialDeMembresias({
   assignmentId,
   historial,
+  repoDeletionPage,
 }: {
   assignmentId: string;
   historial: HistorialDeMembresiasPage;
+  /** Página actual del historial de borrado de repos, para no perderla al paginar este historial. */
+  repoDeletionPage?: number;
 }) {
-  const pageHref = (page: number) =>
-    `/admin/assignments/${assignmentId}?membresiaPage=${page}#historial-membresias`;
+  const pageHref = (page: number) => {
+    const params = new URLSearchParams({ membresiaPage: String(page) });
+    if (repoDeletionPage && repoDeletionPage > 1) {
+      params.set("repoDeletionPage", String(repoDeletionPage));
+    }
+    return `/admin/assignments/${assignmentId}?${params.toString()}#historial-membresias`;
+  };
 
   return (
     <section

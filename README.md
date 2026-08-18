@@ -318,6 +318,23 @@ pnpm dev
 
 Abrir http://localhost:3000.
 
+#### 7.1 Login sin pasar por GitHub (opcional)
+
+Para no depender del OAuth real de GitHub en cada prueba local, hay un login
+de desarrollo: entrar tipeando cualquier username. Requiere **dos**
+condiciones a la vez (a propósito, para que no se filtre a producción por
+accidente):
+
+```bash
+# .env.local
+ENABLE_DEV_LOGIN=true
+```
+
+La otra condición (`NODE_ENV=development`) ya la pone `next dev` solo. Con
+ambas, `/login` muestra un panel extra: un botón directo por cada username
+en `ADMIN_GITHUB_USERNAMES` (entra como docente) y un campo de texto libre
+para entrar como cualquier alumno.
+
 ### 8. Deploy a Vercel
 
 #### 8.1 Primer deploy

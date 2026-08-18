@@ -262,6 +262,32 @@ describe("motivoDeBloqueoDeMembresia", () => {
       })
     ).toBeNull();
   });
+
+  it("también traduce InscripcionesCerradasError a motivo", () => {
+    const contexto = {
+      assignment: fakeGrupal({ inscripcionesCerradas: true }),
+      grupo: fakeGrupo(),
+      grupoTieneEntrega: false,
+    };
+    const motivo = ESTUDIANTE.motivoDeBloqueoDeMembresia(contexto);
+    const error = new InscripcionesCerradasError(contexto.assignment.id);
+    expect(motivo).toBe(error.message);
+  });
+
+  it("relanza un error inesperado en vez de mostrarlo como bloqueo", () => {
+    const rolConBug = Object.create(ESTUDIANTE) as typeof ESTUDIANTE;
+    rolConBug.autorizarCambioDeMembresia = () => {
+      throw new TypeError("contexto mal armado");
+    };
+
+    expect(() =>
+      rolConBug.motivoDeBloqueoDeMembresia({
+        assignment: fakeGrupal(),
+        grupo: fakeGrupo(),
+        grupoTieneEntrega: false,
+      })
+    ).toThrow(TypeError);
+  });
 });
 
 describe("resolverRol", () => {
@@ -279,6 +305,10 @@ describe("resolverRol", () => {
 
   it("devuelve ESTUDIANTE con lista de admins vacía", () => {
     expect(resolverRol("ana", [])).toBe(ESTUDIANTE);
+  });
+
+  it("normaliza mayúsculas de la propia lista de admins, sin depender del caller", () => {
+    expect(resolverRol("juancete", ["JuanCete"])).toBe(DOCENTE);
   });
 });
 

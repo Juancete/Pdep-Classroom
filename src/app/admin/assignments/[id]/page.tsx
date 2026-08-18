@@ -241,6 +241,7 @@ export default async function AssignmentDetailPage(
         <HistorialDeMembresias
           assignmentId={assignment.id}
           historial={historialMembresias}
+          repoDeletionPage={historyPage}
         />
       )}
 

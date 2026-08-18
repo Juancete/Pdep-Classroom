@@ -36,4 +36,11 @@ describe("proxy authorization", () => {
       getProxyRedirectPath({ session: session(false), pathname: "/dashboard" })
     ).toBeNull();
   });
+
+  it("redirige a /dashboard (sin romper) si la sesión tiene pdepUser pero sin rol", () => {
+    const sessionSinRol = { pdepUser: { githubUsername: "alumno", name: "Usuario", image: "" } };
+    expect(
+      getProxyRedirectPath({ session: sessionSinRol, pathname: "/admin/assignments" })
+    ).toBe("/dashboard");
+  });
 });

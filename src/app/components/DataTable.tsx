@@ -50,15 +50,21 @@ export function DataTable({
 
 const ROW_TEMPLATE = {
   gridTemplateColumns: "var(--data-cols)",
-  minWidth: "var(--data-min-w, auto)",
 } as CSSProperties;
+
+// `md:min-w-[...]` en vez de un `minWidth` fijo en el style: en mobile la fila
+// es `block` (no grid, ver DataRow) y no necesita ningún ancho mínimo — forzarlo
+// ahí sólo produciría scroll horizontal en una tarjeta que ya apila su
+// contenido. El mínimo únicamente tiene sentido a partir de md, cuando la fila
+// pasa a ser un grid de verdad.
+const MIN_WIDTH_DESDE_MD = "md:min-w-[var(--data-min-w,auto)]";
 
 export function DataHeader({ children }: { children: ReactNode }) {
   return (
     <div role="rowgroup" className="hidden md:block">
       <div
         role="row"
-        className="grid gap-3 bg-gray-50 border-b border-gray-200 px-4 py-3 text-xs font-medium text-gray-600 uppercase tracking-wide items-center"
+        className={`grid gap-3 bg-gray-50 border-b border-gray-200 px-4 py-3 text-xs font-medium text-gray-600 uppercase tracking-wide items-center ${MIN_WIDTH_DESDE_MD}`}
         style={ROW_TEMPLATE}
       >
         {children}
@@ -93,7 +99,7 @@ export function DataRow({ children }: { children: ReactNode }) {
   return (
     <div
       role="row"
-      className="block md:grid md:gap-3 md:items-center px-4 py-4 md:py-3 hover:bg-gray-50 space-y-3 md:space-y-0 text-sm"
+      className={`block md:grid md:gap-3 md:items-center px-4 py-4 md:py-3 hover:bg-gray-50 space-y-3 md:space-y-0 text-sm ${MIN_WIDTH_DESDE_MD}`}
       style={ROW_TEMPLATE}
     >
       {children}

@@ -9,12 +9,16 @@ const adminUsernames = (process.env.ADMIN_GITHUB_USERNAMES ?? "")
   .map((username) => username.trim().toLowerCase())
   .filter(Boolean);
 
-// Sólo en desarrollo: entrar tipeando cualquier githubUsername, sin pasar por
-// el OAuth real de GitHub. Registrado condicionalmente — en producción este
-// provider ni siquiera existe, así que NextAuth rechaza cualquier intento de
+// Sólo en desarrollo Y con opt-in explícito: entrar tipeando cualquier
+// githubUsername, sin pasar por el OAuth real de GitHub. Dos condiciones
+// independientes en vez de una — NODE_ENV=development solo no alcanza como
+// gate de un bypass de auth: alguna plataforma de hosting mal configurada
+// podría dejarlo filtrar a producción sin que nadie lo pida a propósito.
+// Registrado condicionalmente — si cualquiera de las dos falta, el provider
+// ni siquiera existe, así que NextAuth rechaza cualquier intento de
 // loguearse por acá aunque alguien adivine el nombre del provider.
 const devLoginProvider =
-  process.env.NODE_ENV === "development"
+  process.env.NODE_ENV === "development" && process.env.ENABLE_DEV_LOGIN === "true"
     ? Credentials({
         id: "dev-login",
         name: "Modo desarrollo",

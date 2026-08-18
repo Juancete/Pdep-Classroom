@@ -340,7 +340,7 @@ describe("aceptarAssignment", () => {
     ).resolves.toBeInstanceOf(Entrega);
   });
 
-  it("pasa esAdmin a crearEntregaSiAssignmentDisponible para que revalide bajo lock", async () => {
+  it("pasa el rol a crearEntregaSiAssignmentDisponible para que revalide bajo lock", async () => {
     await aceptarAssignment("a1", makeUser({ rol: ESTUDIANTE }));
     expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalledWith(
       expect.any(Object),

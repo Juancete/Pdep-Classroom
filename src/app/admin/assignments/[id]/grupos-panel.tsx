@@ -66,6 +66,15 @@ function confirmacionPara(
   return [ACCIONES[accion].confirmacion, ...advertencias].join(" ");
 }
 
+// Aparte de ADVERTENCIAS: "último integrante" no tiene sentido evaluado
+// sobre el destino de un movimiento (gana un integrante, no lo pierde), así
+// que el destino sólo suma esta advertencia puntual sobre colaboradores.
+function advertenciaEntregaDestino(grupoDestino: GrupoAdminResumen): string | null {
+  return grupoDestino.tieneEntrega
+    ? "El grupo destino ya entregó: sumar a alguien también desincroniza sus colaboradores."
+    : null;
+}
+
 export function GruposPanel({
   assignmentId,
   inscripcionesCerradas: initialCerradas,
@@ -118,7 +127,12 @@ export function GruposPanel({
   async function handleMover(grupoOrigen: GrupoAdminResumen, username: string) {
     const grupoDestinoId = destinoPorMiembro[username];
     if (!grupoDestinoId) return;
-    if (!confirm(confirmacionPara("mover", grupoOrigen))) return;
+    const grupoDestino = grupos.find((grupo) => grupo.id === grupoDestinoId);
+    const advertenciaDestino = grupoDestino ? advertenciaEntregaDestino(grupoDestino) : null;
+    const confirmacion = [confirmacionPara("mover", grupoOrigen), advertenciaDestino]
+      .filter(Boolean)
+      .join(" ");
+    if (!confirm(confirmacion)) return;
 
     await call(async () => {
       const response = await fetch(
