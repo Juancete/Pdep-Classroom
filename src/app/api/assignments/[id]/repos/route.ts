@@ -11,7 +11,7 @@ export async function DELETE(_req: Request, props: { params: Promise<{ id: strin
   const params = await props.params;
   try {
     const user = await getCurrentUser();
-    if (!user?.isAdmin) {
+    if (!user?.rol.puedeAdministrar()) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 

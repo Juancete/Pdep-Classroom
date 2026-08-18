@@ -75,7 +75,7 @@ export async function aceptarAssignment(
         alumnoId: grupoId ? undefined : alumno?.id,
         grupoId,
       },
-      user.isAdmin
+      user.rol
     );
 
   if (await repoExists(repoName)) {

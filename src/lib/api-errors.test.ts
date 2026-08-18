@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { NextResponse } from "next/server";
-import { parseJsonObjectBody } from "./api-errors";
+import { parseJsonObjectBody, respuestaDeErrorDeDominio } from "./api-errors";
+import {
+  AssignmentNoEncontradoError,
+  GrupoNoEncontradoError,
+  InscripcionesCerradasError,
+  AssignmentNoGrupalError,
+  NombreGrupoInvalidoError,
+} from "@/domain/entities";
 
 function makeRequest(body: unknown, contentType = "application/json"): Request {
   return new Request("http://test.local/api/test", {
@@ -72,5 +79,57 @@ describe("parseJsonObjectBody", () => {
     expect(result).toBeInstanceOf(NextResponse);
     const response = result as NextResponse;
     expect(response.status).toBe(400);
+  });
+});
+
+describe("respuestaDeErrorDeDominio", () => {
+  it("devuelve null para un Error genérico (no está en la tabla)", () => {
+    expect(respuestaDeErrorDeDominio(new Error("cualquier cosa"))).toBeNull();
+  });
+
+  it("devuelve null para un valor que no es Error", () => {
+    expect(respuestaDeErrorDeDominio("no soy un error")).toBeNull();
+  });
+
+  it("usa el status y el mensaje del propio error cuando la tabla no fija uno", async () => {
+    const response = respuestaDeErrorDeDominio(
+      new GrupoNoEncontradoError("a1", "g1")
+    );
+    expect(response).not.toBeNull();
+    expect(response!.status).toBe(404);
+    const json = await response!.json();
+    expect(json.error).toBe("Grupo no encontrado");
+  });
+
+  it("usa el mensaje fijo de la tabla cuando está definido, no el message original", async () => {
+    const response = respuestaDeErrorDeDominio(
+      new InscripcionesCerradasError("a1")
+    );
+    expect(response!.status).toBe(409);
+    const json = await response!.json();
+    expect(json.error).toBe("Las inscripciones a grupos están cerradas");
+  });
+
+  it("mapea AssignmentNoEncontradoError a 404", async () => {
+    const response = respuestaDeErrorDeDominio(
+      new AssignmentNoEncontradoError("a1")
+    );
+    expect(response!.status).toBe(404);
+  });
+
+  it("mapea AssignmentNoGrupalError a 400 con mensaje fijo", async () => {
+    const response = respuestaDeErrorDeDominio(
+      new AssignmentNoGrupalError("a1")
+    );
+    expect(response!.status).toBe(400);
+    const json = await response!.json();
+    expect(json.error).toBe("Este assignment no es grupal");
+  });
+
+  it("mapea NombreGrupoInvalidoError a 400 usando su propio mensaje", async () => {
+    const response = respuestaDeErrorDeDominio(
+      new NombreGrupoInvalidoError("+++")
+    );
+    expect(response!.status).toBe(400);
   });
 });

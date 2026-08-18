@@ -209,9 +209,18 @@ docker compose up -d
 ```
 
 Esto levanta:
-- **PostgreSQL** en `localhost:5432` (user: `postgres`, password: `postgres`, db: `pdep_classroom`)
+- **PostgreSQL** en `localhost:5433` (user: `postgres`, password: `postgres`, db: `pdep_classroom`)
+  — puerto de host no estándar a propósito, para no chocar con otro Postgres local en el 5432
 - **pgAdmin** en http://localhost:5050 (email: `admin@pdep.com`, password: `admin`)
   — ya viene pre-configurado apuntando a la instancia de Postgres, no hay que configurar nada
+
+Si el 5433 también está ocupado, se puede pisar con una variable de entorno:
+
+```bash
+POSTGRES_HOST_PORT=5555 docker compose up -d
+```
+
+(y actualizar `DATABASE_URL` en `.env.local` con el mismo puerto). El puerto interno del container sigue siendo 5432 siempre, así que pgAdmin —que se conecta por la red de Docker— no necesita cambios.
 
 Para bajar todo:
 
@@ -223,7 +232,7 @@ docker compose down -v       # baja todo y borra el volumen (reset total)
 La `DATABASE_URL` en `.env.local` ya está configurada para esta instancia:
 
 ```
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/pdep_classroom
+DATABASE_URL=postgresql://postgres:postgres@localhost:5433/pdep_classroom
 ```
 
 Crear y aplicar las migraciones para generar el schema:
@@ -308,6 +317,23 @@ pnpm dev
 ```
 
 Abrir http://localhost:3000.
+
+#### 7.1 Login sin pasar por GitHub (opcional)
+
+Para no depender del OAuth real de GitHub en cada prueba local, hay un login
+de desarrollo: entrar tipeando cualquier username. Requiere **dos**
+condiciones a la vez (a propósito, para que no se filtre a producción por
+accidente):
+
+```bash
+# .env.local
+ENABLE_DEV_LOGIN=true
+```
+
+La otra condición (`NODE_ENV=development`) ya la pone `next dev` solo. Con
+ambas, `/login` muestra un panel extra: un botón directo por cada username
+en `ADMIN_GITHUB_USERNAMES` (entra como docente) y un campo de texto libre
+para entrar como cualquier alumno.
 
 ### 8. Deploy a Vercel
 

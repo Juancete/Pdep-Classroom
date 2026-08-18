@@ -1,8 +1,18 @@
 import { signIn } from "@/lib/auth";
 
 export default function LoginPage() {
+  const adminUsernames = (process.env.ADMIN_GITHUB_USERNAMES ?? "")
+    .split(",")
+    .map((username) => username.trim())
+    .filter(Boolean);
+  // Mismas dos condiciones que registran el provider en auth.config.ts: si
+  // acá se mostrara el panel sin que el provider exista, el login fallaría
+  // silenciosamente al tocar cualquiera de los botones.
+  const devLoginHabilitado =
+    process.env.NODE_ENV === "development" && process.env.ENABLE_DEV_LOGIN === "true";
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh]">
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 w-full max-w-sm">
         <h2 className="text-xl font-bold text-center mb-6">Iniciar sesión</h2>
         <form
@@ -25,6 +35,68 @@ export default function LoginPage() {
           Usá la misma cuenta de GitHub que registraste en la planilla.
         </p>
       </div>
+
+      {devLoginHabilitado && (
+        <div
+          className="bg-amber-50 border border-amber-200 rounded-xl p-6 w-full max-w-sm"
+          data-testid="dev-login"
+        >
+          <h3 className="text-sm font-semibold text-amber-900 mb-1">
+            Modo desarrollo
+          </h3>
+          <p className="text-xs text-amber-700 mb-4">
+            Entrar sin pasar por GitHub. Sólo visible en local.
+          </p>
+
+          {adminUsernames.length > 0 && (
+            <div className="space-y-2 mb-4">
+              {adminUsernames.map((username) => (
+                <form
+                  key={username}
+                  action={async () => {
+                    "use server";
+                    await signIn("dev-login", {
+                      githubUsername: username,
+                      redirectTo: "/dashboard",
+                    });
+                  }}
+                >
+                  <button
+                    type="submit"
+                    className="w-full text-sm bg-amber-600 text-white px-3 py-2 rounded-lg font-medium hover:bg-amber-700 transition-colors"
+                  >
+                    Entrar como {username} (docente)
+                  </button>
+                </form>
+              ))}
+            </div>
+          )}
+
+          <form
+            action={async (formData: FormData) => {
+              "use server";
+              const githubUsername = String(formData.get("githubUsername") ?? "").trim();
+              if (!githubUsername) return;
+              await signIn("dev-login", { githubUsername, redirectTo: "/dashboard" });
+            }}
+            className="flex gap-2"
+          >
+            <input
+              type="text"
+              name="githubUsername"
+              placeholder="username de alumno"
+              aria-label="GitHub username para entrar como alumno"
+              className="flex-1 border border-amber-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+            <button
+              type="submit"
+              className="text-sm bg-white border border-amber-600 text-amber-700 px-3 py-2 rounded-lg font-medium hover:bg-amber-100 transition-colors"
+            >
+              Entrar
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

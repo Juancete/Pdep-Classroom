@@ -98,6 +98,25 @@ describe("DeleteButton", () => {
     expect(await screen.findByText("Error 500")).toBeInTheDocument();
   });
 
+  it("compact renderiza el botón sin texto pero con nombre accesible 'Eliminar'", () => {
+    render(<DeleteButton confirmMessage="¿Seguro?" endpoint="/api/test/1" compact />);
+    const button = screen.getByRole("button", { name: "Eliminar" });
+    expect(button).toBeInTheDocument();
+    expect(button).not.toHaveTextContent("Eliminar");
+  });
+
+  it("compact funciona igual al confirmar (fetch + refresh)", async () => {
+    const user = userEvent.setup();
+    vi.mocked(confirm).mockReturnValue(true);
+    vi.mocked(fetch).mockResolvedValue(mockResponse(true) as Response);
+
+    render(<DeleteButton confirmMessage="¿Seguro?" endpoint="/api/items/9" compact />);
+    await user.click(screen.getByRole("button", { name: "Eliminar" }));
+
+    expect(fetch).toHaveBeenCalledWith("/api/items/9", { method: "DELETE" });
+    expect(mockRefresh).toHaveBeenCalled();
+  });
+
   it("no llama a router.refresh cuando falla", async () => {
     const user = userEvent.setup();
     vi.mocked(confirm).mockReturnValue(true);

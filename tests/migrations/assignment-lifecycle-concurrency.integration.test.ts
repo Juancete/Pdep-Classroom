@@ -21,7 +21,7 @@ vi.mock("@/lib/db", () => ({
 
 import { cambiarEstadoAssignment } from "../../src/lib/repositories/AssignmentRepository";
 import { crearEntregaSiAssignmentDisponible } from "../../src/lib/repositories/EntregaRepository";
-import { TransicionDeEstadoInvalidaError } from "../../src/domain/entities";
+import { TransicionDeEstadoInvalidaError, ESTUDIANTE } from "../../src/domain/entities";
 import { AssignmentNoDisponibleError } from "../../src/lib/services/assignmentAuthorization";
 
 const LIFECYCLE_MIGRATION = "Migration20260814180000_assignment_lifecycle";
@@ -109,7 +109,7 @@ describe("carrera entre despublicar y aceptar un assignment", () => {
             repoUrl: "https://github.com/org/tp-concurrente-alumno",
             githubUsernames: ["alumno1"],
           },
-          false
+          ESTUDIANTE
         ),
       ]);
 

@@ -20,24 +20,67 @@ vi.mock("@/lib/repositories", () => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => (
-    <a href={href} className={className}>
+  default: ({
+    href,
+    children,
+    ...rest
+  }: { href: string; children: React.ReactNode } & Record<string, unknown>) => (
+    <a href={href} {...rest}>
       {children}
     </a>
   ),
 }));
 
 vi.mock("./delete-button", () => ({
-  DeleteAssignmentButton: ({ id, titulo }: { id: string; titulo: string }) => (
-    <button data-id={id}>Eliminar {titulo}</button>
+  DeleteAssignmentButton: ({
+    id,
+    titulo,
+    compact,
+  }: {
+    id: string;
+    titulo: string;
+    compact?: boolean;
+  }) => (
+    <button data-id={id} data-compact={String(Boolean(compact))}>
+      Eliminar {titulo}
+    </button>
   ),
 }));
 
 vi.mock("./delete-repos-button", () => ({
-  DeleteReposButton: ({ assignmentId, activeRepoCount }: { assignmentId: string; activeRepoCount: number }) => (
-    activeRepoCount > 0
-      ? <button data-testid="delete-repos-button" data-id={assignmentId}>Borrar repos ({activeRepoCount})</button>
-      : null
+  DeleteReposButton: ({
+    assignmentId,
+    activeRepoCount,
+    compact,
+  }: {
+    assignmentId: string;
+    activeRepoCount: number;
+    compact?: boolean;
+  }) =>
+    activeRepoCount > 0 ? (
+      <button
+        data-testid="delete-repos-button"
+        data-id={assignmentId}
+        data-compact={String(Boolean(compact))}
+      >
+        Borrar repos ({activeRepoCount})
+      </button>
+    ) : null,
+}));
+
+vi.mock("./estado-quick-actions", () => ({
+  EstadoQuickActions: ({
+    assignmentId,
+    accionesDisponibles,
+  }: {
+    assignmentId: string;
+    accionesDisponibles: string[];
+  }) => (
+    <div
+      data-testid="estado-quick-actions"
+      data-assignment={assignmentId}
+      data-acciones={accionesDisponibles.join(",")}
+    />
   ),
 }));
 
@@ -203,13 +246,42 @@ describe("Admin Assignments page", () => {
       expect(html).toContain("Editar");
     });
 
-    it("muestra el botón de eliminar por cada assignment", async () => {
+    it("muestra el botón de eliminar por cada assignment, en modo compact", async () => {
       mockGetAssignments.mockResolvedValue([
         makeAssignment({ id: "tp-1", titulo: "Kata Funcional" }),
       ]);
       const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).toContain("Eliminar Kata Funcional");
+      expect(html).toContain('data-compact="true"');
+    });
+  });
+
+  describe("acciones rápidas de estado", () => {
+    it("pasa las transiciones disponibles según estado y entregas", async () => {
+      mockGetAssignments.mockResolvedValue([
+        makeAssignment({ id: "tp-1", estadoNombre: "borrador" }),
+      ]);
+      mockGetEntregaCountsByAssignment.mockResolvedValue(new Map());
+
+      const element = await AdminAssignmentsPage({});
+      const html = renderToStaticMarkup(element);
+
+      expect(html).toContain('data-testid="estado-quick-actions"');
+      expect(html).toContain('data-assignment="tp-1"');
+      expect(html).toContain('data-acciones="publicado,archivado"');
+    });
+
+    it("no ofrece volver a borrador cuando el publicado ya tiene entregas", async () => {
+      mockGetAssignments.mockResolvedValue([
+        makeAssignment({ id: "tp-1", estadoNombre: "publicado" }),
+      ]);
+      mockGetEntregaCountsByAssignment.mockResolvedValue(new Map([["tp-1", 2]]));
+
+      const element = await AdminAssignmentsPage({});
+      const html = renderToStaticMarkup(element);
+
+      expect(html).toContain('data-acciones="archivado"');
     });
   });
 
@@ -241,6 +313,7 @@ describe("Admin Assignments page", () => {
       const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).toContain("Borrar repos (3)");
+      expect(html).toContain('data-compact="true"');
     });
 
     it("no muestra el botón cuando no hay repos activos", async () => {

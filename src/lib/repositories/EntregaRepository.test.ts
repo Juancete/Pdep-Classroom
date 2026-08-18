@@ -26,7 +26,7 @@ vi.mock("@/lib/db", () => ({
 }));
 
 import { LockMode } from "@mikro-orm/core";
-import { Alumno, Assignment, Entrega, Grupo } from "@/domain/entities";
+import { Alumno, Assignment, Entrega, Grupo, DOCENTE, ESTUDIANTE } from "@/domain/entities";
 import { AssignmentNoDisponibleError } from "@/lib/services/assignmentAuthorization";
 import {
   createEntrega,
@@ -185,7 +185,7 @@ describe("EntregaRepository", () => {
           githubUsernames: ["juan"],
           alumnoId: "alumno-1",
         },
-        false
+        ESTUDIANTE
       );
 
       expect(mockEm.transactional).toHaveBeenCalled();
@@ -210,7 +210,7 @@ describe("EntregaRepository", () => {
             githubUsernames: ["juan"],
             alumnoId: "alumno-1",
           },
-          false
+          ESTUDIANTE
         )
       ).rejects.toBeInstanceOf(AssignmentNoDisponibleError);
 
@@ -232,7 +232,7 @@ describe("EntregaRepository", () => {
             githubUsernames: ["juan"],
             alumnoId: "alumno-1",
           },
-          true
+          DOCENTE
         )
       ).resolves.toBeDefined();
 

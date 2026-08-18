@@ -9,14 +9,16 @@ import {
 } from "@/lib/repositories";
 import { AcceptButton } from "./accept-button";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import type { Grupo } from "@/domain/entities";
 import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
 
 export default async function DashboardPage() {
   const user = await requireUser();
+  const puedeAdministrar = user.rol.puedeAdministrar();
   let comisionActivaId: string | null = null;
 
-  if (!user.isAdmin) {
+  if (!puedeAdministrar) {
     const [alumno, comisionActiva] = await Promise.all([
       getAlumnoByGithub(user.githubUsername),
       getComisionActiva(),
@@ -27,12 +29,12 @@ export default async function DashboardPage() {
     }
   }
 
-  const gruposPromise: Promise<Map<string, Grupo>> = user.isAdmin
+  const gruposPromise: Promise<Map<string, Grupo>> = puedeAdministrar
     ? Promise.resolve(new Map())
     : getGruposDeAlumno(user.githubUsername);
 
   const [assignments, entregasMap, gruposMap] = await Promise.all([
-    user.isAdmin
+    puedeAdministrar
       ? getAssignments()
       : comisionActivaId
         ? getAssignmentsDeComision(comisionActivaId)
@@ -54,7 +56,7 @@ export default async function DashboardPage() {
     // depende de datos por-alumno, no solo del estado). El admin ve todo.
     .filter(
       ({ assignment, entrega }) =>
-        user.isAdmin || assignment.esVisibleParaAlumno(entrega !== null)
+        puedeAdministrar || assignment.esVisibleParaAlumno(entrega !== null)
     );
 
   return (
@@ -105,8 +107,14 @@ export default async function DashboardPage() {
                   </p>
                 )}
                 {grupo && !entrega && (
-                  <p className="text-xs text-blue-600 mt-1">
-                    Grupo: <span className="font-medium">{grupo.nombre}</span>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Grupo:{" "}
+                    <Link
+                      href={`/assignments/${assignment.id}/grupo`}
+                      className="font-medium text-blue-600 hover:underline"
+                    >
+                      {grupo.nombre}
+                    </Link>
                   </p>
                 )}
               </div>

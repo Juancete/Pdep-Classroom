@@ -188,16 +188,18 @@ describe("EstadoPanel", () => {
       />
     );
 
-    // Mismo componente montado: las props "congeladas" iniciales siguen
-    // siendo las que ve React, tal como pasaría si el padre no cambiara
-    // la key porque el estado real no cambió.
+    // Mismo componente montado, con props DISTINTAS: si el useState interno
+    // se resincronizara con cada render (bug), acá pasaría a mostrar
+    // accion-borrador. Como la key no cambió, React arrastra el estado local
+    // "congelado" del primer render y la UI no debería moverse.
     rerender(
       <EstadoPanel
         key="publicado"
-        {...makeProps({ estado: "publicado", accionesDisponibles: ["archivado"] })}
+        {...makeProps({ estado: "publicado", accionesDisponibles: ["borrador"] })}
       />
     );
 
     expect(screen.getByTestId("accion-archivado")).toBeInTheDocument();
+    expect(screen.queryByTestId("accion-borrador")).not.toBeInTheDocument();
   });
 });
