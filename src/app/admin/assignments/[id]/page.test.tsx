@@ -105,7 +105,7 @@ vi.mock("./historial-membresias", () => ({
   ),
 }));
 
-vi.mock("./estado-panel", () => ({
+vi.mock("../estado-panel", () => ({
   EstadoPanel: ({
     assignmentId,
     estado,

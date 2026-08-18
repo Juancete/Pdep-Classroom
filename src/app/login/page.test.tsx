@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 // ── Mocks ────────────────────────────────────────────────────
@@ -35,5 +35,52 @@ describe("Login page", () => {
     const html = renderToStaticMarkup(element);
     expect(html).toContain("<form");
     expect(html).toContain('type="submit"');
+  });
+
+  it("no muestra el modo desarrollo fuera de NODE_ENV=development", () => {
+    const element = LoginPage();
+    const html = renderToStaticMarkup(element);
+    expect(html).not.toContain('data-testid="dev-login"');
+  });
+
+  describe("modo desarrollo", () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalAdmins = process.env.ADMIN_GITHUB_USERNAMES;
+
+    beforeEach(() => {
+      vi.stubEnv("NODE_ENV", "development");
+    });
+
+    afterEach(() => {
+      vi.stubEnv("NODE_ENV", originalNodeEnv ?? "test");
+      vi.stubEnv("ADMIN_GITHUB_USERNAMES", originalAdmins ?? "");
+    });
+
+    it("aparece cuando NODE_ENV es development", () => {
+      const element = LoginPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain('data-testid="dev-login"');
+    });
+
+    it("ofrece un botón de acceso directo por cada admin configurado", () => {
+      vi.stubEnv("ADMIN_GITHUB_USERNAMES", "juancete, fdodino");
+      const element = LoginPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("Entrar como juancete (docente)");
+      expect(html).toContain("Entrar como fdodino (docente)");
+    });
+
+    it("no ofrece botones de admin si no hay ninguno configurado", () => {
+      vi.stubEnv("ADMIN_GITHUB_USERNAMES", "");
+      const element = LoginPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).not.toContain("(docente)");
+    });
+
+    it("siempre ofrece un campo de texto para entrar como cualquier alumno", () => {
+      const element = LoginPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("GitHub username para entrar como alumno");
+    });
   });
 });

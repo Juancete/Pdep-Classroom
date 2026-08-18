@@ -133,6 +133,32 @@ describe("DeleteReposButton", () => {
     );
   });
 
+  it("compact no renderiza nada cuando activeRepoCount=0", () => {
+    const { container } = render(
+      <DeleteReposButton assignmentId="a1" activeRepoCount={0} compact />
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("compact renderiza un botón ícono con el conteo en el nombre accesible", () => {
+    render(<DeleteReposButton assignmentId="a1" activeRepoCount={5} compact />);
+    const button = screen.getByRole("button", { name: "Borrar todos los repos (5)" });
+    expect(button).toBeInTheDocument();
+    expect(button).not.toHaveTextContent("Borrar todos los repos");
+  });
+
+  it("compact funciona igual al confirmar (fetch + refresh)", async () => {
+    const user = userEvent.setup();
+    vi.mocked(confirm).mockReturnValue(true);
+    vi.mocked(fetch).mockResolvedValue(mockResponse(true) as Response);
+
+    render(<DeleteReposButton assignmentId="xyz" activeRepoCount={2} compact />);
+    await user.click(screen.getByRole("button"));
+
+    expect(fetch).toHaveBeenCalledWith("/api/assignments/xyz/repos", { method: "DELETE" });
+    await screen.findByText(/Se confirmaron 2 de 2 repositorios/);
+  });
+
   it("muestra los fallidos y permite reintentarlos", async () => {
     const user = userEvent.setup();
     vi.mocked(confirm).mockReturnValue(true);
