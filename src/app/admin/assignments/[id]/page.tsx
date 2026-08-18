@@ -18,7 +18,7 @@ import type { Grupo } from "@/domain/entities";
 import { RepoDeletionHistory } from "./repo-deletion-history";
 import { HistorialDeMembresias } from "./historial-membresias";
 import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
-import { EstadoPanel } from "./estado-panel";
+import { EstadoPanel } from "../estado-panel";
 
 function paginaDeQuery(valor: string | string[] | undefined): number {
   const crudo = Array.isArray(valor) ? valor[0] : valor;
