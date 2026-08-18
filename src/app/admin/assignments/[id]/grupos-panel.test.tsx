@@ -21,6 +21,7 @@ function makeGrupo(overrides: Partial<GrupoAdminResumen> = {}): GrupoAdminResume
     maxIntegrantes: 3,
     estaLleno: false,
     etiquetaCupo: "2/3 integrantes",
+    tieneEntrega: false,
     miembros: [
       { username: "ana", nombreCompleto: "García, Ana" },
       { username: "bob", nombreCompleto: "Smith, Bob" },
@@ -50,6 +51,7 @@ describe("GruposPanel", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   describe("toggle inscripciones", () => {
@@ -168,8 +170,10 @@ describe("GruposPanel", () => {
           alumnosSinGrupo={[]}
         />
       );
-      expect(screen.getByText("Los Lambdas")).toBeInTheDocument();
-      expect(screen.getByText("Los Monads")).toBeInTheDocument();
+      // selector acotado: sin él, el nombre también aparece como opción del
+      // "Mover a…" de los integrantes del otro grupo.
+      expect(screen.getByText("Los Lambdas", { selector: "span.font-medium" })).toBeInTheDocument();
+      expect(screen.getByText("Los Monads", { selector: "span.font-medium" })).toBeInTheDocument();
     });
 
     it("muestra el nombre completo y username de cada miembro", () => {
@@ -270,6 +274,178 @@ describe("GruposPanel", () => {
         />
       );
       expect(screen.getByText(/Sin grupo \(2\)/)).toBeInTheDocument();
+    });
+  });
+
+  describe("quitar integrante", () => {
+    it("llama al DELETE del alumno y refresca tras confirmar", async () => {
+      const user = userEvent.setup();
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      mockFetch(true);
+      render(
+        <GruposPanel
+          assignmentId="a1"
+          inscripcionesCerradas={false}
+          grupos={[makeGrupo()]}
+          alumnosSinGrupo={[]}
+        />
+      );
+
+      await user.click(screen.getAllByRole("button", { name: /^quitar$/i })[0]);
+
+      await waitFor(() => {
+        expect(fetch).toHaveBeenCalledWith(
+          "/api/assignments/a1/grupos/g1/miembros/ana",
+          { method: "DELETE" }
+        );
+      });
+      await waitFor(() => expect(mockRouterRefresh).toHaveBeenCalled());
+    });
+
+    it("no llama a fetch si se cancela la confirmación", async () => {
+      const user = userEvent.setup();
+      vi.spyOn(window, "confirm").mockReturnValue(false);
+      mockFetch(true);
+      render(
+        <GruposPanel
+          assignmentId="a1"
+          inscripcionesCerradas={false}
+          grupos={[makeGrupo()]}
+          alumnosSinGrupo={[]}
+        />
+      );
+
+      await user.click(screen.getAllByRole("button", { name: /^quitar$/i })[0]);
+
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("la confirmación advierte sobre los colaboradores cuando el grupo ya entregó", async () => {
+      const user = userEvent.setup();
+      const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+      render(
+        <GruposPanel
+          assignmentId="a1"
+          inscripcionesCerradas={false}
+          grupos={[makeGrupo({ tieneEntrega: true })]}
+          alumnosSinGrupo={[]}
+        />
+      );
+
+      await user.click(screen.getAllByRole("button", { name: /^quitar$/i })[0]);
+
+      expect(confirmSpy).toHaveBeenCalledWith(
+        expect.stringContaining("colaboradores desincronizados")
+      );
+    });
+
+    it("no advierte sobre colaboradores cuando el grupo no entregó", async () => {
+      const user = userEvent.setup();
+      const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+      render(
+        <GruposPanel
+          assignmentId="a1"
+          inscripcionesCerradas={false}
+          grupos={[makeGrupo({ tieneEntrega: false })]}
+          alumnosSinGrupo={[]}
+        />
+      );
+
+      await user.click(screen.getAllByRole("button", { name: /^quitar$/i })[0]);
+
+      expect(confirmSpy).toHaveBeenCalledWith(
+        expect.not.stringContaining("colaboradores")
+      );
+    });
+  });
+
+  describe("mover integrante", () => {
+    it("no muestra 'Mover a…' si no hay otro grupo con cupo", () => {
+      render(
+        <GruposPanel
+          assignmentId="a1"
+          inscripcionesCerradas={false}
+          grupos={[makeGrupo()]}
+          alumnosSinGrupo={[]}
+        />
+      );
+      expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    });
+
+    it("el botón Mover está deshabilitado hasta elegir un grupo destino", () => {
+      render(
+        <GruposPanel
+          assignmentId="a1"
+          inscripcionesCerradas={false}
+          grupos={[makeGrupo({ id: "g1" }), makeGrupo({ id: "g2", nombre: "Los Monoides", miembros: [] })]}
+          alumnosSinGrupo={[]}
+        />
+      );
+      expect(screen.getAllByRole("button", { name: /^mover$/i })[0]).toBeDisabled();
+    });
+
+    it("llama al PUT del grupo elegido y refresca", async () => {
+      const user = userEvent.setup();
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      mockFetch(true);
+      render(
+        <GruposPanel
+          assignmentId="a1"
+          inscripcionesCerradas={false}
+          grupos={[makeGrupo({ id: "g1" }), makeGrupo({ id: "g2", nombre: "Los Monoides", miembros: [] })]}
+          alumnosSinGrupo={[]}
+        />
+      );
+
+      await user.selectOptions(screen.getAllByRole("combobox")[0], "g2");
+      await user.click(screen.getAllByRole("button", { name: /^mover$/i })[0]);
+
+      await waitFor(() => {
+        expect(fetch).toHaveBeenCalledWith(
+          "/api/assignments/a1/grupos/g2/miembros/ana",
+          { method: "PUT" }
+        );
+      });
+      await waitFor(() => expect(mockRouterRefresh).toHaveBeenCalled());
+    });
+  });
+
+  describe("agregar alumno sin grupo", () => {
+    it("no muestra el selector si ningún grupo tiene cupo", () => {
+      render(
+        <GruposPanel
+          assignmentId="a1"
+          inscripcionesCerradas={false}
+          grupos={[makeGrupo({ estaLleno: true })]}
+          alumnosSinGrupo={[makeAlumnoSinGrupo()]}
+        />
+      );
+      expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    });
+
+    it("llama al PUT del grupo elegido y refresca", async () => {
+      const user = userEvent.setup();
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      mockFetch(true);
+      render(
+        <GruposPanel
+          assignmentId="a1"
+          inscripcionesCerradas={false}
+          grupos={[makeGrupo({ id: "g2", nombre: "Los Monoides" })]}
+          alumnosSinGrupo={[makeAlumnoSinGrupo({ username: "carlos" })]}
+        />
+      );
+
+      await user.selectOptions(screen.getByRole("combobox"), "g2");
+      await user.click(screen.getByRole("button", { name: /^agregar$/i }));
+
+      await waitFor(() => {
+        expect(fetch).toHaveBeenCalledWith(
+          "/api/assignments/a1/grupos/g2/miembros/carlos",
+          { method: "PUT" }
+        );
+      });
+      await waitFor(() => expect(mockRouterRefresh).toHaveBeenCalled());
     });
   });
 });
