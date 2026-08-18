@@ -1,5 +1,6 @@
 import { getEM } from "@/lib/db";
-import { LockMode, type EntityManager } from "@mikro-orm/core";
+import { LockMode } from "@mikro-orm/core";
+import type { EntityManager } from "@mikro-orm/postgresql";
 import {
   Grupo,
   Alumno,
@@ -300,11 +301,13 @@ async function lockearMembresia(
   assignmentId: string,
   alumnoId: string
 ): Promise<void> {
-  await transaction
-    .getConnection()
-    .execute("select pg_advisory_xact_lock(hashtextextended(?, 0))", [
-      `membresia:${assignmentId}:${alumnoId}`,
-    ]);
+  // `transaction.execute(...)` — no `transaction.getConnection().execute(...)`:
+  // este último no hereda el contexto de transacción activo y corre en una
+  // conexión aparte del pool, así que el advisory lock (transaccional, se
+  // libera solo) queda tomado y liberado al instante sin serializar nada.
+  await transaction.execute("select pg_advisory_xact_lock(hashtextextended(?, 0))", [
+    `membresia:${assignmentId}:${alumnoId}`,
+  ]);
 }
 
 // Saca al alumno de su grupo. Atómico: el chequeo de si el grupo ya entregó
