@@ -417,7 +417,7 @@ describe("unirseAGrupo", () => {
         assignmentId: "a-otro",
         grupoId: "g1",
         alumnoId: "alumno-ana",
-        rol: ESTUDIANTE,
+        usuario: fakeUsuario("ana"),
       })
     ).rejects.toBeInstanceOf(GrupoNoEncontradoError);
 
@@ -434,7 +434,7 @@ describe("unirseAGrupo", () => {
       .mockResolvedValueOnce(null); // enOtroGrupo
     mockTx.findOneOrFail.mockResolvedValueOnce(ana); // Alumno
 
-    const resultado = await unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", rol: ESTUDIANTE });
+    const resultado = await unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", usuario: fakeUsuario("ana") });
 
     expect(resultado).toBe(grupo);
     expect(mockTx.findOne).toHaveBeenNthCalledWith(
@@ -468,7 +468,7 @@ describe("unirseAGrupo", () => {
     mockTx.findOne.mockResolvedValueOnce(grupo);
     mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
-    const resultado = await unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", rol: ESTUDIANTE });
+    const resultado = await unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", usuario: fakeUsuario("ana") });
 
     expect(resultado).toBe(grupo);
     expect(mockTx.flush).not.toHaveBeenCalled();
@@ -482,7 +482,7 @@ describe("unirseAGrupo", () => {
     mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
     await expect(
-      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", rol: ESTUDIANTE })
+      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", usuario: fakeUsuario("ana") })
     ).rejects.toBeInstanceOf(InscripcionesCerradasError);
   });
 
@@ -497,7 +497,7 @@ describe("unirseAGrupo", () => {
     mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
     await expect(
-      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", rol: ESTUDIANTE })
+      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", usuario: fakeUsuario("ana") })
     ).rejects.toBeInstanceOf(AlumnoYaEnGrupoDelAssignmentError);
     expect(mockTx.flush).not.toHaveBeenCalled();
   });
@@ -514,7 +514,7 @@ describe("unirseAGrupo", () => {
     mockTx.findOneOrFail.mockResolvedValueOnce(cora);
 
     await expect(
-      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-cora", rol: ESTUDIANTE })
+      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-cora", usuario: fakeUsuario("cora") })
     ).rejects.toBeInstanceOf(GrupoLlenoError);
   });
 
@@ -527,7 +527,7 @@ describe("unirseAGrupo", () => {
       .mockResolvedValueOnce(null);
     mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
-    await unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", rol: ESTUDIANTE });
+    await unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", usuario: fakeUsuario("ana") });
 
     expect(mockEm.transactional).toHaveBeenCalledTimes(1);
   });
@@ -545,7 +545,7 @@ describe("unirseAGrupo", () => {
         assignmentId: "a1",
         grupoId: "g1",
         alumnoId: "alumno-ana",
-        rol: ESTUDIANTE,
+        usuario: fakeUsuario("ana"),
       })
     ).rejects.toBeInstanceOf(AccesoAssignmentProhibidoError);
 
@@ -566,7 +566,7 @@ describe("unirseAGrupo", () => {
         assignmentId: "a1",
         grupoId: "g1",
         alumnoId: "alumno-ana",
-        rol: ESTUDIANTE,
+        usuario: fakeUsuario("ana"),
       })
     ).rejects.toBeInstanceOf(AssignmentNoDisponibleError);
     expect(mockTx.flush).not.toHaveBeenCalled();
@@ -587,7 +587,7 @@ describe("unirseAGrupo", () => {
         assignmentId: "a1",
         grupoId: "g1",
         alumnoId: "alumno-ana",
-        rol: DOCENTE,
+        usuario: fakeUsuario("ana", DOCENTE),
       })
     ).resolves.toBe(grupo);
 
@@ -609,7 +609,7 @@ describe("unirseAGrupo", () => {
         assignmentId: "a1",
         grupoId: "g1",
         alumnoId: "alumno-ana",
-        rol: ESTUDIANTE,
+        usuario: fakeUsuario("ana"),
       })
     ).rejects.toMatchObject({
       constructor: AlumnoYaEnGrupoDelAssignmentError,
@@ -1052,9 +1052,20 @@ describe("moverAlumnoDeGrupo", () => {
       orden.push("addMember");
       return addMemberOriginal(alumno);
     });
-    mockTx.flush.mockImplementation(async () => {
-      orden.push("flush");
-    });
+    // Once x3 (no `mockImplementation` a secas): moverAlumnoDeGrupo flushea
+    // exactamente 3 veces en este camino (removeMember, addMember, auditoría).
+    // Con un `mockImplementation` sin acotar, el override se filtra a los
+    // tests que corren después en este mismo archivo.
+    mockTx.flush
+      .mockImplementationOnce(async () => {
+        orden.push("flush");
+      })
+      .mockImplementationOnce(async () => {
+        orden.push("flush");
+      })
+      .mockImplementationOnce(async () => {
+        orden.push("flush");
+      });
 
     await moverAlumnoDeGrupo({
       assignmentId: "a1",

@@ -393,11 +393,26 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
     // No importa cuál gana la carrera: si la salida gana, borra el grupo y el
     // insert de la entrega falla por la FK (no crea una entrega huérfana). Si
     // la entrega gana, la salida la ve al re-leer bajo el lock y no borra el
-    // grupo. En ningún caso queda una entrega con grupo_id NULL.
-    const huerfanas = await orm.em
-      .getConnection()
-      .execute<{ count: string }[]>(`select count(*) from "entrega" where "grupo_id" is null`);
-    expect(Number(huerfanas[0]?.count)).toBe(0);
+    // grupo. Estado final: o existen ambos y la entrega referencia al grupo
+    // seedeado, o no existe ninguno de los dos — nunca uno sin el otro.
+    const [grupoRows, entregaRows] = await Promise.all([
+      orm.em
+        .getConnection()
+        .execute<{ id: string }[]>(`select "id" from "grupo" where "id" = ?`, [seed.grupoIds[0]]),
+      orm.em
+        .getConnection()
+        .execute<{ grupo_id: string | null }[]>(
+          `select "grupo_id" from "entrega" where "assignment_id" = ?`,
+          [seed.assignmentId]
+        ),
+    ]);
+
+    if (entregaRows.length > 0) {
+      expect(grupoRows).toHaveLength(1);
+      expect(entregaRows[0]?.grupo_id).toBe(seed.grupoIds[0]);
+    } else {
+      expect(grupoRows).toHaveLength(0);
+    }
   });
 
   it("un intercambio simétrico entre dos alumnos resuelve sin deadlock", async () => {

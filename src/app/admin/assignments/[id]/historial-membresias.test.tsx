@@ -95,4 +95,29 @@ describe("HistorialDeMembresias", () => {
     expect(html).toContain("membresiaPage=1");
     expect(html).toContain("membresiaPage=3");
   });
+
+  it("conserva repoDeletionPage al paginar, para no perder el otro historial", () => {
+    const html = renderToStaticMarkup(
+      <HistorialDeMembresias
+        assignmentId="a1"
+        historial={historial([cambio()], { page: 2, total: 60, totalPages: 3 })}
+        repoDeletionPage={4}
+      />
+    );
+
+    expect(html).toContain("membresiaPage=1&amp;repoDeletionPage=4");
+    expect(html).toContain("membresiaPage=3&amp;repoDeletionPage=4");
+  });
+
+  it("no agrega repoDeletionPage cuando es la página 1 (o no está seteada)", () => {
+    const html = renderToStaticMarkup(
+      <HistorialDeMembresias
+        assignmentId="a1"
+        historial={historial([cambio()], { page: 2, total: 60, totalPages: 3 })}
+        repoDeletionPage={1}
+      />
+    );
+
+    expect(html).not.toContain("repoDeletionPage");
+  });
 });

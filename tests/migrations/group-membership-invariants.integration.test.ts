@@ -31,6 +31,11 @@ import {
   upsertGrupoConMiembro,
 } from "../../src/lib/repositories/GrupoRepository";
 import { Alumno, GrupalAssignment, ESTUDIANTE } from "../../src/domain/entities";
+import type { PdepUser } from "../../src/types";
+
+function fakeUsuario(githubUsername: string): PdepUser {
+  return { githubUsername, name: githubUsername, image: "", rol: ESTUDIANTE };
+}
 
 const PREVIOUS_MIGRATION =
   "Migration20260610120000_add_google_group_state_to_alumno";
@@ -417,7 +422,7 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
           assignmentId: seed.assignmentId,
           grupoId: seed.grupoIds[0]!,
           alumnoId,
-          rol: ESTUDIANTE,
+          usuario: fakeUsuario(alumnoId),
         })
       )
     );
@@ -443,7 +448,7 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
           assignmentId: seed.assignmentId,
           grupoId,
           alumnoId: seed.alumnoIds[0]!,
-          rol: ESTUDIANTE,
+          usuario: fakeUsuario(seed.alumnoIds[0]!),
         })
       )
     );

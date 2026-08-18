@@ -8,7 +8,13 @@ import {
 import { randomUUID } from "node:crypto";
 import type { OrigenCambioMembresia } from "./RolDeUsuario";
 
-export type AccionCambioMembresia = "alta" | "baja" | "cambio";
+// Única fuente de verdad para los valores de cada enum: el tipo se deriva de
+// acá en vez de listarse aparte, para que no puedan desincronizarse entre el
+// tipo de TS y los `items` que MikroORM usa para el check constraint.
+export const ACCIONES_CAMBIO_MEMBRESIA = ["alta", "baja", "cambio"] as const;
+export type AccionCambioMembresia = (typeof ACCIONES_CAMBIO_MEMBRESIA)[number];
+
+const ORIGENES_CAMBIO_MEMBRESIA: readonly OrigenCambioMembresia[] = ["alumno", "docente"];
 
 /**
  * Auditoría de altas, bajas y cambios de integrantes de un grupo (issue #50).
@@ -54,12 +60,12 @@ export class CambioDeMembresia {
   @Property({ type: "string", nullable: true })
   grupoDestinoNombre?: string;
 
-  @Enum({ items: ["alta", "baja", "cambio"] })
+  @Enum({ items: [...ACCIONES_CAMBIO_MEMBRESIA] })
   accion!: AccionCambioMembresia;
 
   // Quién originó el cambio: el propio alumno (self-service) o un docente
   // administrando integrantes. Resuelto por `RolDeUsuario.origenDeAuditoria()`.
-  @Enum({ items: ["alumno", "docente"] })
+  @Enum({ items: [...ORIGENES_CAMBIO_MEMBRESIA] })
   origen!: OrigenCambioMembresia;
 
   @Property({ type: "string" })

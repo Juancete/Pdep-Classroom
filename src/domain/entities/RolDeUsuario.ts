@@ -90,9 +90,17 @@ export abstract class RolDeUsuario {
       this.autorizarCambioDeMembresia(contexto);
       return null;
     } catch (error) {
-      return error instanceof Error
-        ? error.message
-        : "No se puede modificar el grupo.";
+      // Sólo los errores de dominio que `autorizarCambioDeMembresia` puede
+      // lanzar se traducen a motivo de bloqueo. Cualquier otra falla (un
+      // `TypeError` por un contexto mal armado, por ejemplo) es un bug real
+      // que tiene que romper fuerte, no disfrazarse de "grupo bloqueado".
+      if (
+        error instanceof InscripcionesCerradasError ||
+        error instanceof GrupoConEntregaError
+      ) {
+        return error.message;
+      }
+      throw error;
     }
   }
 }
@@ -188,5 +196,8 @@ export const ESTUDIANTE: RolDeUsuario = new Estudiante();
  * sola vez, en la callback `session()` de NextAuth.
  */
 export function resolverRol(githubUsername: string, adminUsernames: string[]): RolDeUsuario {
-  return adminUsernames.includes(githubUsername.toLowerCase()) ? DOCENTE : ESTUDIANTE;
+  const usernameNormalizado = githubUsername.toLowerCase();
+  return adminUsernames.some((admin) => admin.toLowerCase() === usernameNormalizado)
+    ? DOCENTE
+    : ESTUDIANTE;
 }

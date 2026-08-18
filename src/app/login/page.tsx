@@ -5,6 +5,11 @@ export default function LoginPage() {
     .split(",")
     .map((username) => username.trim())
     .filter(Boolean);
+  // Mismas dos condiciones que registran el provider en auth.config.ts: si
+  // acá se mostrara el panel sin que el provider exista, el login fallaría
+  // silenciosamente al tocar cualquiera de los botones.
+  const devLoginHabilitado =
+    process.env.NODE_ENV === "development" && process.env.ENABLE_DEV_LOGIN === "true";
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
@@ -31,7 +36,7 @@ export default function LoginPage() {
         </p>
       </div>
 
-      {process.env.NODE_ENV === "development" && (
+      {devLoginHabilitado && (
         <div
           className="bg-amber-50 border border-amber-200 rounded-xl p-6 w-full max-w-sm"
           data-testid="dev-login"

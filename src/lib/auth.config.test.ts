@@ -24,10 +24,8 @@ function providerIds(authConfig: typeof AuthConfigType): string[] {
 }
 
 describe("authConfig", () => {
-  const originalNodeEnv = process.env.NODE_ENV;
-
   afterEach(() => {
-    vi.stubEnv("NODE_ENV", originalNodeEnv ?? "test");
+    vi.unstubAllEnvs();
   });
 
   it("siempre registra el provider de GitHub", async () => {
@@ -37,12 +35,21 @@ describe("authConfig", () => {
 
   it("no registra el login de desarrollo fuera de NODE_ENV=development", async () => {
     vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("ENABLE_DEV_LOGIN", "true");
     const authConfig = await importAuthConfig();
     expect(providerIds(authConfig)).not.toContain("dev-login");
   });
 
-  it("registra el login de desarrollo cuando NODE_ENV=development", async () => {
+  it("no registra el login de desarrollo si falta ENABLE_DEV_LOGIN, aunque NODE_ENV sea development", async () => {
     vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("ENABLE_DEV_LOGIN", "");
+    const authConfig = await importAuthConfig();
+    expect(providerIds(authConfig)).not.toContain("dev-login");
+  });
+
+  it("registra el login de desarrollo cuando NODE_ENV=development y ENABLE_DEV_LOGIN=true", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("ENABLE_DEV_LOGIN", "true");
     const authConfig = await importAuthConfig();
     expect(providerIds(authConfig)).toContain("dev-login");
   });
@@ -54,6 +61,7 @@ describe("authConfig", () => {
 
     beforeEach(() => {
       vi.stubEnv("NODE_ENV", "development");
+      vi.stubEnv("ENABLE_DEV_LOGIN", "true");
     });
 
     it("toma el username del profile de GitHub cuando hay uno", async () => {

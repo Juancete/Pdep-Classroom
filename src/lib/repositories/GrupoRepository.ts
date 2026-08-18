@@ -241,9 +241,10 @@ export async function unirseAGrupo(params: {
   assignmentId: string;
   grupoId: string;
   alumnoId: string;
-  rol: RolDeUsuario;
+  usuario: PdepUser;
 }): Promise<Grupo> {
-  const { assignmentId, grupoId, alumnoId, rol } = params;
+  const { assignmentId, grupoId, alumnoId, usuario } = params;
+  const rol = usuario.rol;
   const entityManager = await getEM();
 
   return entityManager.transactional(async (transaction) => {
@@ -304,7 +305,7 @@ export async function unirseAGrupo(params: {
           grupoDestinoNombre: grupo.nombre,
           accion: "alta",
           origen: rol.origenDeAuditoria(),
-          realizadoPor: alumno.githubUsername,
+          realizadoPor: usuario.githubUsername,
           grupoOrigenTeniaEntrega: false,
           grupoOrigenEliminado: false,
         });
@@ -361,7 +362,7 @@ export async function salirDeGrupo(params: {
 
   return entityManager.transactional(async (transaction) => {
     const alumno = await transaction.findOneOrFail(Alumno, {
-      githubUsername: { $ilike: githubUsername },
+      githubUsername: Alumno.normalizarUsername(githubUsername),
     });
 
     await lockearMembresia(transaction, assignmentId, alumno.id);
@@ -447,7 +448,7 @@ export async function moverAlumnoDeGrupo(params: {
 
   return entityManager.transactional(async (transaction) => {
     const alumno = await transaction.findOneOrFail(Alumno, {
-      githubUsername: { $ilike: githubUsername },
+      githubUsername: Alumno.normalizarUsername(githubUsername),
     });
 
     await lockearMembresia(transaction, assignmentId, alumno.id);

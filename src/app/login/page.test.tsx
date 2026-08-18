@@ -38,25 +38,36 @@ describe("Login page", () => {
   });
 
   it("no muestra el modo desarrollo fuera de NODE_ENV=development", () => {
+    // Explícito en vez de confiar en el NODE_ENV heredado del proceso (que
+    // hoy es "test" al correr vitest, pero no hay garantía de eso): sin este
+    // stub, el test podría pasar por accidente del entorno y no por la
+    // lógica que realmente estamos cubriendo.
+    vi.stubEnv("NODE_ENV", "production");
     const element = LoginPage();
     const html = renderToStaticMarkup(element);
     expect(html).not.toContain('data-testid="dev-login"');
+    vi.unstubAllEnvs();
+  });
+
+  it("no muestra el modo desarrollo si falta ENABLE_DEV_LOGIN, aunque NODE_ENV sea development", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const element = LoginPage();
+    const html = renderToStaticMarkup(element);
+    expect(html).not.toContain('data-testid="dev-login"');
+    vi.unstubAllEnvs();
   });
 
   describe("modo desarrollo", () => {
-    const originalNodeEnv = process.env.NODE_ENV;
-    const originalAdmins = process.env.ADMIN_GITHUB_USERNAMES;
-
     beforeEach(() => {
       vi.stubEnv("NODE_ENV", "development");
+      vi.stubEnv("ENABLE_DEV_LOGIN", "true");
     });
 
     afterEach(() => {
-      vi.stubEnv("NODE_ENV", originalNodeEnv ?? "test");
-      vi.stubEnv("ADMIN_GITHUB_USERNAMES", originalAdmins ?? "");
+      vi.unstubAllEnvs();
     });
 
-    it("aparece cuando NODE_ENV es development", () => {
+    it("aparece cuando NODE_ENV es development y ENABLE_DEV_LOGIN=true", () => {
       const element = LoginPage();
       const html = renderToStaticMarkup(element);
       expect(html).toContain('data-testid="dev-login"');

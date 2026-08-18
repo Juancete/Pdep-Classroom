@@ -83,13 +83,13 @@ describe("POST /api/assignments/[id]/grupos/[grupoId]/join", () => {
     expect(data.miembros).toContain("ana");
   });
 
-  it("llama a unirseAGrupo con grupoId y alumnoId", async () => {
+  it("llama a unirseAGrupo con grupoId, alumnoId y el usuario actor", async () => {
     await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
     expect(mockUnirseAGrupo).toHaveBeenCalledWith({
       assignmentId: "a1",
       grupoId: "g1",
       alumnoId: "alumno-ana",
-      rol: ESTUDIANTE,
+      usuario: makeUser(),
     });
   });
 
@@ -99,7 +99,7 @@ describe("POST /api/assignments/[id]/grupos/[grupoId]/join", () => {
     await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
 
     expect(mockUnirseAGrupo).toHaveBeenCalledWith(
-      expect.objectContaining({ rol: DOCENTE })
+      expect.objectContaining({ usuario: expect.objectContaining({ rol: DOCENTE }) })
     );
   });
 

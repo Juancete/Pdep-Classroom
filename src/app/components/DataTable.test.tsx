@@ -135,6 +135,37 @@ describe("DataTable", () => {
     expect(root.style.getPropertyValue("--data-min-w")).toBe("900px");
   });
 
+  it("el ancho mínimo de la fila sólo aplica desde md (mobile no scrollea horizontal)", () => {
+    const { container } = render(
+      <DataTable columns="2fr 1fr 1fr" minWidth="900px">
+        <DataHeader>
+          <DataHeaderCell>A</DataHeaderCell>
+        </DataHeader>
+        <DataBody>
+          <DataRow>
+            <DataCell label="A">a1</DataCell>
+          </DataRow>
+        </DataBody>
+      </DataTable>
+    );
+
+    const row = screen.getByText("a1").closest('[role="row"]') as HTMLElement;
+    expect(row).toBeInTheDocument();
+    // La fila es `block` en mobile: ninguna clase de min-width sin el
+    // prefijo `md:` — el ancho mínimo sólo puede venir de esa variante.
+    const clasesMinWidthSinMd = row.className
+      .split(/\s+/)
+      .filter((clase) => clase.includes("min-w-") && !clase.startsWith("md:"));
+    expect(clasesMinWidthSinMd).toEqual([]);
+    expect(row.className).toContain("md:min-w-[var(--data-min-w,auto)]");
+    expect(row.style.minWidth).toBe("");
+
+    const headerRow = container.querySelector('[role="columnheader"]')!
+      .parentElement as HTMLElement;
+    expect(headerRow.className).toContain("md:min-w-[var(--data-min-w,auto)]");
+    expect(headerRow.style.minWidth).toBe("");
+  });
+
   it("DataBody envuelve las filas", () => {
     render(
       <DataTable columns="1fr">
