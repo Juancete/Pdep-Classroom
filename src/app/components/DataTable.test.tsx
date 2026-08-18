@@ -111,6 +111,30 @@ describe("DataTable", () => {
     expect(screen.getByText("No hay nada todavía")).toBeInTheDocument();
   });
 
+  it("sin minWidth mantiene overflow-hidden y no fija --data-min-w", () => {
+    const { container } = render(
+      <DataTable columns="1fr 1fr">
+        <div>x</div>
+      </DataTable>
+    );
+    const root = container.firstChild as HTMLElement;
+    expect(root.className).toContain("overflow-hidden");
+    expect(root.className).not.toContain("overflow-x-auto");
+    expect(root.style.getPropertyValue("--data-min-w")).toBe("");
+  });
+
+  it("con minWidth scrollea horizontal en vez de aplastar columnas", () => {
+    const { container } = render(
+      <DataTable columns="2fr 1fr 1fr" minWidth="900px">
+        <div>x</div>
+      </DataTable>
+    );
+    const root = container.firstChild as HTMLElement;
+    expect(root.className).toContain("overflow-x-auto");
+    expect(root.className).not.toContain("overflow-hidden");
+    expect(root.style.getPropertyValue("--data-min-w")).toBe("900px");
+  });
+
   it("DataBody envuelve las filas", () => {
     render(
       <DataTable columns="1fr">

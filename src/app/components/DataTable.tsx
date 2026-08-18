@@ -19,6 +19,12 @@ interface DataTableProps {
   className?: string;
   /** Si true, no aplica el contenedor (bg/borde/rounded). Usalo cuando el padre envuelve. */
   bare?: boolean;
+  /**
+   * Ancho mínimo del grid (ej. "1100px") para tablas con muchas columnas:
+   * en vez de aplastar cada columna hasta amontonar el contenido, el
+   * contenedor scrollea horizontalmente a partir de ese ancho.
+   */
+  minWidth?: string;
 }
 
 export function DataTable({
@@ -26,11 +32,15 @@ export function DataTable({
   children,
   className = "",
   bare = false,
+  minWidth,
 }: DataTableProps) {
-  const style = { ["--data-cols" as string]: columns } as CSSProperties;
-  const containerClass = bare
-    ? ""
-    : "bg-white border border-gray-200 rounded-lg overflow-hidden";
+  const style = {
+    ["--data-cols" as string]: columns,
+    ...(minWidth ? { ["--data-min-w" as string]: minWidth } : {}),
+  } as CSSProperties;
+  const baseClass = bare ? "" : "bg-white border border-gray-200 rounded-lg";
+  const overflowClass = minWidth ? "overflow-x-auto" : bare ? "" : "overflow-hidden";
+  const containerClass = [baseClass, overflowClass].filter(Boolean).join(" ");
   return (
     <div role="table" className={`${containerClass} ${className}`} style={style}>
       {children}
@@ -38,7 +48,10 @@ export function DataTable({
   );
 }
 
-const ROW_TEMPLATE = { gridTemplateColumns: "var(--data-cols)" } as CSSProperties;
+const ROW_TEMPLATE = {
+  gridTemplateColumns: "var(--data-cols)",
+  minWidth: "var(--data-min-w, auto)",
+} as CSSProperties;
 
 export function DataHeader({ children }: { children: ReactNode }) {
   return (

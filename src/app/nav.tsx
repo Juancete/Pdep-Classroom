@@ -30,7 +30,7 @@ export async function Nav() {
 
   return (
     <nav className="bg-pdep-900 text-white">
-      <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
         <Link href="/" className="font-bold text-lg tracking-tight">
           PdeP <span className="font-light text-pdep-200">Classroom</span>
         </Link>

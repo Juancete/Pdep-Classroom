@@ -90,7 +90,10 @@ export default async function AdminAssignmentsPage(props: {
             : "No hay assignments todavía. Creá el primero."}
         </DataEmpty>
       ) : (
-        <DataTable columns="2fr 100px 1fr 1fr 1fr 1.5fr 90px 110px 180px">
+        <DataTable
+          columns="2fr 100px 1fr 1fr 1fr 1.5fr 90px 110px 180px"
+          minWidth="1200px"
+        >
           <DataHeader>
             <DataHeaderCell>Título</DataHeaderCell>
             <DataHeaderCell>Estado</DataHeaderCell>
