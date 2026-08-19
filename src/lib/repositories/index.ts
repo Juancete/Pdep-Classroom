@@ -46,7 +46,7 @@ export {
   createEntrega,
   createOrGetEntrega,
   crearEntregaSiAssignmentDisponible,
-  actualizarAutogradingDeEntrega,
+  actualizarCIDeEntrega,
 } from "./EntregaRepository";
 
 export {

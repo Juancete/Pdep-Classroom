@@ -3,11 +3,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { filterEntregas, EntregasTable } from "./entregas-table";
 import type { EntregaRow } from "./entregas-table";
 
-// AutogradingSyncButton/AutogradingRerunButton usan useRouter — no hay
-// Router context en un render estático fuera de Next, hay que mockearlo
-// igual que en delete-repos-button.test.tsx. El efecto de auto-sincronizar
-// al montar no corre en `renderToStaticMarkup` (no hay fase de commit), así
-// que no hace falta mockear `fetch` acá.
+// CISyncButton/CIRerunButton usan useRouter — no hay Router context en un
+// render estático fuera de Next, hay que mockearlo igual que en
+// delete-repos-button.test.tsx. El efecto de auto-sincronizar al montar no
+// corre en `renderToStaticMarkup` (no hay fase de commit), así que no hace
+// falta mockear `fetch` acá.
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));
@@ -24,9 +24,9 @@ function makeRow(overrides?: Partial<EntregaRow>): EntregaRow {
     estadoRepo: "activo",
     createdAt: "2/1/2026",
     nombreCompleto: "García, Juan",
-    autograding: {
+    ci: {
       resultadoNombre: "sin_consultar",
-      runUrl: undefined,
+      detalleUrl: undefined,
       permiteReejecucion: false,
     },
     ...overrides,
@@ -112,7 +112,7 @@ describe("EntregasTable", () => {
     expect(html).toContain("Usuario(s)");
     expect(html).toContain("Nombre completo");
     expect(html).toContain("Repositorio");
-    expect(html).toContain("Autograding");
+    expect(html).toContain("CI");
     expect(html).toContain("Fecha");
   });
 

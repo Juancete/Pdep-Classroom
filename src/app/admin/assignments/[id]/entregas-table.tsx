@@ -10,10 +10,10 @@ import {
   DataCell,
 } from "@/app/components/DataTable";
 import { matcheaEntregaQuery } from "@/lib/entrega-query";
-import { AutogradingBadge } from "@/app/components/AutogradingBadge";
-import { AutogradingSyncButton } from "./autograding-sync-button";
-import { AutogradingRerunButton } from "./autograding-rerun-button";
-import type { NombreResultadoAutograding } from "@/domain/entities";
+import { CIBadge } from "@/app/components/CIBadge";
+import { CISyncButton } from "./ci-sync-button";
+import { CIRerunButton } from "./ci-rerun-button";
+import type { NombreResultadoCI } from "@/domain/entities";
 
 export type EntregaRow = {
   id: string;
@@ -24,9 +24,9 @@ export type EntregaRow = {
   estadoRepo: "borrado" | "activo" | "sin-repo";
   createdAt: string;
   nombreCompleto: string;
-  autograding: {
-    resultadoNombre: NombreResultadoAutograding;
-    runUrl?: string;
+  ci: {
+    resultadoNombre: NombreResultadoCI;
+    detalleUrl?: string;
     permiteReejecucion: boolean;
   };
 };
@@ -52,7 +52,7 @@ export function EntregasTable({
           Entregas aceptadas
         </h2>
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
-          <AutogradingSyncButton assignmentId={assignmentId} />
+          <CISyncButton assignmentId={assignmentId} />
           <input
             type="search"
             autoComplete="new-password"
@@ -76,7 +76,7 @@ export function EntregasTable({
             <DataHeaderCell>Nombre completo</DataHeaderCell>
             <DataHeaderCell>Usuario(s)</DataHeaderCell>
             <DataHeaderCell>Repositorio</DataHeaderCell>
-            <DataHeaderCell>Autograding</DataHeaderCell>
+            <DataHeaderCell>CI</DataHeaderCell>
             <DataHeaderCell>Fecha</DataHeaderCell>
           </DataHeader>
           <DataBody>
@@ -121,16 +121,16 @@ export function EntregasTable({
                     <span className="text-gray-400 text-xs">Sin repo</span>
                   )}
                 </DataCell>
-                <DataCell label="Autograding">
+                <DataCell label="CI">
                   <span className="inline-flex items-center gap-1.5">
-                    <AutogradingBadge
-                      resultadoNombre={entrega.autograding.resultadoNombre}
-                      runUrl={entrega.autograding.runUrl}
+                    <CIBadge
+                      resultadoNombre={entrega.ci.resultadoNombre}
+                      detalleUrl={entrega.ci.detalleUrl}
                     />
-                    <AutogradingRerunButton
+                    <CIRerunButton
                       assignmentId={assignmentId}
                       entregaId={entrega.id}
-                      permiteReejecucion={entrega.autograding.permiteReejecucion}
+                      permiteReejecucion={entrega.ci.permiteReejecucion}
                     />
                   </span>
                 </DataCell>

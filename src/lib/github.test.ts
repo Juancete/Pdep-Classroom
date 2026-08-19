@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockDelete = vi.fn();
 const mockCreateUsingTemplate = vi.fn();
 const mockAddCollaborator = vi.fn();
-const mockListWorkflowRuns = vi.fn();
-const mockReRunWorkflow = vi.fn();
+const mockReposGet = vi.fn();
+const mockListForRef = vi.fn();
+const mockRerequestSuite = vi.fn();
 
 vi.mock("@octokit/rest", () => ({
   Octokit: class {
@@ -12,10 +13,11 @@ vi.mock("@octokit/rest", () => ({
       delete: mockDelete,
       createUsingTemplate: mockCreateUsingTemplate,
       addCollaborator: mockAddCollaborator,
+      get: mockReposGet,
     };
-    actions = {
-      listWorkflowRuns: mockListWorkflowRuns,
-      reRunWorkflow: mockReRunWorkflow,
+    checks = {
+      listForRef: mockListForRef,
+      rerequestSuite: mockRerequestSuite,
     };
   },
 }));
@@ -25,8 +27,8 @@ vi.mock("@octokit/auth-app", () => ({ createAppAuth: vi.fn() }));
 import {
   crearEntrega,
   deleteRepo,
-  getUltimaEjecucionAutograding,
-  reejecutarAutograding,
+  getEstadoCI,
+  reejecutarCI,
 } from "./github";
 import { NombreRepositorioDemasiadoLargoError } from "./naming";
 
@@ -109,91 +111,132 @@ describe("crearEntrega", () => {
   });
 });
 
-describe("getUltimaEjecucionAutograding", () => {
+describe("getEstadoCI", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockReposGet.mockResolvedValue({ data: { default_branch: "main" } });
   });
 
-  it("devuelve la última ejecución cuando hay al menos una run", async () => {
-    mockListWorkflowRuns.mockResolvedValue({
+  it("consulta los checks del branch por defecto y arma el detalle", async () => {
+    mockListForRef.mockResolvedValue({
       data: {
-        total_count: 3,
-        workflow_runs: [
+        total_count: 2,
+        check_runs: [
           {
-            id: 987654321,
-            html_url: "https://github.com/org/tp-ana/actions/runs/987654321",
-            head_sha: "abc123",
             status: "completed",
             conclusion: "success",
-            updated_at: "2026-08-19T10:00:00Z",
+            head_sha: "abc123",
+            completed_at: "2026-08-19T10:05:00Z",
+            started_at: "2026-08-19T10:00:00Z",
+            check_suite: { id: 111 },
+          },
+          {
+            status: "completed",
+            conclusion: "success",
+            head_sha: "abc123",
+            completed_at: "2026-08-19T10:03:00Z",
+            started_at: "2026-08-19T10:00:00Z",
+            check_suite: { id: 111 },
           },
         ],
       },
     });
 
-    await expect(getUltimaEjecucionAutograding("tp-ana")).resolves.toEqual({
-      tipo: "ejecucion",
-      runId: "987654321",
-      runUrl: "https://github.com/org/tp-ana/actions/runs/987654321",
+    await expect(getEstadoCI("tp-ana")).resolves.toEqual({
+      tipo: "checks",
+      checkSuiteIds: ["111"],
       commitSha: "abc123",
-      status: "completed",
-      conclusion: "success",
-      ejecutadoEn: "2026-08-19T10:00:00Z",
+      detalleUrl: expect.stringContaining("/tp-ana/commit/abc123/checks"),
+      ejecutadoEn: "2026-08-19T10:05:00Z",
+      checkRuns: [
+        { status: "completed", conclusion: "success" },
+        { status: "completed", conclusion: "success" },
+      ],
     });
-    expect(mockListWorkflowRuns).toHaveBeenCalledWith(
-      expect.objectContaining({
-        repo: "tp-ana",
-        workflow_id: "autograding.yml",
-        per_page: 1,
-      })
+    expect(mockReposGet).toHaveBeenCalledWith(
+      expect.objectContaining({ repo: "tp-ana" })
+    );
+    expect(mockListForRef).toHaveBeenCalledWith(
+      expect.objectContaining({ repo: "tp-ana", ref: "main" })
     );
   });
 
-  it("devuelve sin_ejecuciones cuando el workflow existe pero total_count es 0", async () => {
-    mockListWorkflowRuns.mockResolvedValue({
-      data: { total_count: 0, workflow_runs: [] },
+  it("junta ids de check suite únicos cuando hay varios workflows", async () => {
+    mockListForRef.mockResolvedValue({
+      data: {
+        total_count: 2,
+        check_runs: [
+          {
+            status: "completed",
+            conclusion: "success",
+            head_sha: "abc123",
+            completed_at: "2026-08-19T10:00:00Z",
+            started_at: null,
+            check_suite: { id: 111 },
+          },
+          {
+            status: "completed",
+            conclusion: "success",
+            head_sha: "abc123",
+            completed_at: "2026-08-19T10:00:00Z",
+            started_at: null,
+            check_suite: { id: 222 },
+          },
+        ],
+      },
     });
 
-    await expect(getUltimaEjecucionAutograding("tp-nueva")).resolves.toEqual({
-      tipo: "sin_ejecuciones",
-    });
+    const resultado = await getEstadoCI("tp-multi");
+    expect(resultado.tipo).toBe("checks");
+    if (resultado.tipo === "checks") {
+      expect(resultado.checkSuiteIds.sort()).toEqual(["111", "222"]);
+    }
   });
 
-  it("devuelve sin_workflow ante un 404 (el repo no tiene autograding.yml)", async () => {
-    mockListWorkflowRuns.mockRejectedValue(requestError(404, "Not Found"));
-
-    await expect(getUltimaEjecucionAutograding("tp-sin-workflow")).resolves.toEqual({
-      tipo: "sin_workflow",
+  it("devuelve sin_ci cuando no hay ningún check run", async () => {
+    mockListForRef.mockResolvedValue({
+      data: { total_count: 0, check_runs: [] },
     });
+
+    await expect(getEstadoCI("tp-sin-ci")).resolves.toEqual({ tipo: "sin_ci" });
   });
 
-  it("propaga otros errores traducidos (403)", async () => {
-    mockListWorkflowRuns.mockRejectedValue(requestError(403, "Forbidden"));
+  it("propaga errores traducidos de repos.get (403)", async () => {
+    mockReposGet.mockRejectedValue(requestError(403, "Forbidden"));
 
-    await expect(getUltimaEjecucionAutograding("tp-prohibido")).rejects.toThrow(
-      "permisos suficientes"
-    );
+    await expect(getEstadoCI("tp-prohibido")).rejects.toThrow("permisos suficientes");
+    expect(mockListForRef).not.toHaveBeenCalled();
+  });
+
+  it("propaga errores traducidos de checks.listForRef", async () => {
+    mockListForRef.mockRejectedValue(requestError(403, "Forbidden"));
+
+    await expect(getEstadoCI("tp-prohibido")).rejects.toThrow("permisos suficientes");
   });
 });
 
-describe("reejecutarAutograding", () => {
+describe("reejecutarCI", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("pide el rerun con el run_id convertido a número", async () => {
-    mockReRunWorkflow.mockResolvedValue(undefined);
+  it("pide el rerequest de cada check suite convertido a número", async () => {
+    mockRerequestSuite.mockResolvedValue(undefined);
 
-    await reejecutarAutograding("tp-ana", "987654321");
+    await reejecutarCI("tp-ana", ["111", "222"]);
 
-    expect(mockReRunWorkflow).toHaveBeenCalledWith(
-      expect.objectContaining({ repo: "tp-ana", run_id: 987654321 })
+    expect(mockRerequestSuite).toHaveBeenCalledWith(
+      expect.objectContaining({ repo: "tp-ana", check_suite_id: 111 })
     );
+    expect(mockRerequestSuite).toHaveBeenCalledWith(
+      expect.objectContaining({ repo: "tp-ana", check_suite_id: 222 })
+    );
+    expect(mockRerequestSuite).toHaveBeenCalledTimes(2);
   });
 
   it("propaga errores traducidos", async () => {
-    mockReRunWorkflow.mockRejectedValue(requestError(404, "Not Found"));
+    mockRerequestSuite.mockRejectedValue(requestError(404, "Not Found"));
 
-    await expect(reejecutarAutograding("tp-ana", "1")).rejects.toThrow();
+    await expect(reejecutarCI("tp-ana", ["1"])).rejects.toThrow();
   });
 });

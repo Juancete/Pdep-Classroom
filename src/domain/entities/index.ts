@@ -41,11 +41,12 @@ export {
 } from "./Grupo";
 export { Entrega } from "./Entrega";
 export {
-  ResultadoAutograding,
-  resultadoDesdeRun,
-  NOMBRES_RESULTADO_AUTOGRADING,
-  type NombreResultadoAutograding,
-} from "./ResultadoAutograding";
+  ResultadoCI,
+  resultadoDesdeCheckRuns,
+  NOMBRES_RESULTADO_CI,
+  type NombreResultadoCI,
+  type CheckRunResumen,
+} from "./ResultadoCI";
 export {
   RepoDeletionAttempt,
   type RepoDeletionStatus,

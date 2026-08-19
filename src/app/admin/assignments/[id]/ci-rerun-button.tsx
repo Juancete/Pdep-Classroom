@@ -4,10 +4,10 @@ import { useRouter } from "next/navigation";
 import { useApiCall } from "@/app/hooks/useApiCall";
 import { PlayIcon, SpinnerIcon } from "@/app/components/icons";
 
-// Botón ícono-solo para pedir el rerun de la última ejecución de autograding
-// de una entrega — mismo idioma que `EstadoQuickActions`: `useApiCall`,
-// confirm() previo, `router.refresh()` al terminar.
-export function AutogradingRerunButton({
+// Botón ícono-solo para pedir la reejecución de CI de una entrega — mismo
+// idioma que `EstadoQuickActions`: `useApiCall`, confirm() previo,
+// `router.refresh()` al terminar.
+export function CIRerunButton({
   assignmentId,
   entregaId,
   permiteReejecucion,
@@ -20,11 +20,11 @@ export function AutogradingRerunButton({
   const { loading, error, call } = useApiCall();
 
   async function handleRerun() {
-    if (!confirm("¿Reejecutar el autograding de esta entrega?")) return;
+    if (!confirm("¿Reejecutar el CI de esta entrega?")) return;
 
     const ok = await call(async () => {
       const response = await fetch(
-        `/api/assignments/${assignmentId}/autograding/rerun`,
+        `/api/assignments/${assignmentId}/ci/rerun`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -47,10 +47,10 @@ export function AutogradingRerunButton({
         disabled={loading || !permiteReejecucion}
         title={
           permiteReejecucion
-            ? "Reejecutar autograding"
-            : "No hay una ejecución previa para reejecutar"
+            ? "Reejecutar CI"
+            : "No hay checks previos para reejecutar"
         }
-        aria-label="Reejecutar autograding"
+        aria-label="Reejecutar CI"
         className="inline-flex items-center justify-center p-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
       >
         {loading ? <SpinnerIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4" />}

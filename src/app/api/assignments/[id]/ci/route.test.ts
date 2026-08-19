@@ -16,22 +16,22 @@ vi.mock("@/lib/repositories", () => ({
     mockGetEntregaDeUsuario(assignmentId, githubUsername),
 }));
 
-vi.mock("@/lib/services/sincronizarAutograding", () => ({
-  sincronizarAutogradingDeEntregas: (entregas: unknown[], opts: unknown) =>
+vi.mock("@/lib/services/sincronizarCI", () => ({
+  sincronizarCIDeEntregas: (entregas: unknown[], opts: unknown) =>
     mockSincronizar(entregas, opts),
 }));
 
 import { POST } from "./route";
 
 function makeRequest(body: unknown = {}): Request {
-  return new Request("http://localhost/api/assignments/a1/autograding", {
+  return new Request("http://localhost/api/assignments/a1/ci", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
 
-describe("POST /api/assignments/[id]/autograding", () => {
+describe("POST /api/assignments/[id]/ci", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSincronizar.mockResolvedValue({ actualizadas: 1, omitidas: 0, fallidas: [] });

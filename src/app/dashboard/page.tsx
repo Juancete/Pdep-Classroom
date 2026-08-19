@@ -12,8 +12,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { Grupo } from "@/domain/entities";
 import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
-import { AutogradingBadge } from "@/app/components/AutogradingBadge";
-import { AutogradingRefreshButton } from "./autograding-refresh-button";
+import { CIBadge } from "@/app/components/CIBadge";
+import { CIRefreshButton } from "./ci-refresh-button";
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -157,14 +157,14 @@ export default async function DashboardPage() {
                 )}
                 {entrega && (
                   <div className="flex items-center gap-1">
-                    <AutogradingBadge
-                      resultadoNombre={entrega.autogradingResultadoNombre}
-                      runUrl={entrega.autogradingRunUrl}
+                    <CIBadge
+                      resultadoNombre={entrega.ciResultadoNombre}
+                      detalleUrl={entrega.ciDetalleUrl}
                     />
-                    <AutogradingRefreshButton assignmentId={assignment.id} />
+                    <CIRefreshButton assignmentId={assignment.id} />
                   </div>
                 )}
-                {entrega && entrega.autogradingResultadoNombre !== "sin_autograding" && (
+                {entrega && entrega.ciResultadoNombre !== "sin_ci" && (
                   <p className="text-[11px] text-gray-400">
                     Resultado automático — no es la nota final.
                   </p>
