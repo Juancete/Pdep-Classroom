@@ -189,6 +189,22 @@ export const DOCENTE: RolDeUsuario = new Docente();
 export const ESTUDIANTE: RolDeUsuario = new Estudiante();
 
 /**
+ * Nombre serializable de un rol — lo único de `RolDeUsuario` que puede viajar
+ * dentro del objeto de sesión de NextAuth. Auth.js clona ese objeto
+ * internamente antes de devolverlo desde `auth()`, y el clon no preserva el
+ * prototype de una instancia de clase: como `DOCENTE`/`ESTUDIANTE` no tienen
+ * datos propios (todo su comportamiento vive en el prototype), lo que
+ * sobrevive al clon es un objeto vacío sin métodos. Por eso la sesión guarda
+ * este string, no la instancia — y `rolDesdeNombre` la reconstruye del lado
+ * del consumidor, después del clon.
+ */
+export type NombreRolDeUsuario = "docente" | "alumno";
+
+export function rolDesdeNombre(nombre: NombreRolDeUsuario): RolDeUsuario {
+  return nombre === "docente" ? DOCENTE : ESTUDIANTE;
+}
+
+/**
  * Único punto de decisión de todo el sistema entre docente y alumno — la
  * frontera real (username → rol). Análogo a `EstadoAssignment.desdeNombre`,
  * pero acá no hay columna que leer: el rol se computa desde la lista de
