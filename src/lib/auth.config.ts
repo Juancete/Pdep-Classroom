@@ -1,8 +1,8 @@
 import GitHub from "next-auth/providers/github";
 import Credentials from "next-auth/providers/credentials";
 import type { NextAuthConfig } from "next-auth";
-import type { PdepUser } from "@/types";
-import { resolverRol } from "@/domain/entities/RolDeUsuario";
+import type { SessionPdepUser } from "@/types";
+import { resolverRol, DOCENTE } from "@/domain/entities/RolDeUsuario";
 
 const adminUsernames = (process.env.ADMIN_GITHUB_USERNAMES ?? "")
   .split(",")
@@ -55,13 +55,18 @@ export const authConfig: NextAuthConfig = {
 
     async session({ session, token }) {
       const ghUser = (token.githubUsername as string) ?? "";
-      const pdepUser: PdepUser = {
+      // rolNombre, no la instancia de RolDeUsuario: Auth.js clona este
+      // objeto internamente antes de devolverlo desde auth(), y el clon no
+      // preserva el prototype de una clase (ver el comentario de
+      // NombreRolDeUsuario). Los consumidores reconstruyen el rol real con
+      // rolDesdeNombre(...) — getCurrentUser() y getProxyRedirectPath().
+      const pdepUser: SessionPdepUser = {
         githubUsername: ghUser,
         name: session.user?.name ?? ghUser,
         image: session.user?.image ?? "",
-        rol: resolverRol(ghUser, adminUsernames),
+        rolNombre: resolverRol(ghUser, adminUsernames) === DOCENTE ? "docente" : "alumno",
       };
-      (session as unknown as { pdepUser: PdepUser }).pdepUser = pdepUser;
+      (session as unknown as { pdepUser: SessionPdepUser }).pdepUser = pdepUser;
       return session;
     },
   },

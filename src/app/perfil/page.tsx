@@ -6,13 +6,13 @@ import { verificarConsistenciaAlumno } from "@/lib/services/verificarConsistenci
 import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
 import { intentarSincronizarGoogleGroup } from "@/lib/services/intentarSincronizarGoogleGroup";
 import { isGoogleGroupsConfigured } from "@/lib/googleGroups";
-import type { PdepUser } from "@/types";
+import type { SessionPdepUser } from "@/types";
 
 export default async function PerfilPage() {
   const session = await auth();
   if (!session) redirect("/login");
 
-  const pdepUser = (session as unknown as { pdepUser: PdepUser }).pdepUser;
+  const pdepUser = (session as unknown as { pdepUser: SessionPdepUser }).pdepUser;
   const githubUsername = pdepUser.githubUsername;
 
   const alumno = await getAlumnoByGithub(githubUsername);
