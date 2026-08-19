@@ -130,10 +130,10 @@ export default async function AssignmentDetailPage(
         return alumno ? alumno.nombreCompleto : "—";
       })
       .join(" / "),
-    autograding: {
-      resultadoNombre: entrega.autogradingResultadoNombre,
-      runUrl: entrega.autogradingRunUrl,
-      permiteReejecucion: entrega.resultadoAutograding.permiteReejecucion(),
+    ci: {
+      resultadoNombre: entrega.ciResultadoNombre,
+      detalleUrl: entrega.ciDetalleUrl,
+      permiteReejecucion: entrega.resultadoCI.permiteReejecucion(),
     },
   }));
 

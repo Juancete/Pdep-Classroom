@@ -155,31 +155,28 @@ describe("migrations", () => {
     expect(migration).not.toContain("foreign key");
   });
 
-  it("agrega el resultado cacheado de autograding a entrega", () => {
+  it("agrega el resultado cacheado de CI a entrega", () => {
     const migration = readFileSync(
-      join(process.cwd(), "migrations", "Migration20260819120000_autograding.ts"),
+      join(process.cwd(), "migrations", "Migration20260819120000_ci_estado.ts"),
       "utf8"
     );
 
-    expect(migration).toContain('add column "autograding_resultado_nombre"');
+    expect(migration).toContain('add column "ci_resultado_nombre"');
     expect(migration).toContain("'sin_consultar'");
-    expect(migration).toContain("'sin_autograding'");
-    expect(migration).toContain("'sin_ejecuciones'");
+    expect(migration).toContain("'sin_ci'");
     expect(migration).toContain("'pendiente'");
-    expect(migration).toContain("'aprobado'");
-    expect(migration).toContain("'fallido'");
+    expect(migration).toContain("'passing'");
+    expect(migration).toContain("'failing'");
     expect(migration).toContain("'cancelado'");
     expect(migration).toContain("'error_infra'");
     expect(migration).toContain("default 'sin_consultar'");
-    expect(migration).toContain('"autograding_run_id" varchar(255) null');
-    expect(migration).toContain('"autograding_run_url" varchar(255) null');
-    expect(migration).toContain('"autograding_commit_sha" varchar(255) null');
-    expect(migration).toContain('"autograding_ejecutado_en" timestamptz null');
-    expect(migration).toContain('"autograding_actualizado_en" timestamptz null');
-    expect(migration).toContain('create index "entrega_autograding_resultado_idx"');
-    expect(migration).toContain(
-      'drop column "autograding_resultado_nombre"'
-    );
+    expect(migration).toContain('"ci_check_suite_ids" text[] not null default \'{}\'');
+    expect(migration).toContain('"ci_commit_sha" varchar(255) null');
+    expect(migration).toContain('"ci_detalle_url" varchar(255) null');
+    expect(migration).toContain('"ci_ejecutado_en" timestamptz null');
+    expect(migration).toContain('"ci_actualizado_en" timestamptz null');
+    expect(migration).toContain('create index "entrega_ci_resultado_idx"');
+    expect(migration).toContain('drop column "ci_resultado_nombre"');
     expect(migration).not.toContain("foreign key");
   });
 
@@ -260,18 +257,18 @@ describe("migrations", () => {
       })
     );
     expect(cambioMembresia?.foreignKeys).toEqual({});
-    expect(entrega?.columns).toHaveProperty("autograding_resultado_nombre");
-    expect(entrega?.columns.autograding_resultado_nombre).toMatchObject({
+    expect(entrega?.columns).toHaveProperty("ci_resultado_nombre");
+    expect(entrega?.columns.ci_resultado_nombre).toMatchObject({
       nullable: false,
       default: "'sin_consultar'",
     });
-    expect(entrega?.columns).toHaveProperty("autograding_run_id");
-    expect(entrega?.columns).toHaveProperty("autograding_run_url");
-    expect(entrega?.columns).toHaveProperty("autograding_commit_sha");
-    expect(entrega?.columns).toHaveProperty("autograding_ejecutado_en");
-    expect(entrega?.columns).toHaveProperty("autograding_actualizado_en");
+    expect(entrega?.columns).toHaveProperty("ci_check_suite_ids");
+    expect(entrega?.columns).toHaveProperty("ci_commit_sha");
+    expect(entrega?.columns).toHaveProperty("ci_detalle_url");
+    expect(entrega?.columns).toHaveProperty("ci_ejecutado_en");
+    expect(entrega?.columns).toHaveProperty("ci_actualizado_en");
     expect(entrega?.indexes).toContainEqual(
-      expect.objectContaining({ keyName: "entrega_autograding_resultado_idx" })
+      expect.objectContaining({ keyName: "entrega_ci_resultado_idx" })
     );
   });
 });

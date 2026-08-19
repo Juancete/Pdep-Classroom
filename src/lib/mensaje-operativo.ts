@@ -5,7 +5,7 @@ const MAX_ERROR_LENGTH = 1000;
  * redacta tokens y secretos que puedan haber quedado en el mensaje de un
  * error de GitHub, y trunca la longitud. Extraído de
  * `borrarRepositoriosDeAssignment.ts` (issue #50) para reutilizarlo también
- * en `sincronizarAutograding.ts` (issue #58).
+ * en `sincronizarCI.ts` (issue #58).
  */
 export function mensajeOperativo(error: unknown): string {
   const message = error instanceof Error ? error.message : "Error desconocido";

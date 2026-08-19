@@ -4,7 +4,7 @@ import { MikroORM } from "@mikro-orm/postgresql";
 import ormConfig from "../../mikro-orm.config";
 
 const PREVIOUS_MIGRATION = "Migration20260818120000_membership_audit";
-const AUTOGRADING_MIGRATION = "Migration20260819120000_autograding";
+const CI_MIGRATION = "Migration20260819120000_ci_estado";
 
 function getSafeTestDatabaseUrl(): string {
   const value = process.env.MIGRATION_TEST_DATABASE_URL;
@@ -41,7 +41,7 @@ async function insertAssignmentLegacy(
   );
 }
 
-describe("Migration20260819120000_autograding", () => {
+describe("Migration20260819120000_ci_estado", () => {
   let orm: MikroORM;
 
   beforeAll(async () => {
@@ -82,31 +82,31 @@ describe("Migration20260819120000_autograding", () => {
       [entregaId, assignmentId, `tp-juancito-${entregaId}`, "https://github.com/org/repo"]
     );
 
-    await orm.getMigrator().up({ to: AUTOGRADING_MIGRATION });
+    await orm.getMigrator().up({ to: CI_MIGRATION });
 
     const rows = await connection.execute<
       {
-        autograding_resultado_nombre: string;
-        autograding_run_id: string | null;
-        autograding_run_url: string | null;
-        autograding_commit_sha: string | null;
-        autograding_ejecutado_en: Date | null;
-        autograding_actualizado_en: Date | null;
+        ci_resultado_nombre: string;
+        ci_check_suite_ids: string[];
+        ci_commit_sha: string | null;
+        ci_detalle_url: string | null;
+        ci_ejecutado_en: Date | null;
+        ci_actualizado_en: Date | null;
       }[]
     >(
-      `select "autograding_resultado_nombre", "autograding_run_id", "autograding_run_url",
-              "autograding_commit_sha", "autograding_ejecutado_en", "autograding_actualizado_en"
+      `select "ci_resultado_nombre", "ci_check_suite_ids", "ci_commit_sha", "ci_detalle_url",
+              "ci_ejecutado_en", "ci_actualizado_en"
          from "entrega" where "id" = ?`,
       [entregaId]
     );
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.autograding_resultado_nombre).toBe("sin_consultar");
-    expect(rows[0]!.autograding_run_id).toBeNull();
-    expect(rows[0]!.autograding_run_url).toBeNull();
-    expect(rows[0]!.autograding_commit_sha).toBeNull();
-    expect(rows[0]!.autograding_ejecutado_en).toBeNull();
-    expect(rows[0]!.autograding_actualizado_en).toBeNull();
+    expect(rows[0]!.ci_resultado_nombre).toBe("sin_consultar");
+    expect(rows[0]!.ci_check_suite_ids).toEqual([]);
+    expect(rows[0]!.ci_commit_sha).toBeNull();
+    expect(rows[0]!.ci_detalle_url).toBeNull();
+    expect(rows[0]!.ci_ejecutado_en).toBeNull();
+    expect(rows[0]!.ci_actualizado_en).toBeNull();
   });
 
   it("una entrega nueva insertada después de la migración también nace en 'sin_consultar'", async () => {
@@ -130,14 +130,14 @@ describe("Migration20260819120000_autograding", () => {
       [entregaId, assignmentId, `tp-ana-${entregaId}`, "https://github.com/org/repo2"]
     );
 
-    const rows = await connection.execute<{ autograding_resultado_nombre: string }[]>(
-      `select "autograding_resultado_nombre" from "entrega" where "id" = ?`,
+    const rows = await connection.execute<{ ci_resultado_nombre: string }[]>(
+      `select "ci_resultado_nombre" from "entrega" where "id" = ?`,
       [entregaId]
     );
-    expect(rows[0]!.autograding_resultado_nombre).toBe("sin_consultar");
+    expect(rows[0]!.ci_resultado_nombre).toBe("sin_consultar");
   });
 
-  it("el check constraint rechaza un autograding_resultado_nombre desconocido", async () => {
+  it("el check constraint rechaza un ci_resultado_nombre desconocido", async () => {
     const connection = orm.em.getConnection();
     const comisionId = randomUUID();
     const assignmentId = randomUUID();
@@ -155,7 +155,7 @@ describe("Migration20260819120000_autograding", () => {
       connection.execute(
         `insert into "entrega"
           ("id", "assignment_id", "github_usernames", "repo_name", "repo_url",
-           "repo_deleted", "created_at", "autograding_resultado_nombre")
+           "repo_deleted", "created_at", "ci_resultado_nombre")
          values (?, ?, '{"invalido"}', ?, ?, false, now(), 'no_existe')`,
         [entregaId, assignmentId, `tp-invalido-${entregaId}`, "https://github.com/org/repo3"]
       )
@@ -163,10 +163,6 @@ describe("Migration20260819120000_autograding", () => {
   });
 
   it("no agrega ninguna foreign key nueva", async () => {
-    const migration = await import(
-      "../../migrations/Migration20260819120000_autograding"
-    );
-    expect(migration).toBeDefined();
     const connection = orm.em.getConnection();
     const foreignKeys = await connection.execute<{ constraint_name: string }[]>(
       `select constraint_name from information_schema.table_constraints
@@ -174,31 +170,29 @@ describe("Migration20260819120000_autograding", () => {
            and constraint_type = 'FOREIGN KEY'`
     );
     // Las FKs preexistentes de entrega (assignment, alumno, grupo) siguen
-    // ahí, pero ninguna nueva de autograding — las columnas son escalares.
-    expect(
-      foreignKeys.some((fk) => fk.constraint_name.includes("autograding"))
-    ).toBe(false);
+    // ahí, pero ninguna nueva de CI — las columnas son escalares.
+    expect(foreignKeys.some((fk) => fk.constraint_name.includes("ci_"))).toBe(false);
   });
 
   it("las entidades no divergen del esquema aplicado por la migración", async () => {
     const { up } = await orm.getSchemaGenerator().getUpdateSchemaMigrationSQL();
-    expect(up).not.toContain('"autograding_resultado_nombre"');
-    expect(up).not.toContain('"autograding_run_id"');
-    expect(up).not.toContain('"autograding_run_url"');
+    expect(up).not.toContain('"ci_resultado_nombre"');
+    expect(up).not.toContain('"ci_check_suite_ids"');
+    expect(up).not.toContain('"ci_detalle_url"');
   });
 
-  it("down() elimina las columnas de autograding", async () => {
-    await orm.getMigrator().down({ migrations: [AUTOGRADING_MIGRATION] });
+  it("down() elimina las columnas de CI", async () => {
+    await orm.getMigrator().down({ migrations: [CI_MIGRATION] });
 
     const connection = orm.em.getConnection();
     const columns = await connection.execute<{ column_name: string }[]>(
       `select column_name from information_schema.columns
          where table_schema = 'public' and table_name = 'entrega'
-           and column_name like 'autograding_%'`
+           and column_name like 'ci\\_%' escape '\\'`
     );
     expect(columns).toEqual([]);
 
     // deja la DB como la encontró para no afectar otros tests del archivo
-    await orm.getMigrator().up({ to: AUTOGRADING_MIGRATION });
+    await orm.getMigrator().up({ to: CI_MIGRATION });
   });
 });

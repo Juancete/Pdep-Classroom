@@ -2,7 +2,7 @@
  * Aplica `operation` a cada elemento de `items` con a lo sumo `limit`
  * ejecuciones concurrentes. Preserva el orden de `items` en el resultado.
  * Extraído de `borrarRepositoriosDeAssignment.ts` (issue #50) para
- * reutilizarlo también en `sincronizarAutograding.ts` (issue #58) — mismo
+ * reutilizarlo también en `sincronizarCI.ts` (issue #58) — mismo
  * patrón de pool de workers manual, sin dependencia externa.
  */
 export async function mapConConcurrenciaLimitada<T, R>(

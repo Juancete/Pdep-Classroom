@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/session";
 import { getEntregaPorId } from "@/lib/repositories";
-import { reejecutarAutogradingDeEntrega } from "@/lib/services/sincronizarAutograding";
+import { reejecutarCIDeEntrega } from "@/lib/services/sincronizarCI";
 import { internalServerError } from "@/lib/api-errors";
 
 const RerunSchema = z.object({ entregaId: z.string().min(1) });
@@ -29,17 +29,17 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       return NextResponse.json({ error: "Entrega no encontrada" }, { status: 404 });
     }
 
-    if (!entrega.resultadoAutograding.permiteReejecucion()) {
+    if (!entrega.resultadoCI.permiteReejecucion()) {
       return NextResponse.json(
-        { error: "No hay una ejecución previa de autograding para reejecutar" },
+        { error: "No hay checks previos de CI para reejecutar" },
         { status: 409 }
       );
     }
 
-    await reejecutarAutogradingDeEntrega(entrega);
+    await reejecutarCIDeEntrega(entrega);
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return internalServerError("POST /api/assignments/[id]/autograding/rerun", error, {
+    return internalServerError("POST /api/assignments/[id]/ci/rerun", error, {
       assignmentId: params.id,
     });
   }

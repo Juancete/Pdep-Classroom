@@ -13,14 +13,14 @@ vi.mock("@/lib/repositories", () => ({
   getEntregaPorId: (entregaId: string) => mockGetEntregaPorId(entregaId),
 }));
 
-vi.mock("@/lib/services/sincronizarAutograding", () => ({
-  reejecutarAutogradingDeEntrega: (entrega: unknown) => mockReejecutar(entrega),
+vi.mock("@/lib/services/sincronizarCI", () => ({
+  reejecutarCIDeEntrega: (entrega: unknown) => mockReejecutar(entrega),
 }));
 
 import { POST } from "./route";
 
 function makeRequest(body: unknown): Request {
-  return new Request("http://localhost/api/assignments/a1/autograding/rerun", {
+  return new Request("http://localhost/api/assignments/a1/ci/rerun", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -31,12 +31,12 @@ function makeEntrega(overrides: Record<string, unknown> = {}) {
   return {
     id: "e1",
     assignment: { id: "a1" },
-    resultadoAutograding: { permiteReejecucion: () => true },
+    resultadoCI: { permiteReejecucion: () => true },
     ...overrides,
   };
 }
 
-describe("POST /api/assignments/[id]/autograding/rerun", () => {
+describe("POST /api/assignments/[id]/ci/rerun", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockReejecutar.mockResolvedValue(undefined);
@@ -88,7 +88,7 @@ describe("POST /api/assignments/[id]/autograding/rerun", () => {
   it("devuelve 409 si el resultado actual no permite reejecución", async () => {
     mockGetCurrentUser.mockResolvedValue({ githubUsername: "docente1", rol: DOCENTE });
     mockGetEntregaPorId.mockResolvedValue(
-      makeEntrega({ resultadoAutograding: { permiteReejecucion: () => false } })
+      makeEntrega({ resultadoCI: { permiteReejecucion: () => false } })
     );
     const response = await POST(makeRequest({ entregaId: "e1" }), {
       params: Promise.resolve({ id: "a1" }),

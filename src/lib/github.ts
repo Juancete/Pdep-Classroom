@@ -218,75 +218,109 @@ export async function listarTemplates(): Promise<
   }
 }
 
-// ── Autograding (issue #58) ─────────────────────────────────
-// Classroom identifica el workflow de autograding por nombre de archivo fijo
-// en el repo, no por el `name:` declarado adentro del workflow.
+// ── CI (issue #58) ───────────────────────────────────────────
+// No hay un workflow "de CI" con nombre fijo: se lee el estado combinado de
+// los checks del último commit del branch por defecto — mismo mecanismo que
+// un badge de CI en un README. Cualquier *.yml en .github/workflows/ que
+// publique checks cuenta, sin importar cómo se llame ni cuántos haya.
 
-export const AUTOGRADING_WORKFLOW_FILE = "autograding.yml";
+export interface CheckRunCrudo {
+  status: string;
+  conclusion:
+    | "success"
+    | "failure"
+    | "neutral"
+    | "cancelled"
+    | "skipped"
+    | "timed_out"
+    | "action_required"
+    | null;
+}
 
-export type UltimaEjecucionAutograding =
-  | { tipo: "sin_workflow" }
-  | { tipo: "sin_ejecuciones" }
+export type EstadoCI =
+  | { tipo: "sin_ci" }
   | {
-      tipo: "ejecucion";
-      runId: string;
-      runUrl: string;
+      tipo: "checks";
+      checkSuiteIds: string[];
       commitSha: string;
-      status: string;
-      conclusion: string | null;
+      detalleUrl: string;
       ejecutadoEn: string;
+      checkRuns: CheckRunCrudo[];
     };
 
-export async function getUltimaEjecucionAutograding(
-  repoName: string
-): Promise<UltimaEjecucionAutograding> {
+function ejecutadoEnDesdeCheckRuns(
+  checkRuns: { completed_at: string | null; started_at: string | null }[]
+): string {
+  const timestamps = checkRuns
+    .map((run) => run.completed_at ?? run.started_at)
+    .filter((value): value is string => Boolean(value))
+    .sort();
+  return timestamps.at(-1) ?? new Date().toISOString();
+}
+
+export async function getEstadoCI(repoName: string): Promise<EstadoCI> {
   const octokit = getOctokit();
 
-  let data;
+  let defaultBranch;
   try {
-    ({ data } = await octokit.actions.listWorkflowRuns({
-      owner: ORG,
-      repo: repoName,
-      workflow_id: AUTOGRADING_WORKFLOW_FILE,
-      per_page: 1,
-    }));
+    ({
+      data: { default_branch: defaultBranch },
+    } = await octokit.repos.get({ owner: ORG, repo: repoName }));
   } catch (error) {
-    // Acá un 404 es un caso de negocio (el repo no tiene el workflow), no un
-    // error de configuración — se resuelve antes de llegar a
-    // `handleOctokitError`.
-    if (isRequestError(error) && error.status === 404) {
-      return { tipo: "sin_workflow" };
-    }
     handleOctokitError(error);
   }
 
-  if (data.total_count === 0 || !data.workflow_runs[0]) {
-    return { tipo: "sin_ejecuciones" };
+  let checkRuns;
+  try {
+    ({
+      data: { check_runs: checkRuns },
+    } = await octokit.checks.listForRef({
+      owner: ORG,
+      repo: repoName,
+      ref: defaultBranch,
+      per_page: 100,
+    }));
+  } catch (error) {
+    handleOctokitError(error);
   }
 
-  const run = data.workflow_runs[0];
+  if (checkRuns.length === 0) {
+    return { tipo: "sin_ci" };
+  }
+
+  const checkSuiteIds = Array.from(
+    new Set(
+      checkRuns
+        .map((run) => run.check_suite?.id)
+        .filter((id): id is number => id !== undefined && id !== null)
+    )
+  ).map(String);
+
   return {
-    tipo: "ejecucion",
-    runId: String(run.id),
-    runUrl: run.html_url,
-    commitSha: run.head_sha,
-    status: run.status ?? "",
-    conclusion: run.conclusion,
-    ejecutadoEn: run.updated_at,
+    tipo: "checks",
+    checkSuiteIds,
+    commitSha: checkRuns[0]!.head_sha,
+    detalleUrl: `https://github.com/${ORG}/${repoName}/commit/${checkRuns[0]!.head_sha}/checks`,
+    ejecutadoEn: ejecutadoEnDesdeCheckRuns(checkRuns),
+    checkRuns: checkRuns.map((run) => ({ status: run.status, conclusion: run.conclusion })),
   };
 }
 
-export async function reejecutarAutograding(
+export async function reejecutarCI(
   repoName: string,
-  runId: string
+  checkSuiteIds: string[]
 ): Promise<void> {
   const octokit = getOctokit();
   try {
-    await octokit.actions.reRunWorkflow({
-      owner: ORG,
-      repo: repoName,
-      run_id: Number(runId),
-    });
+    await Promise.all(
+      checkSuiteIds.map((checkSuiteId) =>
+        octokit.checks.rerequestSuite({
+          owner: ORG,
+          repo: repoName,
+          check_suite_id: Number(checkSuiteId),
+        })
+      )
+    );
   } catch (error) {
     handleOctokitError(error);
   }

@@ -1305,8 +1305,8 @@
           "enumItems": [],
           "mappedType": "boolean"
         },
-        "autograding_resultado_nombre": {
-          "name": "autograding_resultado_nombre",
+        "ci_resultado_nombre": {
+          "name": "ci_resultado_nombre",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,
@@ -1320,18 +1320,33 @@
           "comment": null,
           "enumItems": [
             "sin_consultar",
-            "sin_autograding",
-            "sin_ejecuciones",
+            "sin_ci",
             "pendiente",
-            "aprobado",
-            "fallido",
+            "passing",
+            "failing",
             "cancelado",
             "error_infra"
           ],
           "mappedType": "enum"
         },
-        "autograding_run_id": {
-          "name": "autograding_run_id",
+        "ci_check_suite_ids": {
+          "name": "ci_check_suite_ids",
+          "type": "text[]",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'{}'",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "array"
+        },
+        "ci_commit_sha": {
+          "name": "ci_commit_sha",
           "type": "varchar(255)",
           "unsigned": false,
           "autoincrement": false,
@@ -1346,8 +1361,8 @@
           "enumItems": [],
           "mappedType": "string"
         },
-        "autograding_run_url": {
-          "name": "autograding_run_url",
+        "ci_detalle_url": {
+          "name": "ci_detalle_url",
           "type": "varchar(255)",
           "unsigned": false,
           "autoincrement": false,
@@ -1362,24 +1377,8 @@
           "enumItems": [],
           "mappedType": "string"
         },
-        "autograding_commit_sha": {
-          "name": "autograding_commit_sha",
-          "type": "varchar(255)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": 255,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
-        "autograding_ejecutado_en": {
-          "name": "autograding_ejecutado_en",
+        "ci_ejecutado_en": {
+          "name": "ci_ejecutado_en",
           "type": "timestamptz(6)",
           "unsigned": false,
           "autoincrement": false,
@@ -1394,8 +1393,8 @@
           "enumItems": [],
           "mappedType": "datetime"
         },
-        "autograding_actualizado_en": {
-          "name": "autograding_actualizado_en",
+        "ci_actualizado_en": {
+          "name": "ci_actualizado_en",
           "type": "timestamptz(6)",
           "unsigned": false,
           "autoincrement": false,
@@ -1441,11 +1440,11 @@
         {
           "columnNames": [
             "assignment_id",
-            "autograding_resultado_nombre"
+            "ci_resultado_nombre"
           ],
           "composite": true,
           "constraint": false,
-          "keyName": "entrega_autograding_resultado_idx",
+          "keyName": "entrega_ci_resultado_idx",
           "unique": false,
           "primary": false
         },

@@ -10,10 +10,10 @@ import { Alumno } from "./Alumno";
 import { Assignment } from "./Assignment";
 import { Grupo } from "./Grupo";
 import {
-  ResultadoAutograding,
-  NOMBRES_RESULTADO_AUTOGRADING,
-  type NombreResultadoAutograding,
-} from "./ResultadoAutograding";
+  ResultadoCI,
+  NOMBRES_RESULTADO_CI,
+  type NombreResultadoCI,
+} from "./ResultadoCI";
 
 @Entity()
 export class Entrega {
@@ -50,31 +50,37 @@ export class Entrega {
   @Property({ type: 'datetime' })
   createdAt: Date = new Date();
 
-  // Autograding (issue #58): resultado de la última ejecución consultada del
-  // workflow `.github/workflows/autograding.yml` en el repo de esta entrega.
-  // Sólo se guarda la última — no un historial completo (ver
+  // CI (issue #58): estado combinado de los checks del último commit del
+  // branch por defecto del repo de esta entrega — mismo mecanismo que un
+  // badge de CI en un README, no depende de un workflow con nombre fijo.
+  // Sólo se guarda el último resultado — no un historial completo (ver
   // `RepoDeletionAttempt` para el molde de auditoría si más adelante hace
   // falta la serie completa).
-  @Enum({ items: [...NOMBRES_RESULTADO_AUTOGRADING], default: "sin_consultar" })
-  autogradingResultadoNombre: NombreResultadoAutograding = "sin_consultar";
+  @Enum({ items: [...NOMBRES_RESULTADO_CI], default: "sin_consultar" })
+  ciResultadoNombre: NombreResultadoCI = "sin_consultar";
+
+  // Check suites del último commit consultado — se usan para pedir el
+  // rerequest al reejecutar. Pueden ser varios si el repo tiene más de un
+  // workflow (ej. lint + tests).
+  @Property({ type: "array", defaultRaw: "'{}'" })
+  ciCheckSuiteIds: string[] = [];
 
   @Property({ type: 'string', nullable: true })
-  autogradingRunId?: string; // el id de GitHub es bigint: se guarda como string
+  ciCommitSha?: string;
 
+  // Link a la pestaña de checks del commit en GitHub (agrega todos los
+  // checks, no uno solo).
   @Property({ type: 'string', nullable: true })
-  autogradingRunUrl?: string;
-
-  @Property({ type: 'string', nullable: true })
-  autogradingCommitSha?: string;
+  ciDetalleUrl?: string;
 
   @Property({ type: 'datetime', nullable: true })
-  autogradingEjecutadoEn?: Date; // cuándo corrió la run (según GitHub)
+  ciEjecutadoEn?: Date; // cuándo corrieron los checks (según GitHub)
 
   @Property({ type: 'datetime', nullable: true })
-  autogradingActualizadoEn?: Date; // cuándo la consultamos nosotros (frescura del caché)
+  ciActualizadoEn?: Date; // cuándo los consultamos nosotros (frescura del caché)
 
-  get resultadoAutograding(): ResultadoAutograding {
-    return ResultadoAutograding.desdeNombre(this.autogradingResultadoNombre);
+  get resultadoCI(): ResultadoCI {
+    return ResultadoCI.desdeNombre(this.ciResultadoNombre);
   }
 
   hasRepo(): boolean {

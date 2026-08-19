@@ -9,7 +9,7 @@ import {
   Grupo,
   Entrega,
   type RolDeUsuario,
-  type NombreResultadoAutograding,
+  type NombreResultadoCI,
 } from "@/domain/entities";
 
 export async function getEntregas(assignmentId?: string): Promise<Entrega[]> {
@@ -149,26 +149,26 @@ export async function getEntregasConRepoActivo(
   });
 }
 
-// Persiste el resultado de la última consulta de autograding (issue #58).
+// Persiste el resultado de la última consulta de CI (issue #58).
 // Sólo actualiza esas columnas, no toca el resto de la entrega.
-export async function actualizarAutogradingDeEntrega(
+export async function actualizarCIDeEntrega(
   entregaId: string,
   data: {
-    resultadoNombre: NombreResultadoAutograding;
-    runId?: string;
-    runUrl?: string;
+    resultadoNombre: NombreResultadoCI;
+    checkSuiteIds?: string[];
     commitSha?: string;
+    detalleUrl?: string;
     ejecutadoEn?: Date;
   }
 ): Promise<void> {
   const entityManager = await getEM();
   const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
-  entrega.autogradingResultadoNombre = data.resultadoNombre;
-  entrega.autogradingRunId = data.runId;
-  entrega.autogradingRunUrl = data.runUrl;
-  entrega.autogradingCommitSha = data.commitSha;
-  entrega.autogradingEjecutadoEn = data.ejecutadoEn;
-  entrega.autogradingActualizadoEn = new Date();
+  entrega.ciResultadoNombre = data.resultadoNombre;
+  entrega.ciCheckSuiteIds = data.checkSuiteIds ?? [];
+  entrega.ciCommitSha = data.commitSha;
+  entrega.ciDetalleUrl = data.detalleUrl;
+  entrega.ciEjecutadoEn = data.ejecutadoEn;
+  entrega.ciActualizadoEn = new Date();
   await entityManager.flush();
 }
 
