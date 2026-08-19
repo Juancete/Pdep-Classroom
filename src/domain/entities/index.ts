@@ -53,8 +53,10 @@ export {
   DOCENTE,
   ESTUDIANTE,
   resolverRol,
+  rolDesdeNombre,
   AccesoAssignmentProhibidoError,
   type ItemDeNavegacion,
   type ContextoDeMembresia,
   type OrigenCambioMembresia,
+  type NombreRolDeUsuario,
 } from "./RolDeUsuario";
