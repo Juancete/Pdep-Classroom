@@ -1,5 +1,6 @@
 import {
   Entity,
+  Enum,
   ManyToOne,
   PrimaryKey,
   Property,
@@ -8,6 +9,11 @@ import { randomUUID } from "crypto";
 import { Alumno } from "./Alumno";
 import { Assignment } from "./Assignment";
 import { Grupo } from "./Grupo";
+import {
+  ResultadoAutograding,
+  NOMBRES_RESULTADO_AUTOGRADING,
+  type NombreResultadoAutograding,
+} from "./ResultadoAutograding";
 
 @Entity()
 export class Entrega {
@@ -43,6 +49,33 @@ export class Entrega {
 
   @Property({ type: 'datetime' })
   createdAt: Date = new Date();
+
+  // Autograding (issue #58): resultado de la última ejecución consultada del
+  // workflow `.github/workflows/autograding.yml` en el repo de esta entrega.
+  // Sólo se guarda la última — no un historial completo (ver
+  // `RepoDeletionAttempt` para el molde de auditoría si más adelante hace
+  // falta la serie completa).
+  @Enum({ items: [...NOMBRES_RESULTADO_AUTOGRADING], default: "sin_consultar" })
+  autogradingResultadoNombre: NombreResultadoAutograding = "sin_consultar";
+
+  @Property({ type: 'string', nullable: true })
+  autogradingRunId?: string; // el id de GitHub es bigint: se guarda como string
+
+  @Property({ type: 'string', nullable: true })
+  autogradingRunUrl?: string;
+
+  @Property({ type: 'string', nullable: true })
+  autogradingCommitSha?: string;
+
+  @Property({ type: 'datetime', nullable: true })
+  autogradingEjecutadoEn?: Date; // cuándo corrió la run (según GitHub)
+
+  @Property({ type: 'datetime', nullable: true })
+  autogradingActualizadoEn?: Date; // cuándo la consultamos nosotros (frescura del caché)
+
+  get resultadoAutograding(): ResultadoAutograding {
+    return ResultadoAutograding.desdeNombre(this.autogradingResultadoNombre);
+  }
 
   hasRepo(): boolean {
     return !!this.repoUrl && !this.repoDeleted;

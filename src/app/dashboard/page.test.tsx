@@ -32,6 +32,9 @@ vi.mock("@/lib/repositories", () => ({
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => mockRedirect(url),
+  // AutogradingRefreshButton (renderizado junto al link de repo) usa
+  // useRouter — no hay Router context en un render estático fuera de Next.
+  useRouter: () => ({ refresh: vi.fn() }),
 }));
 
 vi.mock("./accept-button", () => ({

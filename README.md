@@ -65,9 +65,18 @@ Completar el formulario con estos valores:
 |---|---|---|
 | Repository | Administration | Read & Write |
 | Repository | Contents | Read & Write |
+| Repository | Actions | Read & Write |
 | Organization | Members | Read only |
 
+`Actions` es para el autograding (ver [más abajo](#autograding-con-github-actions)): `Read` alcanza
+para mostrar el estado de las ejecuciones, `Write` hace falta sólo para el botón de reejecución
+administrativa. **No hace falta `Checks`** — se usa la API de workflow runs, no de check runs.
+
 Todo lo demás (Account permissions, Subscribe to events) dejarlo sin seleccionar.
+
+> Si la App ya estaba instalada antes de agregar el permiso `Actions`, hay que aceptar el permiso
+> nuevo desde la org (`Settings → GitHub Apps → PdeP Classroom → Review request` o reinstalar la
+> app) antes de que el autograding funcione — GitHub no lo aplica retroactivamente solo.
 
 **Where can this GitHub App be installed?** → seleccionar **Only on this account**.
 
@@ -495,6 +504,70 @@ GitHub limita el nombre de un repo a 100 caracteres — un `slug` de assignment 
 un username o nombre de grupo largo puede superarlo. En ese caso, aceptar el TP (o crear/unirse al
 grupo) falla con un error explícito en vez de crear un repo con el nombre truncado.
 
+## Autograding con GitHub Actions
+
+Classroom puede mostrar el resultado de la última ejecución de Actions de cada repo de entrega,
+con link al detalle en GitHub, y ofrecer una reejecución administrativa. Es **pull, no push**: se
+consulta la API bajo demanda y se cachea la última ejecución en la propia `Entrega` (sin historial
+completo) — cuando se implemente el webhook de `workflow_run` ([#60](https://github.com/Juancete/Pdep-Classroom/issues/60)),
+va a escribir en el mismo lugar y esta pantalla no cambia.
+
+### Contrato del template
+
+Un template habilita autograding agregando, en su branch por defecto:
+
+```yaml
+# .github/workflows/autograding.yml
+name: Autograding
+on: [push, workflow_dispatch]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # ... setup + comando de tests del paradigma correspondiente
+      # el job debe terminar con exit code != 0 si los tests fallan
+```
+
+Classroom identifica el workflow por **nombre de archivo fijo** (`autograding.yml`), no por el
+`name:` de adentro. Como los repos se crean con `repos.createUsingTemplate`, si el template tiene
+ese archivo el repo generado lo hereda solo — no hace falta ningún paso extra al aceptar el TP.
+
+> Los repos se crean con el token de instalación de la GitHub App, y GitHub no dispara workflows
+> para pushes hechos por una GitHub App salvo que el workflow declare `workflow_dispatch` o el
+> evento sea uno explícitamente soportado — en la práctica, el primer push real del alumno es el
+> que dispara la primera ejecución, no el commit inicial del template.
+
+### Mapeo de estado
+
+| `status` / `conclusion` de la run | Resultado en Classroom |
+|---|---|
+| repo sin `autograding.yml` (404) | Sin autograding |
+| workflow existe, `total_count: 0` | Sin ejecuciones |
+| `status` distinto de `completed` | Pendiente |
+| `conclusion: success` | Aprobado |
+| `conclusion: failure` | Tests fallidos |
+| `conclusion: cancelled` / `timed_out` | Cancelado |
+| `conclusion: startup_failure` / `action_required` / `stale` / `neutral` / `skipped` / desconocida | Error de infraestructura |
+
+Un repo sin el workflow no rompe nada más de la vista — se degrada a un badge gris "Sin
+autograding" (`src/lib/services/sincronizarAutograding.ts`, `src/domain/entities/ResultadoAutograding.ts`).
+
+### Frescura y reejecución
+
+- La sincronización (`POST /api/assignments/[id]/autograding`) respeta una ventana de 60 segundos
+  por entrega para no martillar la API de GitHub — un botón "Actualizar" explícito la puede forzar.
+- La reejecución (`POST /api/assignments/[id]/autograding/rerun`, sólo admin) pide un `rerun` de la
+  última run conocida (`POST /actions/runs/{run_id}/rerun`). Si nunca corrió ninguna, el botón queda
+  deshabilitado — no hay nada que reejecutar.
+
+### Resultado automático, no calificación
+
+El badge siempre se muestra junto a la leyenda "Resultado automático — no es la nota final", tanto
+en el panel admin como en el dashboard del alumno. No hay ninguna opción para presentarlo como
+calificación definitiva.
+
 ## Estructura del proyecto
 
 ```
@@ -518,6 +591,8 @@ src/
 │   │   │       ├── repos/route.ts             # GET/DELETE repos activos del assignment
 │   │   │       ├── estado/route.ts            # PATCH ciclo de vida (borrador/publicado/archivado)
 │   │   │       ├── inscripciones/route.ts     # PATCH abrir/cerrar inscripciones a grupos
+│   │   │       ├── autograding/route.ts       # POST sincronizar resultado de autograding
+│   │   │       ├── autograding/rerun/route.ts # POST reejecutar autograding (admin)
 │   │   │       └── grupos/                    # POST crear grupo; join, mover y quitar integrantes
 │   │   └── comisiones/[id]/route.ts           # PATCH comisión
 │   ├── admin/
@@ -526,6 +601,8 @@ src/
 │   │   │   ├── new/page.tsx                   # Crear assignment
 │   │   │   ├── [id]/page.tsx                  # Detalle: entregas, estadísticas, ciclo de vida
 │   │   │   │   ├── entregas-table.tsx         # Tabla de entregas con filtro (client)
+│   │   │   │   ├── autograding-sync-button.tsx # Sincronizar autograding del assignment (client)
+│   │   │   │   ├── autograding-rerun-button.tsx # Reejecutar autograding de una entrega (client)
 │   │   │   │   ├── grupos-panel.tsx           # Administrar integrantes de grupos (client)
 │   │   │   │   └── historial-membresias.tsx   # Auditoría de altas/bajas/cambios de grupo
 │   │   │   ├── [id]/edit/page.tsx             # Editar assignment
@@ -552,12 +629,15 @@ src/
 │   │   └── acciones-de-membresia.tsx          # Salir / cambiarse de grupo (client)
 │   ├── components/
 │   │   ├── AlumnoForm.tsx                     # Form reutilizable registro/edición alumno
+│   │   ├── AutogradingBadge.tsx               # Badge de resultado de autograding (server)
+│   │   ├── autograding-ui.tsx                 # Tabla de presentación (etiqueta/color/ícono) por resultado
 │   │   └── PageSkeleton.tsx                   # Skeleton de carga genérico
 │   ├── hooks/
 │   │   └── useApiCall.ts                      # Hook genérico para llamadas a la API REST
 │   ├── dashboard/
 │   │   ├── page.tsx                           # Dashboard alumno: TPs pendientes y estado
-│   │   └── accept-button.tsx                  # Botón aceptar TP (client)
+│   │   ├── accept-button.tsx                  # Botón aceptar TP (client)
+│   │   └── autograding-refresh-button.tsx     # Actualizar el autograding de la propia entrega (client)
 │   ├── registro/page.tsx                      # Registro de alumno (con AlumnoForm)
 │   ├── perfil/page.tsx                        # Editar perfil alumno (con AlumnoForm)
 │   ├── login/page.tsx                         # Página de login (GitHub + login de desarrollo opcional)
@@ -572,6 +652,7 @@ src/
 │       ├── IndividualAssignment.ts
 │       ├── GrupalAssignment.ts
 │       ├── EstadoAssignment.ts                # Ciclo de vida (borrador/publicado/archivado) como Strategy
+│       ├── ResultadoAutograding.ts            # Resultado de la última ejecución de autograding, como Strategy
 │       ├── RolDeUsuario.ts                    # Docente/alumno como Strategy (reemplaza un booleano isAdmin)
 │       ├── Comision.ts                        # Incluye columnConfig para la planilla
 │       ├── Entrega.ts
@@ -605,7 +686,10 @@ src/
 │   │   ├── intentarSincronizarGoogleGroup.ts  # Wrapper con retry/flag de falla de Google Groups
 │   │   ├── hooksPostConfirmacion.ts           # Orquesta los sync post-registro
 │   │   ├── verificarConsistenciaAlumno.ts     # Chequeos de consistencia DB↔Sheets
-│   │   └── borrarRepositoriosDeAssignment.ts  # Borrado auditado de repos de un assignment
+│   │   ├── borrarRepositoriosDeAssignment.ts  # Borrado auditado de repos de un assignment
+│   │   └── sincronizarAutograding.ts          # Consulta y cachea el resultado de autograding
+│   ├── concurrencia.ts                        # mapConConcurrenciaLimitada (pool de workers genérico)
+│   ├── mensaje-operativo.ts                   # Redacta secretos de un mensaje de error antes de mostrarlo/persistirlo
 │   └── repositories/                          # Acceso a datos por entidad
 │       ├── AlumnoRepository.ts
 │       ├── AssignmentRepository.ts
@@ -727,7 +811,7 @@ Reutilizamos la service account que ya está en `GOOGLE_SERVICE_ACCOUNT_KEY` —
 - [x] Eliminar repos de un assignment desde el panel admin
 - [ ] Cuando elimina repos de un assignment dar la posibilidad de hacer un backup y descargar un zip
 - [ ] Notificaciones por mail cuando se publica un assignment
-- [ ] Autograding con GitHub Actions en los templates
+- [x] Autograding con GitHub Actions en los templates — ver [Autograding con GitHub Actions](#autograding-con-github-actions); queda pendiente que [#60](https://github.com/Juancete/Pdep-Classroom/issues/60) reemplace el polling por un webhook de `workflow_run`
 - [ ] Export de estado de entregas a Google Sheets (cerrar el loop con la planilla)
 - [x] Suscribir a los alumnos al grupo de Google Groups automáticamente
 - [x] Ciclo de vida de assignments (borrador/publicado/archivado) con auditoría de quién publicó o archivó
@@ -746,6 +830,8 @@ La REST API v3 de GitHub tiene política de versionado conservadora. Todos los e
 | `GET /repos/{owner}/{repo}` | Verificar si el repo ya existe |
 | `GET /orgs/{org}/repos` | Listar repos de la org (para entregas y templates) |
 | `DELETE /repos/{owner}/{repo}` | Eliminar repo (limpieza de assignments) |
+| `GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs` | Última ejecución de autograding |
+| `POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun` | Reejecutar autograding (admin) |
 
 La autenticación usa una **GitHub App** instalada en la org (no un PAT personal), lo que da permisos de admin sobre los repos sin depender de un usuario específico. Como fallback para desarrollo local se puede usar un PAT clásico con scopes `repo` y `admin:org`.
 
