@@ -41,6 +41,12 @@ export {
 } from "./Grupo";
 export { Entrega } from "./Entrega";
 export {
+  ResultadoAutograding,
+  resultadoDesdeRun,
+  NOMBRES_RESULTADO_AUTOGRADING,
+  type NombreResultadoAutograding,
+} from "./ResultadoAutograding";
+export {
   RepoDeletionAttempt,
   type RepoDeletionStatus,
 } from "./RepoDeletionAttempt";

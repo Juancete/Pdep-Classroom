@@ -217,3 +217,77 @@ export async function listarTemplates(): Promise<
     handleOctokitError(error);
   }
 }
+
+// ── Autograding (issue #58) ─────────────────────────────────
+// Classroom identifica el workflow de autograding por nombre de archivo fijo
+// en el repo, no por el `name:` declarado adentro del workflow.
+
+export const AUTOGRADING_WORKFLOW_FILE = "autograding.yml";
+
+export type UltimaEjecucionAutograding =
+  | { tipo: "sin_workflow" }
+  | { tipo: "sin_ejecuciones" }
+  | {
+      tipo: "ejecucion";
+      runId: string;
+      runUrl: string;
+      commitSha: string;
+      status: string;
+      conclusion: string | null;
+      ejecutadoEn: string;
+    };
+
+export async function getUltimaEjecucionAutograding(
+  repoName: string
+): Promise<UltimaEjecucionAutograding> {
+  const octokit = getOctokit();
+
+  let data;
+  try {
+    ({ data } = await octokit.actions.listWorkflowRuns({
+      owner: ORG,
+      repo: repoName,
+      workflow_id: AUTOGRADING_WORKFLOW_FILE,
+      per_page: 1,
+    }));
+  } catch (error) {
+    // Acá un 404 es un caso de negocio (el repo no tiene el workflow), no un
+    // error de configuración — se resuelve antes de llegar a
+    // `handleOctokitError`.
+    if (isRequestError(error) && error.status === 404) {
+      return { tipo: "sin_workflow" };
+    }
+    handleOctokitError(error);
+  }
+
+  if (data.total_count === 0 || !data.workflow_runs[0]) {
+    return { tipo: "sin_ejecuciones" };
+  }
+
+  const run = data.workflow_runs[0];
+  return {
+    tipo: "ejecucion",
+    runId: String(run.id),
+    runUrl: run.html_url,
+    commitSha: run.head_sha,
+    status: run.status ?? "",
+    conclusion: run.conclusion,
+    ejecutadoEn: run.updated_at,
+  };
+}
+
+export async function reejecutarAutograding(
+  repoName: string,
+  runId: string
+): Promise<void> {
+  const octokit = getOctokit();
+  try {
+    await octokit.actions.reRunWorkflow({
+      owner: ORG,
+      repo: repoName,
+      run_id: Number(runId),
+    });
+  } catch (error) {
+    handleOctokitError(error);
+  }
+}

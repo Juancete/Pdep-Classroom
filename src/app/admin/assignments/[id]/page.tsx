@@ -130,6 +130,11 @@ export default async function AssignmentDetailPage(
         return alumno ? alumno.nombreCompleto : "—";
       })
       .join(" / "),
+    autograding: {
+      resultadoNombre: entrega.autogradingResultadoNombre,
+      runUrl: entrega.autogradingRunUrl,
+      permiteReejecucion: entrega.resultadoAutograding.permiteReejecucion(),
+    },
   }));
 
   return (
@@ -229,7 +234,7 @@ export default async function AssignmentDetailPage(
 
       {/* Tabla de entregas (componente cliente con filtro) */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <EntregasTable entregas={entregaRows} />
+        <EntregasTable assignmentId={assignment.id} entregas={entregaRows} />
       </div>
 
       <RepoDeletionHistory

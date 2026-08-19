@@ -9,6 +9,7 @@ import {
   Grupo,
   Entrega,
   type RolDeUsuario,
+  type NombreResultadoAutograding,
 } from "@/domain/entities";
 
 export async function getEntregas(assignmentId?: string): Promise<Entrega[]> {
@@ -56,6 +57,18 @@ export async function getEntregaDeUsuario(
         (username) => username.toLowerCase() === githubUsername.toLowerCase()
       )
     ) ?? null
+  );
+}
+
+export async function getEntregaPorId(
+  entregaId: string,
+  em?: EntityManager
+): Promise<Entrega | null> {
+  const entityManager = em ?? (await getEM());
+  return entityManager.findOne(
+    Entrega,
+    { id: entregaId },
+    { populate: ["assignment"] }
   );
 }
 
@@ -134,6 +147,29 @@ export async function getEntregasConRepoActivo(
     repoDeleted: false,
     repoName: { $ne: null },
   });
+}
+
+// Persiste el resultado de la última consulta de autograding (issue #58).
+// Sólo actualiza esas columnas, no toca el resto de la entrega.
+export async function actualizarAutogradingDeEntrega(
+  entregaId: string,
+  data: {
+    resultadoNombre: NombreResultadoAutograding;
+    runId?: string;
+    runUrl?: string;
+    commitSha?: string;
+    ejecutadoEn?: Date;
+  }
+): Promise<void> {
+  const entityManager = await getEM();
+  const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
+  entrega.autogradingResultadoNombre = data.resultadoNombre;
+  entrega.autogradingRunId = data.runId;
+  entrega.autogradingRunUrl = data.runUrl;
+  entrega.autogradingCommitSha = data.commitSha;
+  entrega.autogradingEjecutadoEn = data.ejecutadoEn;
+  entrega.autogradingActualizadoEn = new Date();
+  await entityManager.flush();
 }
 
 export async function createEntrega(
