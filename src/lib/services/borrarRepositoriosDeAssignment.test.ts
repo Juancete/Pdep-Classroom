@@ -164,6 +164,21 @@ describe("borrarRepositoriosDeAssignment", () => {
     expect(mockDeleteRepo).not.toHaveBeenCalled();
   });
 
+  it("sanitiza el error antes de loggearlo cuando falla el inicio de la auditoría", async () => {
+    mockGetActive.mockResolvedValue([entrega(1)]);
+    mockStart.mockRejectedValue(new Error("DB caída: token=github_pat_secreto123"));
+
+    await borrarRepositoriosDeAssignment({
+      assignmentId: "a1",
+      requestedBy: "docente",
+    });
+
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      expect.objectContaining({ err: "DB caída: token=[REDACTED]" }),
+      "No se pudo iniciar la auditoría de borrado del repositorio"
+    );
+  });
+
   it("marca el intento como fallido si GitHub respondió pero falla la persistencia", async () => {
     mockGetActive.mockResolvedValue([entrega(1)]);
     mockComplete.mockRejectedValue(new Error("DB caída"));
@@ -198,7 +213,7 @@ describe("borrarRepositoriosDeAssignment", () => {
       error: expect.stringContaining("no se pudo guardar"),
     });
     expect(mockLoggerError).toHaveBeenCalledWith(
-      expect.objectContaining({ err: expect.any(Error) }),
+      expect.objectContaining({ err: "DB sigue caída" }),
       "No se pudo cerrar como fallido el intento de borrado"
     );
   });

@@ -34,6 +34,24 @@ describe("mensajeOperativo", () => {
     ).toBe("Authorization: [REDACTED]");
   });
 
+  it("redacta password en formato JSON (clave y valor entre comillas)", () => {
+    expect(
+      mensajeOperativo(new Error('{"password":"secreto123"}'))
+    ).toBe('{"password:[REDACTED]');
+  });
+
+  it("redacta token en formato JSON", () => {
+    expect(
+      mensajeOperativo(new Error('{"token": "secreto456"}'))
+    ).toBe('{"token: [REDACTED]');
+  });
+
+  it("redacta authorization en formato JSON", () => {
+    expect(
+      mensajeOperativo(new Error('{"authorization":"Bearer secreto"}'))
+    ).toBe('{"authorization:[REDACTED]');
+  });
+
   it("trunca mensajes muy largos", () => {
     const mensaje = "a".repeat(2000);
     expect(mensajeOperativo(new Error(mensaje)).length).toBe(1000);

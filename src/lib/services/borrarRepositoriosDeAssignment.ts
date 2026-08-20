@@ -51,7 +51,14 @@ async function borrarRepositorio(data: {
     attemptId = attempt.id;
   } catch (error) {
     logger.error(
-      { err: error, operationId, assignmentId, entregaId: entrega.id, repoName, requestedBy },
+      {
+        err: mensajeOperativo(error),
+        operationId,
+        assignmentId,
+        entregaId: entrega.id,
+        repoName,
+        requestedBy,
+      },
       "No se pudo iniciar la auditoría de borrado del repositorio"
     );
     return {
@@ -71,7 +78,7 @@ async function borrarRepositorio(data: {
       await fallarIntentoBorradoRepo(attemptId, message);
     } catch (auditError) {
       logger.error(
-        { err: auditError, attemptId, operationId, assignmentId, repoName },
+        { err: mensajeOperativo(auditError), attemptId, operationId, assignmentId, repoName },
         "No se pudo persistir el fallo del borrado"
       );
     }
@@ -92,14 +99,22 @@ async function borrarRepositorio(data: {
     const persistenceError =
       "GitHub respondió, pero no se pudo guardar el resultado. Reintentá.";
     logger.error(
-      { err: error, attemptId, operationId, assignmentId, repoName, requestedBy, githubResult },
+      {
+        err: mensajeOperativo(error),
+        attemptId,
+        operationId,
+        assignmentId,
+        repoName,
+        requestedBy,
+        githubResult,
+      },
       "GitHub respondió al borrado, pero no se pudo persistir el resultado"
     );
     try {
       await fallarIntentoBorradoRepo(attemptId, persistenceError);
     } catch (auditError) {
       logger.error(
-        { err: auditError, attemptId, operationId, assignmentId, repoName },
+        { err: mensajeOperativo(auditError), attemptId, operationId, assignmentId, repoName },
         "No se pudo cerrar como fallido el intento de borrado"
       );
     }
