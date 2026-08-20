@@ -38,9 +38,15 @@ export class Migration20260820120000_webhook_deliveries extends Migration {
         add column "repo_github_id" varchar(255) null,
         add column "repo_evento_actualizado_en" timestamptz null;
     `);
+    this.addSql(
+      `alter table "entrega" add constraint "entrega_repo_github_id_unique" unique ("repo_github_id");`
+    );
   }
 
   override async down(): Promise<void> {
+    this.addSql(
+      `alter table "entrega" drop constraint if exists "entrega_repo_github_id_unique";`
+    );
     this.addSql(`
       alter table "entrega"
         drop column "ultimo_push_en",

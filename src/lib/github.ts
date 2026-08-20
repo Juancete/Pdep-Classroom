@@ -206,8 +206,9 @@ export async function getRepoInfo(repoName: string): Promise<RepoInfo | null> {
   try {
     const { data } = await octokit.repos.get({ owner: ORG, repo: repoName });
     return { repoGithubId: String(data.id), repoUrl: data.html_url };
-  } catch {
-    return null;
+  } catch (error) {
+    if (isRequestError(error) && error.status === 404) return null;
+    handleOctokitError(error);
   }
 }
 
@@ -223,10 +224,16 @@ export async function getRepoInfoPorId(
 ): Promise<{ repoName: string; repoUrl: string } | null> {
   const octokit = getOctokit();
   try {
-    const { data } = await octokit.request("GET /repositories/{repository_id}", {
-      repository_id: Number(repoGithubId),
+    // `repos.listForOrg` es una API REST documentada y además mantiene la
+    // reconciliación acotada a la organización configurada. `paginate` es
+    // necesario porque una org puede tener más de 100 repositorios.
+    const repos = await octokit.paginate(octokit.repos.listForOrg, {
+      org: ORG,
+      type: "all",
+      per_page: 100,
     });
-    return { repoName: data.name, repoUrl: data.html_url };
+    const repo = repos.find((candidate) => String(candidate.id) === repoGithubId);
+    return repo ? { repoName: repo.name, repoUrl: repo.html_url } : null;
   } catch (error) {
     if (isRequestError(error) && error.status === 404) return null;
     handleOctokitError(error);

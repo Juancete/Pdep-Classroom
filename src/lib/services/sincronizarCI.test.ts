@@ -12,8 +12,10 @@ vi.mock("@/lib/github", () => ({
 }));
 
 vi.mock("@/lib/repositories", () => ({
-  actualizarCIDeEntrega: (entregaId: string, data: unknown) =>
-    mockActualizarCI(entregaId, data),
+  actualizarCIDeEntrega: (entregaId: string, data: unknown, em?: unknown) =>
+    em === undefined
+      ? mockActualizarCI(entregaId, data)
+      : mockActualizarCI(entregaId, data, em),
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -73,6 +75,20 @@ describe("sincronizarCIDeEntregas", () => {
       detalleUrl: null,
       ejecutadoEn: null,
     });
+  });
+
+  it("usa el EntityManager recibido para persistir dentro del lock transaccional", async () => {
+    const entrega = entregaConRepo(1);
+    const transaction = { nombre: "transaction-em" };
+    mockGetEstadoCI.mockResolvedValue({ tipo: "sin_ci" });
+
+    await sincronizarCIDeEntregas([entrega], { forzar: true, em: transaction as never });
+
+    expect(mockActualizarCI).toHaveBeenCalledWith(
+      entrega.id,
+      expect.objectContaining({ resultadoNombre: "sin_ci" }),
+      transaction
+    );
   });
 
   it("consulta con el repoName de la entrega y persiste el resultado agregado en la entrega correcta", async () => {

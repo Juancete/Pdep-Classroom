@@ -1,4 +1,5 @@
 import { getEM } from "@/lib/db";
+import type { EntityManager } from "@mikro-orm/postgresql";
 import {
   Alumno,
   type AlumnoData,
@@ -42,9 +43,10 @@ export async function getAlumnos(): Promise<Alumno[]> {
 
 export async function getAlumnoByGithub(
   githubUsername: string,
-  populateComision = false
+  populateComision = false,
+  em?: EntityManager
 ): Promise<Alumno | null> {
-  const entityManager = await getEM();
+  const entityManager = em ?? (await getEM());
   return entityManager.findOne(
     Alumno,
     { githubUsername: Alumno.normalizarUsername(githubUsername) },

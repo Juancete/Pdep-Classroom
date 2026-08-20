@@ -190,9 +190,10 @@ export async function actualizarCIDeEntrega(
     commitSha?: string | null;
     detalleUrl?: string | null;
     ejecutadoEn?: Date | null;
-  }
+  },
+  em?: EntityManager
 ): Promise<void> {
-  const entityManager = await getEM();
+  const entityManager = em ?? (await getEM());
   const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
   entrega.ciResultadoNombre = data.resultadoNombre;
   if (data.checkSuiteIds !== undefined) entrega.ciCheckSuiteIds = data.checkSuiteIds ?? [];
@@ -204,22 +205,22 @@ export async function actualizarCIDeEntrega(
 }
 
 /**
- * Serializa las escrituras del webhook de CI sobre una misma entrega bajo un
+ * Serializa el trabajo protegido del webhook sobre una misma entrega bajo un
  * advisory lock transaccional — mismo mecanismo que
- * `conLockBorradoReposAssignment`. Evita que dos `check_suite.completed`
- * casi simultáneos (dos workflows del mismo commit) hagan fetch+write
- * intercalados y el más viejo pise el resultado del más nuevo.
+ * `conLockBorradoReposAssignment`. La operación recibe el `EntityManager` de
+ * ESA transacción y debe usarlo para las lecturas/escrituras protegidas; así
+ * el lock y el read-modify-write comparten conexión y frontera atómica.
  */
 export async function conLockDeEntrega<T>(
   entregaId: string,
-  operation: () => Promise<T>
+  operation: (transaction: EntityManager) => Promise<T>
 ): Promise<T> {
   const entityManager = await getEM();
   return entityManager.transactional(async (transaction) => {
     await transaction
       .getConnection()
       .execute("select pg_advisory_xact_lock(hashtextextended(?, 0))", [`ci:${entregaId}`]);
-    return operation();
+    return operation(transaction);
   });
 }
 
@@ -229,9 +230,10 @@ export async function conLockDeEntrega<T>(
 // escribir.
 export async function actualizarActividadDeEntrega(
   entregaId: string,
-  data: { pusheadoEn: Date; commitSha: string; por: string }
+  data: { pusheadoEn: Date; commitSha: string; por: string },
+  em?: EntityManager
 ): Promise<void> {
-  const entityManager = await getEM();
+  const entityManager = em ?? (await getEM());
   const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
   if (entrega.ultimoPushEn && entrega.ultimoPushEn >= data.pusheadoEn) return;
   entrega.ultimoPushEn = data.pusheadoEn;
@@ -267,9 +269,10 @@ function esEventoRepositoryViejo(entrega: Entrega, eventoActualizadoEn?: Date): 
 // Classroom, así que la grilla de entregas no necesita distinguir el origen.
 export async function marcarRepoBorrado(
   entregaId: string,
-  eventoActualizadoEn?: Date
+  eventoActualizadoEn?: Date,
+  em?: EntityManager
 ): Promise<void> {
-  const entityManager = await getEM();
+  const entityManager = em ?? (await getEM());
   const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
   if (esEventoRepositoryViejo(entrega, eventoActualizadoEn)) return;
   entrega.repoDeleted = true;
@@ -282,9 +285,10 @@ export async function marcarRepoBorrado(
 // `repoGithubId`, ver `getEntregaPorRepoGithubId`) y se reescribe.
 export async function renombrarRepoDeEntrega(
   entregaId: string,
-  data: { repoName: string; repoUrl: string; eventoActualizadoEn?: Date }
+  data: { repoName: string; repoUrl: string; eventoActualizadoEn?: Date },
+  em?: EntityManager
 ): Promise<void> {
-  const entityManager = await getEM();
+  const entityManager = em ?? (await getEM());
   const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
   if (esEventoRepositoryViejo(entrega, data.eventoActualizadoEn)) return;
   entrega.repoName = data.repoName;
@@ -297,23 +301,30 @@ export async function renombrarRepoDeEntrega(
 // array denormalizado de colaboradores con acceso al repo.
 export async function actualizarColaboradoresDeEntrega(
   entregaId: string,
-  data: { agregar?: string; quitar?: string }
+  data: { agregar?: string; quitar?: string },
+  em?: EntityManager
 ): Promise<void> {
-  const entityManager = await getEM();
+  const entityManager = em ?? (await getEM());
   const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
+  let cambio = false;
   if (data.agregar) {
     const normalizado = data.agregar.toLowerCase();
     if (!entrega.githubUsernames.some((username) => username.toLowerCase() === normalizado)) {
       entrega.githubUsernames = [...entrega.githubUsernames, data.agregar];
+      cambio = true;
     }
   }
   if (data.quitar) {
     const normalizado = data.quitar.toLowerCase();
-    entrega.githubUsernames = entrega.githubUsernames.filter(
+    const actualizados = entrega.githubUsernames.filter(
       (username) => username.toLowerCase() !== normalizado
     );
+    if (actualizados.length !== entrega.githubUsernames.length) {
+      entrega.githubUsernames = actualizados;
+      cambio = true;
+    }
   }
-  await entityManager.flush();
+  if (cambio) await entityManager.flush();
 }
 
 export async function createEntrega(

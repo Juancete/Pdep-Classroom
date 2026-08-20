@@ -12,7 +12,11 @@ describe("verificarFirmaGithub", () => {
   const envOriginal = process.env.GITHUB_WEBHOOK_SECRET;
 
   afterEach(() => {
-    process.env.GITHUB_WEBHOOK_SECRET = envOriginal;
+    if (envOriginal === undefined) {
+      delete process.env.GITHUB_WEBHOOK_SECRET;
+    } else {
+      process.env.GITHUB_WEBHOOK_SECRET = envOriginal;
+    }
   });
 
   it("acepta una firma válida", () => {

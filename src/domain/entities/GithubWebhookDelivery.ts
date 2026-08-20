@@ -53,7 +53,7 @@ export class GithubWebhookDelivery {
   intentos: number = 0;
 
   @Property({ type: "text", nullable: true })
-  error?: string;
+  error: string | null = null;
 
   @Property({ type: "json", nullable: true })
   payload?: unknown;

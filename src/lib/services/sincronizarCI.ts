@@ -4,6 +4,7 @@ import { mapConConcurrenciaLimitada } from "@/lib/concurrencia";
 import { mensajeOperativo } from "@/lib/mensaje-operativo";
 import { actualizarCIDeEntrega } from "@/lib/repositories";
 import { resultadoDesdeCheckRuns, type Entrega } from "@/domain/entities";
+import type { EntityManager } from "@mikro-orm/postgresql";
 
 const MAX_CONCURRENT_CI_CHECKS = 5;
 
@@ -23,7 +24,10 @@ function esReciente(fecha: Date | undefined): boolean {
   return Date.now() - fecha.getTime() < FRESCURA_CI_MS;
 }
 
-async function sincronizarUnaEntrega(entrega: Entrega): Promise<"actualizada" | { error: string }> {
+async function sincronizarUnaEntrega(
+  entrega: Entrega,
+  em?: EntityManager
+): Promise<"actualizada" | { error: string }> {
   const repoName = entrega.repoName!;
   try {
     const estado = await getEstadoCI(repoName);
@@ -32,24 +36,32 @@ async function sincronizarUnaEntrega(entrega: Entrega): Promise<"actualizada" | 
       // Limpia explícitamente lo que hubiera de una consulta anterior — acá
       // sí sabemos que no hay ningún check, a diferencia de "pendiente" en
       // `reejecutarCIDeEntrega`, donde se preserva el commit/checks previos.
-      await actualizarCIDeEntrega(entrega.id, {
-        resultadoNombre: "sin_ci",
-        checkSuiteIds: null,
-        commitSha: null,
-        detalleUrl: null,
-        ejecutadoEn: null,
-      });
+      await actualizarCIDeEntrega(
+        entrega.id,
+        {
+          resultadoNombre: "sin_ci",
+          checkSuiteIds: null,
+          commitSha: null,
+          detalleUrl: null,
+          ejecutadoEn: null,
+        },
+        em
+      );
       return "actualizada";
     }
 
     const resultado = resultadoDesdeCheckRuns(estado.checkRuns);
-    await actualizarCIDeEntrega(entrega.id, {
-      resultadoNombre: resultado.nombre,
-      checkSuiteIds: estado.checkSuiteIds,
-      commitSha: estado.commitSha,
-      detalleUrl: estado.detalleUrl,
-      ejecutadoEn: new Date(estado.ejecutadoEn),
-    });
+    await actualizarCIDeEntrega(
+      entrega.id,
+      {
+        resultadoNombre: resultado.nombre,
+        checkSuiteIds: estado.checkSuiteIds,
+        commitSha: estado.commitSha,
+        detalleUrl: estado.detalleUrl,
+        ejecutadoEn: new Date(estado.ejecutadoEn),
+      },
+      em
+    );
     return "actualizada";
   } catch (error) {
     const message = mensajeOperativo(error);
@@ -69,7 +81,7 @@ async function sincronizarUnaEntrega(entrega: Entrega): Promise<"actualizada" | 
  */
 export async function sincronizarCIDeEntregas(
   entregas: Entrega[],
-  opts?: { forzar?: boolean }
+  opts?: { forzar?: boolean; em?: EntityManager }
 ): Promise<SincronizarCIResult> {
   const forzar = opts?.forzar ?? false;
   const pendientes = entregas.filter(
@@ -80,7 +92,7 @@ export async function sincronizarCIDeEntregas(
   const resultados = await mapConConcurrenciaLimitada(
     pendientes,
     MAX_CONCURRENT_CI_CHECKS,
-    sincronizarUnaEntrega
+    (entrega) => sincronizarUnaEntrega(entrega, opts?.em)
   );
 
   const fallidas: { repoName: string; error: string }[] = [];

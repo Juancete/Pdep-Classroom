@@ -201,6 +201,9 @@ describe("migrations", () => {
     expect(migration).toContain('add column "ultimo_push_sha" varchar(255) null');
     expect(migration).toContain('add column "ultimo_push_por" varchar(255) null');
     expect(migration).toContain('add column "repo_github_id" varchar(255) null');
+    expect(migration).toContain(
+      'constraint "entrega_repo_github_id_unique" unique ("repo_github_id")'
+    );
     expect(migration).toContain('add column "repo_evento_actualizado_en" timestamptz null');
     expect(migration).toContain('drop table if exists "github_webhook_delivery"');
     expect(migration).not.toContain("foreign key");
@@ -303,6 +306,12 @@ describe("migrations", () => {
     expect(entrega?.columns).toHaveProperty("ultimo_push_sha");
     expect(entrega?.columns).toHaveProperty("ultimo_push_por");
     expect(entrega?.columns).toHaveProperty("repo_github_id");
+    expect(entrega?.indexes).toContainEqual(
+      expect.objectContaining({
+        keyName: "entrega_repo_github_id_unique",
+        unique: true,
+      })
+    );
     expect(entrega?.columns).toHaveProperty("repo_evento_actualizado_en");
     expect(githubWebhookDelivery?.columns.delivery_id).toMatchObject({
       nullable: false,
