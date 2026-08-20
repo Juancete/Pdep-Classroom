@@ -68,6 +68,10 @@ describe("sincronizarCIDeEntregas", () => {
     expect(resultado).toEqual({ actualizadas: 1, omitidas: 0, fallidas: [] });
     expect(mockActualizarCI).toHaveBeenCalledWith(entrega.id, {
       resultadoNombre: "sin_ci",
+      checkSuiteIds: null,
+      commitSha: null,
+      detalleUrl: null,
+      ejecutadoEn: null,
     });
   });
 

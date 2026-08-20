@@ -28,6 +28,12 @@ describe("mensajeOperativo", () => {
     );
   });
 
+  it("redacta un header authorization con esquema y credencial (con espacio)", () => {
+    expect(
+      mensajeOperativo(new Error("Authorization: Basic dXNlcjpwYXNz"))
+    ).toBe("Authorization: [REDACTED]");
+  });
+
   it("trunca mensajes muy largos", () => {
     const mensaje = "a".repeat(2000);
     expect(mensajeOperativo(new Error(mensaje)).length).toBe(1000);

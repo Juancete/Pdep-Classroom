@@ -42,4 +42,14 @@ describe("mapConConcurrenciaLimitada", () => {
     const resultado = await mapConConcurrenciaLimitada([1, 2], 10, async (item) => item);
     expect(resultado).toEqual([1, 2]);
   });
+
+  it("propaga el rechazo si operation rechaza para algún item", async () => {
+    const error = new Error("boom");
+    await expect(
+      mapConConcurrenciaLimitada([1, 2, 3], 2, async (item) => {
+        if (item === 2) throw error;
+        return item;
+      })
+    ).rejects.toBe(error);
+  });
 });

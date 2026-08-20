@@ -59,6 +59,11 @@ describe("POST /api/assignments/[id]/ci", () => {
       [{ id: "e1" }, { id: "e2" }],
       { forzar: true }
     );
+    await expect(response.json()).resolves.toEqual({
+      actualizadas: 1,
+      omitidas: 0,
+      fallidas: [],
+    });
   });
 
   it("un alumno sólo sincroniza su propia entrega, ignorando cualquier entregaId del body", async () => {
