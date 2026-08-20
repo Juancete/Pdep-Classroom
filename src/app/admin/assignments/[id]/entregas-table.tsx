@@ -10,6 +10,10 @@ import {
   DataCell,
 } from "@/app/components/DataTable";
 import { matcheaEntregaQuery } from "@/lib/entrega-query";
+import { CIBadge } from "@/app/components/CIBadge";
+import { CISyncButton } from "./ci-sync-button";
+import { CIRerunButton } from "./ci-rerun-button";
+import type { NombreResultadoCI } from "@/domain/entities";
 
 export type EntregaRow = {
   id: string;
@@ -20,13 +24,24 @@ export type EntregaRow = {
   estadoRepo: "borrado" | "activo" | "sin-repo";
   createdAt: string;
   nombreCompleto: string;
+  ci: {
+    resultadoNombre: NombreResultadoCI;
+    detalleUrl?: string;
+    permiteReejecucion: boolean;
+  };
 };
 
 export function filterEntregas(entregas: EntregaRow[], rawQuery: string): EntregaRow[] {
   return entregas.filter((entrega) => matcheaEntregaQuery(entrega, rawQuery));
 }
 
-export function EntregasTable({ entregas }: { entregas: EntregaRow[] }) {
+export function EntregasTable({
+  assignmentId,
+  entregas,
+}: {
+  assignmentId: string;
+  entregas: EntregaRow[];
+}) {
   const [query, setQuery] = useState("");
   const filtradas = filterEntregas(entregas, query);
 
@@ -36,14 +51,17 @@ export function EntregasTable({ entregas }: { entregas: EntregaRow[] }) {
         <h2 className="font-medium text-gray-700 shrink-0">
           Entregas aceptadas
         </h2>
-        <input
-          type="search"
-          autoComplete="new-password"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Buscar por usuario o repo..."
-          className="border border-gray-300 rounded-md px-3 py-1 text-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-pdep-400"
-        />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
+          <CISyncButton assignmentId={assignmentId} />
+          <input
+            type="search"
+            autoComplete="new-password"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Buscar por usuario o repo..."
+            className="border border-gray-300 rounded-md px-3 py-1 text-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-pdep-400"
+          />
+        </div>
       </div>
 
       {filtradas.length === 0 ? (
@@ -53,11 +71,12 @@ export function EntregasTable({ entregas }: { entregas: EntregaRow[] }) {
             : "No hay entregas todavía."}
         </div>
       ) : (
-        <DataTable columns="1.5fr 1.2fr 1.5fr 120px" bare>
+        <DataTable columns="1.4fr 1fr 1.3fr 1fr 120px" bare>
           <DataHeader>
             <DataHeaderCell>Nombre completo</DataHeaderCell>
             <DataHeaderCell>Usuario(s)</DataHeaderCell>
             <DataHeaderCell>Repositorio</DataHeaderCell>
+            <DataHeaderCell>CI</DataHeaderCell>
             <DataHeaderCell>Fecha</DataHeaderCell>
           </DataHeader>
           <DataBody>
@@ -101,6 +120,19 @@ export function EntregasTable({ entregas }: { entregas: EntregaRow[] }) {
                   {entrega.estadoRepo === "sin-repo" && (
                     <span className="text-gray-400 text-xs">Sin repo</span>
                   )}
+                </DataCell>
+                <DataCell label="CI">
+                  <span className="inline-flex items-center gap-1.5">
+                    <CIBadge
+                      resultadoNombre={entrega.ci.resultadoNombre}
+                      detalleUrl={entrega.ci.detalleUrl}
+                    />
+                    <CIRerunButton
+                      assignmentId={assignmentId}
+                      entregaId={entrega.id}
+                      permiteReejecucion={entrega.ci.permiteReejecucion}
+                    />
+                  </span>
                 </DataCell>
                 <DataCell label="Fecha">
                   <span className="text-gray-500 text-xs">{entrega.createdAt}</span>

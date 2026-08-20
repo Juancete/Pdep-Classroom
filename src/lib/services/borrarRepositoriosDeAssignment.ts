@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { deleteRepo, type DeleteRepoResult } from "@/lib/github";
 import { logger } from "@/lib/logger";
+import { mapConConcurrenciaLimitada } from "@/lib/concurrencia";
+import { mensajeOperativo } from "@/lib/mensaje-operativo";
 import {
   completarIntentoBorradoRepo,
   fallarIntentoBorradoRepo,
@@ -10,7 +12,6 @@ import {
 import type { Entrega } from "@/domain/entities";
 
 const MAX_CONCURRENT_DELETIONS = 5;
-const MAX_ERROR_LENGTH = 1000;
 
 export type RepoDeletionItemResult = {
   entregaId: string;
@@ -28,39 +29,6 @@ export type DeleteAssignmentReposResult = {
   failed: number;
   results: RepoDeletionItemResult[];
 };
-
-function mensajeOperativo(error: unknown): string {
-  const message = error instanceof Error ? error.message : "Error desconocido";
-  return message
-    .replace(/\b(?:github_pat|gh[pousr])_[A-Za-z0-9_]+\b/g, "[REDACTED]")
-    .replace(/\bBearer\s+\S+/gi, "Bearer [REDACTED]")
-    .replace(
-      /\b(authorization|token|password|cookie)(\s*[:=]\s*)\S+/gi,
-      "$1$2[REDACTED]"
-    )
-    .slice(0, MAX_ERROR_LENGTH);
-}
-
-async function mapConConcurrenciaLimitada<T, R>(
-  items: T[],
-  limit: number,
-  operation: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-
-  async function worker(): Promise<void> {
-    while (nextIndex < items.length) {
-      const index = nextIndex++;
-      results[index] = await operation(items[index]!);
-    }
-  }
-
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, () => worker())
-  );
-  return results;
-}
 
 async function borrarRepositorio(data: {
   entrega: Entrega;
@@ -83,7 +51,14 @@ async function borrarRepositorio(data: {
     attemptId = attempt.id;
   } catch (error) {
     logger.error(
-      { err: error, operationId, assignmentId, entregaId: entrega.id, repoName, requestedBy },
+      {
+        err: mensajeOperativo(error),
+        operationId,
+        assignmentId,
+        entregaId: entrega.id,
+        repoName,
+        requestedBy,
+      },
       "No se pudo iniciar la auditoría de borrado del repositorio"
     );
     return {
@@ -103,12 +78,12 @@ async function borrarRepositorio(data: {
       await fallarIntentoBorradoRepo(attemptId, message);
     } catch (auditError) {
       logger.error(
-        { err: auditError, attemptId, operationId, assignmentId, repoName },
+        { err: mensajeOperativo(auditError), attemptId, operationId, assignmentId, repoName },
         "No se pudo persistir el fallo del borrado"
       );
     }
     logger.error(
-      { err: error, attemptId, operationId, assignmentId, repoName, requestedBy },
+      { err: message, attemptId, operationId, assignmentId, repoName, requestedBy },
       "Falló el borrado del repositorio"
     );
     return { entregaId: entrega.id, repoName, status: "failed", error: message };
@@ -124,14 +99,22 @@ async function borrarRepositorio(data: {
     const persistenceError =
       "GitHub respondió, pero no se pudo guardar el resultado. Reintentá.";
     logger.error(
-      { err: error, attemptId, operationId, assignmentId, repoName, requestedBy, githubResult },
+      {
+        err: mensajeOperativo(error),
+        attemptId,
+        operationId,
+        assignmentId,
+        repoName,
+        requestedBy,
+        githubResult,
+      },
       "GitHub respondió al borrado, pero no se pudo persistir el resultado"
     );
     try {
       await fallarIntentoBorradoRepo(attemptId, persistenceError);
     } catch (auditError) {
       logger.error(
-        { err: auditError, attemptId, operationId, assignmentId, repoName },
+        { err: mensajeOperativo(auditError), attemptId, operationId, assignmentId, repoName },
         "No se pudo cerrar como fallido el intento de borrado"
       );
     }

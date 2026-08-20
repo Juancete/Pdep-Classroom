@@ -41,6 +41,13 @@ export {
 } from "./Grupo";
 export { Entrega } from "./Entrega";
 export {
+  ResultadoCI,
+  resultadoDesdeCheckRuns,
+  NOMBRES_RESULTADO_CI,
+  type NombreResultadoCI,
+  type CheckRunResumen,
+} from "./ResultadoCI";
+export {
   RepoDeletionAttempt,
   type RepoDeletionStatus,
 } from "./RepoDeletionAttempt";

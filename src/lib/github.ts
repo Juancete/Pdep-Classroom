@@ -217,3 +217,111 @@ export async function listarTemplates(): Promise<
     handleOctokitError(error);
   }
 }
+
+// ── CI (issue #58) ───────────────────────────────────────────
+// No hay un workflow "de CI" con nombre fijo: se lee el estado combinado de
+// los checks del último commit del branch por defecto — mismo mecanismo que
+// un badge de CI en un README. Cualquier *.yml en .github/workflows/ que
+// publique checks cuenta, sin importar cómo se llame ni cuántos haya.
+
+export interface CheckRunCrudo {
+  status: string;
+  conclusion:
+    | "success"
+    | "failure"
+    | "neutral"
+    | "cancelled"
+    | "skipped"
+    | "timed_out"
+    | "action_required"
+    | null;
+}
+
+export type EstadoCI =
+  | { tipo: "sin_ci" }
+  | {
+      tipo: "checks";
+      checkSuiteIds: string[];
+      commitSha: string;
+      detalleUrl: string;
+      ejecutadoEn: string;
+      checkRuns: CheckRunCrudo[];
+    };
+
+function ejecutadoEnDesdeCheckRuns(
+  checkRuns: { completed_at: string | null; started_at: string | null }[]
+): string {
+  const timestamps = checkRuns
+    .map((run) => run.completed_at ?? run.started_at)
+    .filter((value): value is string => Boolean(value))
+    .sort();
+  return timestamps.at(-1) ?? new Date().toISOString();
+}
+
+export async function getEstadoCI(repoName: string): Promise<EstadoCI> {
+  const octokit = getOctokit();
+
+  let defaultBranch;
+  try {
+    ({
+      data: { default_branch: defaultBranch },
+    } = await octokit.repos.get({ owner: ORG, repo: repoName }));
+  } catch (error) {
+    handleOctokitError(error);
+  }
+
+  let checkRuns;
+  try {
+    ({
+      data: { check_runs: checkRuns },
+    } = await octokit.checks.listForRef({
+      owner: ORG,
+      repo: repoName,
+      ref: defaultBranch,
+      per_page: 100,
+    }));
+  } catch (error) {
+    handleOctokitError(error);
+  }
+
+  if (checkRuns.length === 0) {
+    return { tipo: "sin_ci" };
+  }
+
+  const checkSuiteIds = Array.from(
+    new Set(
+      checkRuns
+        .map((run) => run.check_suite?.id)
+        .filter((id): id is number => id !== undefined && id !== null)
+    )
+  ).map(String);
+
+  return {
+    tipo: "checks",
+    checkSuiteIds,
+    commitSha: checkRuns[0]!.head_sha,
+    detalleUrl: `https://github.com/${ORG}/${repoName}/commit/${checkRuns[0]!.head_sha}/checks`,
+    ejecutadoEn: ejecutadoEnDesdeCheckRuns(checkRuns),
+    checkRuns: checkRuns.map((run) => ({ status: run.status, conclusion: run.conclusion })),
+  };
+}
+
+export async function reejecutarCI(
+  repoName: string,
+  checkSuiteIds: string[]
+): Promise<void> {
+  const octokit = getOctokit();
+  try {
+    await Promise.all(
+      checkSuiteIds.map((checkSuiteId) =>
+        octokit.checks.rerequestSuite({
+          owner: ORG,
+          repo: repoName,
+          check_suite_id: Number(checkSuiteId),
+        })
+      )
+    );
+  } catch (error) {
+    handleOctokitError(error);
+  }
+}

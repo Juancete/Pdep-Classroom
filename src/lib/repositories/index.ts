@@ -36,6 +36,7 @@ export {
   getEntregas,
   getEntregasDeUsuario,
   getEntregaDeUsuario,
+  getEntregaPorId,
   getEntregaByRepoName,
   getEntregaLogica,
   getEntregaCountsByAssignment,
@@ -45,6 +46,7 @@ export {
   createEntrega,
   createOrGetEntrega,
   crearEntregaSiAssignmentDisponible,
+  actualizarCIDeEntrega,
 } from "./EntregaRepository";
 
 export {

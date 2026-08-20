@@ -1,7 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { filterEntregas, EntregasTable } from "./entregas-table";
 import type { EntregaRow } from "./entregas-table";
+
+// CISyncButton/CIRerunButton usan useRouter — no hay Router context en un
+// render estático fuera de Next, hay que mockearlo igual que en
+// delete-repos-button.test.tsx. El efecto de auto-sincronizar al montar no
+// corre en `renderToStaticMarkup` (no hay fase de commit), así que no hace
+// falta mockear `fetch` acá.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -15,9 +24,16 @@ function makeRow(overrides?: Partial<EntregaRow>): EntregaRow {
     estadoRepo: "activo",
     createdAt: "2/1/2026",
     nombreCompleto: "García, Juan",
+    ci: {
+      resultadoNombre: "sin_consultar",
+      detalleUrl: undefined,
+      permiteReejecucion: false,
+    },
     ...overrides,
   };
 }
+
+const ASSIGNMENT_ID = "assignment-1";
 
 // ── filterEntregas ────────────────────────────────────────────
 
@@ -77,31 +93,32 @@ describe("filterEntregas", () => {
 
 describe("EntregasTable", () => {
   it("muestra mensaje cuando no hay entregas", () => {
-    const html = renderToStaticMarkup(<EntregasTable entregas={[]} />);
+    const html = renderToStaticMarkup(<EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[]} />);
     expect(html).toContain("No hay entregas todavía");
   });
 
   it("no muestra filas cuando no hay entregas", () => {
-    const html = renderToStaticMarkup(<EntregasTable entregas={[]} />);
+    const html = renderToStaticMarkup(<EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[]} />);
     expect(html).not.toContain("data-cols");
   });
 
   it("muestra filas cuando hay entregas", () => {
-    const html = renderToStaticMarkup(<EntregasTable entregas={[makeRow()]} />);
+    const html = renderToStaticMarkup(<EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow()]} />);
     expect(html).toContain("García, Juan");
   });
 
   it("muestra las cabeceras de la tabla", () => {
-    const html = renderToStaticMarkup(<EntregasTable entregas={[makeRow()]} />);
+    const html = renderToStaticMarkup(<EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow()]} />);
     expect(html).toContain("Usuario(s)");
     expect(html).toContain("Nombre completo");
     expect(html).toContain("Repositorio");
+    expect(html).toContain("CI");
     expect(html).toContain("Fecha");
   });
 
   it("muestra los githubUsernames", () => {
     const html = renderToStaticMarkup(
-      <EntregasTable entregas={[makeRow({ githubUsernames: ["juancito", "mariela"] })]} />
+      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow({ githubUsernames: ["juancito", "mariela"] })]} />
     );
     expect(html).toContain("juancito");
     expect(html).toContain("mariela");
@@ -109,15 +126,14 @@ describe("EntregasTable", () => {
 
   it("muestra el nombre completo del alumno", () => {
     const html = renderToStaticMarkup(
-      <EntregasTable entregas={[makeRow({ nombreCompleto: "Pérez, Ana" })]} />
+      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow({ nombreCompleto: "Pérez, Ana" })]} />
     );
     expect(html).toContain("Pérez, Ana");
   });
 
   it("muestra el botón 'Ir al repo' cuando hay repoUrl", () => {
     const html = renderToStaticMarkup(
-      <EntregasTable
-        entregas={[makeRow({ repoUrl: "https://github.com/org/repo" })]}
+      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow({ repoUrl: "https://github.com/org/repo" })]}
       />
     );
     expect(html).toContain("Ir al repo");
@@ -126,41 +142,40 @@ describe("EntregasTable", () => {
 
   it("el link al repo abre en ventana nueva", () => {
     const html = renderToStaticMarkup(
-      <EntregasTable entregas={[makeRow({ repoUrl: "https://github.com/org/repo" })]} />
+      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow({ repoUrl: "https://github.com/org/repo" })]} />
     );
     expect(html).toContain('target="_blank"');
   });
 
   it('muestra "Sin repo" cuando estadoRepo es "sin-repo"', () => {
     const html = renderToStaticMarkup(
-      <EntregasTable entregas={[makeRow({ estadoRepo: "sin-repo", repoUrl: undefined })]} />
+      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow({ estadoRepo: "sin-repo", repoUrl: undefined })]} />
     );
     expect(html).toContain("Sin repo");
   });
 
   it('muestra "Repositorio borrado" cuando estadoRepo es "borrado"', () => {
     const html = renderToStaticMarkup(
-      <EntregasTable entregas={[makeRow({ estadoRepo: "borrado" })]} />
+      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow({ estadoRepo: "borrado" })]} />
     );
     expect(html).toContain("Repositorio borrado");
   });
 
   it("muestra la fecha de la entrega", () => {
     const html = renderToStaticMarkup(
-      <EntregasTable entregas={[makeRow({ createdAt: "15/3/2026" })]} />
+      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow({ createdAt: "15/3/2026" })]} />
     );
     expect(html).toContain("15/3/2026");
   });
 
   it("muestra el campo de búsqueda", () => {
-    const html = renderToStaticMarkup(<EntregasTable entregas={[makeRow()]} />);
+    const html = renderToStaticMarkup(<EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow()]} />);
     expect(html).toContain('type="search"');
   });
 
   it("muestra todas las entregas en el render inicial (sin filtro activo)", () => {
     const html = renderToStaticMarkup(
-      <EntregasTable
-        entregas={[
+      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[
           makeRow({ id: "e1", githubUsernames: ["alumno1"] }),
           makeRow({ id: "e2", githubUsernames: ["alumno2"] }),
           makeRow({ id: "e3", githubUsernames: ["alumno3"] }),

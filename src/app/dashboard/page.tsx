@@ -12,6 +12,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { Grupo } from "@/domain/entities";
 import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
+import { CIBadge } from "@/app/components/CIBadge";
+import { CIRefreshButton } from "./ci-refresh-button";
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -119,7 +121,7 @@ export default async function DashboardPage() {
                 )}
               </div>
 
-              <div className="flex-shrink-0 w-full sm:w-auto">
+              <div className="flex-shrink-0 w-full sm:w-auto flex flex-col items-end gap-1.5">
                 {entrega ? (
                   <a
                     href={entrega.repoUrl}
@@ -152,6 +154,20 @@ export default async function DashboardPage() {
                   </a>
                 ) : (
                   <AcceptButton assignmentId={assignment.id} />
+                )}
+                {entrega && (
+                  <div className="flex items-center gap-1">
+                    <CIBadge
+                      resultadoNombre={entrega.ciResultadoNombre}
+                      detalleUrl={entrega.ciDetalleUrl}
+                    />
+                    <CIRefreshButton assignmentId={assignment.id} />
+                  </div>
+                )}
+                {entrega && entrega.ciResultadoNombre !== "sin_ci" && (
+                  <p className="text-[11px] text-gray-400">
+                    Resultado automático — no es la nota final.
+                  </p>
                 )}
               </div>
             </div>
