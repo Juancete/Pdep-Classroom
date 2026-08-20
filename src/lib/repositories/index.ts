@@ -38,6 +38,8 @@ export {
   getEntregaDeUsuario,
   getEntregaPorId,
   getEntregaByRepoName,
+  getEntregaPorRepoGithubId,
+  asegurarRepoGithubId,
   getEntregaLogica,
   getEntregaCountsByAssignment,
   getActiveRepoCountsByAssignment,
@@ -47,6 +49,11 @@ export {
   createOrGetEntrega,
   crearEntregaSiAssignmentDisponible,
   actualizarCIDeEntrega,
+  conLockDeEntrega,
+  actualizarActividadDeEntrega,
+  marcarRepoBorrado,
+  renombrarRepoDeEntrega,
+  actualizarColaboradoresDeEntrega,
 } from "./EntregaRepository";
 
 export {
@@ -86,3 +93,14 @@ export {
   getHistorialDeMembresias,
   type HistorialDeMembresiasPage,
 } from "./CambioDeMembresiaRepository";
+
+export {
+  registrarDelivery,
+  reclamarDeliveryPorId,
+  reclamarDeliveryPorDeliveryId,
+  cerrarDelivery,
+  fallarDelivery,
+  getDeliveriesReprocesables,
+  DeliveryDuplicadoError,
+  type DeliveryReclamado,
+} from "./GithubWebhookDeliveryRepository";

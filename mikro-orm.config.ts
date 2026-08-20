@@ -19,6 +19,7 @@ import {
   Entrega,
   RepoDeletionAttempt,
   CambioDeMembresia,
+  GithubWebhookDelivery,
 } from "./src/domain/entities";
 
 export default defineConfig({
@@ -39,6 +40,7 @@ export default defineConfig({
     Entrega,
     RepoDeletionAttempt,
     CambioDeMembresia,
+    GithubWebhookDelivery,
   ],
 
   // Usa reflect-metadata en runtime (funciona en webpack/RSC sin necesitar
