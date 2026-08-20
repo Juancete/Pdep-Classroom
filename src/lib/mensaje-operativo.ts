@@ -13,7 +13,7 @@ export function mensajeOperativo(error: unknown): string {
     .replace(/\b(?:github_pat|gh[pousr])_[A-Za-z0-9_]+\b/g, "[REDACTED]")
     .replace(/\bBearer\s+\S+/gi, "Bearer [REDACTED]")
     .replace(
-      /\b(authorization|token|password|cookie)(\s*[:=]\s*).+/gi,
+      /\b(authorization|token|password|cookie)["']?(\s*[:=]\s*)["']?.+/gi,
       "$1$2[REDACTED]"
     )
     .slice(0, MAX_ERROR_LENGTH);
