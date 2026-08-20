@@ -57,7 +57,10 @@ Completar el formulario con estos valores:
 
 **Post installation** — dejar vacío (no se necesita Setup URL).
 
-**Webhook** — desmarcar "Active". Esta app no usa webhooks.
+**Webhook** — marcar "Active" (issue #60):
+- Webhook URL: `https://tu-dominio.vercel.app/api/webhooks/github` (en local, la URL de un túnel —
+  ver [Webhooks de GitHub](#webhooks-de-github) más abajo).
+- Secret: el mismo valor que `GITHUB_WEBHOOK_SECRET` en `.env.local`/Vercel.
 
 **Permissions:**
 
@@ -73,7 +76,13 @@ estado combinado de los checks del último commit, `Write` hace falta sólo para
 reejecución administrativa. **No hace falta `Actions`** — no se lee ningún workflow run puntual, se
 lee el estado combinado de checks del commit, igual que un badge de CI en un README.
 
-Todo lo demás (Account permissions, Subscribe to events) dejarlo sin seleccionar.
+**Subscribe to events** — tildar `Check suite`, `Push`, `Repository`, `Member` (issue #60, ver
+[Webhooks de GitHub](#webhooks-de-github)). Los cuatro entran con los permisos ya listados arriba
+— `check_suite` con `Checks`, `push` con `Contents`, `member` con `Members`, `repository` con
+`Metadata` (que toda GitHub App tiene de forma implícita) — **no hace falta agregar ningún permiso
+nuevo** sólo para habilitar el webhook.
+
+Todo lo demás (Account permissions) dejarlo sin seleccionar.
 
 > Si la App ya estaba instalada antes de agregar el permiso `Checks`, hay que aceptar el permiso
 > nuevo desde la org (`Settings → GitHub Apps → PdeP Classroom → Review request` o reinstalar la
@@ -508,10 +517,12 @@ grupo) falla con un error explícito en vez de crear un repo con el nombre trunc
 ## CI en Classroom
 
 Classroom puede mostrar el estado combinado de CI del último commit de cada repo de entrega, con
-link al detalle en GitHub, y ofrecer una reejecución administrativa. Es **pull, no push**: se
-consulta la API bajo demanda y se cachea el último estado en la propia `Entrega` (sin historial
-completo) — cuando se implemente el webhook de `workflow_run` ([#60](https://github.com/Juancete/Pdep-Classroom/issues/60)),
-va a escribir en el mismo lugar y esta pantalla no cambia.
+link al detalle en GitHub, y ofrecer una reejecución administrativa. El estado se cachea en la
+propia `Entrega` (sin historial completo). Con el webhook de `check_suite` configurado ([issue #60](https://github.com/Juancete/Pdep-Classroom/issues/60),
+ver [Webhooks de GitHub](#webhooks-de-github)), la actualización es push: en cuanto termina una
+ejecución de CI en GitHub, la vista queda al día sin que nadie tenga que abrir nada. El polling
+sigue existiendo como fallback — el botón "Actualizar CI" fuerza una consulta manual para cuando el
+webhook no llegó (App sin webhook configurado, entorno local sin túnel, un delivery perdido).
 
 ### Cualquier workflow cuenta, no hay nombre de archivo obligatorio
 
@@ -565,7 +576,9 @@ Un repo sin ningún check configurado no rompe nada más de la vista — se degr
 ### Frescura y reejecución
 
 - La sincronización (`POST /api/assignments/[id]/ci`) respeta una ventana de 60 segundos por
-  entrega para no martillar la API de GitHub — un botón "Actualizar" explícito la puede forzar.
+  entrega para no martillar la API de GitHub. El panel admin **no** sincroniza automáticamente al
+  abrir la vista (issue #60: con el webhook andando, no hace falta) — el botón "Actualizar CI" la
+  fuerza a pedido.
 - La reejecución (`POST /api/assignments/[id]/ci/rerun`, sólo admin) pide el `rerequest` de cada
   check suite conocido del commit (`POST /check-suites/{check_suite_id}/rerequest`) — si hay varios
   workflows, se reejecutan todos. Si nunca corrió ningún check, el botón queda deshabilitado — no
@@ -576,6 +589,151 @@ Un repo sin ningún check configurado no rompe nada más de la vista — se degr
 El badge siempre se muestra junto a la leyenda "Resultado automático — no es la nota final", tanto
 en el panel admin como en el dashboard del alumno. No hay ninguna opción para presentarlo como
 calificación definitiva.
+
+## Webhooks de GitHub
+
+Classroom recibe eventos push de GitHub en `POST /api/webhooks/github` (issue #60) para mantener
+información operativa al día sin depender exclusivamente de que alguien abra una pantalla. Cada
+delivery se autentica, deduplica y persiste dentro del mismo request; el efecto (que para
+`check_suite` implica llamar de nuevo a la API de GitHub) se aplica después de responder — no hay
+cola ni cron de fondo, el proyecto no tiene infraestructura de ese tipo.
+
+| Evento | Efecto en Classroom |
+|---|---|
+| `check_suite` (`requested`, `rerequested`, `completed`) | Resincroniza el estado de CI de la entrega (ver [CI en Classroom](#ci-en-classroom)) |
+| `push` | Actualiza el último push conocido del repo (fecha, commit, autor) |
+| `repository` (`deleted`, `renamed`) | Marca el repo como borrado, o reescribe su nombre/URL |
+| `member` (`added`, `removed`) | Reconcilia la lista de colaboradores contra el estado real de GitHub — sólo agrega si además es un alumno conocido |
+
+Cualquier otro evento o `action` que GitHub mande se ignora de forma segura (no rompe, no se
+persiste como error).
+
+GitHub no garantiza el orden de entrega de los webhooks, así que ningún handler confía ciegamente
+en el payload de un único evento:
+
+- `push` guarda `repository.pushed_at` (lo que GitHub actualiza en cada push) como fecha de
+  actividad, no la hora en que Classroom procesó el evento ni `head_commit.timestamp` (fecha de
+  autoría del commit, no de cuándo se pusheó) — así un push viejo que llega después de uno nuevo no
+  puede pisar el más reciente. Sin un `pushed_at` interpretable no hay señal de orden confiable, así
+  que el evento se rechaza (el delivery queda `fallido`, reprocesable) en vez de aplicarse con una
+  fecha que no significa lo que dice significar.
+- `member` no aplica el `added`/`removed` del payload tal cual: consulta "¿es colaborador ahora
+  mismo?" contra la API de GitHub y reconcilia el array de colaboradores a esa respuesta — mismo
+  criterio que `check_suite` (invalidar y refrescar, no confiar en el delta). Así, un `removed` que
+  llegó después de un `added` más reciente (o viceversa) converge al estado real sin importar el
+  orden de llegada.
+- `repository` (`deleted`/`renamed`) resuelve la entrega dueña por `repository.id` primero — a
+  diferencia del nombre, no cambia con un rename — y recién si no hay match cae al lookup por
+  nombre. Sin esto, dos renames seguidos entregados fuera de orden (ej. B→C antes que A→B) pueden
+  perder el primero: buscar por el nombre viejo ("B") no encuentra nada porque la entrega todavía
+  dice "A" en la DB. Por eso `repoGithubId` se captura al crear la entrega (desde la respuesta de
+  `createUsingTemplate`, no hace falta esperar a un webhook) — depender sólo del "self-heal" del
+  primer evento deja una ventana real: si el doble rename ocurre antes de que llegue cualquier otro
+  webhook, todavía no hay id guardado en absoluto. Para entregas viejas (creadas antes de esto) el
+  self-heal sigue aplicando como red de respaldo. El fallback por nombre además rechaza una entrega
+  cuyo `repoGithubId` ya está seteado a un id *distinto* del que trae el evento — un repo borrado y
+  recreado con el mismo nombre es un repo distinto, sus eventos no pueden aplicarse sobre la entrega
+  vieja sólo porque el nombre coincide. La escritura en sí se guarda con un guard contra
+  `repository.updated_at`: un `deleted`/`renamed` estrictamente más viejo que el último ya aplicado
+  no lo pisa — la comparación es estricta (no rechaza empates) porque el timestamp viaja en
+  segundos, y un rename seguido de un delete del mismo repo dentro del mismo segundo comparten
+  timestamp; con un guard no estricto, el delete "empatado" se rechazaría por viejo y el repo
+  quedaría marcado como activo pese a haberse borrado.
+
+### Endpoint público a propósito
+
+`/api/webhooks/github` **no** requiere sesión — GitHub no manda cookies. No está en el `matcher` de
+`src/proxy.ts` (que sólo cubre `/api/assignments`, `/api/registro`, `/api/perfil` y las páginas
+protegidas) y no hay que agregarlo ahí: si estuviera, la falta de sesión produciría un redirect 307
+a `/login`, que GitHub registraría como delivery fallido en vez de un 401 limpio. La autenticación
+real es la firma HMAC del header `X-Hub-Signature-256`, verificada contra `GITHUB_WEBHOOK_SECRET`.
+
+### Respuesta rápida, procesamiento diferido
+
+GitHub espera una respuesta 2xx dentro de 10 segundos — si se excede, considera el delivery
+fallido. `check_suite` implica dos llamadas a la API de GitHub (`repos.get` + `checks.listForRef`,
+vía `getEstadoCI`) más la escritura del resultado; bajo latencia de GitHub o carga, eso puede
+acercarse al límite. Por eso el endpoint no espera a que termine todo eso antes de responder: valida
+la firma, deduplica y reclama el delivery (que es sólo una escritura a la DB), y recién ahí responde
+`202`. El efecto real corre después, dentro de la misma invocación, con
+[`after()`](https://nextjs.org/docs/app/api-reference/functions/after) de Next.js — sin sumar cola
+ni cron nuevos.
+
+La contrapartida: como GitHub ya recibió un `202` antes de que el procesamiento termine, **no**
+reintenta automáticamente si ese procesamiento falla después — eso sólo pasa ante un timeout real
+(la respuesta tardando más de 10s) o un error antes de reclamar el delivery. Un fallo post-respuesta
+queda registrado como `fallido` en `github_webhook_delivery`, visible para un admin (tabla + logs),
+pero **no** aparece como delivery rojo en la UI de GitHub. El endpoint de reproceso
+(`POST /api/webhooks/github/reprocesar`, ver más abajo) es la vía de recuperación para esos casos,
+no el "Redeliver" automático de GitHub.
+
+### Deduplicación, reclamo atómico y estados
+
+Cada delivery se identifica por su `X-GitHub-Delivery` (único por entrega de GitHub, incluida una
+reentrega manual desde "Redeliver" — GitHub conserva el mismo id). Se inserta en la tabla
+`github_webhook_delivery` con un índice único sobre ese id.
+
+Un choque contra ese índice **no** significa automáticamente "ya se manejó, no hacer nada": un
+"Redeliver" llega con el mismo `X-GitHub-Delivery` que el intento original, así que si ese intento
+había quedado `fallido` (o abandonado a mitad de camino), el redelivery es la oportunidad real de
+reprocesarlo. Por eso, antes de aplicar cualquier efecto, la fila se **reclama atómicamente** con un
+único `UPDATE ... WHERE estado IN (...) RETURNING ...`: sólo transiciona (y devuelve la fila) si
+sigue en un estado reprocesable en ese instante. Un `SELECT` seguido de un `UPDATE` separado no da
+esta garantía — dos llamadas concurrentes (un redelivery cruzándose con un reproceso admin, o dos
+reprocesos admin en simultáneo) podrían ver la misma fila como candidata y reaplicar el efecto dos
+veces; con el reclamo atómico, sólo una de las dos gana.
+
+Cada fila pasa por uno de cinco estados:
+
+| Estado | Significa |
+|---|---|
+| `recibido` | Persistido, todavía sin reclamar |
+| `procesando` | Reclamado — hay un intento en vuelo aplicando el efecto |
+| `procesado` | El efecto se aplicó correctamente |
+| `ignorado` | Evento/acción sin efecto en Classroom, o repo sin entrega asociada |
+| `fallido` | El procesamiento tiró una excepción (timeout de GitHub, DB caída, etc.) |
+
+`procesado` e `ignorado` limpian el payload guardado (ya no hace falta — acota el crecimiento de la
+tabla y la retención de PII, un payload de `push` trae emails de committers). `recibido` y `fallido`
+lo conservan, porque son los estados reprocesables — y también un `procesando` que quedó huérfano
+(la lambda que lo reclamó murió a mitad de camino sin cerrar la fila): pasados 2 minutos sin
+cerrarse, vuelve a ofrecerse para reclamo igual que `fallido`.
+
+Ese vencimiento se mide contra `reclamado_en` (cuándo se ganó el último reclamo), no contra
+`recibido_en` (cuándo se insertó la fila la primera vez): un delivery `fallido` puede tener
+`recibido_en` de hace horas — si el lease se midiera contra esa fecha, un `procesando` recién
+reclamado quedaría "vencido" desde el instante cero y disponible para un segundo reclamo de
+inmediato, rompiendo la exclusión mutua justo en el caso que el reproceso existe para resolver.
+
+### Reintentos
+
+Un delivery `fallido` (o `recibido`/`procesando` abandonado) se puede reprocesar con
+`POST /api/webhooks/github/reprocesar` (sólo admin), con `{ "deliveryId": "..." }` para uno puntual
+o sin body para tomar hasta 50 candidatos en orden de llegada — cada uno se reclama atómicamente
+antes de procesarse. El schema es estricto: un typo en la clave (`deliverId` en vez de
+`deliveryId`) o un JSON malformado devuelven 400 en vez de interpretarse silenciosamente como "sin
+filtro" y disparar el lote completo por error. El botón "Redeliver" de la propia GitHub App
+(`Settings → GitHub Apps → PdeP Classroom → Advanced`) también funciona como vía de reproceso — el
+redelivery llega con el mismo `X-GitHub-Delivery` y el reclamo lo recupera igual — pero, a
+diferencia de un timeout real, GitHub no lo dispara solo ante un fallo de procesamiento posterior a
+la respuesta (ver arriba): hay que ir a buscarlo, ya sea desde la propia UI de GitHub o desde el
+endpoint de reproceso. Ambos caminos son atómicos, así que da lo mismo cuál se use, incluso si se
+cruzan entre sí.
+
+### Probar en local
+
+GitHub necesita una URL pública para entregar webhooks. Con `pnpm dev` corriendo, exponer
+`localhost:3000` con un túnel (`gh webhook forward --repo pdep-mn-utn/<algún-repo> --url http://localhost:3000/api/webhooks/github`,
+o `cloudflared`/`ngrok`) y usar esa URL como "Webhook URL" de la GitHub App mientras se prueba.
+
+### Rotación del secreto
+
+`GITHUB_WEBHOOK_SECRET` admite una lista separada por comas para rotar sin perder deliveries en la
+transición (GitHub sólo guarda un secreto a la vez):
+
+1. Agregar el secreto nuevo a la env var, sin sacar el viejo: `GITHUB_WEBHOOK_SECRET=viejo,nuevo`.
+2. Cambiar el secreto en GitHub (`Settings → GitHub Apps → PdeP Classroom → Webhook`) al valor nuevo.
+3. Una vez confirmado que los deliveries llegan bien, sacar el viejo de la env var.
 
 ## Estructura del proyecto
 
@@ -603,7 +761,10 @@ src/
 │   │   │       ├── ci/route.ts                 # POST sincronizar estado de CI
 │   │   │       ├── ci/rerun/route.ts           # POST reejecutar CI (admin)
 │   │   │       └── grupos/                    # POST crear grupo; join, mover y quitar integrantes
-│   │   └── comisiones/[id]/route.ts           # PATCH comisión
+│   │   ├── comisiones/[id]/route.ts           # PATCH comisión
+│   │   └── webhooks/github/
+│   │       ├── route.ts                       # POST recibir webhook de GitHub (público, firma HMAC)
+│   │       └── reprocesar/route.ts            # POST reintentar deliveries fallidos (admin)
 │   ├── admin/
 │   │   ├── assignments/
 │   │   │   ├── page.tsx                       # Listar assignments
@@ -668,7 +829,9 @@ src/
 │       ├── Alumno.ts
 │       ├── Grupo.ts
 │       ├── CambioDeMembresia.ts               # Auditoría de altas/bajas/cambios de integrantes
-│       └── RepoDeletionAttempt.ts             # Auditoría de borrado de repos
+│       ├── RepoDeletionAttempt.ts             # Auditoría de borrado de repos
+│       ├── EstadoDelivery.ts                  # Estado de un delivery de webhook, como Strategy
+│       └── GithubWebhookDelivery.ts           # Auditoría de deliveries de webhook (dedup por delivery id)
 ├── lib/
 │   ├── auth.ts / auth.config.ts / auth.events.ts   # NextAuth: config, providers (GitHub + login de desarrollo), eventos
 │   ├── github.ts                              # Octokit: crear/eliminar repos, collaborators, templates
@@ -683,6 +846,7 @@ src/
 │   ├── assignment-schema.ts                   # Schemas Zod para assignments
 │   ├── rate-limit.ts                          # Rate limiting por usuario + assignment (evita double-click)
 │   ├── entrega-query.ts                       # Helpers de consulta sobre entregas
+│   ├── webhook-firma.ts                       # Verifica X-Hub-Signature-256 (con rotación de secreto)
 │   ├── logger.ts                              # Logging estructurado (pino)
 │   ├── db.ts                                  # Singleton MikroORM (getOrm / getEM)
 │   ├── services/                              # Casos de uso — acá vive la lógica de negocio
@@ -696,7 +860,9 @@ src/
 │   │   ├── hooksPostConfirmacion.ts           # Orquesta los sync post-registro
 │   │   ├── verificarConsistenciaAlumno.ts     # Chequeos de consistencia DB↔Sheets
 │   │   ├── borrarRepositoriosDeAssignment.ts  # Borrado auditado de repos de un assignment
-│   │   └── sincronizarCI.ts                   # Consulta y cachea el estado de CI
+│   │   ├── sincronizarCI.ts                   # Consulta y cachea el estado de CI
+│   │   ├── recibirWebhookGithub.ts            # Dedup + estado de un delivery entrante, reproceso
+│   │   └── procesarEventoGithub.ts            # Router evento → efecto sobre la entrega correspondiente
 │   ├── concurrencia.ts                        # mapConConcurrenciaLimitada (pool de workers genérico)
 │   ├── mensaje-operativo.ts                   # Redacta secretos de un mensaje de error antes de mostrarlo/persistirlo
 │   └── repositories/                          # Acceso a datos por entidad
@@ -706,7 +872,8 @@ src/
 │       ├── EntregaRepository.ts
 │       ├── GrupoRepository.ts
 │       ├── CambioDeMembresiaRepository.ts
-│       └── RepoDeletionAttemptRepository.ts
+│       ├── RepoDeletionAttemptRepository.ts
+│       └── GithubWebhookDeliveryRepository.ts
 └── types/index.ts                             # ColumnConfig, PdepUser, tipos del dominio
 ```
 
@@ -714,7 +881,7 @@ src/
 
 ```bash
 pnpm test              # watch mode
-pnpm test:run          # una sola corrida (~95 archivos hoy)
+pnpm test:run          # una sola corrida (~110 archivos hoy)
 pnpm test:coverage
 pnpm lint
 pnpm test:migrations   # migraciones + invariantes contra Postgres real (requiere MIGRATION_TEST_DATABASE_URL)
@@ -820,11 +987,12 @@ Reutilizamos la service account que ya está en `GOOGLE_SERVICE_ACCOUNT_KEY` —
 - [x] Eliminar repos de un assignment desde el panel admin
 - [ ] Cuando elimina repos de un assignment dar la posibilidad de hacer un backup y descargar un zip
 - [ ] Notificaciones por mail cuando se publica un assignment
-- [x] Integrar CI mediante GitHub Actions en los templates — ver [CI en Classroom](#ci-en-classroom); queda pendiente que [#60](https://github.com/Juancete/Pdep-Classroom/issues/60) reemplace el polling por un webhook de `workflow_run`
+- [x] Integrar CI mediante GitHub Actions en los templates — ver [CI en Classroom](#ci-en-classroom)
 - [ ] Export de estado de entregas a Google Sheets (cerrar el loop con la planilla)
 - [x] Suscribir a los alumnos al grupo de Google Groups automáticamente
 - [x] Ciclo de vida de assignments (borrador/publicado/archivado) con auditoría de quién publicó o archivó
 - [x] Auto-gestión de grupos: crear, unirse, salir y cambiarse, con administración manual desde el panel docente
+- [x] Procesar eventos de GitHub mediante webhooks ([#60](https://github.com/Juancete/Pdep-Classroom/issues/60)) — ver [Webhooks de GitHub](#webhooks-de-github); cubre `check_suite`, `push`, `repository` y `member`
 - [ ] Observabilidad ([#18](https://github.com/Juancete/Pdep-Classroom/issues/18)) — tabla `error_log` + pantalla `/admin/errores` + badge en el header con no leídos (PR 2 del refactor de logging, hoy los 500 solo logguean por pino a Vercel)
 - [ ] Reconciliar grupos importados desde Sheets en vez de sólo acumular miembros ([#28](https://github.com/Juancete/Pdep-Classroom/issues/28)) — hoy la sync es puramente aditiva y puede pisar una baja o un cambio hecho a mano (ver "Registro de alumnos" más arriba)
 
@@ -845,3 +1013,7 @@ La REST API v3 de GitHub tiene política de versionado conservadora. Todos los e
 La autenticación usa una **GitHub App** instalada en la org (no un PAT personal), lo que da permisos de admin sobre los repos sin depender de un usuario específico. Como fallback para desarrollo local se puede usar un PAT clásico con scopes `repo` y `admin:org`.
 
 Es más estable que depender de GitHub Classroom, que es un producto con mantenimiento errático.
+
+Esta tabla es sólo API **saliente** (Classroom consultando a GitHub). El webhook de
+`check_suite`/`push`/`repository`/`member` (issue #60, ver [Webhooks de GitHub](#webhooks-de-github))
+es API **entrante** — no agrega ningún endpoint REST nuevo de los de arriba, GitHub es quien llama.

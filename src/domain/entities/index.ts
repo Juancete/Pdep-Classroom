@@ -52,6 +52,12 @@ export {
   type RepoDeletionStatus,
 } from "./RepoDeletionAttempt";
 export {
+  EstadoDelivery,
+  NOMBRES_ESTADO_DELIVERY,
+  type NombreEstadoDelivery,
+} from "./EstadoDelivery";
+export { GithubWebhookDelivery } from "./GithubWebhookDelivery";
+export {
   CambioDeMembresia,
   type AccionCambioMembresia,
 } from "./CambioDeMembresia";

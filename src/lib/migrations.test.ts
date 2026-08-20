@@ -180,6 +180,32 @@ describe("migrations", () => {
     expect(migration).not.toContain("foreign key");
   });
 
+  it("crea la auditoría de deliveries de webhook de GitHub y la actividad reciente de entrega", () => {
+    const migration = readFileSync(
+      join(process.cwd(), "migrations", "Migration20260820120000_webhook_deliveries.ts"),
+      "utf8"
+    );
+
+    expect(migration).toContain('create table "github_webhook_delivery"');
+    expect(migration).toContain('"delivery_id" varchar(255) not null');
+    expect(migration).toContain("'recibido', 'procesando', 'procesado', 'ignorado', 'fallido'");
+    expect(migration).toContain("default 'recibido'");
+    expect(migration).toContain(
+      'constraint "github_webhook_delivery_delivery_id_unique" unique ("delivery_id")'
+    );
+    expect(migration).toContain(
+      'create index "github_webhook_delivery_estado_recibido_idx"'
+    );
+    expect(migration).toContain('"reclamado_en" timestamptz null');
+    expect(migration).toContain('add column "ultimo_push_en" timestamptz null');
+    expect(migration).toContain('add column "ultimo_push_sha" varchar(255) null');
+    expect(migration).toContain('add column "ultimo_push_por" varchar(255) null');
+    expect(migration).toContain('add column "repo_github_id" varchar(255) null');
+    expect(migration).toContain('add column "repo_evento_actualizado_en" timestamptz null');
+    expect(migration).toContain('drop table if exists "github_webhook_delivery"');
+    expect(migration).not.toContain("foreign key");
+  });
+
   it("mantiene el snapshot alineado con Google Groups y las cascadas", () => {
     const snapshot = JSON.parse(
       readFileSync(
@@ -201,6 +227,9 @@ describe("migrations", () => {
     const entrega = snapshot.tables.find((table) => table.name === "entrega");
     const cambioMembresia = snapshot.tables.find(
       (table) => table.name === "cambio_membresia"
+    );
+    const githubWebhookDelivery = snapshot.tables.find(
+      (table) => table.name === "github_webhook_delivery"
     );
 
     expect(alumno?.columns.google_group_emails_pendientes_baja).toMatchObject({
@@ -270,5 +299,30 @@ describe("migrations", () => {
     expect(entrega?.indexes).toContainEqual(
       expect.objectContaining({ keyName: "entrega_ci_resultado_idx" })
     );
+    expect(entrega?.columns).toHaveProperty("ultimo_push_en");
+    expect(entrega?.columns).toHaveProperty("ultimo_push_sha");
+    expect(entrega?.columns).toHaveProperty("ultimo_push_por");
+    expect(entrega?.columns).toHaveProperty("repo_github_id");
+    expect(entrega?.columns).toHaveProperty("repo_evento_actualizado_en");
+    expect(githubWebhookDelivery?.columns.delivery_id).toMatchObject({
+      nullable: false,
+      unique: true,
+    });
+    expect(githubWebhookDelivery?.columns.estado_procesamiento).toMatchObject({
+      nullable: false,
+      default: "'recibido'",
+    });
+    expect(githubWebhookDelivery?.columns).toHaveProperty("payload");
+    expect(githubWebhookDelivery?.columns).toHaveProperty("reclamado_en");
+    expect(githubWebhookDelivery?.indexes).toContainEqual(
+      expect.objectContaining({
+        keyName: "github_webhook_delivery_delivery_id_unique",
+        unique: true,
+      })
+    );
+    expect(githubWebhookDelivery?.indexes).toContainEqual(
+      expect.objectContaining({ keyName: "github_webhook_delivery_estado_recibido_idx" })
+    );
+    expect(githubWebhookDelivery?.foreignKeys).toEqual({});
   });
 });

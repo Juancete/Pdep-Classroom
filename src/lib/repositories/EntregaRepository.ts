@@ -84,6 +84,34 @@ export async function getEntregaByRepoName(
   );
 }
 
+// Id numérico de GitHub del repo (issue #60) — a diferencia del nombre, no
+// cambia con un rename. Ver `Entrega.repoGithubId`.
+export async function getEntregaPorRepoGithubId(
+  repoGithubId: string,
+  em?: EntityManager
+): Promise<Entrega | null> {
+  const entityManager = em ?? (await getEM());
+  return entityManager.findOne(
+    Entrega,
+    { repoGithubId },
+    { populate: ["assignment", "grupo", "alumno"] }
+  );
+}
+
+// Autocompleta `repoGithubId` la primera vez que se conoce (self-heal) —
+// no hace falta poblarlo al crear la entrega, se toma del primer webhook
+// que llegue para ese repo. Idempotente: si ya está seteado, no hace nada.
+export async function asegurarRepoGithubId(
+  entregaId: string,
+  repoGithubId: string
+): Promise<void> {
+  const entityManager = await getEM();
+  const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
+  if (entrega.repoGithubId) return;
+  entrega.repoGithubId = repoGithubId;
+  await entityManager.flush();
+}
+
 export async function getEntregaLogica(
   data: {
     assignmentId: string;
@@ -175,6 +203,119 @@ export async function actualizarCIDeEntrega(
   await entityManager.flush();
 }
 
+/**
+ * Serializa las escrituras del webhook de CI sobre una misma entrega bajo un
+ * advisory lock transaccional — mismo mecanismo que
+ * `conLockBorradoReposAssignment`. Evita que dos `check_suite.completed`
+ * casi simultáneos (dos workflows del mismo commit) hagan fetch+write
+ * intercalados y el más viejo pise el resultado del más nuevo.
+ */
+export async function conLockDeEntrega<T>(
+  entregaId: string,
+  operation: () => Promise<T>
+): Promise<T> {
+  const entityManager = await getEM();
+  return entityManager.transactional(async (transaction) => {
+    await transaction
+      .getConnection()
+      .execute("select pg_advisory_xact_lock(hashtextextended(?, 0))", [`ci:${entregaId}`]);
+    return operation();
+  });
+}
+
+// Actividad reciente del repo (issue #60) — la escribe el webhook de `push`.
+// Guard de orden: un redelivery tardío de un push viejo no puede pisar uno
+// más nuevo, así que se compara contra lo que ya está guardado antes de
+// escribir.
+export async function actualizarActividadDeEntrega(
+  entregaId: string,
+  data: { pusheadoEn: Date; commitSha: string; por: string }
+): Promise<void> {
+  const entityManager = await getEM();
+  const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
+  if (entrega.ultimoPushEn && entrega.ultimoPushEn >= data.pusheadoEn) return;
+  entrega.ultimoPushEn = data.pusheadoEn;
+  entrega.ultimoPushSha = data.commitSha;
+  entrega.ultimoPushPor = data.por;
+  await entityManager.flush();
+}
+
+// `true` sólo si un evento `repository` con fecha `eventoActualizadoEn` es
+// ESTRICTAMENTE más viejo que el último ya aplicado — GitHub no garantiza
+// el orden de entrega, así que un `deleted`/`renamed` demorado no puede
+// pisar uno más nuevo que ya se procesó. Sin fecha (payload sin
+// `updated_at`), nunca se considera viejo — se aplica igual, mismo criterio
+// defensivo que el fallback de `push` cuando falta el timestamp.
+//
+// Comparación estricta (`>`, no `>=`): `repository.updated_at` viaja en
+// segundos, así que dos operaciones sobre el mismo repo dentro del mismo
+// segundo (ej. un rename seguido de inmediato por un delete) comparten
+// timestamp. Con `>=`, si el rename se procesa primero, el delete
+// "empatado" se rechazaría por viejo y el repo quedaría marcado como
+// activo pese a haberse borrado — un resultado peor que simplemente dejar
+// ganar al que se procesó último en un empate genuino.
+function esEventoRepositoryViejo(entrega: Entrega, eventoActualizadoEn?: Date): boolean {
+  return Boolean(
+    eventoActualizadoEn &&
+      entrega.repoEventoActualizadoEn &&
+      entrega.repoEventoActualizadoEn > eventoActualizadoEn
+  );
+}
+
+// El webhook de `repository.deleted` (issue #60) — mismo campo que ya
+// escribe `completarIntentoBorradoRepo` cuando el borrado lo inicia
+// Classroom, así que la grilla de entregas no necesita distinguir el origen.
+export async function marcarRepoBorrado(
+  entregaId: string,
+  eventoActualizadoEn?: Date
+): Promise<void> {
+  const entityManager = await getEM();
+  const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
+  if (esEventoRepositoryViejo(entrega, eventoActualizadoEn)) return;
+  entrega.repoDeleted = true;
+  if (eventoActualizadoEn) entrega.repoEventoActualizadoEn = eventoActualizadoEn;
+  await entityManager.flush();
+}
+
+// El webhook de `repository.renamed` (issue #60): el repo sigue siendo el
+// mismo, sólo cambia de nombre/URL — se busca por el nombre viejo (o por
+// `repoGithubId`, ver `getEntregaPorRepoGithubId`) y se reescribe.
+export async function renombrarRepoDeEntrega(
+  entregaId: string,
+  data: { repoName: string; repoUrl: string; eventoActualizadoEn?: Date }
+): Promise<void> {
+  const entityManager = await getEM();
+  const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
+  if (esEventoRepositoryViejo(entrega, data.eventoActualizadoEn)) return;
+  entrega.repoName = data.repoName;
+  entrega.repoUrl = data.repoUrl;
+  if (data.eventoActualizadoEn) entrega.repoEventoActualizadoEn = data.eventoActualizadoEn;
+  await entityManager.flush();
+}
+
+// El webhook de `member.added`/`member.removed` (issue #60): reconcilia el
+// array denormalizado de colaboradores con acceso al repo.
+export async function actualizarColaboradoresDeEntrega(
+  entregaId: string,
+  data: { agregar?: string; quitar?: string }
+): Promise<void> {
+  const entityManager = await getEM();
+  const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
+  if (data.agregar) {
+    const normalizado = data.agregar.toLowerCase();
+    if (!entrega.githubUsernames.some((username) => username.toLowerCase() === normalizado)) {
+      entrega.githubUsernames = [...entrega.githubUsernames, data.agregar];
+    }
+  }
+  if (data.quitar) {
+    const normalizado = data.quitar.toLowerCase();
+    entrega.githubUsernames = entrega.githubUsernames.filter(
+      (username) => username.toLowerCase() !== normalizado
+    );
+  }
+  await entityManager.flush();
+}
+
 export async function createEntrega(
   data: {
     assignmentId: string;
@@ -183,6 +324,13 @@ export async function createEntrega(
     githubUsernames: string[];
     alumnoId?: string;
     grupoId?: string;
+    // Id numérico de GitHub del repo (issue #60) — capturado al crear el
+    // repo desde template (`crearEntrega` en `github.ts`), cuando está
+    // disponible. Sin esto, el webhook depende exclusivamente del
+    // "self-heal" del primer evento que llegue, lo que deja una ventana
+    // real: dos renames del mismo repo entregados fuera de orden ANTES de
+    // que cualquier webhook haya podido guardar el id se pierden.
+    repoGithubId?: string;
   },
   em?: EntityManager
 ): Promise<Entrega> {
@@ -195,6 +343,7 @@ export async function createEntrega(
   entrega.repoName = data.repoName;
   entrega.repoUrl = data.repoUrl;
   entrega.githubUsernames = data.githubUsernames;
+  entrega.repoGithubId = data.repoGithubId;
 
   if (data.alumnoId) {
     entrega.alumno = entityManager.getReference(Alumno, data.alumnoId);
@@ -245,6 +394,7 @@ export async function createOrGetEntrega(
     githubUsernames: string[];
     alumnoId?: string;
     grupoId?: string;
+    repoGithubId?: string;
   },
   em?: EntityManager
 ): Promise<Entrega> {
@@ -278,6 +428,7 @@ export async function crearEntregaSiAssignmentDisponible(
     githubUsernames: string[];
     alumnoId?: string;
     grupoId?: string;
+    repoGithubId?: string;
   },
   rol: RolDeUsuario
 ): Promise<Entrega> {
