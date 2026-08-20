@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import {
   DashboardSkeleton,
   AssignmentsTableSkeleton,
+  FormSkeleton,
   ListSkeleton,
 } from "./PageSkeleton";
 
@@ -33,6 +34,25 @@ describe("AssignmentsTableSkeleton", () => {
       ".border-b.border-gray-100.flex.gap-6.items-center"
     );
     expect(rows).toHaveLength(4);
+  });
+});
+
+describe("FormSkeleton", () => {
+  it("renderiza el título recibido", () => {
+    render(<FormSkeleton title="Nuevo Assignment" />);
+    expect(screen.getByRole("heading", { name: "Nuevo Assignment" })).toBeInTheDocument();
+  });
+
+  it("usa 6 campos por defecto", () => {
+    const { container } = render(<FormSkeleton title="Test" />);
+    const campos = container.querySelectorAll(".h-10.bg-gray-100.rounded-lg");
+    expect(campos).toHaveLength(6);
+  });
+
+  it("renderiza el número de campos indicado", () => {
+    const { container } = render(<FormSkeleton title="Test" fields={3} />);
+    const campos = container.querySelectorAll(".h-10.bg-gray-100.rounded-lg");
+    expect(campos).toHaveLength(3);
   });
 });
 

@@ -66,6 +66,28 @@ export function AssignmentsTableSkeleton() {
   );
 }
 
+// Skeleton genérico para páginas de formulario (crear/editar assignment,
+// comisión, etc.) — título + N campos label+input + fila de botones.
+export function FormSkeleton({ title, fields = 6 }: { title: string; fields?: number }) {
+  return (
+    <div className="max-w-xl animate-pulse">
+      <h1 className="text-2xl font-bold mb-6">{title}</h1>
+      <div className="space-y-5">
+        {[...Array(fields)].map((_, index) => (
+          <div key={index}>
+            <div className="h-4 bg-gray-200 rounded w-24 mb-1" />
+            <div className="h-10 bg-gray-100 rounded-lg" />
+          </div>
+        ))}
+        <div className="flex gap-3 pt-2">
+          <div className="h-9 bg-gray-200 rounded-lg w-32" />
+          <div className="h-9 bg-gray-100 rounded-lg w-20" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Skeleton genérico para páginas de lista simple (alumnos, grupos)
 export function ListSkeleton({ title, rows = 6 }: { title: string; rows?: number }) {
   return (
