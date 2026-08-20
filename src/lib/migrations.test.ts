@@ -155,6 +155,31 @@ describe("migrations", () => {
     expect(migration).not.toContain("foreign key");
   });
 
+  it("agrega el resultado cacheado de CI a entrega", () => {
+    const migration = readFileSync(
+      join(process.cwd(), "migrations", "Migration20260819120000_ci_estado.ts"),
+      "utf8"
+    );
+
+    expect(migration).toContain('add column "ci_resultado_nombre"');
+    expect(migration).toContain("'sin_consultar'");
+    expect(migration).toContain("'sin_ci'");
+    expect(migration).toContain("'pendiente'");
+    expect(migration).toContain("'passing'");
+    expect(migration).toContain("'failing'");
+    expect(migration).toContain("'cancelado'");
+    expect(migration).toContain("'error_infra'");
+    expect(migration).toContain("default 'sin_consultar'");
+    expect(migration).toContain('"ci_check_suite_ids" text[] not null default \'{}\'');
+    expect(migration).toContain('"ci_commit_sha" varchar(255) null');
+    expect(migration).toContain('"ci_detalle_url" varchar(255) null');
+    expect(migration).toContain('"ci_ejecutado_en" timestamptz null');
+    expect(migration).toContain('"ci_actualizado_en" timestamptz null');
+    expect(migration).toContain('create index "entrega_ci_resultado_idx"');
+    expect(migration).toContain('drop column "ci_resultado_nombre"');
+    expect(migration).not.toContain("foreign key");
+  });
+
   it("mantiene el snapshot alineado con Google Groups y las cascadas", () => {
     const snapshot = JSON.parse(
       readFileSync(
@@ -232,5 +257,18 @@ describe("migrations", () => {
       })
     );
     expect(cambioMembresia?.foreignKeys).toEqual({});
+    expect(entrega?.columns).toHaveProperty("ci_resultado_nombre");
+    expect(entrega?.columns.ci_resultado_nombre).toMatchObject({
+      nullable: false,
+      default: "'sin_consultar'",
+    });
+    expect(entrega?.columns).toHaveProperty("ci_check_suite_ids");
+    expect(entrega?.columns).toHaveProperty("ci_commit_sha");
+    expect(entrega?.columns).toHaveProperty("ci_detalle_url");
+    expect(entrega?.columns).toHaveProperty("ci_ejecutado_en");
+    expect(entrega?.columns).toHaveProperty("ci_actualizado_en");
+    expect(entrega?.indexes).toContainEqual(
+      expect.objectContaining({ keyName: "entrega_ci_resultado_idx" })
+    );
   });
 });

@@ -34,6 +34,7 @@ import {
   crearEntregaSiAssignmentDisponible,
   getEntregasConRepoActivo,
   getEntregaLogica,
+  actualizarCIDeEntrega,
 } from "./EntregaRepository";
 
 function fakeAssignmentDisponible(disponible: boolean) {
@@ -237,6 +238,70 @@ describe("EntregaRepository", () => {
       ).resolves.toBeDefined();
 
       expect(mockEm.persist).toHaveBeenCalled();
+    });
+  });
+
+  describe("actualizarCIDeEntrega", () => {
+    it("escribe todos los campos cuando vienen con valores reales", async () => {
+      const entrega = new Entrega();
+      mockEm.findOneOrFail.mockResolvedValueOnce(entrega);
+      const ejecutadoEn = new Date("2026-08-19T10:00:00Z");
+
+      await actualizarCIDeEntrega("e1", {
+        resultadoNombre: "passing",
+        checkSuiteIds: ["111"],
+        commitSha: "abc123",
+        detalleUrl: "https://github.com/org/repo/commit/abc123/checks",
+        ejecutadoEn,
+      });
+
+      expect(entrega.ciResultadoNombre).toBe("passing");
+      expect(entrega.ciCheckSuiteIds).toEqual(["111"]);
+      expect(entrega.ciCommitSha).toBe("abc123");
+      expect(entrega.ciDetalleUrl).toBe("https://github.com/org/repo/commit/abc123/checks");
+      expect(entrega.ciEjecutadoEn).toBe(ejecutadoEn);
+    });
+
+    it("preserva commitSha/detalleUrl/checkSuiteIds previos cuando el caller sólo manda resultadoNombre", async () => {
+      const entrega = new Entrega();
+      entrega.ciCheckSuiteIds = ["111"];
+      entrega.ciCommitSha = "abc123";
+      entrega.ciDetalleUrl = "https://github.com/org/repo/commit/abc123/checks";
+      const ejecutadoEnPrevio = new Date("2026-08-19T10:00:00Z");
+      entrega.ciEjecutadoEn = ejecutadoEnPrevio;
+      mockEm.findOneOrFail.mockResolvedValueOnce(entrega);
+
+      // Mismo llamado que hace reejecutarCIDeEntrega al pasar a "pendiente".
+      await actualizarCIDeEntrega("e1", { resultadoNombre: "pendiente" });
+
+      expect(entrega.ciResultadoNombre).toBe("pendiente");
+      expect(entrega.ciCheckSuiteIds).toEqual(["111"]);
+      expect(entrega.ciCommitSha).toBe("abc123");
+      expect(entrega.ciDetalleUrl).toBe("https://github.com/org/repo/commit/abc123/checks");
+      expect(entrega.ciEjecutadoEn).toBe(ejecutadoEnPrevio);
+    });
+
+    it("limpia los campos explícitamente cuando vienen en null", async () => {
+      const entrega = new Entrega();
+      entrega.ciCheckSuiteIds = ["111"];
+      entrega.ciCommitSha = "abc123";
+      entrega.ciDetalleUrl = "https://github.com/org/repo/commit/abc123/checks";
+      entrega.ciEjecutadoEn = new Date("2026-08-19T10:00:00Z");
+      mockEm.findOneOrFail.mockResolvedValueOnce(entrega);
+
+      await actualizarCIDeEntrega("e1", {
+        resultadoNombre: "sin_ci",
+        checkSuiteIds: null,
+        commitSha: null,
+        detalleUrl: null,
+        ejecutadoEn: null,
+      });
+
+      expect(entrega.ciResultadoNombre).toBe("sin_ci");
+      expect(entrega.ciCheckSuiteIds).toEqual([]);
+      expect(entrega.ciCommitSha).toBeUndefined();
+      expect(entrega.ciDetalleUrl).toBeUndefined();
+      expect(entrega.ciEjecutadoEn).toBeUndefined();
     });
   });
 

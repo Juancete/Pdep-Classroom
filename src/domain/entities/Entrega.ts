@@ -1,5 +1,6 @@
 import {
   Entity,
+  Enum,
   ManyToOne,
   PrimaryKey,
   Property,
@@ -8,6 +9,11 @@ import { randomUUID } from "crypto";
 import { Alumno } from "./Alumno";
 import { Assignment } from "./Assignment";
 import { Grupo } from "./Grupo";
+import {
+  ResultadoCI,
+  NOMBRES_RESULTADO_CI,
+  type NombreResultadoCI,
+} from "./ResultadoCI";
 
 @Entity()
 export class Entrega {
@@ -43,6 +49,39 @@ export class Entrega {
 
   @Property({ type: 'datetime' })
   createdAt: Date = new Date();
+
+  // CI (issue #58): estado combinado de los checks del último commit del
+  // branch por defecto del repo de esta entrega — mismo mecanismo que un
+  // badge de CI en un README, no depende de un workflow con nombre fijo.
+  // Sólo se guarda el último resultado — no un historial completo (ver
+  // `RepoDeletionAttempt` para el molde de auditoría si más adelante hace
+  // falta la serie completa).
+  @Enum({ items: [...NOMBRES_RESULTADO_CI], default: "sin_consultar" })
+  ciResultadoNombre: NombreResultadoCI = "sin_consultar";
+
+  // Check suites del último commit consultado — se usan para pedir el
+  // rerequest al reejecutar. Pueden ser varios si el repo tiene más de un
+  // workflow (ej. lint + tests).
+  @Property({ type: "array", defaultRaw: "'{}'" })
+  ciCheckSuiteIds: string[] = [];
+
+  @Property({ type: 'string', nullable: true })
+  ciCommitSha?: string;
+
+  // Link a la pestaña de checks del commit en GitHub (agrega todos los
+  // checks, no uno solo).
+  @Property({ type: 'string', nullable: true })
+  ciDetalleUrl?: string;
+
+  @Property({ type: 'datetime', nullable: true })
+  ciEjecutadoEn?: Date; // cuándo corrieron los checks (según GitHub)
+
+  @Property({ type: 'datetime', nullable: true })
+  ciActualizadoEn?: Date; // cuándo los consultamos nosotros (frescura del caché)
+
+  get resultadoCI(): ResultadoCI {
+    return ResultadoCI.desdeNombre(this.ciResultadoNombre);
+  }
 
   hasRepo(): boolean {
     return !!this.repoUrl && !this.repoDeleted;
