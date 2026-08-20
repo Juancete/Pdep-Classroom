@@ -6,6 +6,8 @@ const mockAddCollaborator = vi.fn();
 const mockReposGet = vi.fn();
 const mockListForRef = vi.fn();
 const mockRerequestSuite = vi.fn();
+const mockCheckCollaborator = vi.fn();
+const mockRequest = vi.fn();
 
 vi.mock("@octokit/rest", () => ({
   Octokit: class {
@@ -14,11 +16,13 @@ vi.mock("@octokit/rest", () => ({
       createUsingTemplate: mockCreateUsingTemplate,
       addCollaborator: mockAddCollaborator,
       get: mockReposGet,
+      checkCollaborator: mockCheckCollaborator,
     };
     checks = {
       listForRef: mockListForRef,
       rerequestSuite: mockRerequestSuite,
     };
+    request = mockRequest;
   },
 }));
 
@@ -29,6 +33,9 @@ import {
   deleteRepo,
   getEstadoCI,
   reejecutarCI,
+  esColaborador,
+  getRepoInfo,
+  getRepoInfoPorId,
 } from "./github";
 import { NombreRepositorioDemasiadoLargoError } from "./naming";
 
@@ -71,11 +78,12 @@ describe("crearEntrega", () => {
     vi.clearAllMocks();
   });
 
-  it("usa sin recalcular el nombre de repositorio recibido", async () => {
+  it("usa sin recalcular el nombre de repositorio recibido, y devuelve el id numérico de GitHub", async () => {
     mockCreateUsingTemplate.mockResolvedValue({
       data: {
         html_url: "https://github.com/pdep-mn-utn/tp-los-lambdas",
         full_name: "pdep-mn-utn/tp-los-lambdas",
+        id: 987654,
       },
     });
     mockAddCollaborator.mockResolvedValue(undefined);
@@ -89,6 +97,7 @@ describe("crearEntrega", () => {
     ).resolves.toEqual({
       repoName: "tp-los-lambdas",
       repoUrl: "https://github.com/pdep-mn-utn/tp-los-lambdas",
+      repoGithubId: "987654",
     });
 
     expect(mockCreateUsingTemplate).toHaveBeenCalledWith(
@@ -238,5 +247,88 @@ describe("reejecutarCI", () => {
     mockRerequestSuite.mockRejectedValue(requestError(404, "Not Found"));
 
     await expect(reejecutarCI("tp-ana", ["1"])).rejects.toThrow();
+  });
+});
+
+describe("esColaborador", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("devuelve true cuando GitHub responde 204 (es colaborador)", async () => {
+    mockCheckCollaborator.mockResolvedValue(undefined);
+
+    await expect(esColaborador("tp-ana", "juancito")).resolves.toBe(true);
+    expect(mockCheckCollaborator).toHaveBeenCalledWith(
+      expect.objectContaining({ repo: "tp-ana", username: "juancito" })
+    );
+  });
+
+  it("devuelve false cuando GitHub responde 404 (no es colaborador)", async () => {
+    mockCheckCollaborator.mockRejectedValue(requestError(404, "Not Found"));
+
+    await expect(esColaborador("tp-ana", "juancito")).resolves.toBe(false);
+  });
+
+  it("propaga (traducido) cualquier otro error que no sea 404", async () => {
+    mockCheckCollaborator.mockRejectedValue(requestError(403, "Forbidden"));
+
+    await expect(esColaborador("tp-ana", "juancito")).rejects.toThrow();
+  });
+});
+
+describe("getRepoInfo", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("devuelve el id numérico y la URL cuando el repo existe", async () => {
+    mockReposGet.mockResolvedValue({
+      data: { id: 555666, html_url: "https://github.com/pdep-mn-utn/tp-ana" },
+    });
+
+    await expect(getRepoInfo("tp-ana")).resolves.toEqual({
+      repoGithubId: "555666",
+      repoUrl: "https://github.com/pdep-mn-utn/tp-ana",
+    });
+  });
+
+  it("devuelve null ante cualquier error (repo inexistente u otro)", async () => {
+    mockReposGet.mockRejectedValue(requestError(404, "Not Found"));
+
+    await expect(getRepoInfo("tp-ausente")).resolves.toBeNull();
+  });
+});
+
+describe("getRepoInfoPorId", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("consulta el repo por su id numérico y devuelve nombre y URL actuales", async () => {
+    mockRequest.mockResolvedValue({
+      data: { name: "tp-ana-nuevo", html_url: "https://github.com/pdep-mn-utn/tp-ana-nuevo" },
+    });
+
+    await expect(getRepoInfoPorId("555666")).resolves.toEqual({
+      repoName: "tp-ana-nuevo",
+      repoUrl: "https://github.com/pdep-mn-utn/tp-ana-nuevo",
+    });
+    expect(mockRequest).toHaveBeenCalledWith(
+      "GET /repositories/{repository_id}",
+      { repository_id: 555666 }
+    );
+  });
+
+  it("devuelve null cuando el repo ya no existe (404)", async () => {
+    mockRequest.mockRejectedValue(requestError(404, "Not Found"));
+
+    await expect(getRepoInfoPorId("555666")).resolves.toBeNull();
+  });
+
+  it("propaga (traducido) cualquier otro error que no sea 404", async () => {
+    mockRequest.mockRejectedValue(requestError(403, "Forbidden"));
+
+    await expect(getRepoInfoPorId("555666")).rejects.toThrow();
   });
 });

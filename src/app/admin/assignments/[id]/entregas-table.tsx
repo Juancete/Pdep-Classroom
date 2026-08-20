@@ -29,6 +29,12 @@ export type EntregaRow = {
     detalleUrl?: string;
     permiteReejecucion: boolean;
   };
+  // Último push conocido del repo (issue #60) — lo escribe el webhook de
+  // `push`. Sin valor: todavía no llegó ningún push registrado.
+  ultimoPush?: {
+    fecha: string;
+    por: string;
+  };
 };
 
 export function filterEntregas(entregas: EntregaRow[], rawQuery: string): EntregaRow[] {
@@ -77,7 +83,7 @@ export function EntregasTable({
             <DataHeaderCell>Usuario(s)</DataHeaderCell>
             <DataHeaderCell>Repositorio</DataHeaderCell>
             <DataHeaderCell>CI</DataHeaderCell>
-            <DataHeaderCell>Fecha</DataHeaderCell>
+            <DataHeaderCell>Actividad</DataHeaderCell>
           </DataHeader>
           <DataBody>
             {filtradas.map((entrega) => (
@@ -134,8 +140,13 @@ export function EntregasTable({
                     />
                   </span>
                 </DataCell>
-                <DataCell label="Fecha">
-                  <span className="text-gray-500 text-xs">{entrega.createdAt}</span>
+                <DataCell label="Actividad">
+                  <span className="text-gray-500 text-xs block">{entrega.createdAt}</span>
+                  {entrega.ultimoPush && (
+                    <span className="text-gray-400 text-[11px] block">
+                      Último push: {entrega.ultimoPush.fecha} ({entrega.ultimoPush.por})
+                    </span>
+                  )}
                 </DataCell>
               </DataRow>
             ))}

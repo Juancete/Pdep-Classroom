@@ -7,7 +7,7 @@ import {
   getGrupoDeAlumnoEnAssignment,
   crearEntregaSiAssignmentDisponible,
 } from "@/lib/repositories";
-import { addCollaborators, crearEntrega, repoExists } from "@/lib/github";
+import { addCollaborators, crearEntrega, getRepoInfo } from "@/lib/github";
 import { buildRepoName } from "@/lib/naming";
 import {
   AssignmentNoEncontradoError,
@@ -24,11 +24,6 @@ export class AlumnoNoRegistradoError extends Error {
     super("Completá tu registro antes de aceptar este assignment.");
     this.name = "AlumnoNoRegistradoError";
   }
-}
-
-function repoUrlFor(repoName: string): string {
-  const org = process.env.GITHUB_ORG ?? "pdep-mn-utn";
-  return `https://github.com/${org}/${repoName}`;
 }
 
 export async function aceptarAssignment(
@@ -65,7 +60,7 @@ export async function aceptarAssignment(
         slug: assignment.slug,
         githubUsername: usernames[0]!,
       });
-  const createLocalEntrega = (createdRepoName: string, repoUrl: string) =>
+  const createLocalEntrega = (createdRepoName: string, repoUrl: string, repoGithubId?: string) =>
     crearEntregaSiAssignmentDisponible(
       {
         assignmentId: assignment.id,
@@ -74,13 +69,15 @@ export async function aceptarAssignment(
         githubUsernames: usernames,
         alumnoId: grupoId ? undefined : alumno?.id,
         grupoId,
+        repoGithubId,
       },
       user.rol
     );
 
-  if (await repoExists(repoName)) {
+  const repoPreexistente = await getRepoInfo(repoName);
+  if (repoPreexistente) {
     await addCollaborators(repoName, usernames);
-    return createLocalEntrega(repoName, repoUrlFor(repoName));
+    return createLocalEntrega(repoName, repoPreexistente.repoUrl, repoPreexistente.repoGithubId);
   }
 
   try {
@@ -90,10 +87,16 @@ export async function aceptarAssignment(
       usernames,
       descripcion: `${assignment.titulo} — PdeP`,
     });
-    return createLocalEntrega(resultado.repoName, resultado.repoUrl);
+    return createLocalEntrega(resultado.repoName, resultado.repoUrl, resultado.repoGithubId);
   } catch (error) {
-    if (!(await repoExists(repoName))) throw error;
+    // El repo puede haber quedado creado aunque crearEntrega() haya fallado
+    // después (ej. addCollaborators cayó tras un createUsingTemplate exitoso)
+    // — getRepoInfo trae su id igual que en el camino de repo preexistente,
+    // así la entrega no queda dependiendo pura y exclusivamente del
+    // self-heal del primer webhook.
+    const repoTrasError = await getRepoInfo(repoName);
+    if (!repoTrasError) throw error;
     await addCollaborators(repoName, usernames);
-    return createLocalEntrega(repoName, repoUrlFor(repoName));
+    return createLocalEntrega(repoName, repoTrasError.repoUrl, repoTrasError.repoGithubId);
   }
 }

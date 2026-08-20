@@ -23,6 +23,8 @@ export const logger = pino({
       "*.authorization",
       "cookie",
       "*.cookie",
+      "x-hub-signature-256",
+      "*.x-hub-signature-256",
     ],
     censor: "[REDACTED]",
   },
