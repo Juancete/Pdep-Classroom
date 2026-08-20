@@ -44,6 +44,7 @@ async function insertAssignmentLegacy(
 describe("Migration20260820120000_webhook_deliveries", () => {
   let orm: MikroORM;
   let legacyEntregaId: string;
+  let assignmentId: string;
 
   beforeAll(async () => {
     orm = await MikroORM.init({
@@ -60,7 +61,7 @@ describe("Migration20260820120000_webhook_deliveries", () => {
     // de los tests (o correr uno solo con `it.only`) no cambie el resultado.
     const connection = orm.em.getConnection();
     const comisionId = randomUUID();
-    const assignmentId = randomUUID();
+    assignmentId = randomUUID();
     legacyEntregaId = randomUUID();
     await connection.execute(
       `insert into "comision"
@@ -129,6 +130,31 @@ describe("Migration20260820120000_webhook_deliveries", () => {
       )
       // Verifica específicamente el rechazo por índice único (no cualquier
       // error) — el mensaje de Postgres incluye este texto.
+    ).rejects.toThrow(/duplicate key|unique constraint/i);
+  });
+
+  it("el índice único impide asociar el mismo repo de GitHub a dos entregas", async () => {
+    const connection = orm.em.getConnection();
+    const repoGithubId = String(Date.now());
+    await connection.execute(
+      `update "entrega" set "repo_github_id" = ? where "id" = ?`,
+      [repoGithubId, legacyEntregaId]
+    );
+
+    await expect(
+      connection.execute(
+        `insert into "entrega"
+          ("id", "assignment_id", "github_usernames", "repo_name", "repo_url",
+           "repo_deleted", "repo_github_id", "created_at")
+         values (?, ?, '{}', ?, ?, false, ?, now())`,
+        [
+          randomUUID(),
+          assignmentId,
+          `otro-repo-${randomUUID()}`,
+          "https://github.com/org/otro-repo",
+          repoGithubId,
+        ]
+      )
     ).rejects.toThrow(/duplicate key|unique constraint/i);
   });
 

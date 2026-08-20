@@ -98,7 +98,7 @@ export class Entrega {
   // aunque el nombre actual ya no coincida con lo que ese evento espera. Se
   // autocompleta ("self-heal") la primera vez que llega cualquier webhook
   // para el repo — no hace falta poblarlo al crear la entrega.
-  @Property({ type: 'string', nullable: true })
+  @Property({ type: 'string', nullable: true, unique: true })
   repoGithubId?: string;
 
   // `repository.updated_at` del último evento `repository` aplicado — guard

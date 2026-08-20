@@ -129,7 +129,7 @@ export async function cerrarDelivery(
   delivery.entregaId = data.entregaId;
   delivery.procesadoEn = new Date();
   delivery.payload = null;
-  delivery.error = undefined;
+  delivery.error = null;
   await entityManager.flush();
 }
 

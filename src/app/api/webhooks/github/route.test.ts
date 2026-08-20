@@ -51,7 +51,11 @@ describe("POST /api/webhooks/github", () => {
   });
 
   afterEach(() => {
-    process.env.GITHUB_WEBHOOK_SECRET = envOriginal;
+    if (envOriginal === undefined) {
+      delete process.env.GITHUB_WEBHOOK_SECRET;
+    } else {
+      process.env.GITHUB_WEBHOOK_SECRET = envOriginal;
+    }
   });
 
   it("devuelve 503 si GITHUB_WEBHOOK_SECRET no está configurada", async () => {

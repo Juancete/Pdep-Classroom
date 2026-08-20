@@ -13,6 +13,7 @@ const mockActualizarColaboradores = vi.fn();
 const mockSincronizarCI = vi.fn();
 const mockEsColaborador = vi.fn();
 const mockGetRepoInfoPorId = vi.fn();
+const mockTransaction = { nombre: "transaction-em" };
 
 vi.mock("@/lib/github", () => ({
   ORG: "pdep-mn-utn",
@@ -49,7 +50,9 @@ const REPO_BASE = { name: "kata-juan", owner: { login: "pdep-mn-utn" } };
 describe("procesarEventoGithub", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockConLockDeEntrega.mockImplementation((_id: string, operation: () => unknown) => operation());
+    mockConLockDeEntrega.mockImplementation(
+      (_id: string, operation: (transaction: unknown) => unknown) => operation(mockTransaction)
+    );
     mockGetEntregaPorRepoGithubId.mockResolvedValue(null);
     mockGetRepoInfoPorId.mockResolvedValue(null);
   });
@@ -97,7 +100,10 @@ describe("procesarEventoGithub", () => {
 
       expect(resultado).toEqual({ estado: "procesado", entregaId: "e1" });
       expect(mockConLockDeEntrega).toHaveBeenCalledWith("e1", expect.any(Function));
-      expect(mockSincronizarCI).toHaveBeenCalledWith([entrega], { forzar: true });
+      expect(mockSincronizarCI).toHaveBeenCalledWith([entrega], {
+        forzar: true,
+        em: mockTransaction,
+      });
     });
 
     it.each(["requested", "rerequested", "completed"])(
@@ -152,7 +158,7 @@ describe("procesarEventoGithub", () => {
         pusheadoEn: new Date(1_700_000_000 * 1000),
         commitSha: "abc123",
         por: "juancito",
-      });
+      }, mockTransaction);
     });
 
     it("acepta repository.pushed_at como string ISO", async () => {
@@ -167,7 +173,8 @@ describe("procesarEventoGithub", () => {
 
       expect(mockActualizarActividad).toHaveBeenCalledWith(
         "e1",
-        expect.objectContaining({ pusheadoEn: new Date("2026-08-19T10:00:00Z") })
+        expect.objectContaining({ pusheadoEn: new Date("2026-08-19T10:00:00Z") }),
+        mockTransaction
       );
     });
 
@@ -203,6 +210,20 @@ describe("procesarEventoGithub", () => {
       ).rejects.toThrow(/pushed_at/);
     });
 
+    it("un pushed_at numérico fuera del rango de Date también rechaza el evento", async () => {
+      const entrega = entregaConId("e1");
+      mockGetEntregaByRepoName.mockResolvedValue(entrega);
+
+      await expect(
+        procesarEventoGithub("push", {
+          repository: { ...REPO_BASE, pushed_at: Number.MAX_VALUE },
+          after: "abc123",
+          sender: { login: "juan" },
+        })
+      ).rejects.toThrow(/pushed_at/);
+      expect(mockActualizarActividad).not.toHaveBeenCalled();
+    });
+
     it("no confía en head_commit.timestamp (fecha de autoría, no de push) para la actividad", async () => {
       const entrega = entregaConId("e1");
       mockGetEntregaByRepoName.mockResolvedValue(entrega);
@@ -219,7 +240,8 @@ describe("procesarEventoGithub", () => {
 
       expect(mockActualizarActividad).toHaveBeenCalledWith(
         "e1",
-        expect.objectContaining({ pusheadoEn: new Date(1_700_000_000 * 1000) })
+        expect.objectContaining({ pusheadoEn: new Date(1_700_000_000 * 1000) }),
+        mockTransaction
       );
     });
 
@@ -269,7 +291,11 @@ describe("procesarEventoGithub", () => {
       });
 
       expect(resultado).toEqual({ estado: "procesado", entregaId: "e1" });
-      expect(mockMarcarRepoBorrado).toHaveBeenCalledWith("e1", undefined);
+      expect(mockMarcarRepoBorrado).toHaveBeenCalledWith(
+        "e1",
+        undefined,
+        mockTransaction
+      );
     });
 
     it("pasa repository.updated_at como guard de orden a marcarRepoBorrado", async () => {
@@ -281,7 +307,11 @@ describe("procesarEventoGithub", () => {
         repository: { ...REPO_BASE, updated_at: 1_700_000_000 },
       });
 
-      expect(mockMarcarRepoBorrado).toHaveBeenCalledWith("e1", new Date(1_700_000_000 * 1000));
+      expect(mockMarcarRepoBorrado).toHaveBeenCalledWith(
+        "e1",
+        new Date(1_700_000_000 * 1000),
+        mockTransaction
+      );
     });
 
     it("busca por el nombre anterior en repository.renamed y reescribe repoName/repoUrl", async () => {
@@ -303,7 +333,7 @@ describe("procesarEventoGithub", () => {
         repoName: "kata-juan-nuevo",
         repoUrl: "https://github.com/pdep-mn-utn/kata-juan-nuevo",
         eventoActualizadoEn: undefined,
-      });
+      }, mockTransaction);
       expect(resultado).toEqual({ estado: "procesado", entregaId: "e1" });
     });
 
@@ -349,7 +379,8 @@ describe("procesarEventoGithub", () => {
         expect(mockGetEntregaByRepoName).not.toHaveBeenCalled();
         expect(mockRenombrarRepo).toHaveBeenCalledWith(
           "e1",
-          expect.objectContaining({ repoName: "C" })
+          expect.objectContaining({ repoName: "C" }),
+          mockTransaction
         );
         expect(resultado).toEqual({ estado: "procesado", entregaId: "e1" });
       });
@@ -384,7 +415,8 @@ describe("procesarEventoGithub", () => {
           expect.objectContaining({
             repoName: "C",
             repoUrl: "https://github.com/pdep-mn-utn/C",
-          })
+          }),
+          mockTransaction
         );
       });
 
@@ -409,7 +441,8 @@ describe("procesarEventoGithub", () => {
           expect.objectContaining({
             repoName: "kata-juan-nuevo",
             repoUrl: "https://github.com/pdep-mn-utn/kata-juan-nuevo",
-          })
+          }),
+          mockTransaction
         );
       });
 
@@ -519,7 +552,16 @@ describe("procesarEventoGithub", () => {
       });
 
       expect(mockEsColaborador).toHaveBeenCalledWith("kata-juan", "juancito");
-      expect(mockActualizarColaboradores).toHaveBeenCalledWith("e1", { agregar: "juancito" });
+      expect(mockActualizarColaboradores).toHaveBeenCalledWith(
+        "e1",
+        { agregar: "juancito" },
+        mockTransaction
+      );
+      expect(mockGetAlumnoByGithub).toHaveBeenCalledWith(
+        "juancito",
+        false,
+        mockTransaction
+      );
       expect(resultado).toEqual({ estado: "procesado", entregaId: "e1" });
     });
 
@@ -550,7 +592,11 @@ describe("procesarEventoGithub", () => {
         repository: REPO_BASE,
       });
 
-      expect(mockActualizarColaboradores).toHaveBeenCalledWith("e1", { quitar: "juancito" });
+      expect(mockActualizarColaboradores).toHaveBeenCalledWith(
+        "e1",
+        { quitar: "juancito" },
+        mockTransaction
+      );
       expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
       expect(resultado).toEqual({ estado: "procesado", entregaId: "e1" });
     });
@@ -569,7 +615,11 @@ describe("procesarEventoGithub", () => {
         repository: REPO_BASE,
       });
 
-      expect(mockActualizarColaboradores).toHaveBeenCalledWith("e1", { agregar: "juancito" });
+      expect(mockActualizarColaboradores).toHaveBeenCalledWith(
+        "e1",
+        { agregar: "juancito" },
+        mockTransaction
+      );
       expect(resultado).toEqual({ estado: "procesado", entregaId: "e1" });
     });
 
@@ -586,7 +636,11 @@ describe("procesarEventoGithub", () => {
         repository: REPO_BASE,
       });
 
-      expect(mockActualizarColaboradores).toHaveBeenCalledWith("e1", { quitar: "juancito" });
+      expect(mockActualizarColaboradores).toHaveBeenCalledWith(
+        "e1",
+        { quitar: "juancito" },
+        mockTransaction
+      );
       expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
       expect(resultado).toEqual({ estado: "procesado", entregaId: "e1" });
     });

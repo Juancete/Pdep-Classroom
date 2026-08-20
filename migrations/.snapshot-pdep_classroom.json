@@ -1464,7 +1464,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": true,
-          "unique": false,
+          "unique": true,
           "length": 255,
           "precision": null,
           "scale": null,
@@ -1537,6 +1537,16 @@
           "keyName": "entrega_pkey",
           "unique": true,
           "primary": true
+        },
+        {
+          "columnNames": [
+            "repo_github_id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "entrega_repo_github_id_unique",
+          "unique": true,
+          "primary": false
         },
         {
           "columnNames": [

@@ -357,6 +357,7 @@ describe("EntregaRepository", () => {
         ["ci:e1"]
       );
       expect(operation).toHaveBeenCalled();
+      expect(operation).toHaveBeenCalledWith(mockEm);
     });
   });
 
@@ -555,6 +556,7 @@ describe("EntregaRepository", () => {
       await actualizarColaboradoresDeEntrega("e1", { agregar: "ana" });
 
       expect(entrega.githubUsernames).toEqual(["juan", "ana"]);
+      expect(mockEm.flush).toHaveBeenCalled();
     });
 
     it("no duplica un colaborador que ya estaba (case insensitive)", async () => {
@@ -565,6 +567,7 @@ describe("EntregaRepository", () => {
       await actualizarColaboradoresDeEntrega("e1", { agregar: "juan" });
 
       expect(entrega.githubUsernames).toEqual(["Juan"]);
+      expect(mockEm.flush).not.toHaveBeenCalled();
     });
 
     it("quita un colaborador existente (case insensitive)", async () => {
@@ -575,6 +578,7 @@ describe("EntregaRepository", () => {
       await actualizarColaboradoresDeEntrega("e1", { quitar: "juan" });
 
       expect(entrega.githubUsernames).toEqual(["ana"]);
+      expect(mockEm.flush).toHaveBeenCalled();
     });
 
     it("quitar un username que no está no rompe nada", async () => {
@@ -585,6 +589,7 @@ describe("EntregaRepository", () => {
       await actualizarColaboradoresDeEntrega("e1", { quitar: "juan" });
 
       expect(entrega.githubUsernames).toEqual(["ana"]);
+      expect(mockEm.flush).not.toHaveBeenCalled();
     });
   });
 });

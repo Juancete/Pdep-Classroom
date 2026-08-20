@@ -67,7 +67,10 @@ const PushSchema = z.object({
 // timestamp de orden ausente reabriría el problema que vino a resolver),
 // `repository` lo trata como "sin señal de orden" y aplica igual.
 function fechaDeEpochGithub(valor: number | string | undefined): Date | null {
-  if (typeof valor === "number") return new Date(valor * 1000);
+  if (typeof valor === "number") {
+    const parsed = new Date(valor * 1000);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
   if (typeof valor === "string") {
     const parsed = new Date(valor);
     if (!Number.isNaN(parsed.getTime())) return parsed;
@@ -168,8 +171,11 @@ async function manejarCheckSuite(payload: unknown): Promise<ResultadoProceso> {
   return conEntregaDelRepo(
     { repoName: repository.name, repoGithubId: idComoString(repository.id) },
     (entrega) =>
-      conLockDeEntrega(entrega.id, async () => {
-        const resultado = await sincronizarCIDeEntregas([entrega], { forzar: true });
+      conLockDeEntrega(entrega.id, async (transaction) => {
+        const resultado = await sincronizarCIDeEntregas([entrega], {
+          forzar: true,
+          em: transaction,
+        });
         if (resultado.fallidas.length > 0) {
           throw new Error(resultado.fallidas[0]!.error);
         }
@@ -208,12 +214,16 @@ async function manejarPush(payload: unknown): Promise<ResultadoProceso> {
   return conEntregaDelRepo(
     { repoName: repository.name, repoGithubId: idComoString(repository.id) },
     (entrega) =>
-      conLockDeEntrega(entrega.id, async () => {
-        await actualizarActividadDeEntrega(entrega.id, {
-          pusheadoEn,
-          commitSha: after,
-          por: sender.login,
-        });
+      conLockDeEntrega(entrega.id, async (transaction) => {
+        await actualizarActividadDeEntrega(
+          entrega.id,
+          {
+            pusheadoEn,
+            commitSha: after,
+            por: sender.login,
+          },
+          transaction
+        );
         return "procesado" as const;
       })
   );
@@ -230,8 +240,8 @@ async function manejarRepository(payload: unknown): Promise<ResultadoProceso> {
 
   if (action === "deleted") {
     return conEntregaDelRepo({ repoName: repository.name, repoGithubId }, async (entrega) =>
-      conLockDeEntrega(entrega.id, async () => {
-        await marcarRepoBorrado(entrega.id, eventoActualizadoEn);
+      conLockDeEntrega(entrega.id, async (transaction) => {
+        await marcarRepoBorrado(entrega.id, eventoActualizadoEn, transaction);
         return "procesado" as const;
       })
     );
@@ -264,12 +274,16 @@ async function manejarRepository(payload: unknown): Promise<ResultadoProceso> {
     return conEntregaDelRepo(
       { repoName: nombreAnterior ?? repository.name, repoGithubId },
       (entrega) =>
-        conLockDeEntrega(entrega.id, async () => {
-          await renombrarRepoDeEntrega(entrega.id, {
-            repoName: repoNameFinal,
-            repoUrl: repoUrlFinal,
-            eventoActualizadoEn,
-          });
+        conLockDeEntrega(entrega.id, async (transaction) => {
+          await renombrarRepoDeEntrega(
+            entrega.id,
+            {
+              repoName: repoNameFinal,
+              repoUrl: repoUrlFinal,
+              eventoActualizadoEn,
+            },
+            transaction
+          );
           return "procesado" as const;
         })
     );
@@ -299,20 +313,28 @@ async function manejarMember(payload: unknown): Promise<ResultadoProceso> {
   return conEntregaDelRepo(
     { repoName: repository.name, repoGithubId: idComoString(repository.id) },
     (entrega) =>
-      conLockDeEntrega(entrega.id, async () => {
+      conLockDeEntrega(entrega.id, async (transaction) => {
         const esColaboradorAhora = await esColaborador(repository.name, member.login);
 
         if (esColaboradorAhora) {
           // Sólo se agrega si GitHub reporta a un alumno conocido — sin este
           // guard, agregar a un docente como colaborador lo metería en la
           // grilla de entregas y en el filtro de búsqueda.
-          const alumno = await getAlumnoByGithub(member.login);
+          const alumno = await getAlumnoByGithub(member.login, false, transaction);
           if (!alumno) return "ignorado" as const;
-          await actualizarColaboradoresDeEntrega(entrega.id, { agregar: member.login });
+          await actualizarColaboradoresDeEntrega(
+            entrega.id,
+            { agregar: member.login },
+            transaction
+          );
           return "procesado" as const;
         }
 
-        await actualizarColaboradoresDeEntrega(entrega.id, { quitar: member.login });
+        await actualizarColaboradoresDeEntrega(
+          entrega.id,
+          { quitar: member.login },
+          transaction
+        );
         return "procesado" as const;
       })
   );

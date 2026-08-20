@@ -124,7 +124,7 @@ describe("GithubWebhookDeliveryRepository", () => {
       expect(delivery.estadoProcesamiento).toBe("procesado");
       expect(delivery.entregaId).toBe("e1");
       expect(delivery.payload).toBeNull();
-      expect(delivery.error).toBeUndefined();
+      expect(delivery.error).toBeNull();
       expect(delivery.procesadoEn).toBeInstanceOf(Date);
     });
 
