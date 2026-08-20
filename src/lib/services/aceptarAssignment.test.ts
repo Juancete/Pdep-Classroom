@@ -17,7 +17,7 @@ const mockGetGrupoDeAlumno = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
 const mockCrearEntregaSiAssignmentDisponible = vi.fn();
 const mockCrearEntrega = vi.fn();
-const mockRepoExists = vi.fn();
+const mockGetRepoInfo = vi.fn();
 const mockAddCollaborators = vi.fn();
 
 vi.mock("@/lib/repositories", () => ({
@@ -33,7 +33,7 @@ vi.mock("@/lib/repositories", () => ({
 
 vi.mock("@/lib/github", () => ({
   crearEntrega: (opts: unknown) => mockCrearEntrega(opts),
-  repoExists: (repoName: string) => mockRepoExists(repoName),
+  getRepoInfo: (repoName: string) => mockGetRepoInfo(repoName),
   addCollaborators: (repoName: string, usernames: string[]) =>
     mockAddCollaborators(repoName, usernames),
 }));
@@ -123,10 +123,11 @@ describe("aceptarAssignment", () => {
     mockGetAssignment.mockResolvedValue(makeAssignment());
     mockGetEntregaDeUsuario.mockResolvedValue(null);
     mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
-    mockRepoExists.mockResolvedValue(false);
+    mockGetRepoInfo.mockResolvedValue(null);
     mockCrearEntrega.mockResolvedValue({
       repoName: "kata-funcional-juangarcia",
       repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
+      repoGithubId: "111222",
     });
     mockCrearEntregaSiAssignmentDisponible.mockResolvedValue(makeEntrega());
   });
@@ -137,7 +138,7 @@ describe("aceptarAssignment", () => {
 
     await expect(aceptarAssignment("a1", makeUser())).resolves.toBe(entrega);
 
-    expect(mockRepoExists).not.toHaveBeenCalled();
+    expect(mockGetRepoInfo).not.toHaveBeenCalled();
     expect(mockCrearEntrega).not.toHaveBeenCalled();
     expect(mockCrearEntregaSiAssignmentDisponible).not.toHaveBeenCalled();
   });
@@ -166,7 +167,26 @@ describe("aceptarAssignment", () => {
         alumnoId: "alumno-1",
         grupoId: undefined,
         repoName: "kata-funcional-juangarcia",
+        // Id numérico de GitHub del repo (issue #60): se captura en la
+        // creación real desde template, en vez de depender pura y
+        // exclusivamente del "self-heal" del primer webhook.
+        repoGithubId: "111222",
       }),
+      ESTUDIANTE
+    );
+  });
+
+  it("cuando el repo ya existía (no se crea desde template), toma repoGithubId de GitHub en vez de depender del self-heal del primer webhook", async () => {
+    mockGetRepoInfo.mockResolvedValue({
+      repoGithubId: "555666",
+      repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
+    });
+
+    await aceptarAssignment("a1", makeUser());
+
+    expect(mockCrearEntrega).not.toHaveBeenCalled();
+    expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalledWith(
+      expect.objectContaining({ repoGithubId: "555666" }),
       ESTUDIANTE
     );
   });
@@ -186,7 +206,7 @@ describe("aceptarAssignment", () => {
       )
     ).rejects.toBeInstanceOf(NombreRepositorioDemasiadoLargoError);
 
-    expect(mockRepoExists).not.toHaveBeenCalled();
+    expect(mockGetRepoInfo).not.toHaveBeenCalled();
     expect(mockCrearEntrega).not.toHaveBeenCalled();
   });
 
@@ -230,7 +250,10 @@ describe("aceptarAssignment", () => {
   });
 
   it("reconcilia cuando el repo ya existe en GitHub", async () => {
-    mockRepoExists.mockResolvedValue(true);
+    mockGetRepoInfo.mockResolvedValue({
+      repoGithubId: "777888",
+      repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
+    });
 
     await aceptarAssignment("a1", makeUser());
 
@@ -243,15 +266,19 @@ describe("aceptarAssignment", () => {
       expect.objectContaining({
         repoName: "kata-funcional-juangarcia",
         repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
+        repoGithubId: "777888",
       }),
       ESTUDIANTE
     );
   });
 
-  it("si crearEntrega falla pero el repo apareció, reconcilia la entrega local", async () => {
-    mockRepoExists
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true);
+  it("si crearEntrega falla pero el repo apareció, reconcilia la entrega local con su repoGithubId", async () => {
+    mockGetRepoInfo
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        repoGithubId: "999000",
+        repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
+      });
     mockCrearEntrega.mockRejectedValue(new Error("name already exists"));
 
     await aceptarAssignment("a1", makeUser());
@@ -260,13 +287,16 @@ describe("aceptarAssignment", () => {
       "kata-funcional-juangarcia",
       ["juangarcia"]
     );
-    expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalled();
+    expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalledWith(
+      expect.objectContaining({ repoGithubId: "999000" }),
+      ESTUDIANTE
+    );
   });
 
   it("propaga el error de GitHub si el repo no existe después del fallo", async () => {
-    mockRepoExists
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(false);
+    mockGetRepoInfo
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
     mockCrearEntrega.mockRejectedValue(new Error("GitHub caído"));
 
     await expect(aceptarAssignment("a1", makeUser())).rejects.toThrow("GitHub caído");
@@ -282,7 +312,7 @@ describe("aceptarAssignment", () => {
     );
 
     expect(mockGetEntregaDeUsuario).not.toHaveBeenCalled();
-    expect(mockRepoExists).not.toHaveBeenCalled();
+    expect(mockGetRepoInfo).not.toHaveBeenCalled();
     expect(mockCrearEntrega).not.toHaveBeenCalled();
     expect(mockCrearEntregaSiAssignmentDisponible).not.toHaveBeenCalled();
   });

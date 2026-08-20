@@ -3,7 +3,10 @@ import { createAppAuth } from "@octokit/auth-app";
 import { extractTemplateName, validarRepoName } from "./naming";
 import { handleOctokitError, isRequestError } from "./github-errors";
 
-const ORG = process.env.GITHUB_ORG ?? "pdep-mn-utn";
+// Exportada: el router de eventos de webhooks (issue #60) la usa para
+// validar que el payload venga de la org configurada, no de un fork o de
+// otra instalación de la App.
+export const ORG = process.env.GITHUB_ORG ?? "pdep-mn-utn";
 
 // ── Octokit autenticado como GitHub App ─────────────────────
 // Usa la GitHub App instalada en la org para tener permisos de
@@ -51,7 +54,7 @@ export interface CreateRepoOptions {
 
 export async function createRepoFromTemplate(
   opts: CreateRepoOptions
-): Promise<{ repoUrl: string; repoFullName: string }> {
+): Promise<{ repoUrl: string; repoFullName: string; repoGithubId: string }> {
   const octokit = getOctokit();
 
   try {
@@ -68,6 +71,13 @@ export async function createRepoFromTemplate(
     return {
       repoUrl: data.html_url,
       repoFullName: data.full_name,
+      // Id numérico de GitHub del repo (issue #60) — no cambia con un
+      // rename, a diferencia del nombre. Capturarlo acá evita depender
+      // pura y exclusivamente del "self-heal" del primer webhook: sin
+      // esto, dos renames del mismo repo entregados fuera de orden ANTES
+      // de que llegue cualquier otro evento pueden perderse (ningún
+      // webhook anterior tuvo la chance de guardar el id todavía).
+      repoGithubId: String(data.id),
     };
   } catch (error) {
     handleOctokitError(error);
@@ -122,11 +132,11 @@ export async function crearEntrega(opts: {
   repoName: string;
   usernames: string[];
   descripcion?: string;
-}): Promise<{ repoUrl: string; repoName: string }> {
+}): Promise<{ repoUrl: string; repoName: string; repoGithubId: string }> {
   const repoName = validarRepoName(opts.repoName);
   const templateName = extractTemplateName(opts.templateRepo);
 
-  const { repoUrl } = await createRepoFromTemplate({
+  const { repoUrl, repoGithubId } = await createRepoFromTemplate({
     templateRepo: templateName,
     newRepoName: repoName,
     description: opts.descripcion,
@@ -135,7 +145,7 @@ export async function crearEntrega(opts: {
 
   await addCollaborators(repoName, opts.usernames);
 
-  return { repoUrl, repoName };
+  return { repoUrl, repoName, repoGithubId };
 }
 
 // ── Listar repos de un assignment ───────────────────────────
@@ -182,13 +192,51 @@ export async function deleteRepo(repoName: string): Promise<DeleteRepoResult> {
 
 // ── Verificar si un repo ya existe ──────────────────────────
 
-export async function repoExists(repoName: string): Promise<boolean> {
+export interface RepoInfo {
+  repoGithubId: string;
+  repoUrl: string;
+}
+
+// Reemplaza a un simple repoExists(): boolean — cuando el repo ya existe
+// (issue #60, camino de "repo preexistente" en aceptarAssignment.ts), hace
+// falta también su id numérico de GitHub para no depender exclusivamente del
+// self-heal del primer webhook.
+export async function getRepoInfo(repoName: string): Promise<RepoInfo | null> {
   const octokit = getOctokit();
   try {
-    await octokit.repos.get({ owner: ORG, repo: repoName });
-    return true;
-  } catch {
-    return false;
+    const { data } = await octokit.repos.get({ owner: ORG, repo: repoName });
+    return { repoGithubId: String(data.id), repoUrl: data.html_url };
+  } catch (error) {
+    if (isRequestError(error) && error.status === 404) return null;
+    handleOctokitError(error);
+  }
+}
+
+// ── Reconciliar el nombre actual de un repo por su id ───────
+// GitHub no garantiza el orden de entrega de webhooks: dos `repository.renamed`
+// del mismo repo pueden compartir `updated_at` (resolución de un segundo) y
+// procesarse en el orden inverso al real. Consultar el estado actual por id
+// en vez de confiar en el nombre del payload converge al nombre verdadero sin
+// importar en qué orden se procesen — mismo criterio que `esColaborador` para
+// `member`: invalidar y refrescar, no confiar en el delta.
+export async function getRepoInfoPorId(
+  repoGithubId: string
+): Promise<{ repoName: string; repoUrl: string } | null> {
+  const octokit = getOctokit();
+  try {
+    // `repos.listForOrg` es una API REST documentada y además mantiene la
+    // reconciliación acotada a la organización configurada. `paginate` es
+    // necesario porque una org puede tener más de 100 repositorios.
+    const repos = await octokit.paginate(octokit.repos.listForOrg, {
+      org: ORG,
+      type: "all",
+      per_page: 100,
+    });
+    const repo = repos.find((candidate) => String(candidate.id) === repoGithubId);
+    return repo ? { repoName: repo.name, repoUrl: repo.html_url } : null;
+  } catch (error) {
+    if (isRequestError(error) && error.status === 404) return null;
+    handleOctokitError(error);
   }
 }
 
@@ -322,6 +370,25 @@ export async function reejecutarCI(
       )
     );
   } catch (error) {
+    handleOctokitError(error);
+  }
+}
+
+// ── Colaboradores (issue #60) ────────────────────────────────
+// GitHub no garantiza el orden de entrega de webhooks: un `member.removed`
+// puede llegar después de un `member.added` más reciente (o viceversa). En
+// vez de confiar en la acción del payload, el webhook de `member` reconcilia
+// contra este chequeo — "¿es colaborador ahora mismo?" — igual criterio que
+// `getEstadoCI` con `check_suite`: invalidar y refrescar, no confiar en el
+// delta. Así el resultado converge a la verdad sin importar el orden.
+
+export async function esColaborador(repoName: string, username: string): Promise<boolean> {
+  const octokit = getOctokit();
+  try {
+    await octokit.repos.checkCollaborator({ owner: ORG, repo: repoName, username });
+    return true;
+  } catch (error) {
+    if (isRequestError(error) && error.status === 404) return false;
     handleOctokitError(error);
   }
 }

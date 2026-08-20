@@ -5,9 +5,7 @@ import type { EntregaRow } from "./entregas-table";
 
 // CISyncButton/CIRerunButton usan useRouter — no hay Router context en un
 // render estático fuera de Next, hay que mockearlo igual que en
-// delete-repos-button.test.tsx. El efecto de auto-sincronizar al montar no
-// corre en `renderToStaticMarkup` (no hay fase de commit), así que no hace
-// falta mockear `fetch` acá.
+// delete-repos-button.test.tsx.
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));
@@ -113,7 +111,7 @@ describe("EntregasTable", () => {
     expect(html).toContain("Nombre completo");
     expect(html).toContain("Repositorio");
     expect(html).toContain("CI");
-    expect(html).toContain("Fecha");
+    expect(html).toContain("Actividad");
   });
 
   it("muestra los githubUsernames", () => {
@@ -166,6 +164,23 @@ describe("EntregasTable", () => {
       <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow({ createdAt: "15/3/2026" })]} />
     );
     expect(html).toContain("15/3/2026");
+  });
+
+  it("muestra el último push cuando está disponible", () => {
+    const html = renderToStaticMarkup(
+      <EntregasTable
+        assignmentId={ASSIGNMENT_ID}
+        entregas={[makeRow({ ultimoPush: { fecha: "18/8/2026", por: "juancito" } })]}
+      />
+    );
+    expect(html).toContain("Último push: 18/8/2026 (juancito)");
+  });
+
+  it("no muestra la línea de último push cuando no hay ninguno registrado", () => {
+    const html = renderToStaticMarkup(
+      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow({ ultimoPush: undefined })]} />
+    );
+    expect(html).not.toContain("Último push");
   });
 
   it("muestra el campo de búsqueda", () => {

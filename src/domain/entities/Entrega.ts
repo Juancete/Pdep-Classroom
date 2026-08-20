@@ -79,6 +79,34 @@ export class Entrega {
   @Property({ type: 'datetime', nullable: true })
   ciActualizadoEn?: Date; // cuándo los consultamos nosotros (frescura del caché)
 
+  // Actividad reciente del repo (issue #60) — la escribe el webhook de
+  // `push` cuando llega un commit nuevo al branch por defecto.
+  @Property({ type: 'datetime', nullable: true })
+  ultimoPushEn?: Date;
+
+  @Property({ type: 'string', nullable: true })
+  ultimoPushSha?: string;
+
+  @Property({ type: 'string', nullable: true })
+  ultimoPushPor?: string; // sender.login del payload de GitHub
+
+  // Id numérico de GitHub del repo (issue #60) — a diferencia de `repoName`,
+  // no cambia con un rename. Resolver los eventos `repository.deleted`/
+  // `renamed` por acá (en vez de por nombre) evita perderlos cuando GitHub
+  // entrega los webhooks desordenados: un `renamed` A→B procesado después
+  // de un `renamed` B→C ya aplicado seguiría encontrando la entrega por id,
+  // aunque el nombre actual ya no coincida con lo que ese evento espera. Se
+  // autocompleta ("self-heal") la primera vez que llega cualquier webhook
+  // para el repo — no hace falta poblarlo al crear la entrega.
+  @Property({ type: 'string', nullable: true, unique: true })
+  repoGithubId?: string;
+
+  // `repository.updated_at` del último evento `repository` aplicado — guard
+  // de orden: un `deleted`/`renamed` viejo que llega tarde no debe pisar uno
+  // más nuevo ya aplicado (GitHub no garantiza el orden de entrega).
+  @Property({ type: 'datetime', nullable: true })
+  repoEventoActualizadoEn?: Date;
+
   get resultadoCI(): ResultadoCI {
     return ResultadoCI.desdeNombre(this.ciResultadoNombre);
   }

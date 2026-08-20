@@ -135,6 +135,12 @@ export default async function AssignmentDetailPage(
       detalleUrl: entrega.ciDetalleUrl,
       permiteReejecucion: entrega.resultadoCI.permiteReejecucion(),
     },
+    ultimoPush: entrega.ultimoPushEn
+      ? {
+          fecha: new Date(entrega.ultimoPushEn).toLocaleDateString("es-AR"),
+          por: entrega.ultimoPushPor ?? "—",
+        }
+      : undefined,
   }));
 
   return (
