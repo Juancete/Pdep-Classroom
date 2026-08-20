@@ -43,6 +43,7 @@ async function insertAssignmentLegacy(
 
 describe("Migration20260819120000_ci_estado", () => {
   let orm: MikroORM;
+  let legacyEntregaId: string;
 
   beforeAll(async () => {
     orm = await MikroORM.init({
@@ -53,20 +54,15 @@ describe("Migration20260819120000_ci_estado", () => {
     });
     await resetPublicSchema(orm);
     await orm.getMigrator().up({ to: PREVIOUS_MIGRATION });
-  });
 
-  afterAll(async () => {
-    if (!orm) return;
-    await resetPublicSchema(orm);
-    await orm.close(true);
-  });
-
-  it("backfillea las entregas existentes a 'sin_consultar'", async () => {
+    // Entrega "legacy", insertada ANTES de aplicar la migración de CI —
+    // deja el escenario de backfill armado en el setup, para que el test
+    // que lo verifica sólo lea (no migre) y el orden de los tests, o correr
+    // uno solo con `it.only`, no cambien el resultado.
     const connection = orm.em.getConnection();
     const comisionId = randomUUID();
     const assignmentId = randomUUID();
-    const entregaId = randomUUID();
-
+    legacyEntregaId = randomUUID();
     await connection.execute(
       `insert into "comision"
         ("id", "anio", "spreadsheet_id", "activa", "column_config")
@@ -79,11 +75,20 @@ describe("Migration20260819120000_ci_estado", () => {
         ("id", "assignment_id", "github_usernames", "repo_name", "repo_url",
          "repo_deleted", "created_at")
        values (?, ?, '{"juancito"}', ?, ?, false, now())`,
-      [entregaId, assignmentId, `tp-juancito-${entregaId}`, "https://github.com/org/repo"]
+      [legacyEntregaId, assignmentId, `tp-juancito-${legacyEntregaId}`, "https://github.com/org/repo"]
     );
 
     await orm.getMigrator().up({ to: CI_MIGRATION });
+  });
 
+  afterAll(async () => {
+    if (!orm) return;
+    await resetPublicSchema(orm);
+    await orm.close(true);
+  });
+
+  it("backfillea las entregas existentes a 'sin_consultar'", async () => {
+    const connection = orm.em.getConnection();
     const rows = await connection.execute<
       {
         ci_resultado_nombre: string;
@@ -97,7 +102,7 @@ describe("Migration20260819120000_ci_estado", () => {
       `select "ci_resultado_nombre", "ci_check_suite_ids", "ci_commit_sha", "ci_detalle_url",
               "ci_ejecutado_en", "ci_actualizado_en"
          from "entrega" where "id" = ?`,
-      [entregaId]
+      [legacyEntregaId]
     );
 
     expect(rows).toHaveLength(1);
@@ -159,7 +164,9 @@ describe("Migration20260819120000_ci_estado", () => {
          values (?, ?, '{"invalido"}', ?, ?, false, now(), 'no_existe')`,
         [entregaId, assignmentId, `tp-invalido-${entregaId}`, "https://github.com/org/repo3"]
       )
-    ).rejects.toThrow();
+      // Verifica específicamente el rechazo por check constraint (no
+      // cualquier error) — el mensaje de Postgres incluye este texto.
+    ).rejects.toThrow(/violat(es|ing).*check constraint/i);
   });
 
   it("no agrega ninguna foreign key nueva", async () => {
@@ -178,7 +185,10 @@ describe("Migration20260819120000_ci_estado", () => {
     const { up } = await orm.getSchemaGenerator().getUpdateSchemaMigrationSQL();
     expect(up).not.toContain('"ci_resultado_nombre"');
     expect(up).not.toContain('"ci_check_suite_ids"');
+    expect(up).not.toContain('"ci_commit_sha"');
     expect(up).not.toContain('"ci_detalle_url"');
+    expect(up).not.toContain('"ci_ejecutado_en"');
+    expect(up).not.toContain('"ci_actualizado_en"');
   });
 
   it("down() elimina las columnas de CI", async () => {

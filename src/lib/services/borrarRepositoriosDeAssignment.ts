@@ -76,7 +76,7 @@ async function borrarRepositorio(data: {
       );
     }
     logger.error(
-      { err: error, attemptId, operationId, assignmentId, repoName, requestedBy },
+      { err: message, attemptId, operationId, assignmentId, repoName, requestedBy },
       "Falló el borrado del repositorio"
     );
     return { entregaId: entrega.id, repoName, status: "failed", error: message };

@@ -150,24 +150,27 @@ export async function getEntregasConRepoActivo(
 }
 
 // Persiste el resultado de la última consulta de CI (issue #58).
-// Sólo actualiza esas columnas, no toca el resto de la entrega.
+// Sólo actualiza esas columnas, no toca el resto de la entrega. Cada campo
+// es tri-estado: omitido/`undefined` conserva el valor ya guardado (ej. al
+// pasar a "pendiente" tras pedir un rerun, sin tener todavía un check nuevo
+// que reporte), `null` lo limpia explícitamente (ej. al pasar a "sin_ci").
 export async function actualizarCIDeEntrega(
   entregaId: string,
   data: {
     resultadoNombre: NombreResultadoCI;
-    checkSuiteIds?: string[];
-    commitSha?: string;
-    detalleUrl?: string;
-    ejecutadoEn?: Date;
+    checkSuiteIds?: string[] | null;
+    commitSha?: string | null;
+    detalleUrl?: string | null;
+    ejecutadoEn?: Date | null;
   }
 ): Promise<void> {
   const entityManager = await getEM();
   const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
   entrega.ciResultadoNombre = data.resultadoNombre;
-  entrega.ciCheckSuiteIds = data.checkSuiteIds ?? [];
-  entrega.ciCommitSha = data.commitSha;
-  entrega.ciDetalleUrl = data.detalleUrl;
-  entrega.ciEjecutadoEn = data.ejecutadoEn;
+  if (data.checkSuiteIds !== undefined) entrega.ciCheckSuiteIds = data.checkSuiteIds ?? [];
+  if (data.commitSha !== undefined) entrega.ciCommitSha = data.commitSha ?? undefined;
+  if (data.detalleUrl !== undefined) entrega.ciDetalleUrl = data.detalleUrl ?? undefined;
+  if (data.ejecutadoEn !== undefined) entrega.ciEjecutadoEn = data.ejecutadoEn ?? undefined;
   entrega.ciActualizadoEn = new Date();
   await entityManager.flush();
 }

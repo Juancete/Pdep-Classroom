@@ -29,7 +29,16 @@ async function sincronizarUnaEntrega(entrega: Entrega): Promise<"actualizada" | 
     const estado = await getEstadoCI(repoName);
 
     if (estado.tipo === "sin_ci") {
-      await actualizarCIDeEntrega(entrega.id, { resultadoNombre: "sin_ci" });
+      // Limpia explícitamente lo que hubiera de una consulta anterior — acá
+      // sí sabemos que no hay ningún check, a diferencia de "pendiente" en
+      // `reejecutarCIDeEntrega`, donde se preserva el commit/checks previos.
+      await actualizarCIDeEntrega(entrega.id, {
+        resultadoNombre: "sin_ci",
+        checkSuiteIds: null,
+        commitSha: null,
+        detalleUrl: null,
+        ejecutadoEn: null,
+      });
       return "actualizada";
     }
 
@@ -45,7 +54,7 @@ async function sincronizarUnaEntrega(entrega: Entrega): Promise<"actualizada" | 
   } catch (error) {
     const message = mensajeOperativo(error);
     logger.error(
-      { err: error, entregaId: entrega.id, repoName },
+      { err: message, entregaId: entrega.id, repoName },
       "No se pudo sincronizar el estado de CI"
     );
     return { error: message };
