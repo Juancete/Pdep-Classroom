@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 import { UserMenu } from "./logout-button";
+import { useErrorLogCount } from "./use-error-log-count";
 
 export interface NavLink {
   href: string;
@@ -26,6 +27,7 @@ export function NavMenu({
   hasPendingSync = false,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const unreadErrors = useErrorLogCount(isAdmin);
 
   useEffect(() => {
     if (!open) return;
@@ -88,17 +90,18 @@ export function NavMenu({
           image={image}
           isAdmin={isAdmin}
           hasPendingSync={hasPendingSync}
+          unreadErrors={unreadErrors}
         />
       </div>
 
       <button
         type="button"
         className="md:hidden relative p-2 -mr-2 text-pdep-200 hover:text-white transition-colors"
-        aria-label={
-          hasPendingSync
-            ? "Abrir menú, hay una acción pendiente en tu perfil"
-            : "Abrir menú"
-        }
+        aria-label={[
+          "Abrir menú",
+          hasPendingSync ? "hay una acción pendiente en tu perfil" : null,
+          unreadErrors > 0 ? `${unreadErrors} errores sin leer` : null,
+        ].filter(Boolean).join(", ")}
         aria-expanded={open}
         aria-controls="mobile-drawer"
         onClick={() => setOpen(true)}
@@ -120,6 +123,12 @@ export function NavMenu({
         {hasPendingSync && (
           <span
             className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-pdep-900"
+            aria-hidden="true"
+          />
+        )}
+        {unreadErrors > 0 && (
+          <span
+            className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-pdep-900"
             aria-hidden="true"
           />
         )}
@@ -206,6 +215,23 @@ export function NavMenu({
                 >
                   <span>!</span>
                   Pendiente
+                </span>
+              )}
+            </Link>
+          )}
+          {isAdmin && (
+            <Link
+              href="/admin/errores"
+              onClick={() => setOpen(false)}
+              className="flex items-center justify-between gap-3 px-4 py-3 text-pdep-200 hover:bg-pdep-800 hover:text-white transition-colors"
+            >
+              <span>Errores</span>
+              {unreadErrors > 0 && (
+                <span
+                  className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white"
+                  aria-label={`${unreadErrors} sin leer`}
+                >
+                  {unreadErrors > 99 ? "99+" : unreadErrors}
                 </span>
               )}
             </Link>

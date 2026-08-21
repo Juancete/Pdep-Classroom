@@ -89,6 +89,18 @@ export {
 export type { ComisionFormData } from "./ComisionRepository";
 
 export {
+  registrarErrorInesperado,
+  getErrorLogsPage,
+  getUnreadErrorLogCount,
+  acknowledgeErrorLog,
+  acknowledgeAllErrorLogs,
+  purgeAcknowledgedErrorLogs,
+  ERROR_LOG_RETENTION_DAYS,
+  ERROR_LOG_PAGE_SIZE,
+  type ErrorLogPage,
+} from "./ErrorLogRepository";
+
+export {
   registrarCambioDeMembresia,
   getHistorialDeMembresias,
   type HistorialDeMembresiasPage,

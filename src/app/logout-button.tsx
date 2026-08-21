@@ -9,6 +9,7 @@ interface Props {
   image: string;
   isAdmin?: boolean;
   hasPendingSync?: boolean;
+  unreadErrors?: number;
 }
 
 export function UserMenu({
@@ -16,6 +17,7 @@ export function UserMenu({
   image,
   isAdmin = false,
   hasPendingSync = false,
+  unreadErrors = 0,
 }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -45,11 +47,11 @@ export function UserMenu({
         className="relative flex items-center gap-2 cursor-pointer"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={
-          hasPendingSync
-            ? `${username}, hay una acción pendiente en tu perfil`
-            : username
-        }
+        aria-label={[
+          username,
+          hasPendingSync ? "hay una acción pendiente en tu perfil" : null,
+          unreadErrors > 0 ? `${unreadErrors} errores sin leer` : null,
+        ].filter(Boolean).join(", ")}
         onClick={() => setOpen((previous) => !previous)}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -57,6 +59,12 @@ export function UserMenu({
         {hasPendingSync && (
           <span
             className="absolute -top-0.5 left-5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-pdep-900"
+            aria-hidden="true"
+          />
+        )}
+        {unreadErrors > 0 && (
+          <span
+            className="absolute -top-0.5 left-5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-pdep-900"
             aria-hidden="true"
           />
         )}
@@ -87,6 +95,24 @@ export function UserMenu({
                   aria-hidden="true"
                 >
                   !
+                </span>
+              )}
+            </Link>
+          )}
+          {isAdmin && (
+            <Link
+              href="/admin/errores"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex items-center justify-between gap-3 px-4 py-2 text-sm text-pdep-200 hover:text-white hover:bg-pdep-700 transition-colors"
+            >
+              <span>Errores</span>
+              {unreadErrors > 0 && (
+                <span
+                  className="rounded-full bg-red-500 px-1.5 py-0.5 text-[11px] font-semibold text-white"
+                  aria-label={`${unreadErrors} sin leer`}
+                >
+                  {unreadErrors > 99 ? "99+" : unreadErrors}
                 </span>
               )}
             </Link>
