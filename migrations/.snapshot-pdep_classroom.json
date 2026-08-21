@@ -197,7 +197,13 @@
           "expression": "CREATE INDEX error_log_unread_last_seen_idx ON public.error_log USING btree (last_seen_at DESC, id DESC) WHERE (acknowledged_at IS NULL)"
         }
       ],
-      "checks": [],
+      "checks": [
+        {
+          "name": "error_log_count_positive",
+          "expression": "\"count\" > 0",
+          "definition": "check ((\"count\" > 0))"
+        }
+      ],
       "foreignKeys": {},
       "nativeEnums": {},
       "comment": null

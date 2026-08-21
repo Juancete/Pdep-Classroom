@@ -5,14 +5,24 @@ const MAX_CONTEXT_STRING_LENGTH = 500;
 const MAX_CONTEXT_DEPTH = 4;
 const MAX_CONTEXT_KEYS = 50;
 const MAX_ARRAY_LENGTH = 20;
+const MAX_CONTEXT_NODES = 200;
+const TRUNCATED = "[TRUNCATED]";
 
 const SENSITIVE_KEY = /^(?:password|token|access_?token|authorization|cookie|secret|x-hub-signature-256)$/i;
 const EMAIL_KEY = /^email$/i;
 const EMAIL = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const BEARER = /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi;
-const SENSITIVE_QUERY = /([?&](?:token|access_token|code|secret|password)=)[^&#\s]*/gi;
+const SENSITIVE_QUERY = /([?&](?:token|access_token|authorization|cookie|code|secret|password)=)[^&#\s]*/gi;
 const TOKEN_LIKE = /\b[A-Za-z0-9_-]{32,}\b/g;
 const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
+
+type SanitizationBudget = { restantes: number };
+
+function consumirNodo(presupuesto: SanitizationBudget): boolean {
+  if (presupuesto.restantes <= 0) return false;
+  presupuesto.restantes -= 1;
+  return true;
+}
 
 function limitar(texto: string, maximo: number): string {
   return texto.length <= maximo ? texto : texto.slice(0, maximo);
@@ -44,32 +54,51 @@ export function mensajeSanitizado(error: unknown): string {
 function sanitizarValor(
   valor: unknown,
   profundidad: number,
-  visitados: WeakSet<object>
+  visitados: WeakSet<object>,
+  presupuesto: SanitizationBudget
 ): unknown {
+  if (!consumirNodo(presupuesto)) return TRUNCATED;
   if (valor === null || typeof valor === "boolean") return valor;
   if (typeof valor === "number") return Number.isFinite(valor) ? valor : undefined;
   if (typeof valor === "string") return sanitizarTextoError(valor, MAX_CONTEXT_STRING_LENGTH);
   if (valor instanceof Date) return Number.isNaN(valor.getTime()) ? undefined : valor.toISOString();
   if (typeof valor !== "object") return undefined;
   if (visitados.has(valor)) return "[CIRCULAR]";
-  if (profundidad >= MAX_CONTEXT_DEPTH) return "[TRUNCATED]";
+  if (profundidad >= MAX_CONTEXT_DEPTH) return TRUNCATED;
   visitados.add(valor);
   try {
     if (Array.isArray(valor)) {
-      return valor
-        .slice(0, MAX_ARRAY_LENGTH)
-        .map((item) => sanitizarValor(item, profundidad + 1, visitados))
-        .filter((item) => item !== undefined);
+      const resultado: unknown[] = [];
+      for (const item of valor.slice(0, MAX_ARRAY_LENGTH)) {
+        if (presupuesto.restantes <= 0) {
+          resultado.push(TRUNCATED);
+          break;
+        }
+        const sanitizado = sanitizarValor(item, profundidad + 1, visitados, presupuesto);
+        if (sanitizado !== undefined) resultado.push(sanitizado);
+      }
+      return resultado;
     }
 
     const resultado: Record<string, unknown> = {};
     for (const [clave, contenido] of Object.entries(valor).slice(0, MAX_CONTEXT_KEYS)) {
+      if (presupuesto.restantes <= 0) {
+        resultado[clave] = TRUNCATED;
+        break;
+      }
       if (EMAIL_KEY.test(clave)) {
+        consumirNodo(presupuesto);
         resultado[clave] = "[EMAIL_REDACTED]";
       } else if (SENSITIVE_KEY.test(clave)) {
+        consumirNodo(presupuesto);
         resultado[clave] = "[REDACTED]";
       } else {
-        const sanitizado = sanitizarValor(contenido, profundidad + 1, visitados);
+        const sanitizado = sanitizarValor(
+          contenido,
+          profundidad + 1,
+          visitados,
+          presupuesto
+        );
         if (sanitizado !== undefined) resultado[clave] = sanitizado;
       }
     }
@@ -86,7 +115,12 @@ export function contextoSanitizado(
   context?: Record<string, unknown>
 ): Record<string, unknown> | null {
   if (!context) return null;
-  const resultado = sanitizarValor(context, 0, new WeakSet<object>());
+  const resultado = sanitizarValor(
+    context,
+    0,
+    new WeakSet<object>(),
+    { restantes: MAX_CONTEXT_NODES }
+  );
   if (!resultado || Array.isArray(resultado) || Object.keys(resultado).length === 0) return null;
   return resultado as Record<string, unknown>;
 }

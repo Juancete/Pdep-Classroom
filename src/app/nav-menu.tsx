@@ -122,7 +122,7 @@ export function NavMenu({
         </svg>
         {hasPendingSync && (
           <span
-            className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-pdep-900"
+            className="absolute top-1 right-4 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-pdep-900"
             aria-hidden="true"
           />
         )}

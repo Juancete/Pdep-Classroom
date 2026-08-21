@@ -1,6 +1,7 @@
-import { Entity, Index, PrimaryKey, Property } from "@mikro-orm/core";
+import { Check, Entity, Index, PrimaryKey, Property } from "@mikro-orm/core";
 import { randomUUID } from "node:crypto";
 
+@Check({ name: "error_log_count_positive", expression: '"count" > 0' })
 @Entity({ tableName: "error_log" })
 @Index({
   name: "error_log_route_last_seen_idx",
