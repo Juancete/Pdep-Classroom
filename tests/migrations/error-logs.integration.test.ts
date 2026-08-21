@@ -26,6 +26,10 @@ async function resetPublicSchema(orm: MikroORM): Promise<void> {
   await orm.em.getConnection().execute('create schema "public"');
 }
 
+function timestamp(value: Date | string): number {
+  return value instanceof Date ? value.getTime() : new Date(value).getTime();
+}
+
 describe("Migration20260821120000_error_logs", () => {
   let orm: MikroORM;
 
@@ -71,14 +75,16 @@ describe("Migration20260821120000_error_logs", () => {
     ));
     const rows = await orm.em.getConnection().execute<{
       count: number;
-      first_seen_at: Date;
-      last_seen_at: Date;
+      first_seen_at: Date | string;
+      last_seen_at: Date | string;
       acknowledged_at: Date | null;
     }[]>(`select "count", "first_seen_at", "last_seen_at", "acknowledged_at" from "error_log" where "fingerprint" = ?`, [fingerprint]);
     expect(rows).toHaveLength(1);
     expect(rows[0]!.count).toBe(20);
     expect(rows[0]!.acknowledged_at).toBeNull();
-    expect(rows[0]!.last_seen_at.getTime()).toBeGreaterThanOrEqual(rows[0]!.first_seen_at.getTime());
+    expect(timestamp(rows[0]!.last_seen_at)).toBeGreaterThanOrEqual(
+      timestamp(rows[0]!.first_seen_at)
+    );
   });
 
   it("una recurrencia reactiva un fingerprint reconocido", async () => {
@@ -104,15 +110,15 @@ describe("Migration20260821120000_error_logs", () => {
       count: number;
       acknowledged_at: Date | null;
       context: unknown;
-      first_seen_at: Date;
-      last_seen_at: Date;
+      first_seen_at: Date | string;
+      last_seen_at: Date | string;
     }[]>(
       `select "count", "acknowledged_at", "context", "first_seen_at", "last_seen_at" from "error_log" where "fingerprint" = ?`,
       [fingerprint]
     );
     expect(rows[0]).toMatchObject({ count: 2, acknowledged_at: null, context: { intento: 2 } });
-    expect(rows[0]!.first_seen_at).toEqual(firstSeenAt);
-    expect(rows[0]!.last_seen_at).toEqual(lastSeenAt);
+    expect(timestamp(rows[0]!.first_seen_at)).toBe(firstSeenAt.getTime());
+    expect(timestamp(rows[0]!.last_seen_at)).toBe(lastSeenAt.getTime());
   });
 
   it("garantiza idempotencia exacta ante reconocimientos concurrentes", async () => {
