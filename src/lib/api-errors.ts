@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { logger } from "./logger";
+import { prepararErrorLog } from "./error-log";
 import {
   AssignmentNoEncontradoError,
   AssignmentNoDisponibleError,
@@ -107,18 +108,52 @@ export function respuestaDeErrorDeDominio(error: unknown): NextResponse | null {
 // mensajes de librerías de terceros) al cliente.
 //
 // El `context` es opcional: sirve para adjuntar IDs útiles para debugging
-// (githubUsername, assignmentId, etc.) que quedan en el log server-side
-// pero NO llegan al cliente.
-//
-// TODO(PR 2): extender este helper para persistir el error también en la
-// tabla `error_log` (con dedup por fingerprint) y exponerlo en una pantalla
-// admin con badge de no leídos. Ver issue en el README.
+// (githubUsername, assignmentId, etc.). El error original queda sólo en
+// Pino; una versión sanitizada y sin stack se persiste para la pantalla admin.
 export function internalServerError(
   route: string,
   error: unknown,
   context?: Record<string, unknown>
 ): NextResponse {
   logger.error({ ...context, err: error, route }, "handler error");
+  try {
+    const errorLog = prepararErrorLog(route, error, context);
+    after(async () => {
+      try {
+        // Import perezoso: las rutas que sólo construyen una respuesta 500 no
+        // cargan MikroORM en su grafo inicial (mismo criterio que auth.events).
+        const { registrarErrorInesperado } = await import(
+          "./repositories/ErrorLogRepository"
+        );
+        await registrarErrorInesperado(errorLog);
+      } catch (persistenceError) {
+        logger.error(
+          { err: persistenceError, route },
+          "no se pudo persistir el error del handler"
+        );
+      }
+    });
+  } catch (schedulingError) {
+    logger.error(
+      { err: schedulingError, route },
+      "no se pudo programar la persistencia del error del handler"
+    );
+  }
+  return NextResponse.json(
+    { error: "Error interno del servidor" },
+    { status: 500 }
+  );
+}
+
+/**
+ * Respuesta para handlers que operan sobre `error_log`: evita intentar
+ * registrar en la misma tabla cuya falla originó el error.
+ */
+export function internalErrorSinPersistencia(
+  route: string,
+  error: unknown
+): NextResponse {
+  logger.error({ err: error, route }, "handler error");
   return NextResponse.json(
     { error: "Error interno del servidor" },
     { status: 500 }

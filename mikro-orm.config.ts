@@ -20,6 +20,7 @@ import {
   RepoDeletionAttempt,
   CambioDeMembresia,
   GithubWebhookDelivery,
+  ErrorLog,
 } from "./src/domain/entities";
 
 export default defineConfig({
@@ -41,6 +42,7 @@ export default defineConfig({
     RepoDeletionAttempt,
     CambioDeMembresia,
     GithubWebhookDelivery,
+    ErrorLog,
   ],
 
   // Usa reflect-metadata en runtime (funciona en webpack/RSC sin necesitar
