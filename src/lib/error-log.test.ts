@@ -53,6 +53,27 @@ describe("error-log", () => {
     );
   });
 
+  it("redacta credenciales en parámetros de query", () => {
+    expect(
+      mensajeSanitizado(
+        new Error("Falló /callback?authorization=credencial&cookie=sesion&code=abc")
+      )
+    ).toBe(
+      "Falló /callback?authorization=[REDACTED]&cookie=[REDACTED]&code=[REDACTED]"
+    );
+  });
+
+  it("limita globalmente la expansión del contexto", () => {
+    const context = Object.fromEntries(
+      Array.from({ length: 20 }, (_, outer) => [
+        `rama${outer}`,
+        Array.from({ length: 20 }, (_, inner) => `valor-${outer}-${inner}`),
+      ])
+    );
+
+    expect(JSON.stringify(contextoSanitizado(context))).toContain("[TRUNCATED]");
+  });
+
   it("normaliza mayúsculas, espacios y UUIDs para deduplicar", () => {
     const first = fingerprintDeError(
       "POST /api/test",

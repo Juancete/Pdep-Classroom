@@ -21,11 +21,15 @@ export function useErrorLogCount(enabled: boolean): number {
       });
       if (!response.ok) return;
       const data: unknown = await response.json();
+      const isCurrentRequest = () =>
+        requestRef.current === controller && !controller.signal.aborted;
+      if (!isCurrentRequest()) return;
       if (
         typeof data === "object" &&
         data !== null &&
         typeof (data as { unread?: unknown }).unread === "number"
       ) {
+        if (!isCurrentRequest()) return;
         setUnread(Math.max(0, (data as { unread: number }).unread));
       }
     } catch (error) {

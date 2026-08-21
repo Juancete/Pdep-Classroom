@@ -54,4 +54,34 @@ describe("useErrorLogCount", () => {
     await act(async () => { window.dispatchEvent(new Event(ERROR_LOGS_CHANGED_EVENT)); await Promise.resolve(); });
     expect(result.current).toBe(5);
   });
+
+  it("ignora una respuesta anterior que termina después de la más reciente", async () => {
+    let resolveFirst!: (response: { ok: true; json: () => Promise<{ unread: number }> }) => void;
+    let resolveSecond!: (response: { ok: true; json: () => Promise<{ unread: number }> }) => void;
+    const first = new Promise<{ ok: true; json: () => Promise<{ unread: number }> }>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const second = new Promise<{ ok: true; json: () => Promise<{ unread: number }> }>((resolve) => {
+      resolveSecond = resolve;
+    });
+    vi.stubGlobal("fetch", vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second));
+    const { result } = renderHook(() => useErrorLogCount(true));
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    await act(async () => {
+      window.dispatchEvent(new Event(ERROR_LOGS_CHANGED_EVENT));
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      resolveSecond({ ok: true, json: async () => ({ unread: 8 }) });
+      await second;
+    });
+    expect(result.current).toBe(8);
+
+    await act(async () => {
+      resolveFirst({ ok: true, json: async () => ({ unread: 2 }) });
+      await first;
+    });
+    expect(result.current).toBe(8);
+  });
 });

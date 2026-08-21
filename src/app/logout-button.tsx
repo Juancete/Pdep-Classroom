@@ -58,7 +58,7 @@ export function UserMenu({
         <img src={image} alt="" className="w-7 h-7 rounded-full" />
         {hasPendingSync && (
           <span
-            className="absolute -top-0.5 left-5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-pdep-900"
+            className="absolute -top-0.5 left-8 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-pdep-900"
             aria-hidden="true"
           />
         )}
