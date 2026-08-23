@@ -57,6 +57,7 @@ export {
   type NombreEstadoDelivery,
 } from "./EstadoDelivery";
 export { GithubWebhookDelivery } from "./GithubWebhookDelivery";
+export { ErrorLog } from "./ErrorLog";
 export {
   CambioDeMembresia,
   type AccionCambioMembresia,

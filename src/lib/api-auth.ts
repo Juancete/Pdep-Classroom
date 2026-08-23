@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, requireUser } from "@/lib/session";
+import { getCurrentUser, requireUser } from "@/lib/session";
 
 const UNAUTHORIZED = { error: "No autorizado" };
 
 export async function guardAdmin(): Promise<NextResponse | null> {
-  try {
-    await requireAdmin();
-    return null;
-  } catch {
+  const user = await getCurrentUser();
+  if (!user) {
     return NextResponse.json(UNAUTHORIZED, { status: 401 });
   }
+  if (!user.rol.puedeAdministrar()) {
+    return NextResponse.json({ error: "Acceso prohibido" }, { status: 403 });
+  }
+  return null;
 }
 
 export async function guardUser(): Promise<NextResponse | null> {
