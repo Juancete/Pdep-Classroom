@@ -7,6 +7,7 @@ import { Comision, IndividualAssignment } from "@/domain/entities";
 
 const mockRequireAdmin = vi.fn();
 const mockGetAssignment = vi.fn();
+const mockGetEntregaCountsByAssignment = vi.fn();
 const mockListarTemplates = vi.fn();
 const mockRedirect = vi.fn();
 
@@ -16,6 +17,7 @@ vi.mock("@/lib/session", () => ({
 
 vi.mock("@/lib/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
+  getEntregaCountsByAssignment: () => mockGetEntregaCountsByAssignment(),
 }));
 
 vi.mock("@/lib/github", () => ({
@@ -31,6 +33,27 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("../../actions", () => ({
   actualizarAssignment: vi.fn(),
+}));
+
+vi.mock("../../estado-panel", () => ({
+  EstadoPanel: ({
+    assignmentId,
+    estado,
+    accionesDisponibles,
+    entregasCount,
+  }: {
+    assignmentId: string;
+    estado: string;
+    accionesDisponibles: string[];
+    entregasCount: number;
+  }) =>
+    React.createElement("div", {
+      "data-testid": "estado-panel",
+      "data-assignment": assignmentId,
+      "data-estado": estado,
+      "data-acciones": accionesDisponibles.join(","),
+      "data-entregas": entregasCount,
+    }),
 }));
 
 vi.mock("../../assignment-form", () => ({
@@ -85,6 +108,7 @@ describe("Edit Assignment page", () => {
     vi.clearAllMocks();
     mockRequireAdmin.mockResolvedValue(undefined);
     mockListarTemplates.mockResolvedValue([]);
+    mockGetEntregaCountsByAssignment.mockResolvedValue(new Map());
   });
 
   it("siempre llama a requireAdmin", async () => {
@@ -173,6 +197,30 @@ describe("Edit Assignment page", () => {
       const element = await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
       const html = renderToStaticMarkup(element as React.ReactElement);
       expect(html).toContain("2026-12-31");
+    });
+  });
+
+  describe("panel de estado", () => {
+    it("pasa las acciones disponibles y el conteo de entregas al panel", async () => {
+      mockGetAssignment.mockResolvedValue(makeAssignment());
+      mockGetEntregaCountsByAssignment.mockResolvedValue(new Map([["a1", 1]]));
+
+      const element = await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
+      const html = renderToStaticMarkup(element as React.ReactElement);
+
+      expect(html).toContain('data-estado="borrador"');
+      expect(html).toContain('data-acciones="publicado,archivado"');
+      expect(html).toContain('data-entregas="1"');
+    });
+
+    it("no ofrece volver a borrador cuando el publicado ya tiene entregas", async () => {
+      mockGetAssignment.mockResolvedValue(makeAssignment({ estadoNombre: "publicado" }));
+      mockGetEntregaCountsByAssignment.mockResolvedValue(new Map([["a1", 1]]));
+
+      const element = await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
+      const html = renderToStaticMarkup(element as React.ReactElement);
+
+      expect(html).toContain('data-acciones="archivado"');
     });
   });
 

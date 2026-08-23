@@ -1,0 +1,145 @@
+import { createHash } from "node:crypto";
+
+const MAX_MESSAGE_LENGTH = 2_000;
+const MAX_CONTEXT_STRING_LENGTH = 500;
+const MAX_CONTEXT_DEPTH = 4;
+const MAX_CONTEXT_KEYS = 50;
+const MAX_ARRAY_LENGTH = 20;
+const MAX_CONTEXT_NODES = 200;
+const TRUNCATED = "[TRUNCATED]";
+
+const SENSITIVE_KEY = /^(?:password|token|access_?token|authorization|cookie|secret|x-hub-signature-256)$/i;
+const EMAIL_KEY = /^email$/i;
+const EMAIL = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
+const BEARER = /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi;
+const SENSITIVE_QUERY = /([?&](?:token|access_?token|authorization|cookie|code|secret|password)=)[^&#\s]*/gi;
+const TOKEN_LIKE = /\b[A-Za-z0-9_-]{32,}\b/g;
+const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
+
+type SanitizationBudget = { restantes: number };
+
+function consumirNodo(presupuesto: SanitizationBudget): boolean {
+  if (presupuesto.restantes <= 0) return false;
+  presupuesto.restantes -= 1;
+  return true;
+}
+
+function limitar(texto: string, maximo: number): string {
+  return texto.length <= maximo ? texto : texto.slice(0, maximo);
+}
+
+export function sanitizarTextoError(valor: string, maximo = MAX_MESSAGE_LENGTH): string {
+  return limitar(
+    valor
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+      .replace(EMAIL, "[EMAIL_REDACTED]")
+      .replace(BEARER, "Bearer [REDACTED]")
+      .replace(SENSITIVE_QUERY, "$1[REDACTED]")
+      .replace(TOKEN_LIKE, "[REDACTED]")
+      .replace(/\s+/g, " ")
+      .trim(),
+    maximo
+  );
+}
+
+export function mensajeSanitizado(error: unknown): string {
+  const original = error instanceof Error
+    ? error.message
+    : typeof error === "string"
+      ? error
+      : "Error inesperado";
+  return sanitizarTextoError(original) || "Error inesperado";
+}
+
+function sanitizarValor(
+  valor: unknown,
+  profundidad: number,
+  visitados: WeakSet<object>,
+  presupuesto: SanitizationBudget
+): unknown {
+  if (!consumirNodo(presupuesto)) return TRUNCATED;
+  if (valor === null || typeof valor === "boolean") return valor;
+  if (typeof valor === "number") return Number.isFinite(valor) ? valor : undefined;
+  if (typeof valor === "string") return sanitizarTextoError(valor, MAX_CONTEXT_STRING_LENGTH);
+  if (valor instanceof Date) return Number.isNaN(valor.getTime()) ? undefined : valor.toISOString();
+  if (typeof valor !== "object") return undefined;
+  if (visitados.has(valor)) return "[CIRCULAR]";
+  if (profundidad >= MAX_CONTEXT_DEPTH) return TRUNCATED;
+  visitados.add(valor);
+  try {
+    if (Array.isArray(valor)) {
+      const resultado: unknown[] = [];
+      for (const item of valor.slice(0, MAX_ARRAY_LENGTH)) {
+        if (presupuesto.restantes <= 0) {
+          resultado.push(TRUNCATED);
+          break;
+        }
+        const sanitizado = sanitizarValor(item, profundidad + 1, visitados, presupuesto);
+        if (sanitizado !== undefined) resultado.push(sanitizado);
+      }
+      return resultado;
+    }
+
+    const resultado: Record<string, unknown> = {};
+    for (const [clave, contenido] of Object.entries(valor).slice(0, MAX_CONTEXT_KEYS)) {
+      if (presupuesto.restantes <= 0) {
+        resultado[clave] = TRUNCATED;
+        break;
+      }
+      if (EMAIL_KEY.test(clave)) {
+        consumirNodo(presupuesto);
+        resultado[clave] = "[EMAIL_REDACTED]";
+      } else if (SENSITIVE_KEY.test(clave)) {
+        consumirNodo(presupuesto);
+        resultado[clave] = "[REDACTED]";
+      } else {
+        const sanitizado = sanitizarValor(
+          contenido,
+          profundidad + 1,
+          visitados,
+          presupuesto
+        );
+        if (sanitizado !== undefined) resultado[clave] = sanitizado;
+      }
+    }
+    return resultado;
+  } finally {
+    // `visitados` representa únicamente el path de recursión actual. Un
+    // objeto compartido por dos ramas es válido; sólo una referencia a un
+    // ancestro del mismo path constituye un ciclo real.
+    visitados.delete(valor);
+  }
+}
+
+export function contextoSanitizado(
+  context?: Record<string, unknown>
+): Record<string, unknown> | null {
+  if (!context) return null;
+  const resultado = sanitizarValor(
+    context,
+    0,
+    new WeakSet<object>(),
+    { restantes: MAX_CONTEXT_NODES }
+  );
+  if (!resultado || Array.isArray(resultado) || Object.keys(resultado).length === 0) return null;
+  return resultado as Record<string, unknown>;
+}
+
+export function fingerprintDeError(route: string, message: string): string {
+  const normalizado = message.toLowerCase().replace(UUID, "<uuid>").replace(/\s+/g, " ").trim();
+  return createHash("sha256").update(`${route}\n${normalizado}`, "utf8").digest("hex");
+}
+
+export function prepararErrorLog(
+  route: string,
+  error: unknown,
+  context?: Record<string, unknown>
+) {
+  const message = mensajeSanitizado(error);
+  return {
+    route,
+    message,
+    context: contextoSanitizado(context),
+    fingerprint: fingerprintDeError(route, message),
+  };
+}

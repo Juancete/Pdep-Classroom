@@ -7,6 +7,12 @@ import {
 import Link from "next/link";
 import { DeleteAssignmentButton } from "./delete-button";
 import { DeleteReposButton } from "./delete-repos-button";
+import { EstadoQuickActions } from "./estado-quick-actions";
+import { NOMBRES_ESTADO_ASSIGNMENT, transicionesDisponibles } from "@/domain/entities";
+import type { NombreEstadoAssignment } from "@/types";
+import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
+import { IconLink } from "@/app/components/IconLink";
+import { EyeIcon, PencilIcon } from "@/app/components/icons";
 import {
   DataTable,
   DataHeader,
@@ -17,18 +23,28 @@ import {
   DataEmpty,
 } from "@/app/components/DataTable";
 
-export default async function AdminAssignmentsPage() {
+export default async function AdminAssignmentsPage(props: {
+  searchParams?: Promise<{ estado?: string }>;
+}) {
+  const emptySearchParams: { estado?: string } = {};
+  const searchParams = await (props.searchParams ?? Promise.resolve(emptySearchParams));
   await requireAdmin();
 
+  const estadoFilter = NOMBRES_ESTADO_ASSIGNMENT.includes(
+    searchParams.estado as NombreEstadoAssignment
+  )
+    ? (searchParams.estado as NombreEstadoAssignment)
+    : undefined;
+
   const [assignments, entregasCounts, activeRepoCounts] = await Promise.all([
-    getAssignments(),
+    getAssignments(estadoFilter ? { estado: estadoFilter } : undefined),
     getEntregaCountsByAssignment(),
     getActiveRepoCountsByAssignment(),
   ]);
 
   const sorted = [...assignments].sort(
-    (a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    (anterior, siguiente) =>
+      new Date(siguiente.createdAt).getTime() - new Date(anterior.createdAt).getTime()
   );
 
   return (
@@ -43,12 +59,47 @@ export default async function AdminAssignmentsPage() {
         </Link>
       </div>
 
+      {/* Filtro por estado */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        <Link
+          href="/admin/assignments"
+          className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+            !estadoFilter
+              ? "bg-pdep-600 text-white"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          Todos
+        </Link>
+        {NOMBRES_ESTADO_ASSIGNMENT.map((estado) => (
+          <Link
+            key={estado}
+            href={`/admin/assignments?estado=${estado}`}
+            className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+              estadoFilter === estado
+                ? "bg-pdep-600 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            {estado.charAt(0).toUpperCase() + estado.slice(1)}
+          </Link>
+        ))}
+      </div>
+
       {sorted.length === 0 ? (
-        <DataEmpty>No hay assignments todavía. Creá el primero.</DataEmpty>
+        <DataEmpty>
+          {estadoFilter
+            ? `No hay assignments en estado ${estadoFilter}.`
+            : "No hay assignments todavía. Creá el primero."}
+        </DataEmpty>
       ) : (
-        <DataTable columns="2fr 1fr 1fr 1fr 1.5fr 90px 110px 180px">
+        <DataTable
+          columns="2fr 100px 1fr 1fr 1fr 1.5fr 90px 110px 170px"
+          minWidth="1150px"
+        >
           <DataHeader>
             <DataHeaderCell>Título</DataHeaderCell>
+            <DataHeaderCell>Estado</DataHeaderCell>
             <DataHeaderCell>Paradigma</DataHeaderCell>
             <DataHeaderCell>Tipo</DataHeaderCell>
             <DataHeaderCell>Comisión</DataHeaderCell>
@@ -62,6 +113,9 @@ export default async function AdminAssignmentsPage() {
               <DataRow key={assignment.id}>
                 <DataCell label="Título" heading>
                   {assignment.titulo}
+                </DataCell>
+                <DataCell label="Estado">
+                  <EstadoAssignmentBadge estado={assignment.estadoNombre} />
                 </DataCell>
                 <DataCell label="Paradigma">
                   <span className="text-xs bg-pdep-100 text-pdep-700 px-2 py-0.5 rounded-full">
@@ -107,24 +161,38 @@ export default async function AdminAssignmentsPage() {
                   </span>
                 </DataCell>
                 <DataCell label="">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <Link
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <IconLink
                       href={`/admin/assignments/${assignment.id}`}
-                      className="text-gray-500 hover:text-gray-700 text-xs font-medium"
-                    >
-                      Ver
-                    </Link>
-                    <Link
+                      label="Ver"
+                      Icon={EyeIcon}
+                    />
+                    <IconLink
                       href={`/admin/assignments/${assignment.id}/edit`}
-                      className="text-pdep-600 hover:text-pdep-800 text-xs font-medium"
-                    >
-                      Editar
-                    </Link>
+                      label="Editar"
+                      Icon={PencilIcon}
+                    />
+                    <EstadoQuickActions
+                      // El estado real es la key: ver comentario homólogo en
+                      // admin/assignments/[id]/page.tsx.
+                      key={assignment.estadoNombre}
+                      assignmentId={assignment.id}
+                      accionesDisponibles={transicionesDisponibles(
+                        assignment.estado,
+                        assignment.id,
+                        { tieneEntregas: (entregasCounts.get(assignment.id) ?? 0) > 0 }
+                      )}
+                    />
                     <DeleteReposButton
                       assignmentId={assignment.id}
                       activeRepoCount={activeRepoCounts.get(assignment.id) ?? 0}
+                      compact
                     />
-                    <DeleteAssignmentButton id={assignment.id} titulo={assignment.titulo} />
+                    <DeleteAssignmentButton
+                      id={assignment.id}
+                      titulo={assignment.titulo}
+                      compact
+                    />
                   </div>
                 </DataCell>
               </DataRow>

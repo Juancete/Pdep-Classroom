@@ -1,4 +1,5 @@
 import { AcceptButton } from "@/app/dashboard/accept-button";
+import { AccionesDeMembresia, type GrupoDisponible } from "./acciones-de-membresia";
 
 export type GrupoResumen = {
   id: string;
@@ -14,10 +15,18 @@ export function MiGrupo({
   grupo,
   assignmentId,
   tieneEntrega,
+  githubUsername,
+  motivoBloqueo,
+  esUltimoMiembro,
+  gruposDisponibles,
 }: {
   grupo: GrupoResumen;
   assignmentId: string;
   tieneEntrega: boolean;
+  githubUsername: string;
+  motivoBloqueo: string | null;
+  esUltimoMiembro: boolean;
+  gruposDisponibles: GrupoDisponible[];
 }) {
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
@@ -54,6 +63,15 @@ export function MiGrupo({
           <AcceptButton assignmentId={assignmentId} />
         </div>
       )}
+
+      <AccionesDeMembresia
+        assignmentId={assignmentId}
+        grupoId={grupo.id}
+        githubUsername={githubUsername}
+        motivoBloqueo={motivoBloqueo}
+        esUltimoMiembro={esUltimoMiembro}
+        gruposDisponibles={gruposDisponibles}
+      />
     </div>
   );
 }

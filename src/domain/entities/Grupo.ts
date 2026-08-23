@@ -6,6 +6,7 @@ import {
   ManyToOne,
   PrimaryKey,
   Property,
+  Unique,
 } from "@mikro-orm/core";
 import { randomUUID } from "crypto";
 import { Alumno } from "./Alumno";
@@ -33,6 +34,25 @@ export class AlumnoYaEnGrupoDelAssignmentError extends Error {
   }
 }
 
+export class NombreGrupoDuplicadoError extends Error {
+  constructor(
+    public readonly assignmentId: string,
+    public readonly nombre: string
+  ) {
+    super(
+      `Ya existe un grupo con el mismo nombre o identificador normalizado que "${nombre}" para este TP.`
+    );
+    this.name = "NombreGrupoDuplicadoError";
+  }
+}
+
+export class NombreGrupoInvalidoError extends Error {
+  constructor(public readonly nombre: string) {
+    super("El nombre del grupo debe incluir al menos una letra o un número.");
+    this.name = "NombreGrupoInvalidoError";
+  }
+}
+
 export class GrupoLlenoError extends Error {
   constructor(
     public readonly grupoId: string,
@@ -50,7 +70,47 @@ export class AssignmentNoGrupalError extends Error {
   }
 }
 
+export class GrupoNoEncontradoError extends Error {
+  constructor(
+    public readonly assignmentId: string,
+    public readonly grupoId: string
+  ) {
+    super("Grupo no encontrado");
+    this.name = "GrupoNoEncontradoError";
+  }
+}
+
+// Errores de negocio de la administración de integrantes (issue #50):
+// salir, cambiarse y moverse entre grupos.
+
+export class AlumnoNoEsMiembroDelGrupoError extends Error {
+  constructor(
+    public readonly grupoId: string,
+    public readonly githubUsername: string
+  ) {
+    super(`@${githubUsername} no es integrante de este grupo.`);
+    this.name = "AlumnoNoEsMiembroDelGrupoError";
+  }
+}
+
+export class GrupoConEntregaError extends Error {
+  constructor(public readonly grupoId: string) {
+    super(
+      "El grupo ya entregó: el repositorio está creado y los cambios de integrantes los tiene que resolver el docente."
+    );
+    this.name = "GrupoConEntregaError";
+  }
+}
+
 @Entity()
+@Unique({
+  name: "grupo_id_assignment_unique",
+  properties: ["id", "assignment"],
+})
+@Unique({
+  name: "grupo_assignment_nombre_normalizado_unique_idx",
+  properties: ["assignment", "nombreNormalizado"],
+})
 export class Grupo {
   @PrimaryKey({ type: "uuid" })
   id: string = randomUUID();
@@ -58,10 +118,13 @@ export class Grupo {
   @Property({ type: 'string' })
   nombre!: string;
 
+  @Property({ type: "string" })
+  nombreNormalizado!: string;
+
   @Enum({ items: ["funcional", "logico", "objetos"] })
   paradigma!: Paradigma;
 
-  @ManyToMany(() => Alumno)
+  @ManyToMany({ entity: () => Alumno, pivotTable: "grupo_alumnos" })
   alumnos = new Collection<Alumno>(this);
 
   @Property({ type: 'integer' })
@@ -99,6 +162,17 @@ export class Grupo {
       .some((alumno) => alumno.usernameCanonico === canonico);
   }
 
+  miembroConUsername(githubUsername: string): Alumno | undefined {
+    const canonico = Alumno.normalizarUsername(githubUsername);
+    return this.alumnos
+      .getItems()
+      .find((alumno) => alumno.usernameCanonico === canonico);
+  }
+
+  estaVacio(): boolean {
+    return this.alumnos.length === 0;
+  }
+
   usernamesDeMiembros(): string[] {
     return this.alumnos.getItems().map((alumno) => alumno.githubUsername);
   }
@@ -119,5 +193,12 @@ export class Grupo {
       throw new GrupoLlenoError(this.id, this.maxIntegrantes);
     }
     this.alumnos.add(alumno);
+  }
+
+  removeMember(alumno: Alumno): void {
+    if (!this.alumnos.contains(alumno)) {
+      throw new AlumnoNoEsMiembroDelGrupoError(this.id, alumno.githubUsername);
+    }
+    this.alumnos.remove(alumno);
   }
 }

@@ -17,6 +17,10 @@ import {
   GrupalAssignment,
   Grupo,
   Entrega,
+  RepoDeletionAttempt,
+  CambioDeMembresia,
+  GithubWebhookDelivery,
+  ErrorLog,
 } from "./src/domain/entities";
 
 export default defineConfig({
@@ -27,7 +31,19 @@ export default defineConfig({
   },
 
   // Entidades
-  entities: [Alumno, Comision, Assignment, IndividualAssignment, GrupalAssignment, Grupo, Entrega],
+  entities: [
+    Alumno,
+    Comision,
+    Assignment,
+    IndividualAssignment,
+    GrupalAssignment,
+    Grupo,
+    Entrega,
+    RepoDeletionAttempt,
+    CambioDeMembresia,
+    GithubWebhookDelivery,
+    ErrorLog,
+  ],
 
   // Usa reflect-metadata en runtime (funciona en webpack/RSC sin necesitar
   // leer archivos .ts desde el filesystem).
@@ -38,6 +54,13 @@ export default defineConfig({
   migrations: {
     path: "./migrations",
     glob: "!(*.d).{js,ts}",
+  },
+
+  // `grupo_alumnos` incluye assignment_id, un índice único y una FK compuesta
+  // mantenidos por una migración manual. La relación sigue disponible para el
+  // runtime, pero el schema diff no debe intentar simplificar ese pivot.
+  schemaGenerator: {
+    skipTables: ["grupo_alumnos"],
   },
 
   // Debugging (solo en dev)

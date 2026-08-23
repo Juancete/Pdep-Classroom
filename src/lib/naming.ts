@@ -1,23 +1,40 @@
 // Funciones puras de naming y lógica de negocio.
 // Separadas de github.ts para poder testear sin Octokit.
 
+export const GITHUB_REPO_NAME_MAX_LENGTH = 100;
+
+export class NombreRepositorioDemasiadoLargoError extends Error {
+  constructor(public readonly repoName: string) {
+    super(
+      `El nombre del repositorio generado supera el límite de ${GITHUB_REPO_NAME_MAX_LENGTH} caracteres de GitHub.`
+    );
+    this.name = "NombreRepositorioDemasiadoLargoError";
+  }
+}
+
+export function validarRepoName(repoName: string): string {
+  if (repoName.length > GITHUB_REPO_NAME_MAX_LENGTH) {
+    throw new NombreRepositorioDemasiadoLargoError(repoName);
+  }
+  return repoName;
+}
+
 /**
  * Genera el nombre del repo para una entrega.
  * Individual: `{slug}-{username}`
- * Grupal: `{slug}-{grupoId}`
+ * Grupal: `{slug}-{nombreGrupoNormalizado}`
  */
-export function buildRepoName(opts: {
-  slug: string;
-  usernames: string[];
-  grupoId?: string;
-}): string {
-  const suffix = opts.grupoId
-    ? opts.grupoId
-    : opts.usernames.length === 1
-      ? opts.usernames[0]
-      : opts.usernames.slice(0, 3).join("-");
+export function buildRepoName(
+  opts:
+    | { slug: string; githubUsername: string }
+    | { slug: string; grupoNombreNormalizado: string }
+): string {
+  const suffix =
+    "grupoNombreNormalizado" in opts
+      ? opts.grupoNombreNormalizado
+      : opts.githubUsername;
 
-  return `${opts.slug}-${suffix}`.toLowerCase();
+  return validarRepoName(`${opts.slug}-${suffix}`.toLowerCase());
 }
 
 /**

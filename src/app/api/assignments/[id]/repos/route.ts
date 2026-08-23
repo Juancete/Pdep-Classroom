@@ -1,27 +1,39 @@
 import { NextResponse } from "next/server";
-import { guardAdmin } from "@/lib/api-auth";
-import { getAssignment, getEntregas, clearReposDeAssignment } from "@/lib/repositories";
-import { deleteRepo } from "@/lib/github";
+import { getCurrentUser } from "@/lib/session";
+import {
+  conLockBorradoReposAssignment,
+  getAssignment,
+} from "@/lib/repositories";
+import { borrarRepositoriosDeAssignment } from "@/lib/services/borrarRepositoriosDeAssignment";
+import { internalServerError } from "@/lib/api-errors";
 
 export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const unauthorized = await guardAdmin();
-  if (unauthorized) return unauthorized;
+  try {
+    const user = await getCurrentUser();
+    if (!user?.rol.puedeAdministrar()) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
 
-  const assignment = await getAssignment(params.id);
-  if (!assignment) {
-    return NextResponse.json({ error: "Assignment no encontrado" }, { status: 404 });
+    const assignment = await getAssignment(params.id);
+    if (!assignment) {
+      return NextResponse.json(
+        { error: "Assignment no encontrado" },
+        { status: 404 }
+      );
+    }
+
+    const result = await conLockBorradoReposAssignment(params.id, () =>
+      borrarRepositoriosDeAssignment({
+        assignmentId: params.id,
+        requestedBy: user.githubUsername,
+      })
+    );
+
+    return NextResponse.json(result);
+  } catch (error) {
+    return internalServerError("DELETE /api/assignments/[id]/repos", error, {
+      assignmentId: params.id,
+    });
   }
-
-  const entregas = await getEntregas(params.id);
-  const repoNames = entregas.map((entrega) => entrega.repoName).filter(Boolean) as string[];
-
-  if (repoNames.length === 0) {
-    return NextResponse.json({ ok: true, deleted: 0 });
-  }
-
-  await Promise.all(repoNames.map((name) => deleteRepo(name)));
-  await clearReposDeAssignment(params.id);
-
-  return NextResponse.json({ ok: true, deleted: repoNames.length });
 }

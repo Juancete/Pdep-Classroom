@@ -8,7 +8,12 @@ import {
   AssignmentNoGrupalError,
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
+  NombreGrupoDuplicadoError,
+  NombreGrupoInvalidoError,
+  DOCENTE,
+  ESTUDIANTE,
 } from "@/domain/entities";
+import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -38,7 +43,7 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
     githubUsername: "ana",
     name: "Ana García",
     image: "",
-    isAdmin: false,
+    rol: ESTUDIANTE,
     ...overrides,
   };
 }
@@ -125,7 +130,7 @@ describe("GET /api/assignments/[id]/grupos", () => {
   });
 
   it("permite acceso global al administrador", async () => {
-    mockGetCurrentUser.mockResolvedValue(makeUser({ isAdmin: true }));
+    mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
 
     const response = await GET(makeRequest(undefined, "GET"), { params: Promise.resolve({ id: "a1" }) });
 
@@ -163,17 +168,17 @@ describe("POST /api/assignments/[id]/grupos", () => {
       assignmentId: "a1",
       alumnoId: "alumno-ana",
       nombre: "Los Lambdas",
-      esAdmin: false,
+      rol: ESTUDIANTE,
     });
   });
 
   it("propaga el contexto administrativo confiable a la transacción", async () => {
-    mockGetCurrentUser.mockResolvedValue(makeUser({ isAdmin: true }));
+    mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
 
     await POST(makeRequest({ nombre: "Los Lambdas" }), { params: Promise.resolve({ id: "a1" }) });
 
     expect(mockCrearGrupo).toHaveBeenCalledWith(
-      expect.objectContaining({ esAdmin: true })
+      expect.objectContaining({ rol: DOCENTE })
     );
   });
 
@@ -217,6 +222,50 @@ describe("POST /api/assignments/[id]/grupos", () => {
     mockCrearGrupo.mockRejectedValue(new AlumnoYaEnGrupoDelAssignmentError("a1", "ana"));
     const response = await POST(makeRequest({ nombre: "x" }), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(409);
+  });
+
+  it("devuelve 409 si ya existe un grupo con el mismo nombre", async () => {
+    mockCrearGrupo.mockRejectedValue(
+      new NombreGrupoDuplicadoError("a1", "Los Lambdas")
+    );
+    const response = await POST(makeRequest({ nombre: "Los Lambdas" }), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error:
+        'Ya existe un grupo con el mismo nombre o identificador normalizado que "Los Lambdas" para este TP.',
+    });
+  });
+
+  it("devuelve 400 si el nombre no genera un identificador válido", async () => {
+    mockCrearGrupo.mockRejectedValue(new NombreGrupoInvalidoError("+++"));
+
+    const response = await POST(makeRequest({ nombre: "+++" }), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "El nombre del grupo debe incluir al menos una letra o un número.",
+    });
+  });
+
+  it("devuelve 400 si el nombre completo del repositorio supera el límite", async () => {
+    mockCrearGrupo.mockRejectedValue(
+      new NombreRepositorioDemasiadoLargoError("a".repeat(101))
+    );
+
+    const response = await POST(makeRequest({ nombre: "Los Lambdas" }), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error:
+        "El nombre del repositorio generado supera el límite de 100 caracteres de GitHub.",
+    });
   });
 
   it("devuelve 500 para errores inesperados", async () => {

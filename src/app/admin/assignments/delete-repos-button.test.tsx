@@ -8,7 +8,17 @@ vi.mock("next/navigation", () => ({
 
 import { DeleteReposButton } from "./delete-repos-button";
 
-function mockResponse(ok: boolean, data: object = {}) {
+const successResult = {
+  ok: true,
+  operationId: "op-1",
+  attempted: 2,
+  deleted: 2,
+  alreadyAbsent: 0,
+  failed: 0,
+  results: [],
+};
+
+function mockResponse(ok: boolean, data: object = successResult) {
   return { ok, json: async () => data };
 }
 
@@ -35,6 +45,7 @@ describe("DeleteReposButton", () => {
     expect(
       screen.getByRole("button", { name: "Borrar todos los repos (5)" })
     ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
   it("usa 'repo' en singular con 1 repo en el confirm", async () => {
@@ -106,5 +117,81 @@ describe("DeleteReposButton", () => {
     await user.click(screen.getByRole("button"));
 
     expect(await screen.findByText("No se pudo eliminar")).toBeInTheDocument();
+  });
+
+  it("muestra el resumen al completar todos los borrados", async () => {
+    const user = userEvent.setup();
+    vi.mocked(confirm).mockReturnValue(true);
+    vi.mocked(fetch).mockResolvedValue(mockResponse(true) as Response);
+
+    render(<DeleteReposButton assignmentId="a1" activeRepoCount={2} />);
+    await user.click(screen.getByRole("button"));
+
+    await screen.findByText(/Se confirmaron 2 de 2 repositorios/);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Se confirmaron 2 de 2 repositorios"
+    );
+  });
+
+  it("compact no renderiza nada cuando activeRepoCount=0", () => {
+    const { container } = render(
+      <DeleteReposButton assignmentId="a1" activeRepoCount={0} compact />
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("compact renderiza un botón ícono con el conteo en el nombre accesible", () => {
+    render(<DeleteReposButton assignmentId="a1" activeRepoCount={5} compact />);
+    const button = screen.getByRole("button", { name: "Borrar todos los repos (5)" });
+    expect(button).toBeInTheDocument();
+    expect(button).not.toHaveTextContent("Borrar todos los repos");
+  });
+
+  it("compact funciona igual al confirmar (fetch + refresh)", async () => {
+    const user = userEvent.setup();
+    vi.mocked(confirm).mockReturnValue(true);
+    vi.mocked(fetch).mockResolvedValue(mockResponse(true) as Response);
+
+    render(<DeleteReposButton assignmentId="xyz" activeRepoCount={2} compact />);
+    await user.click(screen.getByRole("button"));
+
+    expect(fetch).toHaveBeenCalledWith("/api/assignments/xyz/repos", { method: "DELETE" });
+    await screen.findByText(/Se confirmaron 2 de 2 repositorios/);
+  });
+
+  it("muestra los fallidos y permite reintentarlos", async () => {
+    const user = userEvent.setup();
+    vi.mocked(confirm).mockReturnValue(true);
+    vi.mocked(fetch).mockResolvedValue(
+      mockResponse(true, {
+        ...successResult,
+        ok: false,
+        attempted: 2,
+        deleted: 1,
+        failed: 1,
+        results: [
+          {
+            entregaId: "e2",
+            repoName: "tp-bob",
+            status: "failed",
+            error: "GitHub no disponible",
+          },
+        ],
+      }) as Response
+    );
+
+    render(<DeleteReposButton assignmentId="a1" activeRepoCount={2} />);
+    await user.click(screen.getByRole("button"));
+
+    await screen.findByText(/Fallaron 1; podés reintentarlos/);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Fallaron 1; podés reintentarlos"
+    );
+    expect(screen.getByText(/tp-bob/).closest("li")).toHaveTextContent(
+      "tp-bob: GitHub no disponible"
+    );
+    expect(
+      screen.getByRole("button", { name: "Reintentar fallidos (2)" })
+    ).toBeInTheDocument();
   });
 });

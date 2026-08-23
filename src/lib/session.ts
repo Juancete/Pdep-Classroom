@@ -1,11 +1,19 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import type { PdepUser } from "@/types";
+import type { PdepUser, SessionPdepUser } from "@/types";
+import { rolDesdeNombre } from "@/domain/entities/RolDeUsuario";
 
 export async function getCurrentUser(): Promise<PdepUser | null> {
   const session = await auth();
   if (!session) return null;
-  return (session as unknown as { pdepUser: PdepUser }).pdepUser ?? null;
+  const raw = (session as unknown as { pdepUser?: SessionPdepUser }).pdepUser;
+  if (!raw) return null;
+  return {
+    githubUsername: raw.githubUsername,
+    name: raw.name,
+    image: raw.image,
+    rol: rolDesdeNombre(raw.rolNombre),
+  };
 }
 
 export async function requireUser(): Promise<PdepUser> {
@@ -17,6 +25,6 @@ export async function requireUser(): Promise<PdepUser> {
 export async function requireAdmin(): Promise<PdepUser> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (!user.isAdmin) redirect("/dashboard");
+  if (!user.rol.puedeAdministrar()) redirect("/dashboard");
   return user;
 }

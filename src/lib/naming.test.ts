@@ -1,44 +1,66 @@
 import { describe, it, expect } from "vitest";
-import { buildRepoName, slugify, extractTemplateName } from "./naming";
+import {
+  buildRepoName,
+  extractTemplateName,
+  GITHUB_REPO_NAME_MAX_LENGTH,
+  NombreRepositorioDemasiadoLargoError,
+  slugify,
+} from "./naming";
 
 // ── buildRepoName ───────────────────────────────────────────
 
 describe("buildRepoName", () => {
   it("individual: slug-username", () => {
     expect(
-      buildRepoName({ slug: "kata-funcional", usernames: ["juangarcia"] })
+      buildRepoName({ slug: "kata-funcional", githubUsername: "juangarcia" })
     ).toBe("kata-funcional-juangarcia");
   });
 
-  it("grupal con grupoId: slug-grupoid", () => {
+  it("grupal con nombre normalizado: slug-nombregrupo", () => {
     expect(
       buildRepoName({
         slug: "tp-funcional",
-        usernames: ["juangarcia", "mariaperez"],
-        grupoId: "los-lambdas",
+        grupoNombreNormalizado: "los-lambdas",
       })
     ).toBe("tp-funcional-los-lambdas");
   });
 
-  it("grupal sin grupoId: slug-usuario1-usuario2-usuario3 (max 3)", () => {
-    expect(
-      buildRepoName({
-        slug: "tp-logico",
-        usernames: ["alice", "bob", "charlie", "diana"],
-      })
-    ).toBe("tp-logico-alice-bob-charlie");
-  });
-
   it("normaliza a lowercase", () => {
     expect(
-      buildRepoName({ slug: "Kata-Funcional", usernames: ["JuanGarcia"] })
+      buildRepoName({
+        slug: "Kata-Funcional",
+        githubUsername: "JuanGarcia",
+      })
     ).toBe("kata-funcional-juangarcia");
   });
 
-  it("grupal con un solo miembro sin grupoId", () => {
-    expect(
-      buildRepoName({ slug: "tp-objetos", usernames: ["solo"] })
-    ).toBe("tp-objetos-solo");
+  it("acepta el nombre completo cuando tiene exactamente el límite de GitHub", () => {
+    const repoName = buildRepoName({
+      slug: "a".repeat(90),
+      githubUsername: "b".repeat(9),
+    });
+
+    expect(repoName).toHaveLength(GITHUB_REPO_NAME_MAX_LENGTH);
+  });
+
+  it("rechaza el nombre individual completo cuando supera el límite de GitHub", () => {
+    expect(() =>
+      buildRepoName({
+        slug: "a".repeat(91),
+        githubUsername: "b".repeat(9),
+      })
+    ).toThrow(NombreRepositorioDemasiadoLargoError);
+  });
+
+  it("rechaza el nombre grupal completo cuando supera el límite de GitHub", () => {
+    expect(() =>
+      buildRepoName({
+        slug: "a".repeat(90),
+        grupoNombreNormalizado: "b".repeat(10),
+      })
+    ).toThrow(
+      "El nombre del repositorio generado supera el límite de 100 caracteres de GitHub."
+    );
   });
 });
 
@@ -69,6 +91,10 @@ describe("slugify", () => {
 
   it("string vacío devuelve vacío", () => {
     expect(slugify("")).toBe("");
+  });
+
+  it("solo caracteres no permitidos devuelve vacío", () => {
+    expect(slugify("  +++ /._  ")).toBe("");
   });
 });
 

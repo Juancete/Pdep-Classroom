@@ -13,7 +13,7 @@ import { isGoogleGroupsConfigured } from "@/lib/googleGroups";
  */
 export async function SyncPendingBanner() {
   const user = await getCurrentUser();
-  if (!user || user.isAdmin) return null;
+  if (!user || !user.rol.veBannerDeSincronizacion()) return null;
 
   const alumno = await getAlumnoByGithub(user.githubUsername);
   if (!alumno) return null;
@@ -28,7 +28,7 @@ export async function SyncPendingBanner() {
       role="alert"
       className="bg-amber-50 border-b border-amber-200 text-amber-900 text-sm"
     >
-      <div className="max-w-5xl mx-auto px-4 py-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div className="max-w-7xl mx-auto px-4 py-2 flex flex-wrap items-center gap-x-3 gap-y-1">
         <span>{mensaje}</span>
         <Link href="/perfil" className="underline font-medium hover:text-amber-950">
           Reintentar desde tu perfil

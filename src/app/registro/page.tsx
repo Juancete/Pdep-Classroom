@@ -6,13 +6,13 @@ import {
 } from "@/lib/repositories";
 import { redirect } from "next/navigation";
 import { AlumnoForm } from "@/app/components/AlumnoForm";
-import type { PdepUser } from "@/types";
+import type { SessionPdepUser } from "@/types";
 
 export default async function RegistroPage() {
   const session = await auth();
   if (!session) redirect("/login");
 
-  const pdepUser = (session as unknown as { pdepUser: PdepUser }).pdepUser;
+  const pdepUser = (session as unknown as { pdepUser: SessionPdepUser }).pdepUser;
   const githubUsername = pdepUser.githubUsername;
 
   const comisionActiva = await getComisionActiva();

@@ -6,6 +6,8 @@ import {
   AlumnoYaEnGrupoDelAssignmentError,
   InscripcionesCerradasError,
   AssignmentNoGrupalError,
+  AlumnoNoEsMiembroDelGrupoError,
+  GrupoConEntregaError,
 } from "./Grupo";
 import { GrupalAssignment } from "./GrupalAssignment";
 import { Alumno } from "./Alumno";
@@ -21,6 +23,7 @@ function nuevoGrupo(maxIntegrantes: number, miembros: Alumno[] = []): Grupo {
   const grupo = new Grupo();
   grupo.id = "g1";
   grupo.nombre = "Los Lambdas";
+  grupo.nombreNormalizado = "los-lambdas";
   grupo.paradigma = "funcional";
   grupo.maxIntegrantes = maxIntegrantes;
   grupo.creadoPor = miembros[0]?.githubUsername ?? "alguien";
@@ -28,6 +31,10 @@ function nuevoGrupo(maxIntegrantes: number, miembros: Alumno[] = []): Grupo {
   grupo.alumnos = {
     contains: (alumno: Alumno) => items.some((member) => member.id === alumno.id),
     add: (alumno: Alumno) => { items.push(alumno); },
+    remove: (alumno: Alumno) => {
+      const index = items.findIndex((member) => member.id === alumno.id);
+      if (index !== -1) items.splice(index, 1);
+    },
     getItems: () => items,
     get length() { return items.length; },
   } as unknown as Collection<Alumno>;
@@ -95,6 +102,79 @@ describe("Grupo", () => {
       const ana = fakeAlumno("ana");
       const grupo = nuevoGrupo(3, [ana]);
       expect(() => grupo.addMember(ana)).toThrow(/ya es miembro/);
+    });
+  });
+
+  describe("removeMember", () => {
+    it("quita al alumno del grupo", () => {
+      const ana = fakeAlumno("ana");
+      const bob = fakeAlumno("bob");
+      const grupo = nuevoGrupo(3, [ana, bob]);
+      grupo.removeMember(ana);
+      expect(grupo.alumnos.contains(ana)).toBe(false);
+    });
+
+    it("no toca a los demás miembros", () => {
+      const ana = fakeAlumno("ana");
+      const bob = fakeAlumno("bob");
+      const grupo = nuevoGrupo(3, [ana, bob]);
+      grupo.removeMember(ana);
+      expect(grupo.alumnos.contains(bob)).toBe(true);
+    });
+
+    it("deja estaVacio() en true si era el último miembro", () => {
+      const ana = fakeAlumno("ana");
+      const grupo = nuevoGrupo(3, [ana]);
+      grupo.removeMember(ana);
+      expect(grupo.estaVacio()).toBe(true);
+    });
+
+    it("lanza AlumnoNoEsMiembroDelGrupoError si el alumno no es miembro", () => {
+      const grupo = nuevoGrupo(3, [fakeAlumno("ana")]);
+      const forastero = fakeAlumno("forastero");
+      expect(() => grupo.removeMember(forastero)).toThrow(AlumnoNoEsMiembroDelGrupoError);
+    });
+
+    it("el AlumnoNoEsMiembroDelGrupoError lleva el grupoId y el githubUsername", () => {
+      const grupo = nuevoGrupo(3, [fakeAlumno("ana")]);
+      try {
+        grupo.removeMember(fakeAlumno("forastero"));
+        expect.fail("debería haber lanzado AlumnoNoEsMiembroDelGrupoError");
+      } catch (error) {
+        expect(error).toBeInstanceOf(AlumnoNoEsMiembroDelGrupoError);
+        const noMiembro = error as AlumnoNoEsMiembroDelGrupoError;
+        expect(noMiembro.grupoId).toBe("g1");
+        expect(noMiembro.githubUsername).toBe("forastero");
+      }
+    });
+  });
+
+  describe("estaVacio", () => {
+    it("es true para un grupo sin miembros", () => {
+      expect(nuevoGrupo(3).estaVacio()).toBe(true);
+    });
+
+    it("es false cuando tiene al menos un miembro", () => {
+      expect(nuevoGrupo(3, [fakeAlumno("ana")]).estaVacio()).toBe(false);
+    });
+  });
+
+  describe("miembroConUsername", () => {
+    it("devuelve el alumno cuando el username coincide", () => {
+      const ana = fakeAlumno("AnaGarcia");
+      const grupo = nuevoGrupo(3, [ana]);
+      expect(grupo.miembroConUsername("anagarcia")).toBe(ana);
+    });
+
+    it("es case-insensitive", () => {
+      const ana = fakeAlumno("AnaGarcia");
+      const grupo = nuevoGrupo(3, [ana]);
+      expect(grupo.miembroConUsername("ANAGARCIA")).toBe(ana);
+    });
+
+    it("devuelve undefined si no está en el grupo", () => {
+      const grupo = nuevoGrupo(3, [fakeAlumno("ana")]);
+      expect(grupo.miembroConUsername("bob")).toBeUndefined();
     });
   });
 });
@@ -196,6 +276,9 @@ describe("GrupalAssignment.aceptaNuevasInscripciones", () => {
     const grupal = new GrupalAssignment();
     grupal.id = "a1";
     grupal.maxIntegrantes = 3;
+    // Publicado por defecto: aceptar inscripciones requiere que el
+    // assignment esté disponible. El test de estado en borrador vive abajo.
+    grupal.transicionarA("publicado", { tieneEntregas: false }, "docente1");
     return grupal;
   }
 
@@ -206,6 +289,13 @@ describe("GrupalAssignment.aceptaNuevasInscripciones", () => {
   it("rechaza cuando el docente cerró las inscripciones", () => {
     const grupal = nuevoGrupal();
     grupal.inscripcionesCerradas = true;
+    expect(grupal.aceptaNuevasInscripciones()).toBe(false);
+  });
+
+  it("rechaza mientras el assignment no esté publicado", () => {
+    const grupal = new GrupalAssignment();
+    grupal.id = "a1";
+    grupal.maxIntegrantes = 3;
     expect(grupal.aceptaNuevasInscripciones()).toBe(false);
   });
 });
@@ -230,5 +320,19 @@ describe("Errores de negocio de inscripción a grupos", () => {
     const error = new AssignmentNoGrupalError("a1");
     expect(error.assignmentId).toBe("a1");
     expect(error.name).toBe("AssignmentNoGrupalError");
+  });
+
+  it("AlumnoNoEsMiembroDelGrupoError lleva grupoId y githubUsername", () => {
+    const error = new AlumnoNoEsMiembroDelGrupoError("g1", "forastero");
+    expect(error.grupoId).toBe("g1");
+    expect(error.githubUsername).toBe("forastero");
+    expect(error.name).toBe("AlumnoNoEsMiembroDelGrupoError");
+    expect(error.message).toContain("forastero");
+  });
+
+  it("GrupoConEntregaError lleva el grupoId", () => {
+    const error = new GrupoConEntregaError("g1");
+    expect(error.grupoId).toBe("g1");
+    expect(error.name).toBe("GrupoConEntregaError");
   });
 });

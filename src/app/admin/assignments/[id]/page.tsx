@@ -4,6 +4,8 @@ import {
   getEntregas,
   getAlumnos,
   getGruposDeAssignment,
+  getRepoDeletionHistory,
+  getHistorialDeMembresias,
 } from "@/lib/repositories";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -11,24 +13,47 @@ import { EntregasTable } from "./entregas-table";
 import { DeleteReposButton } from "../delete-repos-button";
 import { GruposPanel } from "./grupos-panel";
 import type { GrupoAdminResumen, AlumnoSinGrupoResumen } from "./grupos-panel";
-import { GrupalAssignment, Alumno } from "@/domain/entities";
+import { GrupalAssignment, Alumno, transicionesDisponibles } from "@/domain/entities";
 import type { Grupo } from "@/domain/entities";
+import { RepoDeletionHistory } from "./repo-deletion-history";
+import { HistorialDeMembresias } from "./historial-membresias";
+import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
+import { EstadoPanel } from "../estado-panel";
+
+function paginaDeQuery(valor: string | string[] | undefined): number {
+  const crudo = Array.isArray(valor) ? valor[0] : valor;
+  const parseado = Number(crudo ?? 1);
+  return Number.isInteger(parseado) && parseado > 0 ? parseado : 1;
+}
 
 export default async function AssignmentDetailPage(
   props: {
     params: Promise<{ id: string }>;
+    searchParams?: Promise<{
+      repoDeletionPage?: string | string[];
+      membresiaPage?: string | string[];
+    }>;
   }
 ) {
-  const params = await props.params;
+  const emptySearchParams: {
+    repoDeletionPage?: string | string[];
+    membresiaPage?: string | string[];
+  } = {};
+  const [params, searchParams] = await Promise.all([
+    props.params,
+    props.searchParams ?? Promise.resolve(emptySearchParams),
+  ]);
   await requireAdmin();
 
   const assignment = await getAssignment(params.id);
   if (!assignment) redirect("/admin/assignments");
 
   const gruposPromise = assignment.cargarGruposCon(getGruposDeAssignment);
+  const historyPage = paginaDeQuery(searchParams.repoDeletionPage);
+  const membresiaPage = paginaDeQuery(searchParams.membresiaPage);
 
   const alumnosPromise = getAlumnos();
-  const [entregas, alumnos, grupos, total] = await Promise.all([
+  const [entregas, alumnos, grupos, total, deletionHistory, historialMembresias] = await Promise.all([
     getEntregas(params.id),
     alumnosPromise,
     gruposPromise,
@@ -36,13 +61,26 @@ export default async function AssignmentDetailPage(
       getAlumnosDelCurso: () => alumnosPromise,
       getGruposDeAssignment: (_assignmentId: string) => gruposPromise,
     }),
+    getRepoDeletionHistory(params.id, historyPage),
+    getHistorialDeMembresias(params.id, membresiaPage),
   ]);
 
   const aceptadas = entregas.length;
   const pendientes = Math.max(0, total - aceptadas);
 
+  const accionesDeEstado = transicionesDisponibles(assignment.estado, assignment.id, {
+    tieneEntregas: aceptadas > 0,
+  });
+
   const alumnosPorUsername = new Map<string, Alumno>(
     alumnos.map((alumno) => [alumno.usernameCanonico, alumno])
+  );
+
+  // Reusa las entregas ya cargadas (con `grupo` populado) en vez de una
+  // query nueva: qué grupos ya tienen entrega es la razón que justifica
+  // bloquear o advertir sobre un cambio de integrantes.
+  const gruposConEntrega = new Set(
+    entregas.map((entrega) => entrega.grupo?.id).filter((id): id is string => Boolean(id))
   );
 
   let gruposPanel: React.ReactNode = null;
@@ -53,6 +91,7 @@ export default async function AssignmentDetailPage(
       maxIntegrantes: grupo.maxIntegrantes,
       estaLleno: grupo.estaLleno(),
       etiquetaCupo: grupo.etiquetaCupo(),
+      tieneEntrega: gruposConEntrega.has(grupo.id),
       miembros: grupo.usernamesDeMiembros().map((username) => ({
         username,
         nombreCompleto:
@@ -91,6 +130,17 @@ export default async function AssignmentDetailPage(
         return alumno ? alumno.nombreCompleto : "—";
       })
       .join(" / "),
+    ci: {
+      resultadoNombre: entrega.ciResultadoNombre,
+      detalleUrl: entrega.ciDetalleUrl,
+      permiteReejecucion: entrega.resultadoCI.permiteReejecucion(),
+    },
+    ultimoPush: entrega.ultimoPushEn
+      ? {
+          fecha: new Date(entrega.ultimoPushEn).toLocaleDateString("es-AR"),
+          por: entrega.ultimoPushPor ?? "—",
+        }
+      : undefined,
   }));
 
   return (
@@ -105,11 +155,16 @@ export default async function AssignmentDetailPage(
             ← Volver
           </Link>
           <h1 className="text-2xl font-bold">{assignment.titulo}</h1>
+          <EstadoAssignmentBadge estado={assignment.estadoNombre} />
         </div>
         <div className="flex items-center gap-3">
           <DeleteReposButton
             assignmentId={assignment.id}
-            activeRepoCount={entregas.filter((entrega) => entrega.hasRepo()).length}
+            activeRepoCount={
+              entregas.filter(
+                (entrega) => Boolean(entrega.repoName) && !entrega.repoDeleted
+              ).length
+            }
           />
           <Link
             href={`/admin/assignments/${assignment.id}/edit`}
@@ -119,6 +174,21 @@ export default async function AssignmentDetailPage(
           </Link>
         </div>
       </div>
+
+      <EstadoPanel
+        // El estado real es la key: cuando cambia (post router.refresh()),
+        // React remonta el panel en vez de arrastrar el estado local
+        // optimista que quedó tras la transición anterior.
+        key={assignment.estadoNombre}
+        assignmentId={assignment.id}
+        estado={assignment.estadoNombre}
+        accionesDisponibles={accionesDeEstado}
+        entregasCount={aceptadas}
+        publicadoEn={assignment.publicadoEn?.toISOString() ?? null}
+        publicadoPor={assignment.publicadoPor ?? null}
+        archivadoEn={assignment.archivadoEn?.toISOString() ?? null}
+        archivadoPor={assignment.archivadoPor ?? null}
+      />
 
       {/* Metadata del assignment */}
       <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
@@ -144,16 +214,22 @@ export default async function AssignmentDetailPage(
         </p>
       </div>
 
-      {/* Contadores */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      {/* Contadores: "Pendientes" no aplica a un borrador, todavía no aceptable. */}
+      <div
+        className={`grid gap-4 mb-6 ${
+          assignment.estadoNombre === "borrador" ? "grid-cols-2" : "grid-cols-3"
+        }`}
+      >
         <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
           <div className="text-3xl font-bold text-pdep-600">{aceptadas}</div>
           <div className="text-sm text-gray-500 mt-1">Aceptadas</div>
         </div>
-        <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
-          <div className="text-3xl font-bold text-amber-600">{pendientes}</div>
-          <div className="text-sm text-gray-500 mt-1">Pendientes</div>
-        </div>
+        {assignment.estadoNombre !== "borrador" && (
+          <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
+            <div className="text-3xl font-bold text-amber-600">{pendientes}</div>
+            <div className="text-sm text-gray-500 mt-1">Pendientes</div>
+          </div>
+        )}
         <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
           <div className="text-3xl font-bold text-gray-600">{total}</div>
           <div className="text-sm text-gray-500 mt-1">
@@ -164,8 +240,21 @@ export default async function AssignmentDetailPage(
 
       {/* Tabla de entregas (componente cliente con filtro) */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <EntregasTable entregas={entregaRows} />
+        <EntregasTable assignmentId={assignment.id} entregas={entregaRows} />
       </div>
+
+      <RepoDeletionHistory
+        assignmentId={assignment.id}
+        history={deletionHistory}
+      />
+
+      {assignment instanceof GrupalAssignment && (
+        <HistorialDeMembresias
+          assignmentId={assignment.id}
+          historial={historialMembresias}
+          repoDeletionPage={historyPage}
+        />
+      )}
 
       {gruposPanel}
     </div>

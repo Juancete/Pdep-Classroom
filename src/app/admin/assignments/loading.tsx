@@ -1,5 +1,1 @@
-import { AssignmentsTableSkeleton } from "@/app/components/PageSkeleton";
-
-export default function Loading() {
-  return <AssignmentsTableSkeleton />;
-}
+export { AssignmentsLoading as default } from "@/app/components/RouteLoadingStates";

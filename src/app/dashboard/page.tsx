@@ -9,13 +9,18 @@ import {
 } from "@/lib/repositories";
 import { AcceptButton } from "./accept-button";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import type { Grupo } from "@/domain/entities";
+import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
+import { CIBadge } from "@/app/components/CIBadge";
+import { CIRefreshButton } from "./ci-refresh-button";
 
 export default async function DashboardPage() {
   const user = await requireUser();
+  const puedeAdministrar = user.rol.puedeAdministrar();
   let comisionActivaId: string | null = null;
 
-  if (!user.isAdmin) {
+  if (!puedeAdministrar) {
     const [alumno, comisionActiva] = await Promise.all([
       getAlumnoByGithub(user.githubUsername),
       getComisionActiva(),
@@ -26,12 +31,12 @@ export default async function DashboardPage() {
     }
   }
 
-  const gruposPromise: Promise<Map<string, Grupo>> = user.isAdmin
+  const gruposPromise: Promise<Map<string, Grupo>> = puedeAdministrar
     ? Promise.resolve(new Map())
     : getGruposDeAlumno(user.githubUsername);
 
   const [assignments, entregasMap, gruposMap] = await Promise.all([
-    user.isAdmin
+    puedeAdministrar
       ? getAssignments()
       : comisionActivaId
         ? getAssignmentsDeComision(comisionActivaId)
@@ -46,7 +51,15 @@ export default async function DashboardPage() {
       assignment,
       entrega: entregasMap.get(assignment.id) ?? null,
       grupo: gruposMap.get(assignment.id) ?? null,
-    }));
+    }))
+    // Filtro fino de estado, del lado del alumno: la query de
+    // getAssignmentsDeComision ya excluye los borradores; acá se resuelve
+    // "un archivado solo se ve si ya tenés entrega" (decisión de negocio que
+    // depende de datos por-alumno, no solo del estado). El admin ve todo.
+    .filter(
+      ({ assignment, entrega }) =>
+        puedeAdministrar || assignment.esVisibleParaAlumno(entrega !== null)
+    );
 
   return (
     <div>
@@ -76,6 +89,9 @@ export default async function DashboardPage() {
                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
                     {assignment.tipo}
                   </span>
+                  {assignment.estadoNombre !== "publicado" && (
+                    <EstadoAssignmentBadge estado={assignment.estadoNombre} />
+                  )}
                 </div>
                 {assignment.descripcion && (
                   <p className="text-sm text-gray-500">
@@ -93,13 +109,19 @@ export default async function DashboardPage() {
                   </p>
                 )}
                 {grupo && !entrega && (
-                  <p className="text-xs text-blue-600 mt-1">
-                    Grupo: <span className="font-medium">{grupo.nombre}</span>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Grupo:{" "}
+                    <Link
+                      href={`/assignments/${assignment.id}/grupo`}
+                      className="font-medium text-blue-600 hover:underline"
+                    >
+                      {grupo.nombre}
+                    </Link>
                   </p>
                 )}
               </div>
 
-              <div className="flex-shrink-0 w-full sm:w-auto">
+              <div className="flex-shrink-0 w-full sm:w-auto flex flex-col items-end gap-1.5">
                 {entrega ? (
                   <a
                     href={entrega.repoUrl}
@@ -132,6 +154,20 @@ export default async function DashboardPage() {
                   </a>
                 ) : (
                   <AcceptButton assignmentId={assignment.id} />
+                )}
+                {entrega && (
+                  <div className="flex items-center gap-1">
+                    <CIBadge
+                      resultadoNombre={entrega.ciResultadoNombre}
+                      detalleUrl={entrega.ciDetalleUrl}
+                    />
+                    <CIRefreshButton assignmentId={assignment.id} />
+                  </div>
+                )}
+                {entrega && entrega.ciResultadoNombre !== "sin_ci" && (
+                  <p className="text-[11px] text-gray-400">
+                    Resultado automático — no es la nota final.
+                  </p>
                 )}
               </div>
             </div>

@@ -70,6 +70,16 @@ describe("UserMenu", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("muestra errores pendientes para admins y limita el badge visual", async () => {
+    render(<UserMenu username="admin" image="" isAdmin unreadErrors={120} />);
+    await openMenu("admin");
+    expect(screen.getByRole("menuitem", { name: /Errores.*120 sin leer/i })).toHaveAttribute(
+      "href",
+      "/admin/errores"
+    );
+    expect(screen.getByText("99+")).toBeInTheDocument();
+  });
+
   it("muestra Editar perfil por defecto (sin isAdmin)", async () => {
     render(<UserMenu username="juangarcia" image="" />);
     await openMenu("juangarcia");

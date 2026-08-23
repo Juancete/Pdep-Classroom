@@ -1,53 +1,50 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { IndividualAssignment } from "@/domain/entities";
-import { Entrega } from "@/domain/entities/Entrega";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { PdepUser } from "@/types";
+import { DOCENTE, ESTUDIANTE } from "@/domain/entities";
 
-// ── Mocks ────────────────────────────────────────────────────
-
-const mockGuardAdmin = vi.fn();
+const mockGetCurrentUser = vi.fn();
 const mockGetAssignment = vi.fn();
-const mockGetEntregas = vi.fn();
-const mockDeleteRepo = vi.fn();
-const mockClearReposDeAssignment = vi.fn();
+const mockBorrarRepositorios = vi.fn();
+const mockConLock = vi.fn();
 
-vi.mock("@/lib/api-auth", () => ({
-  guardAdmin: () => mockGuardAdmin(),
+vi.mock("@/lib/session", () => ({
+  getCurrentUser: () => mockGetCurrentUser(),
 }));
 
 vi.mock("@/lib/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
-  getEntregas: (id: string) => mockGetEntregas(id),
-  clearReposDeAssignment: (id: string) => mockClearReposDeAssignment(id),
+  conLockBorradoReposAssignment: (
+    assignmentId: string,
+    operation: () => Promise<unknown>
+  ) => mockConLock(assignmentId, operation),
 }));
 
-vi.mock("@/lib/github", () => ({
-  deleteRepo: (name: string) => mockDeleteRepo(name),
+vi.mock("@/lib/services/borrarRepositoriosDeAssignment", () => ({
+  borrarRepositoriosDeAssignment: (data: unknown) => mockBorrarRepositorios(data),
 }));
 
 import { DELETE } from "./route";
 
-// ── Helpers ──────────────────────────────────────────────────
-
-function makeAssignment(overrides?: Partial<IndividualAssignment>): IndividualAssignment {
-  const assignment = new IndividualAssignment();
-  assignment.id = "a1";
-  assignment.titulo = "Kata Funcional";
-  assignment.templateRepo = "kata-template";
-  assignment.tipo = "individual";
-  assignment.paradigma = "funcional";
-  assignment.slug = "kata-funcional";
-  assignment.createdAt = new Date("2026-01-01");
-  return Object.assign(assignment, overrides);
+function admin(): PdepUser {
+  return {
+    githubUsername: "docente",
+    name: "Docente",
+    image: "",
+    rol: DOCENTE,
+  };
 }
 
-function makeEntrega(repoName?: string): Entrega {
-  const entrega = new Entrega();
-  entrega.id = crypto.randomUUID();
-  entrega.repoName = repoName;
-  entrega.repoUrl = repoName ? `https://github.com/org/${repoName}` : undefined;
-  entrega.githubUsernames = ["alumno1"];
-  entrega.createdAt = new Date();
-  return entrega;
+function result(overrides = {}) {
+  return {
+    ok: true,
+    operationId: "op-1",
+    attempted: 2,
+    deleted: 2,
+    alreadyAbsent: 0,
+    failed: 0,
+    results: [],
+    ...overrides,
+  };
 }
 
 function makeRequest(): Request {
@@ -56,113 +53,120 @@ function makeRequest(): Request {
   });
 }
 
-// ── Tests ────────────────────────────────────────────────────
-
 describe("DELETE /api/assignments/[id]/repos", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGuardAdmin.mockResolvedValue(null);
-    mockDeleteRepo.mockResolvedValue(undefined);
-    mockClearReposDeAssignment.mockResolvedValue(undefined);
+    mockGetCurrentUser.mockResolvedValue(admin());
+    mockGetAssignment.mockResolvedValue({ id: "a1" });
+    mockBorrarRepositorios.mockResolvedValue(result());
+    mockConLock.mockImplementation(
+      async (_assignmentId: string, operation: () => Promise<unknown>) =>
+        operation()
+    );
   });
 
-  it("devuelve 401 si no es admin", async () => {
-    mockGuardAdmin.mockResolvedValue(
-      new Response(JSON.stringify({ error: "No autorizado" }), { status: 401 })
-    );
-    const response = await DELETE(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
+  it.each([
+    ["sin sesión", null],
+    ["sin rol admin", { ...admin(), rol: ESTUDIANTE }],
+  ])("devuelve 401 %s", async (_case, user) => {
+    mockGetCurrentUser.mockResolvedValue(user);
+
+    const response = await DELETE(makeRequest(), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+
     expect(response.status).toBe(401);
+    expect(mockBorrarRepositorios).not.toHaveBeenCalled();
   });
 
   it("devuelve 404 si el assignment no existe", async () => {
     mockGetAssignment.mockResolvedValue(null);
-    const response = await DELETE(makeRequest(), { params: Promise.resolve({ id: "no-existe" }) });
+
+    const response = await DELETE(makeRequest(), {
+      params: Promise.resolve({ id: "no-existe" }),
+    });
+
     expect(response.status).toBe(404);
-    const data = await response.json();
-    expect(data.error).toContain("no encontrado");
+    expect(mockBorrarRepositorios).not.toHaveBeenCalled();
   });
 
-  it("elimina todos los repos y devuelve ok: true con el conteo", async () => {
-    mockGetAssignment.mockResolvedValue(makeAssignment());
-    mockGetEntregas.mockResolvedValue([
-      makeEntrega("kata-funcional-alumno1"),
-      makeEntrega("kata-funcional-alumno2"),
-    ]);
+  it("propaga el actor autenticado al servicio", async () => {
+    await DELETE(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
 
-    const response = await DELETE(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
+    expect(mockBorrarRepositorios).toHaveBeenCalledWith({
+      assignmentId: "a1",
+      requestedBy: "docente",
+    });
+    expect(mockConLock).toHaveBeenCalledWith("a1", expect.any(Function));
+  });
+
+  it("devuelve 200 con el resumen de éxito", async () => {
+    const response = await DELETE(makeRequest(), {
+      params: Promise.resolve({ id: "a1" }),
+    });
 
     expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.ok).toBe(true);
-    expect(data.deleted).toBe(2);
+    await expect(response.json()).resolves.toEqual(result());
   });
 
-  it("llama a deleteRepo por cada entrega con repo", async () => {
-    mockGetAssignment.mockResolvedValue(makeAssignment());
-    mockGetEntregas.mockResolvedValue([
-      makeEntrega("kata-funcional-alumno1"),
-      makeEntrega("kata-funcional-alumno2"),
-    ]);
+  it("devuelve 200 y ok=false para un resultado parcial", async () => {
+    mockBorrarRepositorios.mockResolvedValue(
+      result({ ok: false, deleted: 1, failed: 1 })
+    );
 
-    await DELETE(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
-
-    expect(mockDeleteRepo).toHaveBeenCalledTimes(2);
-    expect(mockDeleteRepo).toHaveBeenCalledWith("kata-funcional-alumno1");
-    expect(mockDeleteRepo).toHaveBeenCalledWith("kata-funcional-alumno2");
-  });
-
-  it("ignora entregas sin repo asignado", async () => {
-    mockGetAssignment.mockResolvedValue(makeAssignment());
-    mockGetEntregas.mockResolvedValue([
-      makeEntrega("kata-funcional-alumno1"),
-      makeEntrega(undefined), // pendiente, sin repo
-    ]);
-
-    const response = await DELETE(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
-
-    const data = await response.json();
-    expect(data.deleted).toBe(1);
-    expect(mockDeleteRepo).toHaveBeenCalledTimes(1);
-    expect(mockDeleteRepo).toHaveBeenCalledWith("kata-funcional-alumno1");
-  });
-
-  it("devuelve deleted: 0 si no hay entregas con repo", async () => {
-    mockGetAssignment.mockResolvedValue(makeAssignment());
-    mockGetEntregas.mockResolvedValue([]);
-
-    const response = await DELETE(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
+    const response = await DELETE(makeRequest(), {
+      params: Promise.resolve({ id: "a1" }),
+    });
 
     expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.ok).toBe(true);
-    expect(data.deleted).toBe(0);
-    expect(mockDeleteRepo).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      deleted: 1,
+      failed: 1,
+    });
   });
 
-  it("llama a getEntregas con el id del assignment correcto", async () => {
-    mockGetAssignment.mockResolvedValue(makeAssignment({ id: "tp-logico" }));
-    mockGetEntregas.mockResolvedValue([]);
+  it("devuelve un lote vacío sin inventar una operación", async () => {
+    mockBorrarRepositorios.mockResolvedValue(
+      result({
+        operationId: null,
+        attempted: 0,
+        deleted: 0,
+      })
+    );
 
-    await DELETE(makeRequest(), { params: Promise.resolve({ id: "tp-logico" }) });
+    const response = await DELETE(makeRequest(), {
+      params: Promise.resolve({ id: "a1" }),
+    });
 
-    expect(mockGetEntregas).toHaveBeenCalledWith("tp-logico");
+    await expect(response.json()).resolves.toMatchObject({
+      operationId: null,
+      attempted: 0,
+    });
   });
 
-  it("limpia los repos de las entregas en la DB tras borrarlos en GitHub", async () => {
-    mockGetAssignment.mockResolvedValue(makeAssignment({ id: "a1" }));
-    mockGetEntregas.mockResolvedValue([makeEntrega("kata-funcional-alumno1")]);
+  it("devuelve 500 para fallos previos al procesamiento", async () => {
+    mockGetAssignment.mockRejectedValue(new Error("DB caída"));
 
-    await DELETE(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
+    const response = await DELETE(makeRequest(), {
+      params: Promise.resolve({ id: "a1" }),
+    });
 
-    expect(mockClearReposDeAssignment).toHaveBeenCalledWith("a1");
+    expect(response.status).toBe(500);
   });
 
-  it("no llama a clearReposDeAssignment si no hay repos que borrar", async () => {
-    mockGetAssignment.mockResolvedValue(makeAssignment());
-    mockGetEntregas.mockResolvedValue([makeEntrega(undefined)]);
+  it("devuelve un 500 genérico si falla el borrado", async () => {
+    mockBorrarRepositorios.mockRejectedValue(
+      new Error("GitHub devolvió información interna")
+    );
 
-    await DELETE(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
+    const response = await DELETE(makeRequest(), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+    const body = await response.json();
 
-    expect(mockClearReposDeAssignment).not.toHaveBeenCalled();
+    expect(response.status).toBe(500);
+    expect(body).toEqual({ error: "Error interno del servidor" });
+    expect(JSON.stringify(body)).not.toContain("información interna");
   });
 });

@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PdepUser } from "@/types";
+import { DOCENTE, ESTUDIANTE } from "@/domain/entities";
 
 
 // ── Mocks ────────────────────────────────────────────────────
@@ -53,7 +54,7 @@ function makeUser(overrides: Partial<PdepUser> = {}): PdepUser {
     githubUsername: "juangarcia",
     name: "Juan García",
     image: "https://github.com/juangarcia.png",
-    isAdmin: false,
+    rol: ESTUDIANTE,
     ...overrides,
   };
 }
@@ -89,7 +90,7 @@ describe("Nav", () => {
   });
 
   it("muestra links de admin cuando el usuario es admin", async () => {
-    mockGetCurrentUser.mockResolvedValue(makeUser({ isAdmin: true }));
+    mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
     const html = renderToStaticMarkup(await Nav());
     expect(html).toContain('href="/admin/assignments"');
     expect(html).toContain('href="/admin/grupos"');
@@ -98,7 +99,7 @@ describe("Nav", () => {
   });
 
   it("no muestra links de admin para usuario no admin", async () => {
-    mockGetCurrentUser.mockResolvedValue(makeUser({ isAdmin: false }));
+    mockGetCurrentUser.mockResolvedValue(makeUser({ rol: ESTUDIANTE }));
     const html = renderToStaticMarkup(await Nav());
     expect(html).not.toContain('href="/admin/assignments"');
   });

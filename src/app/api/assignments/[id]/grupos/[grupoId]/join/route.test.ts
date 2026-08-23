@@ -8,6 +8,8 @@ import {
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
   GrupoLlenoError,
+  DOCENTE,
+  ESTUDIANTE,
 } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
@@ -34,7 +36,7 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
     githubUsername: "ana",
     name: "Ana García",
     image: "",
-    isAdmin: false,
+    rol: ESTUDIANTE,
     ...overrides,
   };
 }
@@ -81,23 +83,23 @@ describe("POST /api/assignments/[id]/grupos/[grupoId]/join", () => {
     expect(data.miembros).toContain("ana");
   });
 
-  it("llama a unirseAGrupo con grupoId y alumnoId", async () => {
+  it("llama a unirseAGrupo con grupoId, alumnoId y el usuario actor", async () => {
     await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
     expect(mockUnirseAGrupo).toHaveBeenCalledWith({
       assignmentId: "a1",
       grupoId: "g1",
       alumnoId: "alumno-ana",
-      esAdmin: false,
+      usuario: makeUser(),
     });
   });
 
   it("propaga el contexto administrativo confiable a la transacción", async () => {
-    mockGetCurrentUser.mockResolvedValue(makeUser({ isAdmin: true }));
+    mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
 
     await POST(makeRequest(), { params: Promise.resolve({ id: "a1", grupoId: "g1" }) });
 
     expect(mockUnirseAGrupo).toHaveBeenCalledWith(
-      expect.objectContaining({ esAdmin: true })
+      expect.objectContaining({ usuario: expect.objectContaining({ rol: DOCENTE }) })
     );
   });
 
