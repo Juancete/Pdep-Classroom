@@ -209,6 +209,21 @@ describe("migrations", () => {
     expect(migration).not.toContain("foreign key");
   });
 
+  it("crea el registro deduplicado de errores con índices de lectura y retención", () => {
+    const migration = readFileSync(
+      join(process.cwd(), "migrations", "Migration20260821120000_error_logs.ts"),
+      "utf8"
+    );
+
+    expect(migration).toContain('create table "error_log"');
+    expect(migration).toContain('constraint "error_log_fingerprint_unique"');
+    expect(migration).toContain('constraint "error_log_count_positive"');
+    expect(migration).toContain('create index "error_log_unread_last_seen_idx"');
+    expect(migration).toContain('where "acknowledged_at" is null');
+    expect(migration).toContain('create index "error_log_acknowledged_retention_idx"');
+    expect(migration).toContain('where "acknowledged_at" is not null');
+  });
+
   it("mantiene el snapshot alineado con Google Groups y las cascadas", () => {
     const snapshot = JSON.parse(
       readFileSync(

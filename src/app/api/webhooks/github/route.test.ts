@@ -204,7 +204,8 @@ describe("POST /api/webhooks/github", () => {
     );
 
     expect(response.status).toBe(500);
-    expect(mockAfter).not.toHaveBeenCalled();
+    // `internalServerError` difiere ahora la persistencia del error de observabilidad.
+    expect(mockAfter).toHaveBeenCalledOnce();
   });
 
   it("acepta una firma hecha con el segundo secreto de una lista rotada", async () => {
