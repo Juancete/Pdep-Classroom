@@ -12,7 +12,7 @@ const SENSITIVE_KEY = /^(?:password|token|access_?token|authorization|cookie|sec
 const EMAIL_KEY = /^email$/i;
 const EMAIL = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const BEARER = /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi;
-const SENSITIVE_QUERY = /([?&](?:token|access_token|authorization|cookie|code|secret|password)=)[^&#\s]*/gi;
+const SENSITIVE_QUERY = /([?&](?:token|access_?token|authorization|cookie|code|secret|password)=)[^&#\s]*/gi;
 const TOKEN_LIKE = /\b[A-Za-z0-9_-]{32,}\b/g;
 const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
 

@@ -63,6 +63,18 @@ describe("error-log", () => {
     );
   });
 
+  it("redacta accessToken en query params tanto en camelCase como con guion bajo", () => {
+    const result = prepararErrorLog(
+      "GET /callback",
+      new Error("Falló /callback?accessToken=credencial123&access_token=otraCredencial456")
+    );
+    expect(result.message).not.toContain("credencial123");
+    expect(result.message).not.toContain("otraCredencial456");
+    expect(result.message).toBe(
+      "Falló /callback?accessToken=[REDACTED]&access_token=[REDACTED]"
+    );
+  });
+
   it("limita globalmente la expansión del contexto", () => {
     const context = Object.fromEntries(
       Array.from({ length: 20 }, (_, outer) => [
