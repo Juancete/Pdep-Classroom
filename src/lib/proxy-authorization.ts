@@ -1,4 +1,5 @@
-import type { PdepUser } from "@/types";
+import type { SessionPdepUser } from "@/types";
+import { rolDesdeNombre } from "@/domain/entities/RolDeUsuario";
 
 export function getProxyRedirectPath({
   session,
@@ -7,9 +8,12 @@ export function getProxyRedirectPath({
   session: unknown;
   pathname: string;
 }): "/login" | "/dashboard" | null {
-  const pdepUser = (session as { pdepUser?: PdepUser } | null)?.pdepUser;
+  const pdepUser = (session as { pdepUser?: SessionPdepUser } | null)?.pdepUser;
 
   if (!session) return "/login";
-  if (pathname.startsWith("/admin") && !pdepUser?.isAdmin) return "/dashboard";
+  if (pathname.startsWith("/admin")) {
+    const puedeAdministrar = pdepUser ? rolDesdeNombre(pdepUser.rolNombre).puedeAdministrar() : false;
+    if (!puedeAdministrar) return "/dashboard";
+  }
   return null;
 }

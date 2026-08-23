@@ -24,11 +24,29 @@ describe("ORM metadata", () => {
       "GrupalAssignment",
       "Grupo",
       "Entrega",
+      "RepoDeletionAttempt",
     ];
 
     for (const name of entities) {
       expect(meta.has(name), `entidad '${name}' no encontrada`).toBe(true);
     }
+
+    await orm.close(true);
+  });
+
+  it("modela la auditoría de borrados sin FKs destructivas", async () => {
+    const orm = await MikroORM.init({ ...testConfig, connect: false });
+    const audit = orm.getMetadata().get("RepoDeletionAttempt");
+
+    expect(audit.tableName).toBe("repo_deletion_attempt");
+    expect(audit.properties.status.enum).toBe(true);
+    expect(audit.properties.status.items).toEqual([
+      "pending",
+      "deleted",
+      "already_absent",
+      "failed",
+    ]);
+    expect(audit.relations).toHaveLength(0);
 
     await orm.close(true);
   });
@@ -43,6 +61,29 @@ describe("ORM metadata", () => {
     expect(prop).toBeDefined();
     expect(prop.kind).toBe("m:1");
     expect(prop.type).toBe("Comision");
+
+    await orm.close(true);
+  });
+
+  it("preserva el pivot de grupos administrado por migraciones", async () => {
+    const orm = await MikroORM.init({ ...testConfig, connect: false });
+    const meta = orm.getMetadata();
+    const grupo = meta.get("Grupo");
+
+    expect(grupo.properties.alumnos.pivotTable).toBe("grupo_alumnos");
+    expect(grupo.uniques).toContainEqual(
+      expect.objectContaining({
+        name: "grupo_id_assignment_unique",
+        properties: ["id", "assignment"],
+      })
+    );
+    expect(grupo.uniques).toContainEqual(
+      expect.objectContaining({
+        name: "grupo_assignment_nombre_normalizado_unique_idx",
+        properties: ["assignment", "nombreNormalizado"],
+      })
+    );
+    expect(config.schemaGenerator?.skipTables).toContain("grupo_alumnos");
 
     await orm.close(true);
   });

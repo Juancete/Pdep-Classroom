@@ -1,4 +1,5 @@
 import { normalizarGithubUsername } from "@/domain/entities/domain-constants";
+import type { RolDeUsuario, NombreRolDeUsuario } from "@/domain/entities/RolDeUsuario";
 export { normalizarGithubUsername };
 
 // ── Paradigmas ──────────────────────────────────────────────
@@ -44,13 +45,27 @@ export const DEFAULT_COLUMN_CONFIG: ColumnConfig = {
 
 export type TipoAssignment = "individual" | "grupal";
 
+export type { NombreEstadoAssignment } from "@/domain/entities/EstadoAssignment";
+
 // ── Session extendida ───────────────────────────────────────
 
 export interface PdepUser {
   githubUsername: string;
   name: string;
   image: string;
-  isAdmin: boolean;
+  rol: RolDeUsuario;
+}
+
+// Forma en la que el rol viaja DENTRO del objeto de sesión de NextAuth: un
+// nombre primitivo, no la instancia de `RolDeUsuario` (ver el comentario de
+// `NombreRolDeUsuario`). Todo lo que lee `session.pdepUser` directamente
+// (en vez de pasar por `getCurrentUser()`) tiene que reconstruir el rol real
+// con `rolDesdeNombre(...)` antes de llamar cualquier método sobre él.
+export interface SessionPdepUser {
+  githubUsername: string;
+  name: string;
+  image: string;
+  rolNombre: NombreRolDeUsuario;
 }
 
 export function usernameCanonicoDe(user: PdepUser): string {

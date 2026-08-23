@@ -1,9 +1,11 @@
 import { requireAdmin } from "@/lib/session";
-import { getAssignment } from "@/lib/repositories";
+import { getAssignment, getEntregaCountsByAssignment } from "@/lib/repositories";
 import { listarTemplates } from "@/lib/github";
 import { redirect } from "next/navigation";
 import { AssignmentForm } from "../../assignment-form";
 import { actualizarAssignment } from "../../actions";
+import { transicionesDisponibles } from "@/domain/entities";
+import { EstadoPanel } from "../../estado-panel";
 export default async function EditAssignmentPage(
   props: {
     params: Promise<{ id: string }>;
@@ -15,11 +17,32 @@ export default async function EditAssignmentPage(
   const assignment = await getAssignment(params.id);
   if (!assignment) redirect("/admin/assignments");
 
-  const templates = await listarTemplates();
+  const [templates, entregasCounts] = await Promise.all([
+    listarTemplates(),
+    getEntregaCountsByAssignment(),
+  ]);
+  const aceptadas = entregasCounts.get(assignment.id) ?? 0;
+  const accionesDeEstado = transicionesDisponibles(assignment.estado, assignment.id, {
+    tieneEntregas: aceptadas > 0,
+  });
 
   return (
     <div className="max-w-xl">
       <h1 className="text-2xl font-bold mb-6">Editar Assignment</h1>
+
+      <EstadoPanel
+        // Ver comentario homólogo en admin/assignments/[id]/page.tsx.
+        key={assignment.estadoNombre}
+        assignmentId={assignment.id}
+        estado={assignment.estadoNombre}
+        accionesDisponibles={accionesDeEstado}
+        entregasCount={aceptadas}
+        publicadoEn={assignment.publicadoEn?.toISOString() ?? null}
+        publicadoPor={assignment.publicadoPor ?? null}
+        archivadoEn={assignment.archivadoEn?.toISOString() ?? null}
+        archivadoPor={assignment.archivadoPor ?? null}
+      />
+
       <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
         Comisión:{" "}
         <span className="font-medium text-gray-800">

@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { IndividualAssignment } from "@/domain/entities";
+import { DOCENTE, ESTUDIANTE, IndividualAssignment } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
-const mockRequireAdmin = vi.fn();
+const mockGetCurrentUser = vi.fn();
 const mockGetAssignment = vi.fn();
 const mockDeleteAssignment = vi.fn();
 const mockUpdateAssignment = vi.fn();
 
 vi.mock("@/lib/session", () => ({
-  requireAdmin: () => mockRequireAdmin(),
+  getCurrentUser: () => mockGetCurrentUser(),
 }));
 
 vi.mock("@/lib/repositories", () => ({
@@ -48,14 +48,23 @@ function makeRequest(method: string, body?: unknown): Request {
 describe("DELETE /api/assignments/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRequireAdmin.mockResolvedValue(undefined);
+    mockGetCurrentUser.mockResolvedValue({ rol: DOCENTE });
     mockDeleteAssignment.mockResolvedValue(undefined);
   });
 
   it("devuelve 401 si no es admin", async () => {
-    mockRequireAdmin.mockRejectedValue(new Error("redirect"));
+    mockGetCurrentUser.mockResolvedValue(null);
     const response = await DELETE(makeRequest("DELETE"), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(401);
+  });
+
+  it("devuelve 403 para un alumno autenticado", async () => {
+    mockGetCurrentUser.mockResolvedValue({ rol: ESTUDIANTE });
+    const response = await DELETE(makeRequest("DELETE"), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+    expect(response.status).toBe(403);
+    expect(mockDeleteAssignment).not.toHaveBeenCalled();
   });
 
   it("devuelve 404 si el assignment no existe", async () => {
@@ -86,14 +95,23 @@ describe("DELETE /api/assignments/[id]", () => {
 describe("PATCH /api/assignments/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRequireAdmin.mockResolvedValue(undefined);
+    mockGetCurrentUser.mockResolvedValue({ rol: DOCENTE });
   });
 
   it("devuelve 401 si no es admin", async () => {
-    mockRequireAdmin.mockRejectedValue(new Error("redirect"));
+    mockGetCurrentUser.mockResolvedValue(null);
     const request = makeRequest("PATCH", { titulo: "Nuevo" });
     const response = await PATCH(request, { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(401);
+  });
+
+  it("devuelve 403 para un alumno autenticado", async () => {
+    mockGetCurrentUser.mockResolvedValue({ rol: ESTUDIANTE });
+    const response = await PATCH(makeRequest("PATCH", { titulo: "Nuevo" }), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+    expect(response.status).toBe(403);
+    expect(mockUpdateAssignment).not.toHaveBeenCalled();
   });
 
   it("devuelve 404 si el assignment no existe", async () => {
@@ -123,6 +141,20 @@ describe("PATCH /api/assignments/[id]", () => {
     const request = makeRequest("PATCH", { paradigma: "logico" });
     await PATCH(request, { params: Promise.resolve({ id: "a1" }) });
     expect(mockUpdateAssignment).toHaveBeenCalledWith("a1", { paradigma: "logico" });
+  });
+
+  it("ignora un campo estado en el body: el ciclo de vida solo cambia por su propio endpoint", async () => {
+    mockGetAssignment.mockResolvedValue(makeAssignment());
+    mockUpdateAssignment.mockResolvedValue(makeAssignment());
+
+    const request = makeRequest("PATCH", {
+      titulo: "Nuevo título",
+      estado: "publicado",
+    });
+    await PATCH(request, { params: Promise.resolve({ id: "a1" }) });
+    expect(mockUpdateAssignment).toHaveBeenCalledWith("a1", {
+      titulo: "Nuevo título",
+    });
   });
 
   it("devuelve 400 con formErrors cuando el body no es JSON válido o es null", async () => {

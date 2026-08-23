@@ -5,6 +5,7 @@ import { join } from "path";
 type SnapshotTable = {
   name: string;
   columns: Record<string, { default?: string; nullable?: boolean }>;
+  indexes: Array<{ keyName: string }>;
   foreignKeys: Record<string, { deleteRule?: string }>;
 };
 
@@ -65,6 +66,164 @@ describe("migrations", () => {
     expect(migration).toContain('"google_group_ultimo_error"');
   });
 
+  it("garantiza membresía única por assignment y prepara el locking de cupos", () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        "migrations",
+        "Migration20260813190000_group_membership_invariants.ts"
+      ),
+      "utf8"
+    );
+
+    expect(migration).toContain(
+      'create unique index "grupo_alumnos_assignment_alumno_unique_idx"'
+    );
+    expect(migration).toContain(
+      'constraint "grupo_assignment_nombre_paradigma_unique_idx" unique ("assignment_id", "nombre", "paradigma")'
+    );
+    expect(migration).toContain(
+      'constraint "grupo_alumnos_grupo_assignment_foreign"'
+    );
+    expect(migration).toContain(
+      'create trigger "grupo_alumnos_completar_assignment"'
+    );
+    expect(migration).toContain("hay alumnos en mas de un grupo");
+    expect(migration).toContain("hay grupos con mas alumnos");
+    expect(migration).toContain("hay nombres y paradigmas duplicados");
+  });
+
+  it("crea una auditoría durable para cada intento de borrado de repos", () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        "migrations",
+        "Migration20260814140000_repo_deletion_audit.ts"
+      ),
+      "utf8"
+    );
+
+    expect(migration).toContain('create table "repo_deletion_attempt"');
+    expect(migration).toContain('"operation_id" uuid not null');
+    expect(migration).toContain("'pending', 'deleted', 'already_absent', 'failed'");
+    expect(migration).toContain(
+      'repo_deletion_attempt_assignment_started_idx'
+    );
+    expect(migration).not.toContain("foreign key");
+  });
+
+  it("persiste y garantiza el nombre normalizado de cada grupo", () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        "migrations",
+        "Migration20260814160000_group_repo_name.ts"
+      ),
+      "utf8"
+    );
+
+    expect(migration).toContain('add column "nombre_normalizado"');
+    expect(migration).toContain(
+      'constraint "grupo_assignment_nombre_normalizado_unique_idx"'
+    );
+    expect(migration).toContain("no contiene letras ni números");
+    expect(migration).toContain("hay nombres que generan el mismo identificador");
+  });
+
+  it("crea una auditoría durable para cada cambio de integrantes de un grupo", () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        "migrations",
+        "Migration20260818120000_membership_audit.ts"
+      ),
+      "utf8"
+    );
+
+    expect(migration).toContain('create table "cambio_membresia"');
+    expect(migration).toContain(
+      "'alta', 'baja', 'cambio'"
+    );
+    expect(migration).toContain("'alumno', 'docente'");
+    expect(migration).toContain(
+      'cambio_membresia_assignment_creado_idx'
+    );
+    expect(migration).toContain(
+      'cambio_membresia_alumno_creado_idx'
+    );
+    expect(migration).toContain('drop table if exists "cambio_membresia"');
+    expect(migration).not.toContain("foreign key");
+  });
+
+  it("agrega el resultado cacheado de CI a entrega", () => {
+    const migration = readFileSync(
+      join(process.cwd(), "migrations", "Migration20260819120000_ci_estado.ts"),
+      "utf8"
+    );
+
+    expect(migration).toContain('add column "ci_resultado_nombre"');
+    expect(migration).toContain("'sin_consultar'");
+    expect(migration).toContain("'sin_ci'");
+    expect(migration).toContain("'pendiente'");
+    expect(migration).toContain("'passing'");
+    expect(migration).toContain("'failing'");
+    expect(migration).toContain("'cancelado'");
+    expect(migration).toContain("'error_infra'");
+    expect(migration).toContain("default 'sin_consultar'");
+    expect(migration).toContain('"ci_check_suite_ids" text[] not null default \'{}\'');
+    expect(migration).toContain('"ci_commit_sha" varchar(255) null');
+    expect(migration).toContain('"ci_detalle_url" varchar(255) null');
+    expect(migration).toContain('"ci_ejecutado_en" timestamptz null');
+    expect(migration).toContain('"ci_actualizado_en" timestamptz null');
+    expect(migration).toContain('create index "entrega_ci_resultado_idx"');
+    expect(migration).toContain('drop column "ci_resultado_nombre"');
+    expect(migration).not.toContain("foreign key");
+  });
+
+  it("crea la auditoría de deliveries de webhook de GitHub y la actividad reciente de entrega", () => {
+    const migration = readFileSync(
+      join(process.cwd(), "migrations", "Migration20260820120000_webhook_deliveries.ts"),
+      "utf8"
+    );
+
+    expect(migration).toContain('create table "github_webhook_delivery"');
+    expect(migration).toContain('"delivery_id" varchar(255) not null');
+    expect(migration).toContain("'recibido', 'procesando', 'procesado', 'ignorado', 'fallido'");
+    expect(migration).toContain("default 'recibido'");
+    expect(migration).toContain(
+      'constraint "github_webhook_delivery_delivery_id_unique" unique ("delivery_id")'
+    );
+    expect(migration).toContain(
+      'create index "github_webhook_delivery_estado_recibido_idx"'
+    );
+    expect(migration).toContain('"reclamado_en" timestamptz null');
+    expect(migration).toContain('add column "ultimo_push_en" timestamptz null');
+    expect(migration).toContain('add column "ultimo_push_sha" varchar(255) null');
+    expect(migration).toContain('add column "ultimo_push_por" varchar(255) null');
+    expect(migration).toContain('add column "repo_github_id" varchar(255) null');
+    expect(migration).toContain(
+      'constraint "entrega_repo_github_id_unique" unique ("repo_github_id")'
+    );
+    expect(migration).toContain('add column "repo_evento_actualizado_en" timestamptz null');
+    expect(migration).toContain('drop table if exists "github_webhook_delivery"');
+    expect(migration).not.toContain("foreign key");
+  });
+
+  it("crea el registro deduplicado de errores con índices de lectura y retención", () => {
+    const migration = readFileSync(
+      join(process.cwd(), "migrations", "Migration20260821120000_error_logs.ts"),
+      "utf8"
+    );
+
+    expect(migration).toContain('create table "error_log"');
+    expect(migration).toContain('constraint "error_log_fingerprint_unique"');
+    expect(migration).toContain('constraint "error_log_count_positive"');
+    expect(migration).toContain('create index "error_log_unread_last_seen_idx"');
+    expect(migration).toContain('where "acknowledged_at" is null');
+    expect(migration).toContain('create index "error_log_acknowledged_retention_idx"');
+    expect(migration).toContain('where "acknowledged_at" is not null');
+  });
+
   it("mantiene el snapshot alineado con Google Groups y las cascadas", () => {
     const snapshot = JSON.parse(
       readFileSync(
@@ -75,6 +234,20 @@ describe("migrations", () => {
     const alumno = snapshot.tables.find((table) => table.name === "alumno");
     const assignment = snapshot.tables.find(
       (table) => table.name === "assignment"
+    );
+    const grupo = snapshot.tables.find((table) => table.name === "grupo");
+    const grupoAlumnos = snapshot.tables.find(
+      (table) => table.name === "grupo_alumnos"
+    );
+    const repoDeletionAttempt = snapshot.tables.find(
+      (table) => table.name === "repo_deletion_attempt"
+    );
+    const entrega = snapshot.tables.find((table) => table.name === "entrega");
+    const cambioMembresia = snapshot.tables.find(
+      (table) => table.name === "cambio_membresia"
+    );
+    const githubWebhookDelivery = snapshot.tables.find(
+      (table) => table.name === "github_webhook_delivery"
     );
 
     expect(alumno?.columns.google_group_emails_pendientes_baja).toMatchObject({
@@ -92,5 +265,88 @@ describe("migrations", () => {
     expect(
       assignment?.foreignKeys.assignment_comision_id_foreign.deleteRule
     ).toBe("cascade");
+    expect(grupo?.indexes).toContainEqual(
+      expect.objectContaining({ keyName: "grupo_id_assignment_unique" })
+    );
+    expect(grupo?.indexes).toContainEqual(
+      expect.objectContaining({
+        keyName: "grupo_assignment_nombre_normalizado_unique_idx",
+      })
+    );
+    expect(grupo?.columns).toHaveProperty("nombre_normalizado");
+    expect(grupoAlumnos?.columns).toHaveProperty("assignment_id");
+    expect(grupoAlumnos?.indexes).toContainEqual(
+      expect.objectContaining({
+        keyName: "grupo_alumnos_assignment_alumno_unique_idx",
+      })
+    );
+    expect(grupoAlumnos?.foreignKeys).toHaveProperty(
+      "grupo_alumnos_grupo_assignment_foreign"
+    );
+    expect(repoDeletionAttempt?.columns).toHaveProperty("operation_id");
+    expect(repoDeletionAttempt?.columns).toHaveProperty("requested_by");
+    expect(repoDeletionAttempt?.foreignKeys).toEqual({});
+    expect(
+      entrega?.foreignKeys.entrega_grupo_id_foreign.deleteRule
+    ).toBe("set null");
+    expect(cambioMembresia?.columns).toHaveProperty("assignment_id");
+    expect(cambioMembresia?.columns).toHaveProperty("alumno_id");
+    expect(cambioMembresia?.columns).toHaveProperty("grupo_origen_id");
+    expect(cambioMembresia?.columns).toHaveProperty("grupo_destino_id");
+    expect(cambioMembresia?.indexes).toContainEqual(
+      expect.objectContaining({
+        keyName: "cambio_membresia_assignment_creado_idx",
+      })
+    );
+    expect(cambioMembresia?.indexes).toContainEqual(
+      expect.objectContaining({
+        keyName: "cambio_membresia_alumno_creado_idx",
+      })
+    );
+    expect(cambioMembresia?.foreignKeys).toEqual({});
+    expect(entrega?.columns).toHaveProperty("ci_resultado_nombre");
+    expect(entrega?.columns.ci_resultado_nombre).toMatchObject({
+      nullable: false,
+      default: "'sin_consultar'",
+    });
+    expect(entrega?.columns).toHaveProperty("ci_check_suite_ids");
+    expect(entrega?.columns).toHaveProperty("ci_commit_sha");
+    expect(entrega?.columns).toHaveProperty("ci_detalle_url");
+    expect(entrega?.columns).toHaveProperty("ci_ejecutado_en");
+    expect(entrega?.columns).toHaveProperty("ci_actualizado_en");
+    expect(entrega?.indexes).toContainEqual(
+      expect.objectContaining({ keyName: "entrega_ci_resultado_idx" })
+    );
+    expect(entrega?.columns).toHaveProperty("ultimo_push_en");
+    expect(entrega?.columns).toHaveProperty("ultimo_push_sha");
+    expect(entrega?.columns).toHaveProperty("ultimo_push_por");
+    expect(entrega?.columns).toHaveProperty("repo_github_id");
+    expect(entrega?.indexes).toContainEqual(
+      expect.objectContaining({
+        keyName: "entrega_repo_github_id_unique",
+        unique: true,
+      })
+    );
+    expect(entrega?.columns).toHaveProperty("repo_evento_actualizado_en");
+    expect(githubWebhookDelivery?.columns.delivery_id).toMatchObject({
+      nullable: false,
+      unique: true,
+    });
+    expect(githubWebhookDelivery?.columns.estado_procesamiento).toMatchObject({
+      nullable: false,
+      default: "'recibido'",
+    });
+    expect(githubWebhookDelivery?.columns).toHaveProperty("payload");
+    expect(githubWebhookDelivery?.columns).toHaveProperty("reclamado_en");
+    expect(githubWebhookDelivery?.indexes).toContainEqual(
+      expect.objectContaining({
+        keyName: "github_webhook_delivery_delivery_id_unique",
+        unique: true,
+      })
+    );
+    expect(githubWebhookDelivery?.indexes).toContainEqual(
+      expect.objectContaining({ keyName: "github_webhook_delivery_estado_recibido_idx" })
+    );
+    expect(githubWebhookDelivery?.foreignKeys).toEqual({});
   });
 });

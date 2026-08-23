@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PdepUser } from "@/types";
+import { DOCENTE, ESTUDIANTE } from "@/domain/entities";
 
 const mockGetCurrentUser = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
 const mockGetAssignments = vi.fn();
 const mockGetAssignmentsDeComision = vi.fn();
+const mockGetEntregasDeUsuario = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
@@ -15,7 +17,21 @@ vi.mock("@/lib/repositories", () => ({
   getAssignments: () => mockGetAssignments(),
   getAssignmentsDeComision: (comisionId: string) =>
     mockGetAssignmentsDeComision(comisionId),
+  getEntregasDeUsuario: (username: string) =>
+    mockGetEntregasDeUsuario(username),
 }));
+
+// `esVisibleParaAlumno` real depende de si el alumno tiene entrega: el mock
+// respeta ese contrato en vez de devolver un valor fijo, para que los tests
+// verifiquen que route.ts realmente pasa entregasMap.has(id) como argumento.
+function makeAssignment(
+  id: string,
+  esVisiblePara: boolean | ((tieneEntrega: boolean) => boolean) = true
+) {
+  const resolver =
+    typeof esVisiblePara === "function" ? esVisiblePara : () => esVisiblePara;
+  return { id, esVisibleParaAlumno: resolver };
+}
 
 import { GET } from "./route";
 
@@ -24,7 +40,7 @@ function makeUser(overrides: Partial<PdepUser> = {}): PdepUser {
     githubUsername: "ana",
     name: "Ana",
     image: "",
-    isAdmin: false,
+    rol: ESTUDIANTE,
     ...overrides,
   };
 }
@@ -37,7 +53,8 @@ describe("GET /api/assignments", () => {
       id: "alumno-ana",
       comision: { id: "c1" },
     });
-    mockGetAssignmentsDeComision.mockResolvedValue([{ id: "a1" }]);
+    mockGetAssignmentsDeComision.mockResolvedValue([makeAssignment("a1")]);
+    mockGetEntregasDeUsuario.mockResolvedValue(new Map());
     mockGetAssignments.mockResolvedValue([{ id: "a1" }, { id: "a2" }]);
   });
 
@@ -59,6 +76,43 @@ describe("GET /api/assignments", () => {
     expect(mockGetAssignments).not.toHaveBeenCalled();
   });
 
+  it("excluye assignments que el estado del alumno no hace visibles", async () => {
+    mockGetAssignmentsDeComision.mockResolvedValue([
+      makeAssignment("a1", true),
+      makeAssignment("a-oculto", false),
+    ]);
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.map((assignment: { id: string }) => assignment.id)).toEqual(["a1"]);
+  });
+
+  it("consulta las entregas del alumno para resolver la visibilidad de archivados", async () => {
+    await GET();
+    expect(mockGetEntregasDeUsuario).toHaveBeenCalledWith("ana");
+  });
+
+  it("incluye un archivado cuando el alumno tiene entrega, y lo excluye si no", async () => {
+    // esVisibleParaAlumno real: archivado.esVisibleParaAlumno(tieneEntrega) === tieneEntrega
+    mockGetAssignmentsDeComision.mockResolvedValue([
+      makeAssignment("a-archivado-con-entrega", (tieneEntrega) => tieneEntrega),
+      makeAssignment("a-archivado-sin-entrega", (tieneEntrega) => tieneEntrega),
+    ]);
+    mockGetEntregasDeUsuario.mockResolvedValue(
+      new Map([["a-archivado-con-entrega", { id: "e1" }]])
+    );
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.map((assignment: { id: string }) => assignment.id)).toEqual([
+      "a-archivado-con-entrega",
+    ]);
+  });
+
   it("devuelve 403 si el usuario no está registrado como alumno", async () => {
     mockGetAlumnoByGithub.mockResolvedValue(null);
 
@@ -69,7 +123,7 @@ describe("GET /api/assignments", () => {
   });
 
   it("mantiene el listado global para administradores", async () => {
-    mockGetCurrentUser.mockResolvedValue(makeUser({ isAdmin: true }));
+    mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
 
     const response = await GET();
 

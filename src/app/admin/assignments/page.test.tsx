@@ -14,30 +14,73 @@ vi.mock("@/lib/session", () => ({
 }));
 
 vi.mock("@/lib/repositories", () => ({
-  getAssignments: () => mockGetAssignments(),
+  getAssignments: (filtro?: unknown) => mockGetAssignments(filtro),
   getEntregaCountsByAssignment: () => mockGetEntregaCountsByAssignment(),
   getActiveRepoCountsByAssignment: () => mockGetActiveRepoCountsByAssignment(),
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => (
-    <a href={href} className={className}>
+  default: ({
+    href,
+    children,
+    ...rest
+  }: { href: string; children: React.ReactNode } & Record<string, unknown>) => (
+    <a href={href} {...rest}>
       {children}
     </a>
   ),
 }));
 
 vi.mock("./delete-button", () => ({
-  DeleteAssignmentButton: ({ id, titulo }: { id: string; titulo: string }) => (
-    <button data-id={id}>Eliminar {titulo}</button>
+  DeleteAssignmentButton: ({
+    id,
+    titulo,
+    compact,
+  }: {
+    id: string;
+    titulo: string;
+    compact?: boolean;
+  }) => (
+    <button data-id={id} data-compact={String(Boolean(compact))}>
+      Eliminar {titulo}
+    </button>
   ),
 }));
 
 vi.mock("./delete-repos-button", () => ({
-  DeleteReposButton: ({ assignmentId, activeRepoCount }: { assignmentId: string; activeRepoCount: number }) => (
-    activeRepoCount > 0
-      ? <button data-testid="delete-repos-button" data-id={assignmentId}>Borrar repos ({activeRepoCount})</button>
-      : null
+  DeleteReposButton: ({
+    assignmentId,
+    activeRepoCount,
+    compact,
+  }: {
+    assignmentId: string;
+    activeRepoCount: number;
+    compact?: boolean;
+  }) =>
+    activeRepoCount > 0 ? (
+      <button
+        data-testid="delete-repos-button"
+        data-id={assignmentId}
+        data-compact={String(Boolean(compact))}
+      >
+        Borrar repos ({activeRepoCount})
+      </button>
+    ) : null,
+}));
+
+vi.mock("./estado-quick-actions", () => ({
+  EstadoQuickActions: ({
+    assignmentId,
+    accionesDisponibles,
+  }: {
+    assignmentId: string;
+    accionesDisponibles: string[];
+  }) => (
+    <div
+      data-testid="estado-quick-actions"
+      data-assignment={assignmentId}
+      data-acciones={accionesDisponibles.join(",")}
+    />
   ),
 }));
 
@@ -73,13 +116,13 @@ describe("Admin Assignments page", () => {
 
   it("siempre llama a requireAdmin", async () => {
     mockGetAssignments.mockResolvedValue([]);
-    await AdminAssignmentsPage();
+    await AdminAssignmentsPage({});
     expect(mockRequireAdmin).toHaveBeenCalledOnce();
   });
 
   it("muestra el link para crear un nuevo assignment", async () => {
     mockGetAssignments.mockResolvedValue([]);
-    const element = await AdminAssignmentsPage();
+    const element = await AdminAssignmentsPage({});
     const html = renderToStaticMarkup(element);
     expect(html).toContain("href=\"/admin/assignments/new\"");
     expect(html).toContain("Nuevo Assignment");
@@ -88,14 +131,14 @@ describe("Admin Assignments page", () => {
   describe("estado vacío", () => {
     it("muestra mensaje cuando no hay assignments", async () => {
       mockGetAssignments.mockResolvedValue([]);
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).toContain("No hay assignments todavía");
     });
 
     it("no muestra filas cuando no hay assignments", async () => {
       mockGetAssignments.mockResolvedValue([]);
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).not.toContain("Kata Funcional");
     });
@@ -104,7 +147,7 @@ describe("Admin Assignments page", () => {
   describe("con assignments", () => {
     it("no muestra el estado vacío cuando hay assignments", async () => {
       mockGetAssignments.mockResolvedValue([makeAssignment()]);
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).not.toContain("No hay assignments todavía");
     });
@@ -113,7 +156,7 @@ describe("Admin Assignments page", () => {
       mockGetAssignments.mockResolvedValue([
         makeAssignment({ titulo: "TP Lógico" }),
       ]);
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).toContain("TP Lógico");
     });
@@ -122,7 +165,7 @@ describe("Admin Assignments page", () => {
       mockGetAssignments.mockResolvedValue([
         makeAssignment({ paradigma: "objetos" }),
       ]);
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).toContain("objetos");
     });
@@ -131,7 +174,7 @@ describe("Admin Assignments page", () => {
       mockGetAssignments.mockResolvedValue([
         makeAssignment({ tipo: "grupal" }),
       ]);
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).toContain("grupal");
     });
@@ -140,7 +183,7 @@ describe("Admin Assignments page", () => {
       mockGetAssignments.mockResolvedValue([
         makeAssignment({ templateRepo: "mi-template-especial" }),
       ]);
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).toContain("mi-template-especial");
     });
@@ -150,7 +193,7 @@ describe("Admin Assignments page", () => {
       comision.activa = true;
       mockGetAssignments.mockResolvedValue([makeAssignment({ comision })]);
 
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
 
       expect(html).toContain("2027");
@@ -162,7 +205,7 @@ describe("Admin Assignments page", () => {
       comision.activa = false;
       mockGetAssignments.mockResolvedValue([makeAssignment({ comision })]);
 
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
 
       expect(html).toContain("2025");
@@ -174,7 +217,7 @@ describe("Admin Assignments page", () => {
         makeAssignment({ comision: undefined }),
       ]);
 
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
 
       expect(html).toContain("Sin comisión");
@@ -182,9 +225,10 @@ describe("Admin Assignments page", () => {
 
     it("muestra las cabeceras de la tabla", async () => {
       mockGetAssignments.mockResolvedValue([makeAssignment()]);
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).toContain("Título");
+      expect(html).toContain("Estado");
       expect(html).toContain("Paradigma");
       expect(html).toContain("Tipo");
       expect(html).toContain("Comisión");
@@ -196,19 +240,48 @@ describe("Admin Assignments page", () => {
 
     it("muestra el link de editar por cada assignment", async () => {
       mockGetAssignments.mockResolvedValue([makeAssignment({ id: "a1" })]);
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).toContain('href="/admin/assignments/a1/edit"');
       expect(html).toContain("Editar");
     });
 
-    it("muestra el botón de eliminar por cada assignment", async () => {
+    it("muestra el botón de eliminar por cada assignment, en modo compact", async () => {
       mockGetAssignments.mockResolvedValue([
         makeAssignment({ id: "tp-1", titulo: "Kata Funcional" }),
       ]);
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).toContain("Eliminar Kata Funcional");
+      expect(html).toContain('data-compact="true"');
+    });
+  });
+
+  describe("acciones rápidas de estado", () => {
+    it("pasa las transiciones disponibles según estado y entregas", async () => {
+      mockGetAssignments.mockResolvedValue([
+        makeAssignment({ id: "tp-1", estadoNombre: "borrador" }),
+      ]);
+      mockGetEntregaCountsByAssignment.mockResolvedValue(new Map());
+
+      const element = await AdminAssignmentsPage({});
+      const html = renderToStaticMarkup(element);
+
+      expect(html).toContain('data-testid="estado-quick-actions"');
+      expect(html).toContain('data-assignment="tp-1"');
+      expect(html).toContain('data-acciones="publicado,archivado"');
+    });
+
+    it("no ofrece volver a borrador cuando el publicado ya tiene entregas", async () => {
+      mockGetAssignments.mockResolvedValue([
+        makeAssignment({ id: "tp-1", estadoNombre: "publicado" }),
+      ]);
+      mockGetEntregaCountsByAssignment.mockResolvedValue(new Map([["tp-1", 2]]));
+
+      const element = await AdminAssignmentsPage({});
+      const html = renderToStaticMarkup(element);
+
+      expect(html).toContain('data-acciones="archivado"');
     });
   });
 
@@ -217,7 +290,7 @@ describe("Admin Assignments page", () => {
       mockGetAssignments.mockResolvedValue([makeAssignment({ id: "tp-1" })]);
       mockGetEntregaCountsByAssignment.mockResolvedValue(new Map());
 
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).toContain(">0<");
     });
@@ -226,7 +299,7 @@ describe("Admin Assignments page", () => {
       mockGetAssignments.mockResolvedValue([makeAssignment({ id: "tp-1" })]);
       mockGetEntregaCountsByAssignment.mockResolvedValue(new Map([["tp-1", 3]]));
 
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).toContain(">3<");
     });
@@ -237,16 +310,17 @@ describe("Admin Assignments page", () => {
       mockGetAssignments.mockResolvedValue([makeAssignment({ id: "a1" })]);
       mockGetActiveRepoCountsByAssignment.mockResolvedValue(new Map([["a1", 3]]));
 
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).toContain("Borrar repos (3)");
+      expect(html).toContain('data-compact="true"');
     });
 
     it("no muestra el botón cuando no hay repos activos", async () => {
       mockGetAssignments.mockResolvedValue([makeAssignment({ id: "a1" })]);
       mockGetActiveRepoCountsByAssignment.mockResolvedValue(new Map());
 
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).not.toContain("Borrar repos");
     });
@@ -257,7 +331,7 @@ describe("Admin Assignments page", () => {
       mockGetAssignments.mockResolvedValue([
         makeAssignment({ deadline: new Date("2026-06-30") }),
       ]);
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       // Localización es-AR: "30/6/2026" o similar
       expect(html).toContain("2026");
@@ -268,9 +342,49 @@ describe("Admin Assignments page", () => {
       mockGetAssignments.mockResolvedValue([
         makeAssignment({ deadline: undefined }),
       ]);
-      const element = await AdminAssignmentsPage();
+      const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).toContain("—");
+    });
+  });
+
+  describe("estado", () => {
+    it("muestra el badge de estado por assignment", async () => {
+      mockGetAssignments.mockResolvedValue([
+        makeAssignment({ estadoNombre: "archivado" }),
+      ]);
+      const element = await AdminAssignmentsPage({});
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain('data-testid="estado-badge"');
+      expect(html).toContain("Archivado");
+    });
+
+    it("muestra los chips de filtro por estado", async () => {
+      mockGetAssignments.mockResolvedValue([]);
+      const element = await AdminAssignmentsPage({});
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("Todos");
+      expect(html).toContain('href="/admin/assignments?estado=borrador"');
+      expect(html).toContain('href="/admin/assignments?estado=publicado"');
+      expect(html).toContain('href="/admin/assignments?estado=archivado"');
+    });
+
+    it("pasa el filtro al repositorio cuando el estado es válido", async () => {
+      mockGetAssignments.mockResolvedValue([]);
+      const element = await AdminAssignmentsPage({
+        searchParams: Promise.resolve({ estado: "archivado" }),
+      });
+      renderToStaticMarkup(element);
+      expect(mockGetAssignments).toHaveBeenCalledWith({ estado: "archivado" });
+    });
+
+    it("ignora un estado desconocido en el query string", async () => {
+      mockGetAssignments.mockResolvedValue([]);
+      const element = await AdminAssignmentsPage({
+        searchParams: Promise.resolve({ estado: "basura" }),
+      });
+      renderToStaticMarkup(element);
+      expect(mockGetAssignments).toHaveBeenCalledWith(undefined);
     });
   });
 });
