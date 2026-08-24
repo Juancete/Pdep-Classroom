@@ -185,14 +185,19 @@ export default async function AdminAssignmentsPage(props: {
                     />
                     <DeleteReposButton
                       assignmentId={assignment.id}
+                      assignmentSlug={assignment.slug}
+                      deletionEnabled={assignment.estadoNombre === "archivado"}
                       activeRepoCount={activeRepoCounts.get(assignment.id) ?? 0}
                       compact
                     />
-                    <DeleteAssignmentButton
-                      id={assignment.id}
-                      titulo={assignment.titulo}
-                      compact
-                    />
+                    {assignment.estadoNombre === "borrador" &&
+                      (entregasCounts.get(assignment.id) ?? 0) === 0 && (
+                        <DeleteAssignmentButton
+                          id={assignment.id}
+                          titulo={assignment.titulo}
+                          compact
+                        />
+                      )}
                   </div>
                 </DataCell>
               </DataRow>

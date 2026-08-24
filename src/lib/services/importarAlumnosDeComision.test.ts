@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockGetAlumnos = vi.fn();
 const mockUpsertAlumnos = vi.fn();
-const mockEjecutarHooksPostConfirmacion = vi.fn();
 const mockIntentarSincronizarGrupos = vi.fn();
 
 vi.mock("@/lib/sheets", () => ({
@@ -11,12 +10,6 @@ vi.mock("@/lib/sheets", () => ({
 
 vi.mock("@/lib/repositories", () => ({
   upsertAlumnos: (...args: unknown[]) => mockUpsertAlumnos(...args),
-}));
-
-vi.mock("./hooksPostConfirmacion", () => ({
-  ejecutarHooksPostConfirmacion: (...args: unknown[]) =>
-    mockEjecutarHooksPostConfirmacion(...args),
-  HOOKS_IMPORTACION_ALUMNO: ["google-groups-hook"],
 }));
 
 vi.mock("./intentarSincronizarGrupos", () => ({
@@ -52,7 +45,6 @@ describe("importarAlumnosDeComision", () => {
     vi.clearAllMocks();
     mockGetAlumnos.mockResolvedValue(alumnos);
     mockUpsertAlumnos.mockResolvedValue(2);
-    mockEjecutarHooksPostConfirmacion.mockResolvedValue({ groupSubscription: "added" });
   });
 
   it("lee alumnos desde la planilla configurada de la comisión", async () => {
@@ -67,27 +59,9 @@ describe("importarAlumnosDeComision", () => {
     );
   });
 
-  it("pasa el contexto persistido al hook de Google Groups", async () => {
-    await importarAlumnosDeComision(comision as never);
-
-    expect(mockEjecutarHooksPostConfirmacion).toHaveBeenCalledWith(
-      expect.objectContaining({
-        githubUsername: "Ana",
-        email: "ana-nuevo@b.com",
-        comision,
-      }),
-      ["google-groups-hook"]
-    );
-  });
-
-  it("cuenta conErrorDeGrupo cuando falla alguna suscripción", async () => {
-    mockEjecutarHooksPostConfirmacion
-      .mockResolvedValueOnce({ groupSubscription: "error" })
-      .mockResolvedValueOnce({ groupSubscription: "added" });
-
+  it("deja Google Groups para el lote administrativo reintentable", async () => {
     const result = await importarAlumnosDeComision(comision as never);
-
-    expect(result).toEqual({ sincronizados: 2, conErrorDeGrupo: 1 });
+    expect(result).toEqual({ sincronizados: 2, conErrorDeGrupo: 0 });
   });
 
   it("no ejecuta sync de grupos inline", async () => {

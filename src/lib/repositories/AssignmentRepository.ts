@@ -1,10 +1,11 @@
-import { getEM, deleteEntity } from "@/lib/db";
+import { getEM } from "@/lib/db";
 import { LockMode } from "@mikro-orm/core";
 import {
   Assignment,
   AssignmentNoEncontradoError,
   Comision,
   Entrega,
+  Grupo,
   IndividualAssignment,
   GrupalAssignment,
 } from "@/domain/entities";
@@ -16,6 +17,35 @@ export class ComisionActivaRequeridaError extends Error {
   constructor() {
     super("Necesitás una comisión activa para crear assignments.");
     this.name = "ComisionActivaRequeridaError";
+  }
+}
+
+export class AssignmentNoEliminableError extends Error {
+  constructor(public readonly motivo: "estado" | "entregas" | "grupos") {
+    const mensajes = {
+      estado: "Sólo se pueden eliminar assignments que todavía están en borrador.",
+      entregas: "El assignment tiene entregas y debe conservarse como histórico. Archivá el TP en lugar de eliminarlo.",
+      grupos: "El assignment tiene grupos asociados y debe conservarse como histórico.",
+    } as const;
+    super(mensajes[motivo]);
+    this.name = "AssignmentNoEliminableError";
+  }
+}
+
+export class AssignmentEstructuraInmutableError extends Error {
+  constructor(public readonly campos: string[]) {
+    super(
+      `No se puede cambiar ${campos.join(", ")} en un assignment publicado o archivado.`
+    );
+    this.name = "AssignmentEstructuraInmutableError";
+  }
+}
+
+export class AssignmentTipoInmutableError extends AssignmentEstructuraInmutableError {
+  constructor() {
+    super(["el tipo"]);
+    this.message = "El tipo de un assignment no se puede cambiar después de crearlo.";
+    this.name = "AssignmentTipoInmutableError";
   }
 }
 
@@ -91,6 +121,34 @@ export async function updateAssignment(
   const assignment = await entityManager.findOne(Assignment, { id });
   if (!assignment) return null;
 
+  if (data.tipo !== undefined && data.tipo !== assignment.tipo) {
+    if (assignment.estadoNombre === "borrador") {
+      throw new AssignmentTipoInmutableError();
+    }
+    throw new AssignmentEstructuraInmutableError(["el tipo"]);
+  }
+  if (assignment.estadoNombre !== "borrador") {
+    const campos: string[] = [];
+    const slugNuevo = data.slug === undefined
+      ? assignment.slug
+      : data.slug || slugify(data.titulo ?? assignment.titulo);
+    if (slugNuevo !== assignment.slug) campos.push("el slug");
+    if (data.templateRepo !== undefined && data.templateRepo !== assignment.templateRepo) {
+      campos.push("el template");
+    }
+    if (data.paradigma !== undefined && data.paradigma !== assignment.paradigma) {
+      campos.push("el paradigma");
+    }
+    if (
+      data.maxIntegrantes !== undefined &&
+      assignment instanceof GrupalAssignment &&
+      data.maxIntegrantes !== assignment.maxIntegrantes
+    ) {
+      campos.push("el máximo de integrantes");
+    }
+    if (campos.length > 0) throw new AssignmentEstructuraInmutableError(campos);
+  }
+
   if (data.titulo !== undefined) assignment.titulo = data.titulo;
   if (data.slug !== undefined)
     assignment.slug = data.slug || slugify(data.titulo ?? assignment.titulo);
@@ -108,7 +166,26 @@ export async function updateAssignment(
 }
 
 export async function deleteAssignment(id: string): Promise<void> {
-  await deleteEntity(Assignment, id);
+  const entityManager = await getEM();
+  await entityManager.transactional(async (transaction) => {
+    const assignment = await transaction.findOne(
+      Assignment,
+      { id },
+      { lockMode: LockMode.PESSIMISTIC_WRITE }
+    );
+    if (!assignment) return;
+    if (assignment.estadoNombre !== "borrador") {
+      throw new AssignmentNoEliminableError("estado");
+    }
+    if ((await transaction.count(Entrega, { assignment: { id } })) > 0) {
+      throw new AssignmentNoEliminableError("entregas");
+    }
+    if ((await transaction.count(Grupo, { assignment: { id } })) > 0) {
+      throw new AssignmentNoEliminableError("grupos");
+    }
+    transaction.remove(assignment);
+    await transaction.flush();
+  });
 }
 
 export async function setInscripcionesCerradas(

@@ -193,6 +193,38 @@ describe("AssignmentForm", () => {
     });
   });
 
+  describe("bloqueo estructural", () => {
+    it("mantiene bloqueado el tipo STI de un borrador existente", () => {
+      const { container } = render(
+        <AssignmentForm
+          action={noop}
+          templates={[]}
+          submitLabel="Guardar"
+          defaultValues={{ id: "a1", tipo: "individual" }}
+          structuralLocked={false}
+        />
+      );
+
+      expect(getTipoSelect(container)).toBeDisabled();
+      expect(container.querySelector<HTMLInputElement>('input[type="hidden"][name="tipo"]')?.value).toBe("individual");
+    });
+
+    it("preserva el tipo enviado cuando la estructura está bloqueada", () => {
+      const { container } = render(
+        <AssignmentForm
+          action={noop}
+          templates={[]}
+          submitLabel="Guardar"
+          defaultValues={{ id: "a1", tipo: "grupal" }}
+          structuralLocked
+        />
+      );
+
+      expect(getTipoSelect(container)).toBeDisabled();
+      expect(container.querySelector<HTMLInputElement>('input[type="hidden"][name="tipo"]')?.value).toBe("grupal");
+    });
+  });
+
   describe("mensajes de error del servidor", () => {
     it("muestra error de título", () => {
       errorState({ titulo: ["El título es requerido"] });

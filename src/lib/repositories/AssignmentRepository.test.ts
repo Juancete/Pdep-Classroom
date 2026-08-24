@@ -5,6 +5,7 @@ const mockEm: {
   findOne: ReturnType<typeof vi.fn>;
   count: ReturnType<typeof vi.fn>;
   persist: ReturnType<typeof vi.fn>;
+  remove: ReturnType<typeof vi.fn>;
   flush: ReturnType<typeof vi.fn>;
   transactional: ReturnType<typeof vi.fn>;
 } = {
@@ -12,6 +13,7 @@ const mockEm: {
   findOne: vi.fn(),
   count: vi.fn(),
   persist: vi.fn(),
+  remove: vi.fn(),
   flush: vi.fn(),
   transactional: vi.fn(),
 };
@@ -25,6 +27,11 @@ vi.mock("@/lib/db", () => ({
 
 import {
   cambiarEstadoAssignment,
+  deleteAssignment,
+  AssignmentNoEliminableError,
+  updateAssignment,
+  AssignmentEstructuraInmutableError,
+  AssignmentTipoInmutableError,
   ComisionActivaRequeridaError,
   createAssignment,
   getAssignment,
@@ -191,6 +198,112 @@ describe("AssignmentRepository", () => {
 
       expect(publicado.estadoNombre).toBe("publicado");
       expect(mockEm.flush).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("deleteAssignment", () => {
+    it("elimina un borrador vacío dentro del lock", async () => {
+      const assignment = new IndividualAssignment();
+      assignment.id = "a1";
+      mockEm.findOne.mockResolvedValueOnce(assignment);
+      mockEm.count.mockResolvedValue(0);
+
+      await deleteAssignment("a1");
+
+      expect(mockEm.remove).toHaveBeenCalledWith(assignment);
+      expect(mockEm.flush).toHaveBeenCalled();
+    });
+
+    it("conserva un assignment publicado aunque no tenga entregas", async () => {
+      const assignment = new IndividualAssignment();
+      assignment.id = "a1";
+      assignment.estadoNombre = "publicado";
+      mockEm.findOne.mockResolvedValueOnce(assignment);
+
+      await expect(deleteAssignment("a1")).rejects.toBeInstanceOf(
+        AssignmentNoEliminableError
+      );
+
+      expect(mockEm.remove).not.toHaveBeenCalled();
+    });
+
+    it("conserva un borrador que ya tiene entregas", async () => {
+      const assignment = new IndividualAssignment();
+      assignment.id = "a1";
+      mockEm.findOne.mockResolvedValueOnce(assignment);
+      mockEm.count.mockResolvedValueOnce(1);
+
+      await expect(deleteAssignment("a1")).rejects.toMatchObject({ motivo: "entregas" });
+
+      expect(mockEm.remove).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("updateAssignment", () => {
+    it("usa un error específico si intentan cambiar el tipo de un borrador", async () => {
+      const assignment = new IndividualAssignment();
+      assignment.id = "a1";
+      mockEm.findOne.mockResolvedValueOnce(assignment);
+
+      const error = await updateAssignment("a1", { tipo: "grupal" }).catch(
+        (caught: unknown) => caught
+      );
+
+      expect(error).toBeInstanceOf(AssignmentTipoInmutableError);
+      expect(error).toMatchObject({
+        name: "AssignmentTipoInmutableError",
+        message: "El tipo de un assignment no se puede cambiar después de crearlo.",
+      });
+      expect(mockEm.flush).not.toHaveBeenCalled();
+    });
+
+    it("conserva el error estructural para cambios de tipo publicados", async () => {
+      const assignment = new IndividualAssignment();
+      assignment.id = "a1";
+      assignment.estadoNombre = "publicado";
+      mockEm.findOne.mockResolvedValueOnce(assignment);
+
+      await expect(updateAssignment("a1", { tipo: "grupal" })).rejects.toMatchObject({
+        name: "AssignmentEstructuraInmutableError",
+        message: "No se puede cambiar el tipo en un assignment publicado o archivado.",
+      });
+    });
+
+    it("bloquea cambios estructurales después de publicar", async () => {
+      const assignment = new IndividualAssignment();
+      assignment.id = "a1";
+      assignment.titulo = "Kata";
+      assignment.slug = "kata";
+      assignment.templateRepo = "template-a";
+      assignment.paradigma = "funcional";
+      assignment.estadoNombre = "publicado";
+      mockEm.findOne.mockResolvedValueOnce(assignment);
+
+      await expect(
+        updateAssignment("a1", { ...assignmentData, templateRepo: "template-b" })
+      ).rejects.toBeInstanceOf(AssignmentEstructuraInmutableError);
+
+      expect(mockEm.flush).not.toHaveBeenCalled();
+    });
+
+    it("permite editar título y descripción sin cambiar el slug publicado", async () => {
+      const assignment = new IndividualAssignment();
+      assignment.id = "a1";
+      assignment.titulo = "Kata";
+      assignment.slug = "kata";
+      assignment.templateRepo = "template-a";
+      assignment.paradigma = "funcional";
+      assignment.estadoNombre = "publicado";
+      mockEm.findOne.mockResolvedValueOnce(assignment);
+
+      await updateAssignment("a1", {
+        titulo: "Kata corregida",
+        descripcion: "Nueva descripción",
+      });
+
+      expect(assignment.titulo).toBe("Kata corregida");
+      expect(assignment.slug).toBe("kata");
+      expect(mockEm.flush).toHaveBeenCalled();
     });
   });
 });

@@ -30,6 +30,9 @@ export {
   setInscripcionesCerradas,
   cambiarEstadoAssignment,
   ComisionActivaRequeridaError,
+  AssignmentNoEliminableError,
+  AssignmentEstructuraInmutableError,
+  AssignmentTipoInmutableError,
 } from "./AssignmentRepository";
 
 export {
@@ -48,6 +51,10 @@ export {
   createEntrega,
   createOrGetEntrega,
   crearEntregaSiAssignmentDisponible,
+  iniciarProvisionEntrega,
+  marcarCreacionGithubIniciada,
+  completarProvisionEntrega,
+  fallarProvisionEntrega,
   actualizarCIDeEntrega,
   conLockDeEntrega,
   actualizarActividadDeEntrega,
@@ -84,9 +91,16 @@ export {
   createComision,
   updateComision,
   deleteComision,
+  reclamarImportacionGrupos,
+  renovarImportacionGrupos,
+  completarImportacionGrupos,
+  liberarImportacionGrupos,
+  INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS,
   ComisionActivaDuplicadaError,
+  ComisionNoEliminableError,
 } from "./ComisionRepository";
 export type { ComisionFormData } from "./ComisionRepository";
+export type { ReclamoImportacionGrupos } from "./ComisionRepository";
 
 export {
   registrarErrorInesperado,
@@ -113,6 +127,8 @@ export {
   cerrarDelivery,
   fallarDelivery,
   getDeliveriesReprocesables,
+  getWebhookDeliveryOverview,
   DeliveryDuplicadoError,
   type DeliveryReclamado,
+  type WebhookDeliveryOverview,
 } from "./GithubWebhookDeliveryRepository";

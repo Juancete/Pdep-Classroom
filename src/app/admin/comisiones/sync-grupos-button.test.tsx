@@ -45,10 +45,10 @@ describe("SyncGruposButton", () => {
   });
 
   describe("estado idle", () => {
-    it("renderiza el botón 'Resincronizar grupos'", () => {
+    it("renderiza el botón de importación", () => {
       render(<SyncGruposButton comisionId="c1" />);
       expect(
-        screen.getByRole("button", { name: "Resincronizar grupos" })
+        screen.getByRole("button", { name: "Importar grupos desde Sheets" })
       ).toBeInTheDocument();
     });
 
@@ -98,10 +98,10 @@ describe("SyncGruposButton", () => {
   });
 
   describe("estado pending", () => {
-    it("muestra 'Sincronizando…' y desactiva el botón", () => {
+    it("muestra 'Importando…' y desactiva el botón", () => {
       mockUseFormStatus.mockReturnValue({ pending: true });
       render(<SyncGruposButton comisionId="c1" />);
-      const btn = screen.getByRole("button", { name: "Sincronizando…" });
+      const btn = screen.getByRole("button", { name: "Importando…" });
       expect(btn).toBeInTheDocument();
       expect(btn).toBeDisabled();
     });
