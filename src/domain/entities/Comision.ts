@@ -31,6 +31,15 @@ export class Comision {
   @Property({ type: "datetime", nullable: true })
   gruposImportadosEn?: Date;
 
+  // Lease del bootstrap de grupos. El token identifica al request que puede
+  // completar o liberar la importación; la fecha permite recuperar un request
+  // que murió sin ejecutar su finally.
+  @Property({ type: "string", nullable: true })
+  gruposImportacionToken?: string;
+
+  @Property({ type: "datetime", nullable: true })
+  gruposImportacionIniciadaEn?: Date;
+
   @Property({ type: "json" })
   columnConfig: ColumnConfig = { ...DEFAULT_COLUMN_CONFIG };
 

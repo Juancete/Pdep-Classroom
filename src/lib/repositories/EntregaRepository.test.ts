@@ -578,6 +578,19 @@ describe("EntregaRepository", () => {
       expect(entrega.provisionIntentos).toBe(1);
       expect(mockEm.flush).not.toHaveBeenCalled();
     });
+
+    it("reclama otra vez un intento vencido", async () => {
+      const entrega = new Entrega();
+      entrega.provisionEstado = "pendiente";
+      entrega.provisionIntentos = 1;
+      entrega.provisionActualizadoEn = new Date(Date.now() - 121_000);
+      mockEm.findOneOrFail.mockResolvedValueOnce(entrega);
+
+      await expect(iniciarProvisionEntrega("e1")).resolves.toBe(entrega);
+
+      expect(entrega.provisionIntentos).toBe(2);
+      expect(mockEm.flush).toHaveBeenCalled();
+    });
   });
 
   describe("actualizarColaboradoresDeEntrega", () => {

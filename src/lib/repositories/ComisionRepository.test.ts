@@ -27,6 +27,9 @@ import {
   createComision,
   updateComision,
   deleteComision,
+  reclamarImportacionGrupos,
+  completarImportacionGrupos,
+  liberarImportacionGrupos,
   ComisionActivaDuplicadaError,
   ComisionNoEliminableError,
 } from "./ComisionRepository";
@@ -171,6 +174,80 @@ describe("ComisionRepository", () => {
       await expect(deleteComision("c1")).rejects.toMatchObject({ motivo: "alumnos" });
 
       expect(mockTx.remove).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("lease de importación de grupos", () => {
+    it("reclama atómicamente una comisión disponible", async () => {
+      const comision = new Comision(2026, "sheet-1");
+      mockTx.findOne.mockResolvedValueOnce(comision);
+
+      const result = await reclamarImportacionGrupos("c1");
+
+      expect(result).toMatchObject({
+        estado: "reclamada",
+        comision,
+        token: expect.any(String),
+      });
+      expect(comision.gruposImportacionToken).toEqual(expect.any(String));
+      expect(comision.gruposImportacionIniciadaEn).toBeInstanceOf(Date);
+      expect(mockTx.flush).toHaveBeenCalledOnce();
+    });
+
+    it("rechaza un segundo reclamo mientras el lease sigue vigente", async () => {
+      const comision = new Comision(2026, "sheet-1");
+      comision.gruposImportacionToken = "lease-activo";
+      comision.gruposImportacionIniciadaEn = new Date();
+      mockTx.findOne.mockResolvedValueOnce(comision);
+
+      await expect(reclamarImportacionGrupos("c1")).resolves.toEqual({
+        estado: "en_proceso",
+      });
+      expect(mockTx.flush).not.toHaveBeenCalled();
+    });
+
+    it("recupera un lease vencido", async () => {
+      const comision = new Comision(2026, "sheet-1");
+      comision.gruposImportacionToken = "lease-vencido";
+      comision.gruposImportacionIniciadaEn = new Date(Date.now() - 301_000);
+      mockTx.findOne.mockResolvedValueOnce(comision);
+
+      const result = await reclamarImportacionGrupos("c1");
+
+      expect(result).toMatchObject({ estado: "reclamada", token: expect.any(String) });
+      expect(comision.gruposImportacionToken).not.toBe("lease-vencido");
+      expect(mockTx.flush).toHaveBeenCalledOnce();
+    });
+
+    it("solo completa la importación del dueño del lease", async () => {
+      const comision = new Comision(2026, "sheet-1");
+      comision.gruposImportacionToken = "lease-1";
+      comision.gruposImportacionIniciadaEn = new Date();
+      mockTx.findOne.mockResolvedValueOnce(comision);
+
+      await expect(completarImportacionGrupos("c1", "lease-ajeno")).resolves.toBe(false);
+      expect(comision.gruposImportadosEn).toBeUndefined();
+      expect(mockTx.flush).not.toHaveBeenCalled();
+
+      mockTx.findOne.mockResolvedValueOnce(comision);
+      await expect(completarImportacionGrupos("c1", "lease-1")).resolves.toBe(true);
+      expect(comision.gruposImportadosEn).toBeInstanceOf(Date);
+      expect(comision.gruposImportacionToken).toBeUndefined();
+      expect(comision.gruposImportacionIniciadaEn).toBeUndefined();
+      expect(mockTx.flush).toHaveBeenCalledOnce();
+    });
+
+    it("libera un lease fallido para permitir reintentos", async () => {
+      const comision = new Comision(2026, "sheet-1");
+      comision.gruposImportacionToken = "lease-1";
+      comision.gruposImportacionIniciadaEn = new Date();
+      mockTx.findOne.mockResolvedValueOnce(comision);
+
+      await liberarImportacionGrupos("c1", "lease-1");
+
+      expect(comision.gruposImportacionToken).toBeUndefined();
+      expect(comision.gruposImportacionIniciadaEn).toBeUndefined();
+      expect(mockTx.flush).toHaveBeenCalledOnce();
     });
   });
 });

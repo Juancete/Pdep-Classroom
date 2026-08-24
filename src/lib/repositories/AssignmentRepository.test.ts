@@ -31,6 +31,7 @@ import {
   AssignmentNoEliminableError,
   updateAssignment,
   AssignmentEstructuraInmutableError,
+  AssignmentTipoInmutableError,
   ComisionActivaRequeridaError,
   createAssignment,
   getAssignment,
@@ -239,6 +240,35 @@ describe("AssignmentRepository", () => {
   });
 
   describe("updateAssignment", () => {
+    it("usa un error específico si intentan cambiar el tipo de un borrador", async () => {
+      const assignment = new IndividualAssignment();
+      assignment.id = "a1";
+      mockEm.findOne.mockResolvedValueOnce(assignment);
+
+      const error = await updateAssignment("a1", { tipo: "grupal" }).catch(
+        (caught: unknown) => caught
+      );
+
+      expect(error).toBeInstanceOf(AssignmentTipoInmutableError);
+      expect(error).toMatchObject({
+        name: "AssignmentTipoInmutableError",
+        message: "El tipo de un assignment no se puede cambiar después de crearlo.",
+      });
+      expect(mockEm.flush).not.toHaveBeenCalled();
+    });
+
+    it("conserva el error estructural para cambios de tipo publicados", async () => {
+      const assignment = new IndividualAssignment();
+      assignment.id = "a1";
+      assignment.estadoNombre = "publicado";
+      mockEm.findOne.mockResolvedValueOnce(assignment);
+
+      await expect(updateAssignment("a1", { tipo: "grupal" })).rejects.toMatchObject({
+        name: "AssignmentEstructuraInmutableError",
+        message: "No se puede cambiar el tipo en un assignment publicado o archivado.",
+      });
+    });
+
     it("bloquea cambios estructurales después de publicar", async () => {
       const assignment = new IndividualAssignment();
       assignment.id = "a1";
