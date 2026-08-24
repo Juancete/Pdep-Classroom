@@ -14,6 +14,7 @@ const mockImportarAlumnosDeComision = vi.fn();
 const mockGetAlumnosConGoogleGroupPendiente = vi.fn();
 const mockIntentarSincronizarGoogleGroup = vi.fn();
 const mockIsGoogleGroupsConfigured = vi.fn();
+const mockMarcarGruposImportados = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
@@ -48,6 +49,7 @@ vi.mock("@/lib/repositories", () => ({
     mockGetAlumnosByComision(...args),
   getAlumnosConGoogleGroupPendiente: (...args: unknown[]) =>
     mockGetAlumnosConGoogleGroupPendiente(...args),
+  marcarGruposImportados: (...args: unknown[]) => mockMarcarGruposImportados(...args),
   LegajoConflictError: FakeLegajoConflictError,
   ComisionActivaDuplicadaError: FakeComisionActivaDuplicadaError,
 }));

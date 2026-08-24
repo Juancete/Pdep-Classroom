@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { guardAdmin } from "@/lib/api-auth";
-import { getAssignment, deleteAssignment, updateAssignment } from "@/lib/repositories";
+import {
+  AssignmentNoEliminableError,
+  AssignmentEstructuraInmutableError,
+  getAssignment,
+  deleteAssignment,
+  updateAssignment,
+} from "@/lib/repositories";
+import { internalServerError } from "@/lib/api-errors";
 import { AssignmentBaseSchema } from "@/lib/assignment-schema";
 
 export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
@@ -13,8 +20,17 @@ export async function DELETE(_req: Request, props: { params: Promise<{ id: strin
     return NextResponse.json({ error: "Assignment no encontrado" }, { status: 404 });
   }
 
-  await deleteAssignment(params.id);
-  return NextResponse.json({ ok: true });
+  try {
+    await deleteAssignment(params.id);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    if (error instanceof AssignmentNoEliminableError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    return internalServerError("DELETE /api/assignments/[id]", error, {
+      assignmentId: params.id,
+    });
+  }
 }
 
 export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
@@ -37,6 +53,15 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
     );
   }
 
-  const updated = await updateAssignment(params.id, parsed.data);
-  return NextResponse.json(updated);
+  try {
+    const updated = await updateAssignment(params.id, parsed.data);
+    return NextResponse.json(updated);
+  } catch (error) {
+    if (error instanceof AssignmentEstructuraInmutableError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    return internalServerError("PATCH /api/assignments/[id]", error, {
+      assignmentId: params.id,
+    });
+  }
 }

@@ -30,6 +30,7 @@ type Props = {
   templates: Template[];
   defaultValues?: DefaultValues;
   submitLabel: string;
+  structuralLocked?: boolean;
 };
 
 
@@ -128,6 +129,7 @@ export function AssignmentForm({
   templates,
   defaultValues = {},
   submitLabel,
+  structuralLocked = false,
 }: Props) {
   const [state, formAction] = useActionState(action, null);
   const errors = state?.errors ?? {};
@@ -185,10 +187,12 @@ export function AssignmentForm({
         <input
           name="slug"
           value={slug}
+          disabled={structuralLocked}
           placeholder="kata-funcional-rompecabezas"
           className={`${errors.slug ? INPUT_ERROR_CLASS : INPUT_CLASS} font-mono`}
           onChange={handleSlugChange}
         />
+        {structuralLocked && <input type="hidden" name="slug" value={slug} />}
         <FieldError message={errors.slug?.[0]} />
       </div>
 
@@ -211,7 +215,16 @@ export function AssignmentForm({
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Template Repo *
         </label>
-        {templates.length > 0 ? (
+        {structuralLocked ? (
+          <>
+            <input
+              value={defaultValues.templateRepo ?? ""}
+              disabled
+              className={`${INPUT_CLASS} bg-gray-100 font-mono`}
+            />
+            <input type="hidden" name="templateRepo" value={defaultValues.templateRepo ?? ""} />
+          </>
+        ) : templates.length > 0 ? (
           <TemplateRepoCombobox
             templates={templates}
             defaultValue={defaultValues.templateRepo}
@@ -240,6 +253,7 @@ export function AssignmentForm({
             <select
               name="paradigma"
               required
+              disabled={structuralLocked}
               defaultValue={defaultValues.paradigma ?? "funcional"}
               className={`${INPUT_CLASS} appearance-none pr-8`}
             >
@@ -249,6 +263,9 @@ export function AssignmentForm({
                 </option>
               ))}
             </select>
+            {structuralLocked && (
+              <input type="hidden" name="paradigma" value={defaultValues.paradigma ?? "funcional"} />
+            )}
             <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-gray-400">
               <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -264,6 +281,7 @@ export function AssignmentForm({
             <select
               name="tipo"
               required
+              disabled={Boolean(defaultValues.id)}
               value={tipo}
               onChange={(event) => setTipo(event.target.value)}
               className={`${INPUT_CLASS} appearance-none pr-8`}
@@ -271,6 +289,7 @@ export function AssignmentForm({
               <option value="individual">Individual</option>
               <option value="grupal">Grupal</option>
             </select>
+            {defaultValues.id && <input type="hidden" name="tipo" value={tipo} />}
             <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-gray-400">
               <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -291,9 +310,13 @@ export function AssignmentForm({
             type="number"
             min={GRUPAL_MIN_MAX_INTEGRANTES}
             defaultValue={defaultValues.maxIntegrantes}
+            disabled={structuralLocked}
             placeholder="Ej: 3"
             className={errors.maxIntegrantes ? INPUT_ERROR_CLASS : INPUT_CLASS}
           />
+          {structuralLocked && (
+            <input type="hidden" name="maxIntegrantes" value={defaultValues.maxIntegrantes ?? ""} />
+          )}
           <FieldError message={errors.maxIntegrantes?.[0]} />
         </div>
       )}

@@ -26,6 +26,11 @@ export class Comision {
   @Property({ type: 'boolean', default: false })
   activa: boolean = false;
 
+  // Sheets es bootstrap, no autoridad continua: una vez importados, los
+  // cambios de grupos se administran exclusivamente desde Classroom.
+  @Property({ type: "datetime", nullable: true })
+  gruposImportadosEn?: Date;
+
   @Property({ type: "json" })
   columnConfig: ColumnConfig = { ...DEFAULT_COLUMN_CONFIG };
 

@@ -6,6 +6,7 @@ const mockGetCurrentUser = vi.fn();
 const mockGetAssignment = vi.fn();
 const mockBorrarRepositorios = vi.fn();
 const mockConLock = vi.fn();
+const mockGetEntregasConRepoActivo = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
@@ -13,6 +14,7 @@ vi.mock("@/lib/session", () => ({
 
 vi.mock("@/lib/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
+  getEntregasConRepoActivo: (id: string) => mockGetEntregasConRepoActivo(id),
   conLockBorradoReposAssignment: (
     assignmentId: string,
     operation: () => Promise<unknown>
@@ -23,7 +25,7 @@ vi.mock("@/lib/services/borrarRepositoriosDeAssignment", () => ({
   borrarRepositoriosDeAssignment: (data: unknown) => mockBorrarRepositorios(data),
 }));
 
-import { DELETE } from "./route";
+import { DELETE, GET } from "./route";
 
 function admin(): PdepUser {
   return {
@@ -50,6 +52,8 @@ function result(overrides = {}) {
 function makeRequest(): Request {
   return new Request("http://localhost/api/assignments/a1/repos", {
     method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirmation: "kata" }),
   });
 }
 
@@ -57,7 +61,13 @@ describe("DELETE /api/assignments/[id]/repos", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetCurrentUser.mockResolvedValue(admin());
-    mockGetAssignment.mockResolvedValue({ id: "a1" });
+    mockGetAssignment.mockResolvedValue({
+      id: "a1",
+      titulo: "Kata",
+      slug: "kata",
+      estadoNombre: "archivado",
+    });
+    mockGetEntregasConRepoActivo.mockResolvedValue([]);
     mockBorrarRepositorios.mockResolvedValue(result());
     mockConLock.mockImplementation(
       async (_assignmentId: string, operation: () => Promise<unknown>) =>
@@ -87,6 +97,37 @@ describe("DELETE /api/assignments/[id]/repos", () => {
     });
 
     expect(response.status).toBe(404);
+    expect(mockBorrarRepositorios).not.toHaveBeenCalled();
+  });
+
+  it("exige archivar el assignment antes de borrar repos", async () => {
+    mockGetAssignment.mockResolvedValue({
+      id: "a1",
+      titulo: "Kata",
+      slug: "kata",
+      estadoNombre: "publicado",
+    });
+
+    const response = await DELETE(makeRequest(), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(mockBorrarRepositorios).not.toHaveBeenCalled();
+  });
+
+  it("exige escribir el slug exacto para confirmar", async () => {
+    const request = new Request("http://localhost/api/assignments/a1/repos", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmation: "otro" }),
+    });
+
+    const response = await DELETE(request, {
+      params: Promise.resolve({ id: "a1" }),
+    });
+
+    expect(response.status).toBe(400);
     expect(mockBorrarRepositorios).not.toHaveBeenCalled();
   });
 
@@ -168,5 +209,35 @@ describe("DELETE /api/assignments/[id]/repos", () => {
     expect(response.status).toBe(500);
     expect(body).toEqual({ error: "Error interno del servidor" });
     expect(JSON.stringify(body)).not.toContain("información interna");
+  });
+});
+
+describe("GET /api/assignments/[id]/repos", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetCurrentUser.mockResolvedValue(admin());
+    mockGetAssignment.mockResolvedValue({
+      id: "a1",
+      titulo: "Kata",
+      slug: "kata",
+      estadoNombre: "archivado",
+    });
+    mockGetEntregasConRepoActivo.mockResolvedValue([
+      { repoName: "kata-ana" },
+      { repoName: "kata-bruno" },
+    ]);
+  });
+
+  it("previsualiza la lista exacta que se va a borrar", async () => {
+    const response = await GET(new Request("http://localhost"), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      slug: "kata",
+      estado: "archivado",
+      repos: ["kata-ana", "kata-bruno"],
+    });
   });
 });
