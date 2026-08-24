@@ -148,7 +148,9 @@ describe("aceptarAssignment", () => {
     mockCompletarProvision.mockImplementation(async (_id, data) =>
       makeEntrega({ ...data, provisionEstado: "activa" })
     );
-    mockMarcarCreacion.mockResolvedValue(undefined);
+    mockMarcarCreacion.mockResolvedValue(
+      makeEntrega({ provisionCreacionIniciadaEn: new Date("2026-08-23T12:00:00Z") })
+    );
     mockFallarProvision.mockResolvedValue(undefined);
   });
 
@@ -337,6 +339,8 @@ describe("aceptarAssignment", () => {
       .mockResolvedValueOnce({
         repoGithubId: "999000",
         repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
+        description: "Kata Funcional — PdeP [pdep-entrega:e1]",
+        createdAt: new Date("2026-08-23T12:00:01Z"),
       });
     mockCrearEntrega.mockRejectedValue(new Error("name already exists"));
 
@@ -349,6 +353,29 @@ describe("aceptarAssignment", () => {
     expect(mockCompletarProvision).toHaveBeenCalledWith(
       "e1",
       expect.objectContaining({ repoGithubId: "999000" })
+    );
+  });
+
+  it("rechaza el repo recuperado si no tiene marcador ni repoGithubId esperado", async () => {
+    mockGetRepoInfo
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        repoGithubId: "repo-ajeno",
+        repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
+        description: "Repositorio preexistente de otra operación",
+        createdAt: new Date("2026-08-23T12:00:01Z"),
+      });
+    mockCrearEntrega.mockRejectedValue(new Error("name already exists"));
+
+    await expect(aceptarAssignment("a1", makeUser())).rejects.toBeInstanceOf(
+      RepositorioPreexistenteNoAdministradoError
+    );
+
+    expect(mockAddCollaborators).not.toHaveBeenCalled();
+    expect(mockCompletarProvision).not.toHaveBeenCalled();
+    expect(mockFallarProvision).toHaveBeenCalledWith(
+      "e1",
+      expect.stringContaining("no fue creado por esta entrega")
     );
   });
 

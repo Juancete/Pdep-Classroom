@@ -404,11 +404,12 @@ export async function iniciarProvisionEntrega(entregaId: string): Promise<Entreg
   });
 }
 
-export async function marcarCreacionGithubIniciada(entregaId: string): Promise<void> {
+export async function marcarCreacionGithubIniciada(entregaId: string): Promise<Entrega> {
   const entityManager = await getEM();
   const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
   entrega.marcarCreacionGithubIniciada();
   await entityManager.flush();
+  return entrega;
 }
 
 export async function completarProvisionEntrega(

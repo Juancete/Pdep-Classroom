@@ -155,6 +155,8 @@ export async function deleteComision(id: string): Promise<void> {
 }
 
 const VENTANA_IMPORTACION_GRUPOS_MS = 5 * 60_000;
+export const INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS =
+  VENTANA_IMPORTACION_GRUPOS_MS / 2;
 
 export type ReclamoImportacionGrupos =
   | { estado: "reclamada"; comision: Comision; token: string }
@@ -207,6 +209,30 @@ export async function completarImportacionGrupos(
     comision.gruposImportadosEn = new Date();
     comision.gruposImportacionToken = undefined;
     comision.gruposImportacionIniciadaEn = undefined;
+    await transaction.flush();
+    return true;
+  });
+}
+
+export async function renovarImportacionGrupos(
+  id: string,
+  token: string
+): Promise<boolean> {
+  const entityManager = await getEM();
+  return entityManager.transactional(async (transaction) => {
+    const comision = await transaction.findOne(
+      Comision,
+      { id },
+      { lockMode: LockMode.PESSIMISTIC_WRITE }
+    );
+    if (
+      !comision ||
+      Boolean(comision.gruposImportadosEn) ||
+      comision.gruposImportacionToken !== token
+    ) {
+      return false;
+    }
+    comision.gruposImportacionIniciadaEn = new Date();
     await transaction.flush();
     return true;
   });

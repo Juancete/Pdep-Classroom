@@ -135,6 +135,9 @@ export function AssignmentForm({
   const errors = state?.errors ?? {};
 
   const [tipo, setTipo] = useState(defaultValues.tipo ?? "individual");
+  // El tipo es el discriminador STI de MikroORM. Una entidad existente no se
+  // puede convertir de subclase de forma segura, ni siquiera en borrador.
+  const tipoLocked = Boolean(defaultValues.id);
   const [slug, setSlug] = useState(defaultValues.slug ?? "");
   const [slugEdited, setSlugEdited] = useState(!!defaultValues.slug);
 
@@ -281,7 +284,7 @@ export function AssignmentForm({
             <select
               name="tipo"
               required
-              disabled={structuralLocked}
+              disabled={tipoLocked}
               value={tipo}
               onChange={(event) => setTipo(event.target.value)}
               className={`${INPUT_CLASS} appearance-none pr-8`}
@@ -289,7 +292,7 @@ export function AssignmentForm({
               <option value="individual">Individual</option>
               <option value="grupal">Grupal</option>
             </select>
-            {structuralLocked && <input type="hidden" name="tipo" value={tipo} />}
+            {tipoLocked && <input type="hidden" name="tipo" value={tipo} />}
             <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-gray-400">
               <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />

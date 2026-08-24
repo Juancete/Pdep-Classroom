@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -15,6 +15,7 @@ const mockGetAlumnosConGoogleGroupPendiente = vi.fn();
 const mockIntentarSincronizarGoogleGroup = vi.fn();
 const mockIsGoogleGroupsConfigured = vi.fn();
 const mockReclamarImportacionGrupos = vi.fn();
+const mockRenovarImportacionGrupos = vi.fn();
 const mockCompletarImportacionGrupos = vi.fn();
 const mockLiberarImportacionGrupos = vi.fn();
 
@@ -53,12 +54,15 @@ vi.mock("@/lib/repositories", () => ({
     mockGetAlumnosConGoogleGroupPendiente(...args),
   reclamarImportacionGrupos: (...args: unknown[]) =>
     mockReclamarImportacionGrupos(...args),
+  renovarImportacionGrupos: (...args: unknown[]) =>
+    mockRenovarImportacionGrupos(...args),
   completarImportacionGrupos: (...args: unknown[]) =>
     mockCompletarImportacionGrupos(...args),
   liberarImportacionGrupos: (...args: unknown[]) =>
     mockLiberarImportacionGrupos(...args),
   LegajoConflictError: FakeLegajoConflictError,
   ComisionActivaDuplicadaError: FakeComisionActivaDuplicadaError,
+  INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS: 150_000,
 }));
 
 vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
@@ -111,6 +115,8 @@ import {
   sincronizarGruposDeLaComision,
   sincronizarGoogleGroupsDeLaComision,
 } from "./actions";
+
+afterEach(() => vi.useRealTimers());
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -412,6 +418,7 @@ describe("sincronizarGruposDeLaComision", () => {
       token: "lease-1",
     });
     mockCompletarImportacionGrupos.mockResolvedValue(true);
+    mockRenovarImportacionGrupos.mockResolvedValue(true);
     mockLiberarImportacionGrupos.mockResolvedValue(undefined);
     mockGetAlumnosByComision.mockResolvedValue([]);
     mockIntentarSincronizarGrupos.mockResolvedValue(undefined);
@@ -548,6 +555,51 @@ describe("sincronizarGruposDeLaComision", () => {
       status: "error",
       message: "La importación perdió su reserva. Volvé a intentarla.",
     });
+    expect(mockLiberarImportacionGrupos).toHaveBeenCalledWith("c1", "lease-1");
+  });
+
+  it("renueva periódicamente el lease mientras un alumno sigue procesándose", async () => {
+    vi.useFakeTimers();
+    mockGetAlumnosByComision.mockResolvedValue([{ githubUsername: "ana" }]);
+    let terminarSincronizacion!: () => void;
+    mockIntentarSincronizarGrupos.mockImplementation(
+      () => new Promise<void>((resolve) => { terminarSincronizacion = resolve; })
+    );
+
+    const resultado = sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledOnce();
+
+    await vi.advanceTimersByTimeAsync(150_000);
+    expect(mockRenovarImportacionGrupos).toHaveBeenCalledWith("c1", "lease-1");
+
+    terminarSincronizacion();
+    await expect(resultado).resolves.toEqual({
+      status: "ok",
+      sincronizados: 1,
+      aunConError: 0,
+    });
+  });
+
+  it("detiene el lote si el heartbeat detecta que perdió el lease", async () => {
+    vi.useFakeTimers();
+    mockGetAlumnosByComision.mockResolvedValue([{ githubUsername: "ana" }]);
+    mockRenovarImportacionGrupos.mockResolvedValue(false);
+    let terminarSincronizacion!: () => void;
+    mockIntentarSincronizarGrupos.mockImplementation(
+      () => new Promise<void>((resolve) => { terminarSincronizacion = resolve; })
+    );
+
+    const resultado = sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(150_000);
+    terminarSincronizacion();
+
+    await expect(resultado).resolves.toEqual({
+      status: "error",
+      message: "La importación perdió su reserva. Volvé a intentarla.",
+    });
+    expect(mockCompletarImportacionGrupos).not.toHaveBeenCalled();
     expect(mockLiberarImportacionGrupos).toHaveBeenCalledWith("c1", "lease-1");
   });
 

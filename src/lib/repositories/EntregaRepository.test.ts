@@ -47,6 +47,7 @@ import {
   getEntregaPorRepoGithubId,
   asegurarRepoGithubId,
   iniciarProvisionEntrega,
+  marcarCreacionGithubIniciada,
 } from "./EntregaRepository";
 
 function fakeAssignmentDisponible(disponible: boolean) {
@@ -590,6 +591,18 @@ describe("EntregaRepository", () => {
 
       expect(entrega.provisionIntentos).toBe(2);
       expect(mockEm.flush).toHaveBeenCalled();
+    });
+  });
+
+  describe("marcarCreacionGithubIniciada", () => {
+    it("persiste y devuelve la entrega con el timestamp estable", async () => {
+      const entrega = new Entrega();
+      mockEm.findOneOrFail.mockResolvedValueOnce(entrega);
+
+      await expect(marcarCreacionGithubIniciada("e1")).resolves.toBe(entrega);
+
+      expect(entrega.provisionCreacionIniciadaEn).toBeInstanceOf(Date);
+      expect(mockEm.flush).toHaveBeenCalledOnce();
     });
   });
 
