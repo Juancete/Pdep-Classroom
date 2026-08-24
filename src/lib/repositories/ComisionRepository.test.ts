@@ -28,6 +28,7 @@ import {
   updateComision,
   deleteComision,
   reclamarImportacionGrupos,
+  renovarImportacionGrupos,
   completarImportacionGrupos,
   liberarImportacionGrupos,
   ComisionActivaDuplicadaError,
@@ -234,6 +235,23 @@ describe("ComisionRepository", () => {
       expect(comision.gruposImportadosEn).toBeInstanceOf(Date);
       expect(comision.gruposImportacionToken).toBeUndefined();
       expect(comision.gruposImportacionIniciadaEn).toBeUndefined();
+      expect(mockTx.flush).toHaveBeenCalledOnce();
+    });
+
+    it("renueva el heartbeat únicamente para el dueño del lease", async () => {
+      const comision = new Comision(2026, "sheet-1");
+      const inicioAnterior = new Date(Date.now() - 60_000);
+      comision.gruposImportacionToken = "lease-1";
+      comision.gruposImportacionIniciadaEn = inicioAnterior;
+      mockTx.findOne.mockResolvedValueOnce(comision);
+
+      await expect(renovarImportacionGrupos("c1", "lease-ajeno")).resolves.toBe(false);
+      expect(comision.gruposImportacionIniciadaEn).toBe(inicioAnterior);
+      expect(mockTx.flush).not.toHaveBeenCalled();
+
+      mockTx.findOne.mockResolvedValueOnce(comision);
+      await expect(renovarImportacionGrupos("c1", "lease-1")).resolves.toBe(true);
+      expect(comision.gruposImportacionIniciadaEn).not.toBe(inicioAnterior);
       expect(mockTx.flush).toHaveBeenCalledOnce();
     });
 

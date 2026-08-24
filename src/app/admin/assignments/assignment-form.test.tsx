@@ -194,7 +194,7 @@ describe("AssignmentForm", () => {
   });
 
   describe("bloqueo estructural", () => {
-    it("mantiene editable el tipo de un borrador existente", () => {
+    it("mantiene bloqueado el tipo STI de un borrador existente", () => {
       const { container } = render(
         <AssignmentForm
           action={noop}
@@ -205,8 +205,8 @@ describe("AssignmentForm", () => {
         />
       );
 
-      expect(getTipoSelect(container)).not.toBeDisabled();
-      expect(container.querySelector('input[type="hidden"][name="tipo"]')).toBeNull();
+      expect(getTipoSelect(container)).toBeDisabled();
+      expect(container.querySelector<HTMLInputElement>('input[type="hidden"][name="tipo"]')?.value).toBe("individual");
     });
 
     it("preserva el tipo enviado cuando la estructura está bloqueada", () => {

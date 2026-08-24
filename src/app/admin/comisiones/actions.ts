@@ -10,8 +10,10 @@ import {
   getAlumnosConGoogleGroupPendiente,
   ComisionActivaDuplicadaError,
   reclamarImportacionGrupos,
+  renovarImportacionGrupos,
   completarImportacionGrupos,
   liberarImportacionGrupos,
+  INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS,
 } from "@/lib/repositories";
 import { getAsignacionesGrupos, getSheetNames, type AsignacionGrupoRow } from "@/lib/sheets";
 import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
@@ -277,6 +279,32 @@ export async function sincronizarGruposDeLaComision(
 
   const { comision, token } = reclamo;
   let importacionCompletada = false;
+  let reservaPerdida = false;
+  let errorDeHeartbeat: unknown;
+  let heartbeatPendiente: Promise<void> = Promise.resolve();
+  const ejecutarHeartbeat = () => {
+    if (reservaPerdida || errorDeHeartbeat) return;
+    heartbeatPendiente = heartbeatPendiente
+      .then(async () => {
+        if (!(await renovarImportacionGrupos(id, token))) reservaPerdida = true;
+      })
+      .catch((error: unknown) => {
+        errorDeHeartbeat = error;
+      });
+  };
+  const heartbeat = setInterval(
+    ejecutarHeartbeat,
+    INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS
+  );
+  const reservaSigueVigente = async () => {
+    await heartbeatPendiente;
+    if (errorDeHeartbeat) throw errorDeHeartbeat;
+    return !reservaPerdida;
+  };
+  const errorReservaPerdida: SyncGruposState = {
+    status: "error",
+    message: "La importación perdió su reserva. Volvé a intentarla.",
+  };
   try {
     const alumnos = await getAlumnosByComision(id);
 
@@ -296,6 +324,7 @@ export async function sincronizarGruposDeLaComision(
     let sincronizados = 0;
     let aunConError = 0;
     for (const alumno of alumnos) {
+      if (!(await reservaSigueVigente())) return errorReservaPerdida;
       try {
         await intentarSincronizarGrupos(alumno.githubUsername, comision, asignaciones);
         sincronizados++;
@@ -304,20 +333,19 @@ export async function sincronizarGruposDeLaComision(
       }
     }
 
+    clearInterval(heartbeat);
+    if (!(await reservaSigueVigente())) return errorReservaPerdida;
     if (aunConError === 0) {
       importacionCompletada = await completarImportacionGrupos(id, token);
-      if (!importacionCompletada) {
-        return {
-          status: "error",
-          message: "La importación perdió su reserva. Volvé a intentarla.",
-        };
-      }
+      if (!importacionCompletada) return errorReservaPerdida;
     }
 
     revalidatePath("/admin/comisiones");
     revalidatePath(`/admin/comisiones/${id}/edit`);
     return { status: "ok", sincronizados, aunConError };
   } finally {
+    clearInterval(heartbeat);
+    await heartbeatPendiente;
     if (!importacionCompletada) await liberarImportacionGrupos(id, token);
   }
 }

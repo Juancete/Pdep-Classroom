@@ -135,8 +135,9 @@ export async function aceptarAssignment(
     }
   }
 
+  let intentoConCreacionIniciada = intento;
   try {
-    await marcarCreacionGithubIniciada(entrega.id);
+    intentoConCreacionIniciada = await marcarCreacionGithubIniciada(entrega.id);
     const resultado = await crearEntrega({
       templateRepo: assignment.nombreDelTemplate(),
       repoName,
@@ -154,6 +155,17 @@ export async function aceptarAssignment(
     if (!repoTrasError) {
       await fallarProvisionEntrega(entrega.id, mensajeOperativo(error));
       throw error;
+    }
+    if (
+      !repoCompatibleConIntento(
+        intentoConCreacionIniciada,
+        repoTrasError,
+        marcadorEntrega
+      )
+    ) {
+      const colision = new RepositorioPreexistenteNoAdministradoError(repoName);
+      await fallarProvisionEntrega(entrega.id, colision.message);
+      throw colision;
     }
     try {
       await addCollaborators(repoName, usernames);

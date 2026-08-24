@@ -92,8 +92,10 @@ export {
   updateComision,
   deleteComision,
   reclamarImportacionGrupos,
+  renovarImportacionGrupos,
   completarImportacionGrupos,
   liberarImportacionGrupos,
+  INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS,
   ComisionActivaDuplicadaError,
   ComisionNoEliminableError,
 } from "./ComisionRepository";
