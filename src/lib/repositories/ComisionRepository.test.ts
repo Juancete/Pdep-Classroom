@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockTx = {
   findOne: vi.fn(),
+  count: vi.fn(),
   nativeUpdate: vi.fn(),
   persist: vi.fn(),
+  remove: vi.fn(),
   flush: vi.fn(),
 };
 
@@ -24,7 +26,9 @@ vi.mock("@/lib/db", () => ({
 import {
   createComision,
   updateComision,
+  deleteComision,
   ComisionActivaDuplicadaError,
+  ComisionNoEliminableError,
 } from "./ComisionRepository";
 import { Comision } from "@/domain/entities";
 
@@ -38,6 +42,7 @@ function uniqueActiveComisionError(): Error {
 describe("ComisionRepository", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTx.count.mockResolvedValue(0);
     mockEm.transactional.mockImplementation(
       async (callback: (transaction: typeof mockTx) => Promise<unknown>) =>
         callback(mockTx)
@@ -133,6 +138,39 @@ describe("ComisionRepository", () => {
       await expect(
         updateComision("c1", { anio: 2026, spreadsheetId: "sheet-1", activa: true })
       ).rejects.toBeInstanceOf(ComisionActivaDuplicadaError);
+    });
+  });
+
+  describe("deleteComision", () => {
+    it("elimina una comisión inactiva y vacía", async () => {
+      const comision = new Comision(2025, "sheet-old");
+      mockTx.findOne.mockResolvedValueOnce(comision);
+
+      await deleteComision("c1");
+
+      expect(mockTx.remove).toHaveBeenCalledWith(comision);
+      expect(mockTx.flush).toHaveBeenCalled();
+    });
+
+    it("no elimina la comisión activa", async () => {
+      const comision = new Comision(2026, "sheet-current");
+      comision.activa = true;
+      mockTx.findOne.mockResolvedValueOnce(comision);
+
+      await expect(deleteComision("c1")).rejects.toBeInstanceOf(
+        ComisionNoEliminableError
+      );
+
+      expect(mockTx.remove).not.toHaveBeenCalled();
+    });
+
+    it("no elimina una comisión histórica con alumnos", async () => {
+      mockTx.findOne.mockResolvedValueOnce(new Comision(2025, "sheet-old"));
+      mockTx.count.mockResolvedValueOnce(1);
+
+      await expect(deleteComision("c1")).rejects.toMatchObject({ motivo: "alumnos" });
+
+      expect(mockTx.remove).not.toHaveBeenCalled();
     });
   });
 });

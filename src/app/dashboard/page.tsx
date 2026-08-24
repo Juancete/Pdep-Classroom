@@ -122,7 +122,7 @@ export default async function DashboardPage() {
               </div>
 
               <div className="flex-shrink-0 w-full sm:w-auto flex flex-col items-end gap-1.5">
-                {entrega ? (
+                {entrega?.provisionEstaActiva() ? (
                   <a
                     href={entrega.repoUrl}
                     target="_blank"
@@ -144,6 +144,15 @@ export default async function DashboardPage() {
                     </svg>
                     Ir al repo
                   </a>
+                ) : entrega ? (
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-xs text-amber-700">
+                      {entrega.provisionEstado === "fallida"
+                        ? "No se pudo crear el repo. Podés reintentar."
+                        : "Estamos creando el repositorio."}
+                    </span>
+                    <AcceptButton assignmentId={assignment.id} />
+                  </div>
                 ) : assignment.requiereSeleccionDeGrupo(user, grupo) ? (
                   <a
                     href={`/assignments/${assignment.id}/grupo`}
@@ -155,7 +164,7 @@ export default async function DashboardPage() {
                 ) : (
                   <AcceptButton assignmentId={assignment.id} />
                 )}
-                {entrega && (
+                {entrega?.provisionEstaActiva() && (
                   <div className="flex items-center gap-1">
                     <CIBadge
                       resultadoNombre={entrega.ciResultadoNombre}
@@ -164,7 +173,7 @@ export default async function DashboardPage() {
                     <CIRefreshButton assignmentId={assignment.id} />
                   </div>
                 )}
-                {entrega && entrega.ciResultadoNombre !== "sin_ci" && (
+                {entrega?.provisionEstaActiva() && entrega.ciResultadoNombre !== "sin_ci" && (
                   <p className="text-[11px] text-gray-400">
                     Resultado automático — no es la nota final.
                   </p>

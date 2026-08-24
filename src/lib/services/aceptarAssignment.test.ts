@@ -19,6 +19,10 @@ const mockCrearEntregaSiAssignmentDisponible = vi.fn();
 const mockCrearEntrega = vi.fn();
 const mockGetRepoInfo = vi.fn();
 const mockAddCollaborators = vi.fn();
+const mockIniciarProvision = vi.fn();
+const mockMarcarCreacion = vi.fn();
+const mockCompletarProvision = vi.fn();
+const mockFallarProvision = vi.fn();
 
 vi.mock("@/lib/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
@@ -29,6 +33,10 @@ vi.mock("@/lib/repositories", () => ({
   getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
   crearEntregaSiAssignmentDisponible: (data: unknown, rol: unknown) =>
     mockCrearEntregaSiAssignmentDisponible(data, rol),
+  iniciarProvisionEntrega: (id: string) => mockIniciarProvision(id),
+  marcarCreacionGithubIniciada: (id: string) => mockMarcarCreacion(id),
+  completarProvisionEntrega: (id: string, data: unknown) => mockCompletarProvision(id, data),
+  fallarProvisionEntrega: (id: string, error: string) => mockFallarProvision(id, error),
 }));
 
 vi.mock("@/lib/github", () => ({
@@ -43,6 +51,7 @@ import {
   AlumnoNoRegistradoError,
   AssignmentNoDisponibleError,
   AssignmentNoEncontradoError,
+  RepositorioPreexistenteNoAdministradoError,
 } from "./aceptarAssignment";
 import { AccesoAssignmentProhibidoError } from "./assignmentAuthorization";
 import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
@@ -129,7 +138,18 @@ describe("aceptarAssignment", () => {
       repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
       repoGithubId: "111222",
     });
-    mockCrearEntregaSiAssignmentDisponible.mockResolvedValue(makeEntrega());
+    const pendiente = makeEntrega({
+      provisionEstado: "pendiente",
+      repoUrl: undefined,
+      provisionCreacionIniciadaEn: undefined,
+    });
+    mockCrearEntregaSiAssignmentDisponible.mockResolvedValue(pendiente);
+    mockIniciarProvision.mockResolvedValue(pendiente);
+    mockCompletarProvision.mockImplementation(async (_id, data) =>
+      makeEntrega({ ...data, provisionEstado: "activa" })
+    );
+    mockMarcarCreacion.mockResolvedValue(undefined);
+    mockFallarProvision.mockResolvedValue(undefined);
   });
 
   it("devuelve la entrega existente sin tocar GitHub", async () => {
@@ -141,6 +161,17 @@ describe("aceptarAssignment", () => {
     expect(mockGetRepoInfo).not.toHaveBeenCalled();
     expect(mockCrearEntrega).not.toHaveBeenCalled();
     expect(mockCrearEntregaSiAssignmentDisponible).not.toHaveBeenCalled();
+  });
+
+  it("no duplica la creación cuando otra request ya reclamó el aprovisionamiento", async () => {
+    const pendiente = makeEntrega({ provisionEstado: "pendiente", repoUrl: undefined });
+    mockCrearEntregaSiAssignmentDisponible.mockResolvedValue(pendiente);
+    mockIniciarProvision.mockResolvedValue(null);
+
+    await expect(aceptarAssignment("a1", makeUser())).resolves.toBe(pendiente);
+
+    expect(mockGetRepoInfo).not.toHaveBeenCalled();
+    expect(mockCrearEntrega).not.toHaveBeenCalled();
   });
 
   it("falla con error de dominio si el assignment no existe", async () => {
@@ -167,28 +198,28 @@ describe("aceptarAssignment", () => {
         alumnoId: "alumno-1",
         grupoId: undefined,
         repoName: "kata-funcional-juangarcia",
-        // Id numérico de GitHub del repo (issue #60): se captura en la
-        // creación real desde template, en vez de depender pura y
-        // exclusivamente del "self-heal" del primer webhook.
-        repoGithubId: "111222",
+        provisionEstado: "pendiente",
       }),
       ESTUDIANTE
     );
+    expect(mockCompletarProvision).toHaveBeenCalledWith(
+      "e1",
+      expect.objectContaining({ repoGithubId: "111222" })
+    );
   });
 
-  it("cuando el repo ya existía (no se crea desde template), toma repoGithubId de GitHub en vez de depender del self-heal del primer webhook", async () => {
+  it("rechaza un repo preexistente que no pertenece a una provisión iniciada", async () => {
     mockGetRepoInfo.mockResolvedValue({
       repoGithubId: "555666",
       repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
     });
 
-    await aceptarAssignment("a1", makeUser());
+    await expect(aceptarAssignment("a1", makeUser())).rejects.toBeInstanceOf(
+      RepositorioPreexistenteNoAdministradoError
+    );
 
     expect(mockCrearEntrega).not.toHaveBeenCalled();
-    expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalledWith(
-      expect.objectContaining({ repoGithubId: "555666" }),
-      ESTUDIANTE
-    );
+    expect(mockFallarProvision).toHaveBeenCalled();
   });
 
   it("rechaza una entrega individual cuyo nombre completo supera el límite", async () => {
@@ -250,9 +281,15 @@ describe("aceptarAssignment", () => {
   });
 
   it("reconcilia cuando el repo ya existe en GitHub", async () => {
+    const inicio = new Date("2026-08-23T12:00:00Z");
+    mockIniciarProvision.mockResolvedValue(
+      makeEntrega({ provisionEstado: "fallida", provisionCreacionIniciadaEn: inicio })
+    );
     mockGetRepoInfo.mockResolvedValue({
       repoGithubId: "777888",
       repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
+      description: "Kata Funcional — PdeP",
+      createdAt: new Date("2026-08-23T12:00:01Z"),
     });
 
     await aceptarAssignment("a1", makeUser());
@@ -262,13 +299,9 @@ describe("aceptarAssignment", () => {
       "kata-funcional-juangarcia",
       ["juangarcia"]
     );
-    expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalledWith(
-      expect.objectContaining({
-        repoName: "kata-funcional-juangarcia",
-        repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
-        repoGithubId: "777888",
-      }),
-      ESTUDIANTE
+    expect(mockCompletarProvision).toHaveBeenCalledWith(
+      "e1",
+      expect.objectContaining({ repoGithubId: "777888" })
     );
   });
 
@@ -287,9 +320,9 @@ describe("aceptarAssignment", () => {
       "kata-funcional-juangarcia",
       ["juangarcia"]
     );
-    expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalledWith(
-      expect.objectContaining({ repoGithubId: "999000" }),
-      ESTUDIANTE
+    expect(mockCompletarProvision).toHaveBeenCalledWith(
+      "e1",
+      expect.objectContaining({ repoGithubId: "999000" })
     );
   });
 

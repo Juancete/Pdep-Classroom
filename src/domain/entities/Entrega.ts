@@ -50,6 +50,24 @@ export class Entrega {
   @Property({ type: 'datetime' })
   createdAt: Date = new Date();
 
+  // Saga de aprovisionamiento GitHub. La fila se crea antes de llamar a
+  // GitHub para que un timeout o una carrera nunca deje un repo sin dueño
+  // lógico recuperable en Classroom.
+  @Enum({ items: ["pendiente", "activa", "fallida"], default: "activa" })
+  provisionEstado: "pendiente" | "activa" | "fallida" = "activa";
+
+  @Property({ type: "text", nullable: true })
+  provisionUltimoError?: string;
+
+  @Property({ type: "integer", default: 0 })
+  provisionIntentos: number = 0;
+
+  @Property({ type: "datetime", nullable: true })
+  provisionCreacionIniciadaEn?: Date;
+
+  @Property({ type: "datetime", nullable: true })
+  provisionActualizadoEn?: Date;
+
   // CI (issue #58): estado combinado de los checks del último commit del
   // branch por defecto del repo de esta entrega — mismo mecanismo que un
   // badge de CI en un README, no depende de un workflow con nombre fijo.
@@ -112,7 +130,39 @@ export class Entrega {
   }
 
   hasRepo(): boolean {
-    return !!this.repoUrl && !this.repoDeleted;
+    return this.provisionEstado === "activa" && !!this.repoUrl && !this.repoDeleted;
+  }
+
+  provisionEstaActiva(): boolean {
+    return this.provisionEstado === "activa" && Boolean(this.repoUrl) && !this.repoDeleted;
+  }
+
+  iniciarProvision(): void {
+    this.provisionEstado = "pendiente";
+    this.provisionUltimoError = undefined;
+    this.provisionIntentos += 1;
+    this.provisionActualizadoEn = new Date();
+  }
+
+  marcarCreacionGithubIniciada(): void {
+    this.provisionCreacionIniciadaEn ??= new Date();
+    this.provisionActualizadoEn = new Date();
+  }
+
+  completarProvision(data: { repoName: string; repoUrl: string; repoGithubId?: string }): void {
+    this.repoName = data.repoName;
+    this.repoUrl = data.repoUrl;
+    this.repoGithubId = data.repoGithubId;
+    this.repoDeleted = false;
+    this.provisionEstado = "activa";
+    this.provisionUltimoError = undefined;
+    this.provisionActualizadoEn = new Date();
+  }
+
+  fallarProvision(error: string): void {
+    this.provisionEstado = "fallida";
+    this.provisionUltimoError = error;
+    this.provisionActualizadoEn = new Date();
   }
 
   repoFueBorrado(): boolean {

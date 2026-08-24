@@ -34,6 +34,7 @@ export const hookGoogleGroups: HookPostConfirmacion = async ({
  * degradada para el warning inmediato.
  */
 export const hookGruposSync: HookPostConfirmacion = async ({ githubUsername, comision }) => {
+  if (comision.gruposImportadosEn) return { gruposSync: "ok" };
   try {
     await intentarSincronizarGrupos(githubUsername, comision);
     return { gruposSync: "ok" };

@@ -38,7 +38,7 @@ export default async function EditComisionPage(
     getAlumnos(comision.spreadsheetId, comision.columnConfig)
       .then((alumnos) => alumnos.length)
       .catch(() => null),
-    countAlumnos().catch(() => null),
+    countAlumnos(comision.id).catch(() => null),
     getAlumnosConGruposSyncPendiente(comision.id).catch(() => [] as unknown[]),
     googleGroupsConfigurado
       ? getAlumnosConGoogleGroupPendiente(comision.id, true).catch(
@@ -69,17 +69,24 @@ export default async function EditComisionPage(
             <SyncButton comisionId={comision.id} />
           </>
         )}
-        {cantPendientesGrupos > 0 && (
+        {!comision.gruposImportadosEn && (comision.columnConfig?.grupos || cantPendientesGrupos > 0) && (
           <>
             <span
-              title="Alumnos cuyo último intento de sincronizar grupos desde la planilla falló"
-              className="inline-flex items-center gap-1.5 text-xs font-medium bg-red-100 text-red-700 border border-red-200 px-2.5 py-1 rounded-full"
+              title="La planilla se usa una sola vez como bootstrap; después Classroom es la fuente de verdad"
+              className="inline-flex items-center gap-1.5 text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-full"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-              Grupos pendientes · {cantPendientesGrupos}
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              {cantPendientesGrupos > 0
+                ? `Grupos pendientes · ${cantPendientesGrupos}`
+                : "Bootstrap de grupos pendiente"}
             </span>
             <SyncGruposButton comisionId={comision.id} />
           </>
+        )}
+        {comision.gruposImportadosEn && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">
+            Grupos importados · {comision.gruposImportadosEn.toLocaleDateString("es-AR")}
+          </span>
         )}
         {cantPendientesGoogleGroup > 0 && (
           <>
@@ -95,7 +102,7 @@ export default async function EditComisionPage(
         )}
       </div>
 
-      {cantPendientesGrupos > 0 && (
+      {!comision.gruposImportadosEn && cantPendientesGrupos > 0 && (
         <div
           className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6"
           data-testid="pendientes-grupos-lista"

@@ -286,12 +286,19 @@ describe("getRepoInfo", () => {
 
   it("devuelve el id numérico y la URL cuando el repo existe", async () => {
     mockReposGet.mockResolvedValue({
-      data: { id: 555666, html_url: "https://github.com/pdep-mn-utn/tp-ana" },
+      data: {
+        id: 555666,
+        html_url: "https://github.com/pdep-mn-utn/tp-ana",
+        description: "TP — PdeP",
+        created_at: "2026-08-23T12:00:00Z",
+      },
     });
 
     await expect(getRepoInfo("tp-ana")).resolves.toEqual({
       repoGithubId: "555666",
       repoUrl: "https://github.com/pdep-mn-utn/tp-ana",
+      description: "TP — PdeP",
+      createdAt: new Date("2026-08-23T12:00:00Z"),
     });
   });
 

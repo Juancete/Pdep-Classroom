@@ -13,6 +13,8 @@ vi.mock("@/lib/session", () => ({
 }));
 
 vi.mock("@/lib/repositories", () => ({
+  AssignmentNoEliminableError: class AssignmentNoEliminableError extends Error {},
+  AssignmentEstructuraInmutableError: class AssignmentEstructuraInmutableError extends Error {},
   getAssignment: (id: string) => mockGetAssignment(id),
   deleteAssignment: (id: string) => mockDeleteAssignment(id),
   updateAssignment: (id: string, data: unknown) => mockUpdateAssignment(id, data),

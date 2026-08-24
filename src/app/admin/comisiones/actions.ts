@@ -9,6 +9,7 @@ import {
   getAlumnosByComision,
   getAlumnosConGoogleGroupPendiente,
   ComisionActivaDuplicadaError,
+  marcarGruposImportados,
 } from "@/lib/repositories";
 import { getAsignacionesGrupos, getSheetNames, type AsignacionGrupoRow } from "@/lib/sheets";
 import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
@@ -257,6 +258,12 @@ export async function sincronizarGruposDeLaComision(
   const id = formData.get("comisionId") as string;
   const comision = await getComision(id);
   if (!comision) return { status: "error", message: "Comisión no encontrada" };
+  if (comision.gruposImportadosEn) {
+    return {
+      status: "error",
+      message: "Los grupos ya fueron importados. Classroom es ahora la fuente de verdad; administralos desde la app.",
+    };
+  }
 
   const alumnos = await getAlumnosByComision(id);
 
@@ -283,6 +290,8 @@ export async function sincronizarGruposDeLaComision(
       aunConError++;
     }
   }
+
+  if (aunConError === 0) await marcarGruposImportados(id);
 
   revalidatePath("/admin/comisiones");
   revalidatePath(`/admin/comisiones/${id}/edit`);
@@ -317,7 +326,8 @@ export async function sincronizarGoogleGroupsDeLaComision(
   let omitidos = 0;
   let aunConError = 0;
 
-  for (const alumno of alumnos) {
+  const lote = alumnos.slice(0, 20);
+  for (const alumno of lote) {
     try {
       const resultado = await intentarSincronizarGoogleGroup(
         alumno.githubUsername
@@ -339,5 +349,10 @@ export async function sincronizarGoogleGroupsDeLaComision(
 
   revalidatePath(`/admin/comisiones/${id}/edit`);
   revalidatePath("/perfil");
-  return { status: "ok", sincronizados, omitidos, aunConError };
+  return {
+    status: "ok",
+    sincronizados,
+    omitidos,
+    aunConError,
+  };
 }

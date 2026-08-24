@@ -331,7 +331,7 @@ export async function createEntrega(
   data: {
     assignmentId: string;
     repoName: string;
-    repoUrl: string;
+    repoUrl?: string;
     githubUsernames: string[];
     alumnoId?: string;
     grupoId?: string;
@@ -342,6 +342,7 @@ export async function createEntrega(
     // real: dos renames del mismo repo entregados fuera de orden ANTES de
     // que cualquier webhook haya podido guardar el id se pierden.
     repoGithubId?: string;
+    provisionEstado?: "pendiente" | "activa" | "fallida";
   },
   em?: EntityManager
 ): Promise<Entrega> {
@@ -355,6 +356,7 @@ export async function createEntrega(
   entrega.repoUrl = data.repoUrl;
   entrega.githubUsernames = data.githubUsernames;
   entrega.repoGithubId = data.repoGithubId;
+  entrega.provisionEstado = data.provisionEstado ?? "activa";
 
   if (data.alumnoId) {
     entrega.alumno = entityManager.getReference(Alumno, data.alumnoId);
@@ -367,6 +369,68 @@ export async function createEntrega(
   entityManager.persist(entrega);
   await entityManager.flush();
   return entrega;
+}
+
+const VENTANA_PROVISION_EN_VUELO_MS = 120_000;
+
+// Reclama el aprovisionamiento bajo lock. Si otra request ya lo está
+// ejecutando, devuelve null para que el segundo click observe la misma fila
+// pendiente sin volver a crear el repo en GitHub. Un intento abandonado se
+// puede reclamar de nuevo pasados dos minutos.
+export async function iniciarProvisionEntrega(entregaId: string): Promise<Entrega | null> {
+  const entityManager = await getEM();
+  return entityManager.transactional(async (transaction) => {
+    const entrega = await transaction.findOneOrFail(
+      Entrega,
+      { id: entregaId },
+      {
+        populate: ["assignment", "grupo", "alumno"],
+        lockMode: LockMode.PESSIMISTIC_WRITE,
+      }
+    );
+    if (entrega.provisionEstaActiva()) return entrega;
+    const enVueloDesde = entrega.provisionActualizadoEn?.getTime();
+    if (
+      entrega.provisionEstado === "pendiente" &&
+      entrega.provisionIntentos > 0 &&
+      enVueloDesde !== undefined &&
+      enVueloDesde > Date.now() - VENTANA_PROVISION_EN_VUELO_MS
+    ) {
+      return null;
+    }
+    entrega.iniciarProvision();
+    await transaction.flush();
+    return entrega;
+  });
+}
+
+export async function marcarCreacionGithubIniciada(entregaId: string): Promise<void> {
+  const entityManager = await getEM();
+  const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
+  entrega.marcarCreacionGithubIniciada();
+  await entityManager.flush();
+}
+
+export async function completarProvisionEntrega(
+  entregaId: string,
+  data: { repoName: string; repoUrl: string; repoGithubId?: string }
+): Promise<Entrega> {
+  const entityManager = await getEM();
+  const entrega = await entityManager.findOneOrFail(
+    Entrega,
+    { id: entregaId },
+    { populate: ["assignment", "grupo", "alumno"] }
+  );
+  entrega.completarProvision(data);
+  await entityManager.flush();
+  return entrega;
+}
+
+export async function fallarProvisionEntrega(entregaId: string, error: string): Promise<void> {
+  const entityManager = await getEM();
+  const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
+  entrega.fallarProvision(error.slice(0, 2_000));
+  await entityManager.flush();
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -401,11 +465,12 @@ export async function createOrGetEntrega(
   data: {
     assignmentId: string;
     repoName: string;
-    repoUrl: string;
+    repoUrl?: string;
     githubUsernames: string[];
     alumnoId?: string;
     grupoId?: string;
     repoGithubId?: string;
+    provisionEstado?: "pendiente" | "activa" | "fallida";
   },
   em?: EntityManager
 ): Promise<Entrega> {
@@ -435,11 +500,12 @@ export async function crearEntregaSiAssignmentDisponible(
   data: {
     assignmentId: string;
     repoName: string;
-    repoUrl: string;
+    repoUrl?: string;
     githubUsernames: string[];
     alumnoId?: string;
     grupoId?: string;
     repoGithubId?: string;
+    provisionEstado?: "pendiente" | "activa" | "fallida";
   },
   rol: RolDeUsuario
 ): Promise<Entrega> {

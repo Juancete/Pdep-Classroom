@@ -12,7 +12,7 @@ function SyncSubmitButton() {
       disabled={pending}
       className="inline-flex items-center gap-1.5 text-xs font-medium bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1 rounded-full transition-colors disabled:opacity-60"
     >
-      {pending ? "Sincronizando…" : "Resincronizar grupos"}
+      {pending ? "Importando…" : "Importar grupos desde Sheets"}
     </button>
   );
 }

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
-    "vercel-build": "npm run db:migration:up && npm run build",
+    "vercel-build": "npm run build",
+    "release:migrate": "mikro-orm migration:up",
     "start": "next start",
     "lint": "eslint .",
     "audit:prod": "pnpm audit --prod --audit-level high",

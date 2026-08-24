@@ -141,6 +141,7 @@ describe("navegación por rol", () => {
       "/admin/grupos",
       "/admin/comisiones",
       "/admin/alumnos",
+      "/admin/operaciones",
     ]);
   });
 

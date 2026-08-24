@@ -26,10 +26,7 @@ export default async function PerfilPage() {
   const googleGroupsConfigurado = isGoogleGroupsConfigured();
   if (alumno.tieneSyncPendiente(googleGroupsConfigurado)) {
     const tareas: Promise<unknown>[] = [];
-    if (
-      alumno.tieneSyncDeAlumnoFallido() ||
-      alumno.tieneSyncDeGruposFallido()
-    ) {
+    if (alumno.tieneSyncDeAlumnoFallido() || alumno.tieneSyncDeGruposFallido()) {
       tareas.push(
         (async () => {
           const comisionActiva = await getComisionActiva();
@@ -44,12 +41,9 @@ export default async function PerfilPage() {
               )
             );
           }
-          if (alumno.tieneSyncDeGruposFallido()) {
+          if (alumno.tieneSyncDeGruposFallido() && !comisionActiva.gruposImportadosEn) {
             tareasDeComision.push(
-              intentarSincronizarGrupos(
-                githubUsername,
-                comisionActiva
-              )
+              intentarSincronizarGrupos(githubUsername, comisionActiva)
             );
           }
           await Promise.allSettled(tareasDeComision);

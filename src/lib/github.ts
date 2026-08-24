@@ -195,6 +195,8 @@ export async function deleteRepo(repoName: string): Promise<DeleteRepoResult> {
 export interface RepoInfo {
   repoGithubId: string;
   repoUrl: string;
+  description: string | null;
+  createdAt: Date | null;
 }
 
 // Reemplaza a un simple repoExists(): boolean — cuando el repo ya existe
@@ -205,7 +207,12 @@ export async function getRepoInfo(repoName: string): Promise<RepoInfo | null> {
   const octokit = getOctokit();
   try {
     const { data } = await octokit.repos.get({ owner: ORG, repo: repoName });
-    return { repoGithubId: String(data.id), repoUrl: data.html_url };
+    return {
+      repoGithubId: String(data.id),
+      repoUrl: data.html_url,
+      description: data.description,
+      createdAt: data.created_at ? new Date(data.created_at) : null,
+    };
   } catch (error) {
     if (isRequestError(error) && error.status === 404) return null;
     handleOctokitError(error);

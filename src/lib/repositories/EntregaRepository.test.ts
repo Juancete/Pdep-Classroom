@@ -46,6 +46,7 @@ import {
   actualizarColaboradoresDeEntrega,
   getEntregaPorRepoGithubId,
   asegurarRepoGithubId,
+  iniciarProvisionEntrega,
 } from "./EntregaRepository";
 
 function fakeAssignmentDisponible(disponible: boolean) {
@@ -543,6 +544,38 @@ describe("EntregaRepository", () => {
       await asegurarRepoGithubId("e1", "999");
 
       expect(entrega.repoGithubId).toBe("555");
+      expect(mockEm.flush).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("iniciarProvisionEntrega", () => {
+    it("reclama y persiste el primer intento bajo lock", async () => {
+      const entrega = new Entrega();
+      entrega.provisionEstado = "pendiente";
+      entrega.provisionIntentos = 0;
+      mockEm.findOneOrFail.mockResolvedValueOnce(entrega);
+
+      await expect(iniciarProvisionEntrega("e1")).resolves.toBe(entrega);
+
+      expect(entrega.provisionIntentos).toBe(1);
+      expect(mockEm.findOneOrFail).toHaveBeenCalledWith(
+        Entrega,
+        { id: "e1" },
+        expect.objectContaining({ lockMode: LockMode.PESSIMISTIC_WRITE })
+      );
+      expect(mockEm.flush).toHaveBeenCalled();
+    });
+
+    it("no reclama otra vez un intento reciente en vuelo", async () => {
+      const entrega = new Entrega();
+      entrega.provisionEstado = "pendiente";
+      entrega.provisionIntentos = 1;
+      entrega.provisionActualizadoEn = new Date();
+      mockEm.findOneOrFail.mockResolvedValueOnce(entrega);
+
+      await expect(iniciarProvisionEntrega("e1")).resolves.toBeNull();
+
+      expect(entrega.provisionIntentos).toBe(1);
       expect(mockEm.flush).not.toHaveBeenCalled();
     });
   });
