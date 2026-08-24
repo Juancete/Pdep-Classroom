@@ -147,11 +147,17 @@ export default async function DashboardPage() {
                 ) : entrega ? (
                   <div className="flex flex-col items-end gap-1">
                     <span className="text-xs text-amber-700">
-                      {entrega.provisionEstado === "fallida"
-                        ? "No se pudo crear el repo. Podés reintentar."
-                        : "Estamos creando el repositorio."}
+                      {puedeAdministrar || assignment.permiteAccionesDeAlumno()
+                        ? entrega.provisionEstado === "fallida"
+                          ? "No se pudo crear el repo. Podés reintentar."
+                          : "Estamos creando el repositorio."
+                        : entrega.provisionEstado === "fallida"
+                          ? "No se pudo crear el repo antes de archivar el TP. Consultá al equipo docente."
+                          : "La creación del repo quedó pendiente antes de archivar el TP."}
                     </span>
-                    <AcceptButton assignmentId={assignment.id} />
+                    {(puedeAdministrar || assignment.permiteAccionesDeAlumno()) && (
+                      <AcceptButton assignmentId={assignment.id} />
+                    )}
                   </div>
                 ) : assignment.requiereSeleccionDeGrupo(user, grupo) ? (
                   <a

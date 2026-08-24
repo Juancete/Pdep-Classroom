@@ -1332,6 +1332,38 @@
           "enumItems": [],
           "mappedType": "datetime"
         },
+        "grupos_importacion_token": {
+          "name": "grupos_importacion_token",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "grupos_importacion_iniciada_en": {
+          "name": "grupos_importacion_iniciada_en",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
         "column_config": {
           "name": "column_config",
           "type": "jsonb",

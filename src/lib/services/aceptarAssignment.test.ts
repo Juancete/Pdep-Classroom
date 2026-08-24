@@ -190,6 +190,7 @@ describe("aceptarAssignment", () => {
         templateRepo: "kata-template",
         repoName: "kata-funcional-juangarcia",
         usernames: ["juangarcia"],
+        descripcion: "Kata Funcional — PdeP [pdep-entrega:e1]",
       })
     );
     expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalledWith(
@@ -288,7 +289,7 @@ describe("aceptarAssignment", () => {
     mockGetRepoInfo.mockResolvedValue({
       repoGithubId: "777888",
       repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
-      description: "Kata Funcional — PdeP",
+      description: "Título anterior — PdeP [pdep-entrega:e1]",
       createdAt: new Date("2026-08-23T12:00:01Z"),
     });
 
@@ -299,6 +300,31 @@ describe("aceptarAssignment", () => {
       "kata-funcional-juangarcia",
       ["juangarcia"]
     );
+    expect(mockCompletarProvision).toHaveBeenCalledWith(
+      "e1",
+      expect.objectContaining({ repoGithubId: "777888" })
+    );
+  });
+
+  it("reconcilia por repoGithubId persistido aunque la descripción sea anterior", async () => {
+    const inicio = new Date("2026-08-23T12:00:00Z");
+    mockIniciarProvision.mockResolvedValue(
+      makeEntrega({
+        provisionEstado: "fallida",
+        provisionCreacionIniciadaEn: inicio,
+        repoGithubId: "777888",
+      })
+    );
+    mockGetRepoInfo.mockResolvedValue({
+      repoGithubId: "777888",
+      repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-juangarcia",
+      description: "Descripción creada antes del marcador estable",
+      createdAt: new Date("2026-08-23T12:00:01Z"),
+    });
+
+    await aceptarAssignment("a1", makeUser());
+
+    expect(mockCrearEntrega).not.toHaveBeenCalled();
     expect(mockCompletarProvision).toHaveBeenCalledWith(
       "e1",
       expect.objectContaining({ repoGithubId: "777888" })

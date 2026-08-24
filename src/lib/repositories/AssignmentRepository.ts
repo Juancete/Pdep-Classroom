@@ -41,6 +41,14 @@ export class AssignmentEstructuraInmutableError extends Error {
   }
 }
 
+export class AssignmentTipoInmutableError extends AssignmentEstructuraInmutableError {
+  constructor() {
+    super(["el tipo"]);
+    this.message = "El tipo de un assignment no se puede cambiar después de crearlo.";
+    this.name = "AssignmentTipoInmutableError";
+  }
+}
+
 // Estados en los que un assignment puede aparecer en superficies de alumno.
 // Borrador nunca; el filtrado fino de "archivado solo si tiene entrega" lo
 // hace el caller (dashboard, /api/assignments) con `esVisibleParaAlumno`.
@@ -114,6 +122,9 @@ export async function updateAssignment(
   if (!assignment) return null;
 
   if (data.tipo !== undefined && data.tipo !== assignment.tipo) {
+    if (assignment.estadoNombre === "borrador") {
+      throw new AssignmentTipoInmutableError();
+    }
     throw new AssignmentEstructuraInmutableError(["el tipo"]);
   }
   if (assignment.estadoNombre !== "borrador") {

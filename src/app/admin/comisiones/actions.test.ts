@@ -14,7 +14,9 @@ const mockImportarAlumnosDeComision = vi.fn();
 const mockGetAlumnosConGoogleGroupPendiente = vi.fn();
 const mockIntentarSincronizarGoogleGroup = vi.fn();
 const mockIsGoogleGroupsConfigured = vi.fn();
-const mockMarcarGruposImportados = vi.fn();
+const mockReclamarImportacionGrupos = vi.fn();
+const mockCompletarImportacionGrupos = vi.fn();
+const mockLiberarImportacionGrupos = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
@@ -49,7 +51,12 @@ vi.mock("@/lib/repositories", () => ({
     mockGetAlumnosByComision(...args),
   getAlumnosConGoogleGroupPendiente: (...args: unknown[]) =>
     mockGetAlumnosConGoogleGroupPendiente(...args),
-  marcarGruposImportados: (...args: unknown[]) => mockMarcarGruposImportados(...args),
+  reclamarImportacionGrupos: (...args: unknown[]) =>
+    mockReclamarImportacionGrupos(...args),
+  completarImportacionGrupos: (...args: unknown[]) =>
+    mockCompletarImportacionGrupos(...args),
+  liberarImportacionGrupos: (...args: unknown[]) =>
+    mockLiberarImportacionGrupos(...args),
   LegajoConflictError: FakeLegajoConflictError,
   ComisionActivaDuplicadaError: FakeComisionActivaDuplicadaError,
 }));
@@ -399,17 +406,47 @@ describe("sincronizarGruposDeLaComision", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireAdmin.mockResolvedValue(undefined);
-    mockGetComision.mockResolvedValue(comision);
+    mockReclamarImportacionGrupos.mockResolvedValue({
+      estado: "reclamada",
+      comision,
+      token: "lease-1",
+    });
+    mockCompletarImportacionGrupos.mockResolvedValue(true);
+    mockLiberarImportacionGrupos.mockResolvedValue(undefined);
     mockGetAlumnosByComision.mockResolvedValue([]);
     mockIntentarSincronizarGrupos.mockResolvedValue(undefined);
     mockGetAsignacionesGrupos.mockResolvedValue(asignacionesFake);
   });
 
   it("devuelve error si la comisión no existe", async () => {
-    mockGetComision.mockResolvedValue(null);
+    mockReclamarImportacionGrupos.mockResolvedValue({ estado: "no_encontrada" });
     const result = await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
     expect(result).toEqual({ status: "error", message: "Comisión no encontrada" });
     expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+  });
+
+  it("no inicia otro lote mientras una importación conserva el lease", async () => {
+    mockReclamarImportacionGrupos.mockResolvedValue({ estado: "en_proceso" });
+
+    await expect(
+      sincronizarGruposDeLaComision({ status: "idle" }, makeFd())
+    ).resolves.toEqual({
+      status: "error",
+      message: "Ya hay una importación de grupos en proceso. Volvé a intentar en unos minutos.",
+    });
+    expect(mockGetAlumnosByComision).not.toHaveBeenCalled();
+  });
+
+  it("no reimporta una comisión cuyo bootstrap ya terminó", async () => {
+    mockReclamarImportacionGrupos.mockResolvedValue({ estado: "completada" });
+
+    await expect(
+      sincronizarGruposDeLaComision({ status: "idle" }, makeFd())
+    ).resolves.toEqual({
+      status: "error",
+      message: "Los grupos ya fueron importados. Classroom es ahora la fuente de verdad; administralos desde la app.",
+    });
+    expect(mockGetAlumnosByComision).not.toHaveBeenCalled();
   });
 
   it("devuelve ok con 0 sincronizados cuando no hay alumnos en la comisión", async () => {
@@ -417,6 +454,8 @@ describe("sincronizarGruposDeLaComision", () => {
     expect(result).toEqual({ status: "ok", sincronizados: 0, aunConError: 0 });
     expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
     expect(mockGetAsignacionesGrupos).not.toHaveBeenCalled();
+    expect(mockCompletarImportacionGrupos).toHaveBeenCalledWith("c1", "lease-1");
+    expect(mockLiberarImportacionGrupos).not.toHaveBeenCalled();
   });
 
   it("corre para todos los alumnos de la comisión (no solo los pendientes)", async () => {
@@ -460,10 +499,16 @@ describe("sincronizarGruposDeLaComision", () => {
       message: "No se pudo leer la hoja de grupos: rate limited",
     });
     expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+    expect(mockCompletarImportacionGrupos).not.toHaveBeenCalled();
+    expect(mockLiberarImportacionGrupos).toHaveBeenCalledWith("c1", "lease-1");
   });
 
   it("no lee la hoja si la comisión no tiene config de grupos", async () => {
-    mockGetComision.mockResolvedValue({ id: "c1", spreadsheetId: "sheet-xyz", columnConfig: {}, gruposConfig: () => undefined });
+    mockReclamarImportacionGrupos.mockResolvedValue({
+      estado: "reclamada",
+      comision: { id: "c1", spreadsheetId: "sheet-xyz", columnConfig: {}, gruposConfig: () => undefined },
+      token: "lease-1",
+    });
     mockGetAlumnosByComision.mockResolvedValue([{ githubUsername: "ana" }]);
 
     await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
@@ -490,6 +535,20 @@ describe("sincronizarGruposDeLaComision", () => {
     const result = await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
 
     expect(result).toEqual({ status: "ok", sincronizados: 2, aunConError: 1 });
+    expect(mockCompletarImportacionGrupos).not.toHaveBeenCalled();
+    expect(mockLiberarImportacionGrupos).toHaveBeenCalledWith("c1", "lease-1");
+  });
+
+  it("libera el lease si no puede completar la importación", async () => {
+    mockCompletarImportacionGrupos.mockResolvedValue(false);
+
+    await expect(
+      sincronizarGruposDeLaComision({ status: "idle" }, makeFd())
+    ).resolves.toEqual({
+      status: "error",
+      message: "La importación perdió su reserva. Volvé a intentarla.",
+    });
+    expect(mockLiberarImportacionGrupos).toHaveBeenCalledWith("c1", "lease-1");
   });
 
   it("requiere admin antes de ejecutar", async () => {

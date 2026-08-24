@@ -1,6 +1,7 @@
 import { getEM } from "@/lib/db";
 import { Alumno, Assignment, Comision } from "@/domain/entities";
 import { LockMode } from "@mikro-orm/core";
+import { randomUUID } from "node:crypto";
 import { type ColumnConfig, DEFAULT_COLUMN_CONFIG } from "@/types";
 import { extractDbErrorCode, UNIQUE_VIOLATION } from "./db-errors";
 
@@ -153,9 +154,78 @@ export async function deleteComision(id: string): Promise<void> {
   });
 }
 
-export async function marcarGruposImportados(id: string): Promise<void> {
+const VENTANA_IMPORTACION_GRUPOS_MS = 5 * 60_000;
+
+export type ReclamoImportacionGrupos =
+  | { estado: "reclamada"; comision: Comision; token: string }
+  | { estado: "completada" }
+  | { estado: "en_proceso" }
+  | { estado: "no_encontrada" };
+
+export async function reclamarImportacionGrupos(
+  id: string
+): Promise<ReclamoImportacionGrupos> {
   const entityManager = await getEM();
-  const comision = await entityManager.findOneOrFail(Comision, { id });
-  comision.gruposImportadosEn = new Date();
-  await entityManager.flush();
+  return entityManager.transactional(async (transaction) => {
+    const comision = await transaction.findOne(
+      Comision,
+      { id },
+      { lockMode: LockMode.PESSIMISTIC_WRITE }
+    );
+    if (!comision) return { estado: "no_encontrada" };
+    if (comision.gruposImportadosEn) return { estado: "completada" };
+
+    const inicio = comision.gruposImportacionIniciadaEn?.getTime();
+    if (
+      comision.gruposImportacionToken &&
+      inicio !== undefined &&
+      inicio > Date.now() - VENTANA_IMPORTACION_GRUPOS_MS
+    ) {
+      return { estado: "en_proceso" };
+    }
+
+    const token = randomUUID();
+    comision.gruposImportacionToken = token;
+    comision.gruposImportacionIniciadaEn = new Date();
+    await transaction.flush();
+    return { estado: "reclamada", comision, token };
+  });
+}
+
+export async function completarImportacionGrupos(
+  id: string,
+  token: string
+): Promise<boolean> {
+  const entityManager = await getEM();
+  return entityManager.transactional(async (transaction) => {
+    const comision = await transaction.findOne(
+      Comision,
+      { id },
+      { lockMode: LockMode.PESSIMISTIC_WRITE }
+    );
+    if (!comision || comision.gruposImportacionToken !== token) return false;
+    comision.gruposImportadosEn = new Date();
+    comision.gruposImportacionToken = undefined;
+    comision.gruposImportacionIniciadaEn = undefined;
+    await transaction.flush();
+    return true;
+  });
+}
+
+export async function liberarImportacionGrupos(
+  id: string,
+  token: string
+): Promise<void> {
+  const entityManager = await getEM();
+  await entityManager.transactional(async (transaction) => {
+    const comision = await transaction.findOne(
+      Comision,
+      { id },
+      { lockMode: LockMode.PESSIMISTIC_WRITE }
+    );
+    if (!comision || comision.gruposImportacionToken !== token) return;
+    comision.gruposImportacionToken = undefined;
+    comision.gruposImportacionIniciadaEn = undefined;
+    await transaction.flush();
+  });
 }

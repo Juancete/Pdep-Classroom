@@ -9,7 +9,9 @@ import {
   getAlumnosByComision,
   getAlumnosConGoogleGroupPendiente,
   ComisionActivaDuplicadaError,
-  marcarGruposImportados,
+  reclamarImportacionGrupos,
+  completarImportacionGrupos,
+  liberarImportacionGrupos,
 } from "@/lib/repositories";
 import { getAsignacionesGrupos, getSheetNames, type AsignacionGrupoRow } from "@/lib/sheets";
 import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
@@ -256,46 +258,68 @@ export async function sincronizarGruposDeLaComision(
   await requireAdmin();
 
   const id = formData.get("comisionId") as string;
-  const comision = await getComision(id);
-  if (!comision) return { status: "error", message: "Comisión no encontrada" };
-  if (comision.gruposImportadosEn) {
+  const reclamo = await reclamarImportacionGrupos(id);
+  if (reclamo.estado === "no_encontrada") {
+    return { status: "error", message: "Comisión no encontrada" };
+  }
+  if (reclamo.estado === "completada") {
     return {
       status: "error",
       message: "Los grupos ya fueron importados. Classroom es ahora la fuente de verdad; administralos desde la app.",
     };
   }
-
-  const alumnos = await getAlumnosByComision(id);
-
-  // Lectura única de la hoja de grupos: con N alumnos evitamos N lecturas a
-  // Sheets (cada alumno releía la hoja entera). Si la lectura falla reportamos
-  // el error global y no modificamos los flags.
-  let asignaciones: AsignacionGrupoRow[] | undefined;
-  const gruposConfig = comision.gruposConfig();
-  if (gruposConfig && alumnos.length > 0) {
-    try {
-      asignaciones = await getAsignacionesGrupos(comision.spreadsheetId, gruposConfig);
-    } catch (error) {
-      return { status: "error", message: (error as Error).message };
-    }
+  if (reclamo.estado === "en_proceso") {
+    return {
+      status: "error",
+      message: "Ya hay una importación de grupos en proceso. Volvé a intentar en unos minutos.",
+    };
   }
 
-  let sincronizados = 0;
-  let aunConError = 0;
-  for (const alumno of alumnos) {
-    try {
-      await intentarSincronizarGrupos(alumno.githubUsername, comision, asignaciones);
-      sincronizados++;
-    } catch {
-      aunConError++;
+  const { comision, token } = reclamo;
+  let importacionCompletada = false;
+  try {
+    const alumnos = await getAlumnosByComision(id);
+
+    // Lectura única de la hoja de grupos: con N alumnos evitamos N lecturas a
+    // Sheets (cada alumno releía la hoja entera). Si la lectura falla reportamos
+    // el error global y no modificamos los flags.
+    let asignaciones: AsignacionGrupoRow[] | undefined;
+    const gruposConfig = comision.gruposConfig();
+    if (gruposConfig && alumnos.length > 0) {
+      try {
+        asignaciones = await getAsignacionesGrupos(comision.spreadsheetId, gruposConfig);
+      } catch (error) {
+        return { status: "error", message: (error as Error).message };
+      }
     }
+
+    let sincronizados = 0;
+    let aunConError = 0;
+    for (const alumno of alumnos) {
+      try {
+        await intentarSincronizarGrupos(alumno.githubUsername, comision, asignaciones);
+        sincronizados++;
+      } catch {
+        aunConError++;
+      }
+    }
+
+    if (aunConError === 0) {
+      importacionCompletada = await completarImportacionGrupos(id, token);
+      if (!importacionCompletada) {
+        return {
+          status: "error",
+          message: "La importación perdió su reserva. Volvé a intentarla.",
+        };
+      }
+    }
+
+    revalidatePath("/admin/comisiones");
+    revalidatePath(`/admin/comisiones/${id}/edit`);
+    return { status: "ok", sincronizados, aunConError };
+  } finally {
+    if (!importacionCompletada) await liberarImportacionGrupos(id, token);
   }
-
-  if (aunConError === 0) await marcarGruposImportados(id);
-
-  revalidatePath("/admin/comisiones");
-  revalidatePath(`/admin/comisiones/${id}/edit`);
-  return { status: "ok", sincronizados, aunConError };
 }
 
 export type SyncGoogleGroupState =

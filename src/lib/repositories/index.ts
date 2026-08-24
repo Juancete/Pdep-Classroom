@@ -32,6 +32,7 @@ export {
   ComisionActivaRequeridaError,
   AssignmentNoEliminableError,
   AssignmentEstructuraInmutableError,
+  AssignmentTipoInmutableError,
 } from "./AssignmentRepository";
 
 export {
@@ -90,11 +91,14 @@ export {
   createComision,
   updateComision,
   deleteComision,
-  marcarGruposImportados,
+  reclamarImportacionGrupos,
+  completarImportacionGrupos,
+  liberarImportacionGrupos,
   ComisionActivaDuplicadaError,
   ComisionNoEliminableError,
 } from "./ComisionRepository";
 export type { ComisionFormData } from "./ComisionRepository";
+export type { ReclamoImportacionGrupos } from "./ComisionRepository";
 
 export {
   registrarErrorInesperado,

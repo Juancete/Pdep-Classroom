@@ -3,6 +3,9 @@ name: Migrate production database
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: production-database-migration
   cancel-in-progress: false

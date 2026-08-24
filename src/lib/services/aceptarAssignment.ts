@@ -41,16 +41,17 @@ export class RepositorioPreexistenteNoAdministradoError extends Error {
 }
 
 function repoCompatibleConIntento(
-  intento: { provisionCreacionIniciadaEn?: Date },
+  intento: { provisionCreacionIniciadaEn?: Date; repoGithubId?: string },
   repo: RepoInfo,
-  descripcionEsperada: string
+  marcadorEntrega: string
 ): boolean {
   const inicio = intento.provisionCreacionIniciadaEn;
   if (!inicio || !repo.createdAt) return false;
   // GitHub informa created_at con precisión de segundos; toleramos cinco
   // segundos hacia atrás respecto del timestamp local tomado antes del POST.
   return (
-    repo.description === descripcionEsperada &&
+    ((intento.repoGithubId !== undefined && intento.repoGithubId === repo.repoGithubId) ||
+      repo.description?.includes(marcadorEntrega) === true) &&
     repo.createdAt.getTime() >= inicio.getTime() - 5_000
   );
 }
@@ -89,7 +90,6 @@ export async function aceptarAssignment(
         slug: assignment.slug,
         githubUsername: usernames[0]!,
       });
-  const descripcionRepo = `${assignment.titulo} — PdeP`;
   const entrega = await crearEntregaSiAssignmentDisponible(
     {
       assignmentId: assignment.id,
@@ -101,6 +101,8 @@ export async function aceptarAssignment(
     },
     user.rol
   );
+  const marcadorEntrega = `[pdep-entrega:${entrega.id}]`;
+  const descripcionRepo = `${assignment.titulo} — PdeP ${marcadorEntrega}`;
   if (entrega.provisionEstaActiva()) return entrega;
 
   const intento = await iniciarProvisionEntrega(entrega.id);
@@ -115,7 +117,7 @@ export async function aceptarAssignment(
     throw error;
   }
   if (repoPreexistente) {
-    if (!repoCompatibleConIntento(intento, repoPreexistente, descripcionRepo)) {
+    if (!repoCompatibleConIntento(intento, repoPreexistente, marcadorEntrega)) {
       const colision = new RepositorioPreexistenteNoAdministradoError(repoName);
       await fallarProvisionEntrega(entrega.id, colision.message);
       throw colision;
