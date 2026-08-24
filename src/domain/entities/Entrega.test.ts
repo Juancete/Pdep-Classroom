@@ -25,6 +25,39 @@ describe("Entrega.hasRepo", () => {
   });
 });
 
+describe("aprovisionamiento de Entrega", () => {
+  it("no considera activa una entrega cuyo repo fue borrado", () => {
+    const entrega = nuevaEntrega({
+      repoUrl: "https://github.com/org/repo",
+      provisionEstado: "activa",
+      repoDeleted: true,
+    });
+
+    expect(entrega.provisionEstaActiva()).toBe(false);
+  });
+
+  it("registra intentos, error y recuperación", () => {
+    const entrega = nuevaEntrega({ provisionEstado: "fallida" });
+
+    entrega.iniciarProvision();
+    expect(entrega.provisionEstado).toBe("pendiente");
+    expect(entrega.provisionIntentos).toBe(1);
+
+    entrega.fallarProvision("GitHub no respondió");
+    expect(entrega.provisionEstado).toBe("fallida");
+    expect(entrega.provisionUltimoError).toBe("GitHub no respondió");
+
+    entrega.completarProvision({
+      repoName: "kata-ana",
+      repoUrl: "https://github.com/org/kata-ana",
+      repoGithubId: "123",
+    });
+    expect(entrega.provisionEstaActiva()).toBe(true);
+    expect(entrega.provisionUltimoError).toBeUndefined();
+    expect(entrega.repoGithubId).toBe("123");
+  });
+});
+
 describe("Entrega.repoFueBorrado", () => {
   it("devuelve true cuando hay repoName y repoDeleted es true", () => {
     const entrega = nuevaEntrega({ repoName: "org-repo", repoDeleted: true });

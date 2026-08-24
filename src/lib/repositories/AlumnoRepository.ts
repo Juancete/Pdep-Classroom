@@ -267,7 +267,10 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
   return dataList.length;
 }
 
-export async function countAlumnos(): Promise<number> {
+export async function countAlumnos(comisionId?: string): Promise<number> {
   const entityManager = await getEM();
-  return entityManager.count(Alumno, {});
+  return entityManager.count(
+    Alumno,
+    comisionId ? { comision: { id: comisionId } } : {}
+  );
 }

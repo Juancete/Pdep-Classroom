@@ -222,6 +222,11 @@ por comisión al mapear las columnas de esa hoja:
 Un alumno puede figurar en un grupo distinto por cada paradigma; si una celda queda vacía, no
 sincroniza grupo para ese paradigma.
 
+La hoja es sólo la fuente de **carga inicial**. Después de ejecutar “Importar grupos desde Sheets”
+para una comisión, la base de Classroom pasa a ser la fuente de verdad: las altas, bajas y cambios
+se hacen desde la aplicación y una sincronización posterior no vuelve a agregar miembros quitados
+manualmente. La fecha de esa importación queda visible en la edición de la comisión.
+
 ### 5. Configurar la base de datos
 
 La app usa PostgreSQL via MikroORM. El esquema se crea con migraciones.
@@ -317,15 +322,18 @@ O desde el dashboard de Vercel: **Settings → Environment Variables → Add**.
 
 **Migraciones en producción:**
 
-El script `vercel-build` (`package.json`) corre `pnpm db:migration:up` **antes** de cada build:
+Las migraciones están separadas del build: `vercel-build` sólo compila. Esto evita que dos builds
+de Vercel intenten modificar el schema en paralelo. Antes de promover una versión que requiere un
+schema nuevo hay que ejecutar manualmente el workflow **Migrate production database** de GitHub
+Actions, configurado con el secret `DATABASE_URL` en el environment protegido `production`.
 
-```json
-"vercel-build": "npm run db:migration:up && npm run build"
+```bash
+# Alternativa equivalente desde una terminal autorizada
+DATABASE_URL="postgresql://..." pnpm release:migrate
 ```
 
-Es decir, las migraciones pendientes se aplican solas en cada deploy — no hace falta correrlas a
-mano contra Neon. La implicancia: toda migración nueva tiene que ser segura de correr desatendida
-en producción (idempotente, sin downtime largo, sin asumir que alguien va a mirar la salida).
+La secuencia de release es: backup/restore point, migración, deploy, smoke test. El detalle y el
+procedimiento de recuperación están en [`docs/production-runbook.md`](docs/production-runbook.md).
 
 #### Scripts de DB disponibles
 
@@ -409,29 +417,26 @@ vercel env add NEXTAUTH_SECRET               # npx auth secret
 vercel env add ADMIN_GITHUB_USERNAMES        # usernames separados por coma
 ```
 
-**Acceso a GitHub para crear/borrar repos** — usar la GitHub App (recomendado) o el PAT, no ambos:
+**Acceso a GitHub para crear/borrar repos** — en producción se exige la GitHub App. El PAT queda
+sólo como fallback de desarrollo local:
 
 ```bash
-# Opción A: GitHub App instalada en la org (recomendado)
+# GitHub App instalada en la org
 vercel env add GITHUB_APP_ID
 vercel env add GITHUB_APP_PRIVATE_KEY        # base64 del .pem, sin saltos de línea
 vercel env add GITHUB_APP_INSTALLATION_ID
 
-# Opción B: PAT clásico (fallback, ver §3) — si falta el trío de arriba, se usa este
-vercel env add GITHUB_PAT
-
 vercel env add GITHUB_ORG                    # opcional, default "pdep-mn-utn" si se omite
 ```
 
-**Google Sheets** — requerida sólo si usás el registro/sincronización de alumnos desde planilla:
+**Google Sheets** — requerida en producción para el registro/sincronización de alumnos:
 
 ```bash
 vercel env add GOOGLE_SERVICE_ACCOUNT_KEY    # base64 del JSON
 ```
 
-**Google Groups (opcional)** — si se omiten ambas, el feature queda desactivado sin romper nada;
-si se setea sólo `GOOGLE_GROUP_EMAIL` sin la otra, el server **no arranca** (ver §"Suscripción
-automática a Google Group" más abajo):
+**Google Groups** — las dos variables son requeridas en producción; si falta una, la validación de
+arranque impide publicar una versión que no podría suscribir alumnos:
 
 ```bash
 vercel env add GOOGLE_GROUP_EMAIL
@@ -461,14 +466,17 @@ vercel env add NOMBRE_VARIABLE
 
 #### 9.3 Migraciones en producción
 
-No hace falta correrlas a mano: `vercel-build` ejecuta `pnpm db:migration:up` antes de cada build
-(ver §5.2). Si igual necesitás aplicarlas manualmente contra Neon (por ejemplo, para probar una
-migración antes de deployar), apuntá `DATABASE_URL` a la connection string de Neon:
+Antes de promover el deploy, ejecutar **Actions → Migrate production database → Run workflow** y
+esperar que termine correctamente. El environment `production` debe contener `DATABASE_URL` y
+puede requerir aprobación docente. También se puede ejecutar el mismo comando manualmente:
 
 ```bash
 DATABASE_URL="postgresql://user:pass@ep-xxx.neon.tech/pdep_classroom?sslmode=require" \
-  pnpm db:migration:up
+  pnpm release:migrate
 ```
+
+No habilitar un auto-deploy de producción que pueda adelantarse a este paso. Los previews sí pueden
+seguir construyéndose normalmente porque el build no toca la base.
 
 #### 9.4 Actualizar URLs de callback
 
@@ -707,7 +715,8 @@ inmediato, rompiendo la exclusión mutua justo en el caso que el reproceso exist
 
 ### Reintentos
 
-Un delivery `fallido` (o `recibido`/`procesando` abandonado) se puede reprocesar con
+Un delivery `fallido` (o `recibido`/`procesando` abandonado) se puede reprocesar desde la pantalla
+admin **Operación** o con
 `POST /api/webhooks/github/reprocesar` (sólo admin), con `{ "deliveryId": "..." }` para uno puntual
 o sin body para tomar hasta 50 candidatos en orden de llegada — cada uno se reclama atómicamente
 antes de procesarse. El schema es estricto: un typo en la clave (`deliverId` en vez de
@@ -921,14 +930,17 @@ El flujo de registro reemplaza la carga manual en la planilla:
 
 La **DB es la autoridad** para la coherencia legajo↔GitHub (ahí se valida y se rechazan
 duplicados); la planilla se mantiene como espejo para uso de los docentes. La sincronización de
-grupos desde Sheets es la excepción: ahí la planilla sigue siendo la entrada, aunque sólo agrega
-membresías, nunca las saca (ver [issue #28](https://github.com/Juancete/Pdep-Classroom/issues/28)).
+grupos desde Sheets es una carga inicial por comisión; una vez importada, los grupos se administran
+en Classroom y la DB queda como autoridad.
 
 ## Suscripción automática a Google Group
 
 Al completarse el alta de un alumno, lo suscribimos al Google Group de la materia — así el docente no tiene que agregarlo a mano y el alumno empieza a recibir los mails del grupo desde el primer día.
 
-El feature es **opcional**: si las variables de entorno no están configuradas, el endpoint de registro no hace nada con Groups. Si están configuradas y la suscripción falla (permisos, red, etc.), el alta del alumno **igual se completa** y se le muestra un aviso al alumno para que avise al docente. El detalle del error queda en los logs del server.
+En producción el feature es obligatorio y la configuración se valida al arrancar. Si la
+suscripción falla por un problema transitorio (permisos, red, etc.), el alta del alumno **igual se
+completa** y queda una reconciliación pendiente visible para el docente. En desarrollo se puede
+omitir la integración.
 
 Si un alumno ya era miembro del grupo (por ejemplo, se registró, lo dieron de baja y se vuelve a registrar), la API de Google responde 409 y tratamos ese caso como éxito silencioso — la UI no le muestra nada especial.
 
@@ -936,8 +948,8 @@ Si un alumno ya era miembro del grupo (por ejemplo, se registró, lo dieron de b
 
 | Variable | Rol |
 |---|---|
-| `GOOGLE_GROUP_EMAIL` | Email del grupo al que suscribimos a los alumnos (ej: `pdep-2026@googlegroups.com`). Dejalo vacío para desactivar el feature. |
-| `GOOGLE_WORKSPACE_ADMIN_EMAIL` | Usuario admin del Workspace que la service account impersona para poder agregar miembros al grupo. Obligatorio si `GOOGLE_GROUP_EMAIL` está seteada. |
+| `GOOGLE_GROUP_EMAIL` | Email del grupo al que suscribimos a los alumnos (ej: `pdep-2026@googlegroups.com`). |
+| `GOOGLE_WORKSPACE_ADMIN_EMAIL` | Usuario admin del Workspace que la service account impersona para poder agregar miembros al grupo. |
 
 Si seteás `GOOGLE_GROUP_EMAIL` sin `GOOGLE_WORKSPACE_ADMIN_EMAIL`, el server falla al arrancar (ver [`src/instrumentation.ts`](src/instrumentation.ts)) — preferimos romper el boot antes que dejar que la misconfig le caiga al alumno en la cara.
 
@@ -993,8 +1005,8 @@ Reutilizamos la service account que ya está en `GOOGLE_SERVICE_ACCOUNT_KEY` —
 - [x] Ciclo de vida de assignments (borrador/publicado/archivado) con auditoría de quién publicó o archivó
 - [x] Auto-gestión de grupos: crear, unirse, salir y cambiarse, con administración manual desde el panel docente
 - [x] Procesar eventos de GitHub mediante webhooks ([#60](https://github.com/Juancete/Pdep-Classroom/issues/60)) — ver [Webhooks de GitHub](#webhooks-de-github); cubre `check_suite`, `push`, `repository` y `member`
-- [ ] Observabilidad ([#18](https://github.com/Juancete/Pdep-Classroom/issues/18)) — tabla `error_log` + pantalla `/admin/errores` + badge en el header con no leídos (PR 2 del refactor de logging, hoy los 500 solo logguean por pino a Vercel)
-- [ ] Reconciliar grupos importados desde Sheets en vez de sólo acumular miembros ([#28](https://github.com/Juancete/Pdep-Classroom/issues/28)) — hoy la sync es puramente aditiva y puede pisar una baja o un cambio hecho a mano (ver "Registro de alumnos" más arriba)
+- [x] Observabilidad ([#18](https://github.com/Juancete/Pdep-Classroom/issues/18)) — tabla `error_log`, pantalla `/admin/errores`, badge de pendientes y diagnóstico de integraciones/webhooks en `/admin/operaciones`
+- [x] Definir autoridad de grupos ([#28](https://github.com/Juancete/Pdep-Classroom/issues/28)) — Sheets se importa una sola vez por comisión y luego Classroom es la fuente de verdad
 
 ## API de GitHub — Estabilidad
 

@@ -8,11 +8,15 @@ import type { DeleteAssignmentReposResult } from "@/lib/services/borrarRepositor
 
 export function DeleteReposButton({
   assignmentId,
+  assignmentSlug = assignmentId,
   activeRepoCount,
+  deletionEnabled = true,
   compact = false,
 }: {
   assignmentId: string;
+  assignmentSlug?: string;
   activeRepoCount: number;
+  deletionEnabled?: boolean;
   /** Ícono solo, sin el texto del botón — para filas angostas de tabla. */
   compact?: boolean;
 }) {
@@ -21,16 +25,34 @@ export function DeleteReposButton({
   const [result, setResult] = useState<DeleteAssignmentReposResult | null>(null);
 
   async function handleDelete() {
-    if (
-      !confirm(
-        `¿Estás seguro? Esto eliminará ${activeRepoCount} ${activeRepoCount === 1 ? "repo" : "repos"} de GitHub. Esta acción no se puede deshacer.`
-      )
-    )
-      return;
-
+    if (!confirm(
+      `Vas a revisar ${activeRepoCount} ${activeRepoCount === 1 ? "repo" : "repos"} de GitHub antes de eliminarlos.`
+    )) return;
     setResult(null);
     const responseResult = await call(async () => {
-      const response = await fetch(`/api/assignments/${assignmentId}/repos`, { method: "DELETE" });
+      const previewResponse = await fetch(`/api/assignments/${assignmentId}/repos`);
+      if (!previewResponse.ok) {
+        const body = await previewResponse.json().catch(() => ({}));
+        throw new Error(body.error ?? `Error ${previewResponse.status}`);
+      }
+      const preview = (await previewResponse.json()) as { repos?: string[]; slug?: string };
+      const repos = Array.isArray(preview.repos)
+        ? preview.repos
+        : Array.from({ length: activeRepoCount }, (_, index) => `repositorio ${index + 1}`);
+      const visibles = repos.slice(0, 20).map((repo) => `• ${repo}`).join("\n");
+      const restantes = repos.length > 20
+        ? `\n…y ${repos.length - 20} repositorios más.`
+        : "";
+      if (!confirm(`Se eliminarán estos repositorios de GitHub:\n\n${visibles}${restantes}\n\nEsta acción no se puede deshacer.`)) {
+        return null;
+      }
+      const confirmation = prompt(`Escribí ${assignmentSlug} para confirmar:`);
+      if (confirmation === null) return null;
+      const response = await fetch(`/api/assignments/${assignmentId}/repos`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation }),
+      });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.error ?? `Error ${response.status}`);
@@ -43,7 +65,7 @@ export function DeleteReposButton({
     }
   }
 
-  if (activeRepoCount === 0 && !result) return null;
+  if (!deletionEnabled || (activeRepoCount === 0 && !result)) return null;
 
   const failedResults = result?.results.filter(
     (item) => item.status === "failed"

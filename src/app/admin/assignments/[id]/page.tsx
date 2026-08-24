@@ -122,6 +122,9 @@ export default async function AssignmentDetailPage(
     repoName: entrega.repoName,
     repoUrl: entrega.repoUrl,
     repoDeleted: entrega.repoDeleted,
+    provisionEstado: entrega.provisionEstado,
+    provisionUltimoError: entrega.provisionUltimoError,
+    provisionIntentos: entrega.provisionIntentos,
     estadoRepo: entrega.estadoRepo(),
     createdAt: new Date(entrega.createdAt).toLocaleDateString("es-AR"),
     nombreCompleto: entrega.githubUsernames
@@ -160,6 +163,8 @@ export default async function AssignmentDetailPage(
         <div className="flex items-center gap-3">
           <DeleteReposButton
             assignmentId={assignment.id}
+            assignmentSlug={assignment.slug}
+            deletionEnabled={assignment.estadoNombre === "archivado"}
             activeRepoCount={
               entregas.filter(
                 (entrega) => Boolean(entrega.repoName) && !entrega.repoDeleted

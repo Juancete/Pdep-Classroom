@@ -3,6 +3,7 @@
 import { requireAdmin } from "@/lib/session";
 import {
   ComisionActivaRequeridaError,
+  AssignmentEstructuraInmutableError,
   createAssignment,
   updateAssignment,
 } from "@/lib/repositories";
@@ -61,6 +62,13 @@ export async function actualizarAssignment(
     return { ok: false, errors: result.error.flatten().fieldErrors };
   }
 
-  await updateAssignment(id, result.data);
+  try {
+    await updateAssignment(id, result.data);
+  } catch (error) {
+    if (error instanceof AssignmentEstructuraInmutableError) {
+      return { ok: false, errors: {}, formError: error.message };
+    }
+    throw error;
+  }
   redirect("/admin/assignments");
 }

@@ -171,3 +171,55 @@ export async function getDeliveriesReprocesables(
   });
   return deliveries.map((delivery) => delivery.id);
 }
+
+export type WebhookDeliveryOverview = {
+  pendientes: number;
+  fallidos: number;
+  ultimoRecibidoEn: Date | null;
+  items: Array<{
+    id: string;
+    deliveryId: string;
+    evento: string;
+    accion?: string;
+    repoName?: string;
+    estadoProcesamiento: NombreEstadoDelivery;
+    intentos: number;
+    error: string | null;
+    recibidoEn: Date;
+  }>;
+};
+
+export async function getWebhookDeliveryOverview(limit = 50): Promise<WebhookDeliveryOverview> {
+  const entityManager = await getEM();
+  const [items, pendientes, fallidos, ultimo] = await Promise.all([
+    entityManager.find(GithubWebhookDelivery, {}, {
+      orderBy: { recibidoEn: "desc" },
+      limit,
+      fields: [
+        "id",
+        "deliveryId",
+        "evento",
+        "accion",
+        "repoName",
+        "estadoProcesamiento",
+        "intentos",
+        "error",
+        "recibidoEn",
+      ],
+    }),
+    entityManager.count(GithubWebhookDelivery, {
+      estadoProcesamiento: { $in: ["recibido", "procesando"] },
+    }),
+    entityManager.count(GithubWebhookDelivery, { estadoProcesamiento: "fallido" }),
+    entityManager.findOne(GithubWebhookDelivery, {}, {
+      orderBy: { recibidoEn: "desc" },
+      fields: ["recibidoEn"],
+    }),
+  ]);
+  return {
+    items,
+    pendientes,
+    fallidos,
+    ultimoRecibidoEn: ultimo?.recibidoEn ?? null,
+  };
+}

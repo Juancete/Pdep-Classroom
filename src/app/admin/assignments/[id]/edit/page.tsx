@@ -66,6 +66,7 @@ export default async function EditAssignmentPage(
           ...assignment.extraFormDefaults(),
         }}
         submitLabel="Guardar cambios"
+        structuralLocked={assignment.estadoNombre !== "borrador"}
       />
     </div>
   );

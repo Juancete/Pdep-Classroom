@@ -1,10 +1,6 @@
 import type { Comision } from "@/domain/entities";
 import { upsertAlumnos } from "@/lib/repositories";
 import { getAlumnos } from "@/lib/sheets";
-import {
-  ejecutarHooksPostConfirmacion,
-  HOOKS_IMPORTACION_ALUMNO,
-} from "./hooksPostConfirmacion";
 
 export type ResultadoImportacionAlumnos = {
   sincronizados: number;
@@ -40,18 +36,8 @@ export async function importarAlumnosDeComision(
     alumnos.map((alumno) => ({ ...alumno, comision }))
   );
 
-  let conErrorDeGrupo = 0;
-  for (const alumno of alumnos) {
-    const { groupSubscription } = await ejecutarHooksPostConfirmacion(
-      {
-        githubUsername: alumno.githubUsername,
-        email: alumno.email,
-        comision,
-      },
-      HOOKS_IMPORTACION_ALUMNO
-    );
-    if (groupSubscription === "error") conErrorDeGrupo++;
-  }
-
-  return { sincronizados, conErrorDeGrupo };
+  // Las integraciones externas se procesan desde acciones administrativas
+  // reintentables y acotadas. Una importación grande no debe agotar el
+  // timeout de la request por suscribir alumnos uno por uno.
+  return { sincronizados, conErrorDeGrupo: 0 };
 }

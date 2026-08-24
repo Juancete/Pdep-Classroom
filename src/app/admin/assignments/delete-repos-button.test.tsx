@@ -27,6 +27,7 @@ describe("DeleteReposButton", () => {
     vi.clearAllMocks();
     vi.stubGlobal("fetch", vi.fn());
     vi.stubGlobal("confirm", vi.fn());
+    vi.stubGlobal("prompt", vi.fn(() => "a1"));
   });
 
   afterEach(() => {
@@ -90,9 +91,10 @@ describe("DeleteReposButton", () => {
     render(<DeleteReposButton assignmentId="xyz" activeRepoCount={2} />);
     await user.click(screen.getByRole("button"));
 
-    expect(fetch).toHaveBeenCalledWith("/api/assignments/xyz/repos", {
-      method: "DELETE",
-    });
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/assignments/xyz/repos",
+      expect.objectContaining({ method: "DELETE" })
+    );
   });
 
   it("llama a router.refresh al completar", async () => {
@@ -155,7 +157,10 @@ describe("DeleteReposButton", () => {
     render(<DeleteReposButton assignmentId="xyz" activeRepoCount={2} compact />);
     await user.click(screen.getByRole("button"));
 
-    expect(fetch).toHaveBeenCalledWith("/api/assignments/xyz/repos", { method: "DELETE" });
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/assignments/xyz/repos",
+      expect.objectContaining({ method: "DELETE" })
+    );
     await screen.findByText(/Se confirmaron 2 de 2 repositorios/);
   });
 
