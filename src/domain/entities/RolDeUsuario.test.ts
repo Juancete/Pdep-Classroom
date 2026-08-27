@@ -143,6 +143,9 @@ describe("navegación por rol", () => {
       "/admin/alumnos",
       "/admin/operaciones",
     ]);
+    expect(items.find((item) => item.href === "/admin/operaciones")?.label).toBe(
+      "Diagnóstico"
+    );
   });
 
   it("Estudiante no ve ninguna sección de admin", () => {

@@ -29,7 +29,7 @@ export default async function OperacionesPage() {
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Operación</h1>
+          <h1 className="text-2xl font-bold">Tablero de diagnóstico</h1>
           <p className="text-sm text-gray-500">Diagnóstico de integraciones y deliveries recientes.</p>
         </div>
         {(overview.pendientes > 0 || overview.fallidos > 0) && <ReprocessWebhookButton />}
