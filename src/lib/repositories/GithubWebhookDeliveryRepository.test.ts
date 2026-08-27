@@ -4,7 +4,9 @@ const mockConnection = { execute: vi.fn() };
 
 const mockEm = {
   find: vi.fn(),
+  findOne: vi.fn(),
   findOneOrFail: vi.fn(),
+  count: vi.fn(),
   persist: vi.fn(),
   flush: vi.fn(),
   getConnection: vi.fn(() => mockConnection),
@@ -22,6 +24,7 @@ import {
   cerrarDelivery,
   fallarDelivery,
   getDeliveriesReprocesables,
+  getWebhookDeliveryOverview,
   DeliveryDuplicadoError,
 } from "./GithubWebhookDeliveryRepository";
 
@@ -29,6 +32,8 @@ describe("GithubWebhookDeliveryRepository", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockEm.flush.mockResolvedValue(undefined);
+    mockEm.find.mockResolvedValue([]);
+    mockEm.count.mockResolvedValue(0);
   });
 
   describe("registrarDelivery", () => {
@@ -182,6 +187,55 @@ describe("GithubWebhookDeliveryRepository", () => {
       const [, where] = mockEm.find.mock.calls[0]!;
       expect(where).toMatchObject({ deliveryId: "delivery-1" });
       expect(where.$or).toBeDefined();
+    });
+  });
+
+  describe("getWebhookDeliveryOverview", () => {
+    it("devuelve un overview vacío sin consultar findOne con un filtro vacío", async () => {
+      await expect(getWebhookDeliveryOverview()).resolves.toEqual({
+        items: [],
+        pendientes: 0,
+        fallidos: 0,
+        ultimoRecibidoEn: null,
+      });
+
+      expect(mockEm.findOne).not.toHaveBeenCalled();
+    });
+
+    it("toma el último recibido del primer delivery, ya ordenado descendentemente", async () => {
+      const masReciente = {
+        id: "row-2",
+        deliveryId: "delivery-2",
+        evento: "push",
+        estadoProcesamiento: "procesado",
+        intentos: 1,
+        error: null,
+        recibidoEn: new Date("2026-08-27T12:00:00Z"),
+      };
+      const anterior = {
+        ...masReciente,
+        id: "row-1",
+        deliveryId: "delivery-1",
+        recibidoEn: new Date("2026-08-27T11:00:00Z"),
+      };
+      mockEm.find.mockResolvedValueOnce([masReciente, anterior]);
+      mockEm.count.mockResolvedValueOnce(2).mockResolvedValueOnce(1);
+
+      const overview = await getWebhookDeliveryOverview();
+
+      expect(overview.items).toEqual([masReciente, anterior]);
+      expect(overview.pendientes).toBe(2);
+      expect(overview.fallidos).toBe(1);
+      expect(overview.ultimoRecibidoEn).toEqual(masReciente.recibidoEn);
+      expect(mockEm.find).toHaveBeenCalledWith(
+        GithubWebhookDelivery,
+        {},
+        expect.objectContaining({
+          orderBy: { recibidoEn: "desc" },
+          limit: 50,
+        })
+      );
+      expect(mockEm.findOne).not.toHaveBeenCalled();
     });
   });
 });

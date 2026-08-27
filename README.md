@@ -546,8 +546,9 @@ Después de promover el deploy:
 
 1. Consultar `GET /api/health`: debe responder HTTP 200 con `ok: true`, `database: "ok"` y el SHA
    desplegado en `version`.
-2. Entrar como docente a `/admin/operaciones`: base, GitHub App, Sheets y Google Groups deben estar
-   en verde. Revisar cualquier delivery fallido antes de habilitar alumnos reales.
+2. Entrar como docente al tablero **Diagnóstico** (`/admin/operaciones`): base, GitHub App, Sheets y
+   Google Groups deben estar en verde. Revisar cualquier delivery fallido antes de habilitar
+   alumnos reales.
 3. Hacer un canary con datos descartables: registrar un alumno, publicar y aceptar un TP individual
    y formar un grupo de dos alumnos para aceptar uno grupal. Confirmar repos, colaboradores,
    suscripción al mail, webhook y CI.
@@ -613,7 +614,7 @@ que tenga el mismo nombre.
   lista afectada y exige escribir el slug exacto. La operación es irreversible y deja auditoría.
 - Una comisión sólo puede eliminarse si está inactiva y no tiene alumnos ni assignments asociados.
 
-### Operación y recuperación
+### Diagnóstico y recuperación
 
 `/admin/operaciones` concentra el diagnóstico de base de datos, GitHub App, Google Sheets, Google
 Groups y webhooks. También muestra deliveries recientes y permite reprocesar los que quedaron
@@ -818,7 +819,7 @@ inmediato, rompiendo la exclusión mutua justo en el caso que el reproceso exist
 ### Reintentos
 
 Un delivery `fallido` (o `recibido`/`procesando` abandonado) se puede reprocesar desde la pantalla
-admin **Operación** o con
+admin **Diagnóstico** o con
 `POST /api/webhooks/github/reprocesar` (sólo admin), con `{ "deliveryId": "..." }` para uno puntual
 o sin body para tomar hasta 50 candidatos en orden de llegada — cada uno se reclama atómicamente
 antes de procesarse. El schema es estricto: un typo en la clave (`deliverId` en vez de

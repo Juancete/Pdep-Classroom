@@ -191,7 +191,7 @@ export type WebhookDeliveryOverview = {
 
 export async function getWebhookDeliveryOverview(limit = 50): Promise<WebhookDeliveryOverview> {
   const entityManager = await getEM();
-  const [items, pendientes, fallidos, ultimo] = await Promise.all([
+  const [items, pendientes, fallidos] = await Promise.all([
     entityManager.find(GithubWebhookDelivery, {}, {
       orderBy: { recibidoEn: "desc" },
       limit,
@@ -211,15 +211,11 @@ export async function getWebhookDeliveryOverview(limit = 50): Promise<WebhookDel
       estadoProcesamiento: { $in: ["recibido", "procesando"] },
     }),
     entityManager.count(GithubWebhookDelivery, { estadoProcesamiento: "fallido" }),
-    entityManager.findOne(GithubWebhookDelivery, {}, {
-      orderBy: { recibidoEn: "desc" },
-      fields: ["recibidoEn"],
-    }),
   ]);
   return {
     items,
     pendientes,
     fallidos,
-    ultimoRecibidoEn: ultimo?.recibidoEn ?? null,
+    ultimoRecibidoEn: items[0]?.recibidoEn ?? null,
   };
 }
