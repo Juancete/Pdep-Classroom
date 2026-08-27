@@ -6,7 +6,7 @@ import { Alumno, DOCENTE, ESTUDIANTE } from "@/domain/entities";
 
 const mockGetCurrentUser = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
-const mockIsGoogleGroupsConfigured = vi.fn();
+const mockResolverEstadoDeSincronizacion = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
@@ -16,8 +16,9 @@ vi.mock("@/lib/repositories", () => ({
   getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
 }));
 
-vi.mock("@/lib/googleGroups", () => ({
-  isGoogleGroupsConfigured: () => mockIsGoogleGroupsConfigured(),
+vi.mock("@/lib/services/estadoDeSincronizacion", () => ({
+  resolverEstadoDeSincronizacion: (...args: unknown[]) =>
+    mockResolverEstadoDeSincronizacion(...args),
 }));
 
 import { SyncPendingBanner } from "./SyncPendingBanner";
@@ -38,12 +39,20 @@ function makeAlumno(overrides: Partial<Alumno> = {}): Alumno {
   });
 }
 
+function mockEstado(hayPendientes: boolean, mensaje = "") {
+  mockResolverEstadoDeSincronizacion.mockResolvedValue({
+    hayPendientes,
+    mensaje,
+    canalesPendientes: [],
+  });
+}
+
 // ── Tests ────────────────────────────────────────────────────
 
 describe("SyncPendingBanner", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockIsGoogleGroupsConfigured.mockReturnValue(false);
+    mockEstado(false);
   });
 
   it("no renderiza nada si no hay usuario logueado", async () => {
@@ -73,24 +82,24 @@ describe("SyncPendingBanner", () => {
     expect(banner).toBeNull();
   });
 
-  it("no renderiza nada si ningún flag está prendido", async () => {
+  it("no renderiza nada si no hay nada pendiente", async () => {
     mockGetCurrentUser.mockResolvedValue({
       githubUsername: "juangarcia",
       rol: ESTUDIANTE,
     });
     mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
+    mockEstado(false);
     const banner = await SyncPendingBanner();
     expect(banner).toBeNull();
   });
 
-  it("renderiza el banner cuando gruposSyncFallidoEn está prendido", async () => {
+  it("renderiza el banner con el mensaje resuelto por el servicio", async () => {
     mockGetCurrentUser.mockResolvedValue({
       githubUsername: "juangarcia",
       rol: ESTUDIANTE,
     });
-    mockGetAlumnoByGithub.mockResolvedValue(
-      makeAlumno({ gruposSyncFallidoEn: new Date("2026-04-01") })
-    );
+    mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
+    mockEstado(true, "No pudimos asignarte a tu grupo de TP desde la planilla.");
 
     const banner = await SyncPendingBanner();
     const html = renderToStaticMarkup(banner as React.ReactElement);
@@ -100,31 +109,15 @@ describe("SyncPendingBanner", () => {
     expect(html).toContain("Reintentar");
   });
 
-  it("renderiza el banner cuando alumnoSyncFallidoEn está prendido", async () => {
+  it("renderiza el mensaje combinado que devuelve el servicio", async () => {
     mockGetCurrentUser.mockResolvedValue({
       githubUsername: "juangarcia",
       rol: ESTUDIANTE,
     });
-    mockGetAlumnoByGithub.mockResolvedValue(
-      makeAlumno({ alumnoSyncFallidoEn: new Date("2026-04-01") })
-    );
-
-    const banner = await SyncPendingBanner();
-    const html = renderToStaticMarkup(banner as React.ReactElement);
-
-    expect(html).toContain("No pudimos reflejar tus datos de alumno");
-  });
-
-  it("renderiza mensaje combinado cuando ambos flags están prendidos", async () => {
-    mockGetCurrentUser.mockResolvedValue({
-      githubUsername: "juangarcia",
-      rol: ESTUDIANTE,
-    });
-    mockGetAlumnoByGithub.mockResolvedValue(
-      makeAlumno({
-        gruposSyncFallidoEn: new Date("2026-04-01"),
-        alumnoSyncFallidoEn: new Date("2026-04-01"),
-      })
+    mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
+    mockEstado(
+      true,
+      "No pudimos reflejar tus datos de alumno en la planilla ni asignarte a tu grupo de TP desde la planilla."
     );
 
     const banner = await SyncPendingBanner();
@@ -134,20 +127,18 @@ describe("SyncPendingBanner", () => {
     expect(html).toContain("grupo de TP");
   });
 
-  it("muestra una membresía de Google Groups pendiente cuando está habilitada", async () => {
-    mockIsGoogleGroupsConfigured.mockReturnValue(true);
+  it("renderiza un canal de comunicación pendiente", async () => {
     mockGetCurrentUser.mockResolvedValue({
       githubUsername: "juangarcia",
       rol: ESTUDIANTE,
     });
-    mockGetAlumnoByGithub.mockResolvedValue(
-      makeAlumno({ googleGroupEstado: "fallido" })
-    );
+    mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
+    mockEstado(true, "No pudimos suscribirte al grupo de Google del curso.");
 
     const html = renderToStaticMarkup(
       (await SyncPendingBanner()) as React.ReactElement
     );
-    expect(html).toContain("suscripción al grupo de Google");
+    expect(html).toContain("suscribirte al grupo de Google");
     expect(html).toContain('href="/perfil"');
   });
 });

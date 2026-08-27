@@ -11,9 +11,10 @@ const mockGetAsignacionesGrupos = vi.fn();
 const mockGetAlumnosByComision = vi.fn();
 const mockIntentarSincronizarGrupos = vi.fn();
 const mockImportarAlumnosDeComision = vi.fn();
-const mockGetAlumnosConGoogleGroupPendiente = vi.fn();
-const mockIntentarSincronizarGoogleGroup = vi.fn();
-const mockIsGoogleGroupsConfigured = vi.fn();
+const mockGetSuscripcionesPendientesDeComision = vi.fn();
+const mockCanalesActivos = vi.fn();
+const mockCanalPorNombre = vi.fn();
+const mockSincronizarCanal = vi.fn();
 const mockReclamarImportacionGrupos = vi.fn();
 const mockRenovarImportacionGrupos = vi.fn();
 const mockCompletarImportacionGrupos = vi.fn();
@@ -50,8 +51,8 @@ vi.mock("@/lib/repositories", () => ({
   getComision: (...args: unknown[]) => mockGetComision(...args),
   getAlumnosByComision: (...args: unknown[]) =>
     mockGetAlumnosByComision(...args),
-  getAlumnosConGoogleGroupPendiente: (...args: unknown[]) =>
-    mockGetAlumnosConGoogleGroupPendiente(...args),
+  getSuscripcionesPendientesDeComision: (...args: unknown[]) =>
+    mockGetSuscripcionesPendientesDeComision(...args),
   reclamarImportacionGrupos: (...args: unknown[]) =>
     mockReclamarImportacionGrupos(...args),
   renovarImportacionGrupos: (...args: unknown[]) =>
@@ -70,13 +71,9 @@ vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
     mockIntentarSincronizarGrupos(...args),
 }));
 
-vi.mock("@/lib/services/intentarSincronizarGoogleGroup", () => ({
-  intentarSincronizarGoogleGroup: (...args: unknown[]) =>
-    mockIntentarSincronizarGoogleGroup(...args),
-}));
-
-vi.mock("@/lib/googleGroups", () => ({
-  isGoogleGroupsConfigured: () => mockIsGoogleGroupsConfigured(),
+vi.mock("@/lib/canales", () => ({
+  canalesActivos: (...args: unknown[]) => mockCanalesActivos(...args),
+  canalPorNombre: (...args: unknown[]) => mockCanalPorNombre(...args),
 }));
 
 const { FakeLecturaPlanillaAlumnosError } = vi.hoisted(() => {
@@ -113,7 +110,7 @@ import {
   actualizarComision,
   sincronizarAlumnos,
   sincronizarGruposDeLaComision,
-  sincronizarGoogleGroupsDeLaComision,
+  sincronizarCanalesDeLaComision,
 } from "./actions";
 
 afterEach(() => vi.useRealTimers());
@@ -611,7 +608,7 @@ describe("sincronizarGruposDeLaComision", () => {
   });
 });
 
-describe("sincronizarGoogleGroupsDeLaComision", () => {
+describe("sincronizarCanalesDeLaComision", () => {
   function makeFd(): FormData {
     return makeFormData({ comisionId: "c1" });
   }
@@ -620,21 +617,22 @@ describe("sincronizarGoogleGroupsDeLaComision", () => {
     vi.clearAllMocks();
     mockRequireAdmin.mockResolvedValue(undefined);
     mockGetComision.mockResolvedValue({ id: "c1" });
-    mockGetAlumnosConGoogleGroupPendiente.mockResolvedValue([]);
-    mockIsGoogleGroupsConfigured.mockReturnValue(true);
+    mockGetSuscripcionesPendientesDeComision.mockResolvedValue([]);
+    mockCanalesActivos.mockReturnValue([{ nombre: "google_groups" }]);
+    mockCanalPorNombre.mockReturnValue({ sincronizar: mockSincronizarCanal });
   });
 
   it("requiere admin", async () => {
     mockRequireAdmin.mockRejectedValue(new Error("forbidden"));
     await expect(
-      sincronizarGoogleGroupsDeLaComision({ status: "idle" }, makeFd())
+      sincronizarCanalesDeLaComision({ status: "idle" }, makeFd())
     ).rejects.toThrow("forbidden");
   });
 
   it("devuelve error si la comisión no existe", async () => {
     mockGetComision.mockResolvedValue(null);
     await expect(
-      sincronizarGoogleGroupsDeLaComision({ status: "idle" }, makeFd())
+      sincronizarCanalesDeLaComision({ status: "idle" }, makeFd())
     ).resolves.toEqual({
       status: "error",
       message: "Comisión no encontrada",
@@ -642,64 +640,61 @@ describe("sincronizarGoogleGroupsDeLaComision", () => {
   });
 
   it("procesa solo pendientes y agrega los resultados", async () => {
-    mockGetAlumnosConGoogleGroupPendiente.mockResolvedValue([
-      { githubUsername: "ana" },
-      { githubUsername: "bruno" },
-      { githubUsername: "cintia" },
+    mockGetSuscripcionesPendientesDeComision.mockResolvedValue([
+      { canal: "google_groups", alumno: { githubUsername: "ana" } },
+      { canal: "google_groups", alumno: { githubUsername: "bruno" } },
+      { canal: "google_groups", alumno: { githubUsername: "cintia" } },
     ]);
-    mockIntentarSincronizarGoogleGroup
-      .mockResolvedValueOnce({ status: "added" })
-      .mockResolvedValueOnce({ status: "skipped" })
-      .mockResolvedValueOnce({ status: "error", error: "boom" });
+    mockSincronizarCanal
+      .mockResolvedValueOnce({ estado: "sincronizada" })
+      .mockResolvedValueOnce({ estado: "omitida" })
+      .mockResolvedValueOnce({ estado: "error", error: "boom" });
 
     await expect(
-      sincronizarGoogleGroupsDeLaComision({ status: "idle" }, makeFd())
+      sincronizarCanalesDeLaComision({ status: "idle" }, makeFd())
     ).resolves.toEqual({
       status: "ok",
       sincronizados: 1,
       omitidos: 1,
       aunConError: 1,
     });
-    expect(mockGetAlumnosConGoogleGroupPendiente).toHaveBeenCalledWith(
+    expect(mockGetSuscripcionesPendientesDeComision).toHaveBeenCalledWith(
       "c1",
-      true
+      ["google_groups"]
     );
   });
 
   it("continúa con el lote cuando un alumno lanza una excepción", async () => {
-    mockGetAlumnosConGoogleGroupPendiente.mockResolvedValue([
-      { githubUsername: "ana" },
-      { githubUsername: "bruno" },
+    mockGetSuscripcionesPendientesDeComision.mockResolvedValue([
+      { canal: "google_groups", alumno: { githubUsername: "ana" } },
+      { canal: "google_groups", alumno: { githubUsername: "bruno" } },
     ]);
-    mockIntentarSincronizarGoogleGroup
+    mockSincronizarCanal
       .mockRejectedValueOnce(new Error("error inesperado"))
-      .mockResolvedValueOnce({ status: "added" });
+      .mockResolvedValueOnce({ estado: "sincronizada" });
 
     await expect(
-      sincronizarGoogleGroupsDeLaComision({ status: "idle" }, makeFd())
+      sincronizarCanalesDeLaComision({ status: "idle" }, makeFd())
     ).resolves.toEqual({
       status: "ok",
       sincronizados: 1,
       omitidos: 0,
       aunConError: 1,
     });
-    expect(mockIntentarSincronizarGoogleGroup).toHaveBeenCalledTimes(2);
+    expect(mockSincronizarCanal).toHaveBeenCalledTimes(2);
   });
 
-  it("no incluye omitidos cuando la integración está desactivada", async () => {
-    mockIsGoogleGroupsConfigured.mockReturnValue(false);
+  it("no consulta ni procesa nada cuando no hay canales activos", async () => {
+    mockCanalesActivos.mockReturnValue([]);
 
     await expect(
-      sincronizarGoogleGroupsDeLaComision({ status: "idle" }, makeFd())
+      sincronizarCanalesDeLaComision({ status: "idle" }, makeFd())
     ).resolves.toEqual({
       status: "ok",
       sincronizados: 0,
       omitidos: 0,
       aunConError: 0,
     });
-    expect(mockGetAlumnosConGoogleGroupPendiente).toHaveBeenCalledWith(
-      "c1",
-      false
-    );
+    expect(mockGetSuscripcionesPendientesDeComision).toHaveBeenCalledWith("c1", []);
   });
 });

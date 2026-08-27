@@ -2,7 +2,7 @@ import { requireAdmin } from "@/lib/session";
 import { getComisionActiva, getWebhookDeliveryOverview } from "@/lib/repositories";
 import { listarTemplates } from "@/lib/github";
 import { getSheetNames } from "@/lib/sheets";
-import { isGoogleGroupsConfigured } from "@/lib/googleGroups";
+import { CANALES_DE_COMUNICACION } from "@/lib/canales";
 import { ReprocessWebhookButton } from "./reprocess-button";
 
 type Check = { nombre: string; ok: boolean; detalle: string };
@@ -21,7 +21,14 @@ export default async function OperacionesPage() {
     { nombre: "Base de datos", ok: true, detalle: "Consulta administrativa correcta" },
     { nombre: "GitHub App", ...github },
     { nombre: "Google Sheets", ...sheets },
-    { nombre: "Google Groups", ok: isGoogleGroupsConfigured(), detalle: isGoogleGroupsConfigured() ? "Configuración presente" : "Integración desactivada o incompleta" },
+    ...CANALES_DE_COMUNICACION.map((canal) => {
+      const configurado = canal.estaConfigurado();
+      return {
+        nombre: canal.etiqueta,
+        ok: configurado,
+        detalle: configurado ? "Configuración presente" : "Integración desactivada o incompleta",
+      };
+    }),
     { nombre: "Webhook", ok: Boolean(process.env.GITHUB_WEBHOOK_SECRET), detalle: overview.ultimoRecibidoEn ? `Último delivery: ${overview.ultimoRecibidoEn.toLocaleString("es-AR")}` : "Todavía no se recibió ningún delivery" },
   ];
 

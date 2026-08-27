@@ -13,12 +13,18 @@ export {
   marcarAlumnoSyncOk,
   getAlumnosByComision,
   getAlumnosConGruposSyncPendiente,
-  getAlumnosConGoogleGroupPendiente,
-  actualizarEstadoGoogleGroup,
   countAlumnos,
   LegajoConflictError,
 } from "./AlumnoRepository";
 export type { AlumnoData } from "./AlumnoRepository";
+
+export {
+  actualizarSuscripcion,
+  getSuscripcionesPendientesDeComision,
+  getSuscripcionesDeAlumno,
+  crearSuscripcionesFaltantes,
+  marcarSuscripcionesPendientes,
+} from "./SuscripcionAlumnoRepository";
 
 export {
   getAssignments,

@@ -12,7 +12,7 @@ depender de GitHub Classroom.
 Funciones principales:
 
 - registro con GitHub, persistencia en PostgreSQL y espejo en Google Sheets;
-- suscripción y reconciliación por lotes de Google Groups;
+- suscripción y reconciliación por lotes a canales de comunicación (Google Groups hoy, extensible);
 - assignments en borrador, publicados y archivados, individuales o grupales;
 - autogestión de grupos con invariantes de cupo y auditoría de membresías;
 - aprovisionamiento reintentable e idempotente de repositorios;
@@ -459,8 +459,9 @@ vercel env add GITHUB_ORG                    # opcional, default "pdep-mn-utn" s
 vercel env add GOOGLE_SERVICE_ACCOUNT_KEY    # base64 del JSON
 ```
 
-**Google Groups** — las dos variables son requeridas en producción; si falta una, la validación de
-arranque impide publicar una versión que no podría suscribir alumnos:
+**Canal de comunicación: Google Groups** — opcional. Sin estas dos variables el canal simplemente no
+existe (ver sección "Canales de comunicación" más abajo); si seteás sólo una de las dos, la
+validación de arranque rompe el boot (misconfig, no falta de config):
 
 ```bash
 vercel env add GOOGLE_GROUP_EMAIL
@@ -547,13 +548,14 @@ Después de promover el deploy:
 1. Consultar `GET /api/health`: debe responder HTTP 200 con `ok: true`, `database: "ok"` y el SHA
    desplegado en `version`.
 2. Entrar como docente al tablero **Diagnóstico** (`/admin/operaciones`): base, GitHub App, Sheets y
-   Google Groups deben estar en verde. Revisar cualquier delivery fallido antes de habilitar
-   alumnos reales.
+   cada canal de comunicación configurado deben estar en verde. Un canal sin configurar aparece
+   como "Revisar" — es esperable si todavía no armaste su infraestructura, no bloquea el deploy.
+   Revisar cualquier delivery fallido antes de habilitar alumnos reales.
 3. Hacer un canary con datos descartables: registrar un alumno, publicar y aceptar un TP individual
    y formar un grupo de dos alumnos para aceptar uno grupal. Confirmar repos, colaboradores,
-   suscripción al mail, webhook y CI.
-4. Si la materia ya empezó, sincronizar el padrón desde Sheets y procesar Google Groups por lotes
-   hasta que no queden pendientes.
+   suscripción a los canales configurados, webhook y CI.
+4. Si la materia ya empezó, sincronizar el padrón desde Sheets y procesar las suscripciones a
+   canales de comunicación por lotes hasta que no queden pendientes.
 5. Si ya existían grupos en la planilla, ejecutar **Importar grupos desde Sheets** una sola vez por
    comisión. La operación usa un lease renovable para impedir dos importaciones concurrentes; al
    completarse, Classroom pasa a ser la única fuente de verdad de grupos.
@@ -568,7 +570,8 @@ No importar grupos reales antes de que el canary termine correctamente.
 2. Crear un assignment en borrador: elegir template, paradigma y tipo individual o grupal. El tipo
    es el discriminador persistido y no se puede convertir después de crear el assignment.
 3. Revisar su configuración y publicarlo para habilitar acciones de alumnos.
-4. Compartir el link de la app; los alumnos registrados se suscriben al Google Group configurado.
+4. Compartir el link de la app; los alumnos registrados se suscriben a los canales de comunicación
+   que estén configurados (ej. Google Groups).
 5. Al finalizar, archivarlo para impedir nuevas aceptaciones y conservar sus entregas como
    histórico.
 
@@ -855,7 +858,7 @@ mikro-orm.config.ts                            # Config de MikroORM (CLI + runti
 migrations/                                    # Migraciones commiteadas + snapshot del schema
 tests/migrations/                              # Tests de integración contra Postgres real
 src/
-├── instrumentation.ts                         # Validaciones de arranque (ej. config de Google Groups)
+├── instrumentation.ts                         # Validaciones de arranque (ej. misconfig de un canal)
 ├── proxy.ts                                   # Auth proxy (protege rutas /admin, /dashboard, etc.)
 ├── app/
 │   ├── api/
@@ -939,6 +942,7 @@ src/
 │       ├── Comision.ts                        # Incluye columnConfig para la planilla
 │       ├── Entrega.ts
 │       ├── Alumno.ts
+│       ├── SuscripcionAlumno.ts               # Estado de suscripción de un alumno a un canal (1 fila por canal)
 │       ├── Grupo.ts
 │       ├── CambioDeMembresia.ts               # Auditoría de altas/bajas/cambios de integrantes
 │       ├── RepoDeletionAttempt.ts             # Auditoría de borrado de repos
@@ -948,9 +952,13 @@ src/
 │   ├── auth.ts / auth.config.ts / auth.events.ts   # NextAuth: config, providers (GitHub + login de desarrollo), eventos
 │   ├── github.ts                              # Octokit: crear/eliminar repos, collaborators, templates
 │   ├── github-errors.ts                       # Tipado y manejo de errores de la API de GitHub
-│   ├── naming.ts                              # Funciones puras: slugify, buildRepoName
+│   ├── naming.ts                              # Funciones puras: slugify, buildRepoName, enumerar
 │   ├── sheets.ts                              # Google Sheets: leer/escribir alumnos y grupos
-│   ├── googleGroups.ts                        # Alta/baja en Google Groups (obligatorio en producción)
+│   ├── googleGroups.ts                        # Cliente de la Admin SDK Directory API (alta/baja de miembros)
+│   ├── canales/                               # Canales de comunicación como Template Method — ver más abajo
+│   │   ├── CanalDeComunicacion.ts             # Clase abstracta: algoritmo de reconciliación
+│   │   ├── GoogleGroupsCanal.ts               # Único canal concreto hoy
+│   │   └── index.ts                           # Registro: CANALES_DE_COMUNICACION, canalesActivos()
 │   ├── session.ts                             # requireUser / requireAdmin
 │   ├── proxy-authorization.ts                 # Reglas de redirect que usa proxy.ts
 │   ├── api-auth.ts                            # Middleware de auth para API routes
@@ -968,7 +976,7 @@ src/
 │   │   ├── importarAlumnosDeComision.ts       # Sheets → DB, bulk por comisión
 │   │   ├── grupoSync.ts                       # Sheets → DB, membresía de grupos (sólo aditivo)
 │   │   ├── intentarSincronizarGrupos.ts       # Wrapper con retry/flag de falla de grupoSync
-│   │   ├── intentarSincronizarGoogleGroup.ts  # Wrapper con retry/flag de falla de Google Groups
+│   │   ├── estadoDeSincronizacion.ts          # Combina asuntos pendientes (alumno + canales) en un mensaje
 │   │   ├── hooksPostConfirmacion.ts           # Orquesta los sync post-registro
 │   │   ├── verificarConsistenciaAlumno.ts     # Chequeos de consistencia DB↔Sheets
 │   │   ├── borrarRepositoriosDeAssignment.ts  # Borrado auditado de repos de un assignment
@@ -979,6 +987,7 @@ src/
 │   ├── mensaje-operativo.ts                   # Redacta secretos de un mensaje de error antes de mostrarlo/persistirlo
 │   └── repositories/                          # Acceso a datos por entidad
 │       ├── AlumnoRepository.ts
+│       ├── SuscripcionAlumnoRepository.ts     # Estado de suscripción por (alumno, canal)
 │       ├── AssignmentRepository.ts
 │       ├── ComisionRepository.ts
 │       ├── EntregaRepository.ts
@@ -1028,8 +1037,8 @@ El flujo de registro reemplaza la carga manual en la planilla:
 6. Recién si la DB aceptó el alta, se hace un upsert del alumno en la hoja "Alumnos" de la
    spreadsheet — y si esto falla, el registro en la DB **no se revierte** (el alumno igual entra al
    dashboard; el alta en Sheets se puede reintentar después)
-7. Se intenta suscribir al alumno al Google Group de la materia (obligatorio en producción; ver más
-   abajo)
+7. Se intenta suscribir al alumno a cada canal de comunicación configurado (opcional; ver
+   "Canales de comunicación" más abajo)
 8. Redirige al dashboard
 
 La **DB es la autoridad** para la coherencia legajo↔GitHub (ahí se valida y se rechazan
@@ -1037,25 +1046,66 @@ duplicados); la planilla se mantiene como espejo para uso de los docentes. La si
 grupos desde Sheets es una carga inicial por comisión; una vez importada, los grupos se administran
 en Classroom y la DB queda como autoridad.
 
-## Suscripción automática a Google Group
+## Canales de comunicación
 
-Al completarse el alta de un alumno, lo suscribimos al Google Group de la materia — así el docente no tiene que agregarlo a mano y el alumno empieza a recibir los mails del grupo desde el primer día.
+Al completarse el alta (o la edición) de un alumno, la app lo suscribe a cada **canal de
+comunicación** que esté configurado — hoy, Google Groups. La idea es que el docente no tenga que
+agregar a nadie a mano y el alumno reciba los avisos del curso desde el primer día.
 
-En producción el feature es obligatorio y la configuración se valida al arrancar. Si la
-suscripción falla por un problema transitorio (permisos, red, etc.), el alta del alumno **igual se
-completa** y queda una reconciliación pendiente visible para el docente. En desarrollo se puede
-omitir la integración.
+La suscripción se modela como **Template Method** (`src/lib/canales/CanalDeComunicacion.ts`): el
+algoritmo de reconciliación — registrar el intento, dar de alta el destinatario actual, drenar
+identidades anteriores pendientes de baja, marcar sincronizado — vive una sola vez en la clase
+abstracta. Cada canal concreto sólo aporta:
 
-Si un alumno ya era miembro del grupo (por ejemplo, se registró, lo dieron de baja y se vuelve a registrar), la API de Google responde 409 y tratamos ese caso como éxito silencioso — la UI no le muestra nada especial.
+- `estaConfigurado()` — si sus env vars están completas.
+- `destinatarioDe(alumno)` — la identidad del alumno en ese canal (un email para Google Groups; el
+  ID de una cuenta de Discord si algún día se agrega ese canal), o `null` si el alumno todavía no la
+  tiene.
+- `darDeAlta` / `darDeBaja` — cómo hablar con el servicio externo.
 
-### Variables de entorno
+El estado de cada suscripción (pendiente/sincronizada/fallida/omitida, último error, identidades
+pendientes de baja) se persiste una fila por `(alumno, canal)` en `suscripcion_alumno` —
+`src/domain/entities/SuscripcionAlumno.ts`.
+
+**Un canal sin configurar no existe para el alumno.** No hay error, no hay banner, no se acumula
+estado "fallido" — `canalesActivos()` (`src/lib/canales/index.ts`) lo filtra antes de tocarlo. El
+docente sí lo ve: `/admin/operaciones` marca "Revisar" para cada canal apagado.
+
+Si un alumno ya era miembro del canal (se registró, lo dieron de baja y se vuelve a registrar), se
+trata como éxito idempotente — la UI no le muestra nada especial.
+
+### Agregar un canal nuevo
+
+1. Escribir la subclase en `src/lib/canales/` con las cinco primitivas (`nombre`, `etiqueta`,
+   `estaConfigurado`, `asuntoPendiente`, `destinatarioDe`, `darDeAlta`, `darDeBaja`).
+2. Sumar su nombre a `NOMBRES_DE_CANAL` en `src/domain/entities/SuscripcionAlumno.ts`.
+3. Registrar la instancia en `CANALES_DE_COMUNICACION` (`src/lib/canales/index.ts`).
+4. Migración que ensancha el `CHECK` de `suscripcion_alumno.canal` y backfillea una fila
+   `pendiente` por alumno existente — molde: `Migration20260827120000_suscripcion_alumno.ts`.
+
+Nada en `hooksPostConfirmacion.ts`, las rutas API, `AlumnoForm.tsx` ni la action de sincronización
+admin necesita tocarse: todos recorren `canalesActivos()` sin ramificar por tipo.
+
+### Google Groups — variables de entorno
 
 | Variable | Rol |
 |---|---|
-| `GOOGLE_GROUP_EMAIL` | Email del grupo al que suscribimos a los alumnos (ej: `pdep-2026@googlegroups.com`). |
+| `GOOGLE_GROUP_EMAIL` | Email del grupo al que suscribimos a los alumnos. |
 | `GOOGLE_WORKSPACE_ADMIN_EMAIL` | Usuario admin del Workspace que la service account impersona para poder agregar miembros al grupo. |
 
-Si seteás `GOOGLE_GROUP_EMAIL` sin `GOOGLE_WORKSPACE_ADMIN_EMAIL`, el server falla al arrancar (ver [`src/instrumentation.ts`](src/instrumentation.ts)) — preferimos romper el boot antes que dejar que la misconfig le caiga al alumno en la cara.
+Ambas son **opcionales**: sin ellas, el canal de Google Groups no hace nada. Si seteás
+`GOOGLE_GROUP_EMAIL` sin `GOOGLE_WORKSPACE_ADMIN_EMAIL`, el server falla al arrancar (ver
+[`src/instrumentation.ts`](src/instrumentation.ts)) — preferimos romper el boot antes que dejar que
+la misconfig le caiga al alumno en la cara.
+
+**Requisito real, no obvio:** el grupo tiene que estar creado **dentro de un dominio Google
+Workspace** (Google Admin Console → Directorio → Grupos, o "Groups for Business"), en el **mismo
+dominio** que el admin impersonado. Un grupo de consumidor (`algo@googlegroups.com`) **no sirve**:
+la Admin SDK Directory API sólo administra grupos del dominio Workspace que autorizó la
+domain-wide delegation de la service account — impersonar un admin de Workspace contra un grupo de
+`@googlegroups.com` falla con `401 unauthorized_client` antes de siquiera consultar el grupo. No
+hace falta pagar Google Workspace para esto: **Cloud Identity Free** (gratis, hasta 50 usuarios)
+incluye administración de grupos y alcanza con verificar un dominio propio.
 
 ### Setup en Google (primera vez)
 
@@ -1073,21 +1123,24 @@ Reutilizamos la service account que ya está en `GOOGLE_SERVICE_ACCOUNT_KEY` —
    - Scope: `https://www.googleapis.com/auth/admin.directory.group.member`.
    - Authorize.
 
-4. **Elegir el admin a impersonar**.
+4. **Crear (o elegir) el grupo dentro del Workspace** y **elegir el admin a impersonar**.
+   - El grupo tiene que vivir en el dominio del Workspace — ver el requisito de arriba.
    - Cualquier usuario del Workspace con permisos para administrar el grupo (típicamente un docente con rol de admin). Ese email va en `GOOGLE_WORKSPACE_ADMIN_EMAIL`.
 
 5. **Setear las env vars** en `.env.local` (desarrollo) y en el panel de Vercel (producción):
    ```bash
-   GOOGLE_GROUP_EMAIL=pdep-2026@googlegroups.com
-   GOOGLE_WORKSPACE_ADMIN_EMAIL=docente-admin@utn.edu.ar
+   GOOGLE_GROUP_EMAIL=pdep@tudominio.edu.ar
+   GOOGLE_WORKSPACE_ADMIN_EMAIL=docente-admin@tudominio.edu.ar
    ```
+   (Ambas tienen que estar en el **mismo dominio** — ver el requisito real más arriba.)
 
 6. **Reiniciar el server**. Si la config quedó bien, el boot pasa sin ruido y el próximo registro va a suscribir al alumno.
 
 ### Troubleshooting
 
-- **El server no arranca con error "GOOGLE_WORKSPACE_ADMIN_EMAIL no está configurada"** → setea la variable o vacía `GOOGLE_GROUP_EMAIL` para desactivar el feature.
-- **El registro completa OK pero el alumno ve el aviso ámbar** → buscá el log con el prefijo `Error al suscribir al Google Group` **en Vercel → Project → Deployments → el deploy activo → Runtime Logs** (en local, aparece en la terminal donde corrés `next dev`). El log incluye `github=<handle>` del alumno y el detalle devuelto por la API. Causas típicas: falta habilitar la Admin SDK API, el scope no está autorizado, o el admin impersonado no tiene permiso sobre el grupo.
+- **El server no arranca con error "GOOGLE_WORKSPACE_ADMIN_EMAIL no está configurada"** → setea la variable o vacía `GOOGLE_GROUP_EMAIL` para desactivar el canal.
+- **`401 unauthorized_client`** → el grupo o el admin no viven en un dominio Google Workspace real (por ejemplo, el grupo es `@googlegroups.com`), o el admin impersonado no es una cuenta de ese Workspace. Ver "Requisito real" más arriba.
+- **El registro completa OK pero el alumno ve el aviso ámbar** → buscá el log con el prefijo `Error al sincronizar el canal google_groups` **en Vercel → Project → Deployments → el deploy activo → Runtime Logs** (en local, aparece en la terminal donde corrés `next dev`). El log incluye `githubUsername` del alumno y el detalle devuelto por la API. Causas típicas: falta habilitar la Admin SDK API, el scope no está autorizado, o el admin impersonado no tiene permiso sobre el grupo.
 - **La API devuelve 403 "Not Authorized to access this resource/api"** → típicamente el scope no está autorizado en el Workspace, o la Domain-Wide Delegation quedó con el Client ID equivocado.
 
 ## TODOs sugeridos

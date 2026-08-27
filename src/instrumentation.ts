@@ -14,6 +14,10 @@ export async function register() {
   assertProductionConfig();
 }
 
+// GOOGLE_GROUP_EMAIL / GOOGLE_WORKSPACE_ADMIN_EMAIL NO están acá a propósito:
+// el canal de Google Groups (ver src/lib/canales/) es opcional — sin esas
+// vars simplemente no hace nada, no rompe el boot. GOOGLE_SERVICE_ACCOUNT_KEY
+// sí es obligatoria: la usa Google Sheets, que no es opcional.
 const REQUIRED_PRODUCTION_ENV = [
   "DATABASE_URL",
   "GITHUB_CLIENT_ID",
@@ -25,8 +29,6 @@ const REQUIRED_PRODUCTION_ENV = [
   "GITHUB_APP_INSTALLATION_ID",
   "GITHUB_WEBHOOK_SECRET",
   "GOOGLE_SERVICE_ACCOUNT_KEY",
-  "GOOGLE_GROUP_EMAIL",
-  "GOOGLE_WORKSPACE_ADMIN_EMAIL",
 ] as const;
 
 export function assertProductionConfig(): void {
@@ -47,6 +49,12 @@ export function assertProductionConfig(): void {
   }
 }
 
+// Queda inline y sin cambios tras el refactor a canales de comunicación
+// (ver src/lib/canales/): sigue siendo la única validación de Google Groups
+// que corre acá — a propósito NO se la reemplaza por algo que itere el
+// registro de canales, porque `src/lib/canales/index.ts` importa
+// `GoogleGroupsCanal`, que arrastra `googleapis`, y esta función corre en
+// `register()` (ver comentario de arriba sobre el bundle Edge).
 export function assertGoogleGroupsConfig(): void {
   const groupEmail = process.env.GOOGLE_GROUP_EMAIL?.trim();
   const adminEmail = process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL?.trim();

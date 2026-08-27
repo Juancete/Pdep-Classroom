@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       ok: true,
-      groupSubscription: resultado.hooks.groupSubscription,
+      canalesConError: resultado.hooks.canalesConError ?? [],
       ...(resultado.hooks.gruposSync === "error" && { gruposSync: "error" }),
     });
   } catch (error) {

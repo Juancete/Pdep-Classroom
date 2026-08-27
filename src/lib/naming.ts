@@ -51,6 +51,18 @@ export function slugify(title: string): string {
 }
 
 /**
+ * Enumera una lista de frases en español, separadas por coma y con "ni"
+ * antes de la última: `["a","b","c"] → "a, b ni c"`. Usado para componer el
+ * mensaje de sincronizaciones pendientes con un asunto por feature/canal, en
+ * vez de una cadena de `if` que enumere combinaciones a mano.
+ */
+export function enumerar(items: string[]): string {
+  if (items.length === 0) return "";
+  if (items.length === 1) return items[0];
+  return `${items.slice(0, -1).join(", ")} ni ${items[items.length - 1]}`;
+}
+
+/**
  * Extrae el nombre del template sin la org.
  * "pdep-mn-utn/kata-template" → "kata-template"
  * "kata-template" → "kata-template"

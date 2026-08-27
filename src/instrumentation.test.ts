@@ -20,13 +20,13 @@ describe("assertGoogleGroupsConfig", () => {
   });
 
   it("no tira si ambas env vars están seteadas", () => {
-    process.env.GOOGLE_GROUP_EMAIL = "pdep@googlegroups.com";
+    process.env.GOOGLE_GROUP_EMAIL = "pdep@utn.edu.ar";
     process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL = "admin@utn.edu.ar";
     expect(() => assertGoogleGroupsConfig()).not.toThrow();
   });
 
   it("tira si GOOGLE_GROUP_EMAIL está seteada pero GOOGLE_WORKSPACE_ADMIN_EMAIL no", () => {
-    process.env.GOOGLE_GROUP_EMAIL = "pdep@googlegroups.com";
+    process.env.GOOGLE_GROUP_EMAIL = "pdep@utn.edu.ar";
     delete process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL;
     expect(() => assertGoogleGroupsConfig()).toThrow(/GOOGLE_WORKSPACE_ADMIN_EMAIL/);
   });
@@ -51,8 +51,6 @@ describe("assertProductionConfig", () => {
     "GITHUB_APP_INSTALLATION_ID",
     "GITHUB_WEBHOOK_SECRET",
     "GOOGLE_SERVICE_ACCOUNT_KEY",
-    "GOOGLE_GROUP_EMAIL",
-    "GOOGLE_WORKSPACE_ADMIN_EMAIL",
   ];
 
   afterEach(() => {
@@ -69,6 +67,16 @@ describe("assertProductionConfig", () => {
     for (const name of required) delete process.env[name];
 
     expect(() => assertProductionConfig()).toThrow(/DATABASE_URL.*GITHUB_CLIENT_ID/);
+  });
+
+  it("no exige las env de Google Groups en producción (canal opcional)", () => {
+    process.env.VERCEL_ENV = "production";
+    for (const name of required) process.env[name] = "configured";
+    delete process.env.GOOGLE_GROUP_EMAIL;
+    delete process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL;
+    delete process.env.ENABLE_DEV_LOGIN;
+
+    expect(() => assertProductionConfig()).not.toThrow();
   });
 
   it("acepta una configuración completa y rechaza el login de desarrollo", () => {

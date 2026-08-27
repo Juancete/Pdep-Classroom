@@ -8,7 +8,8 @@ modifica la base de datos.
 1. Confirmar CI verde y revisar las migraciones nuevas.
 2. Crear un restore point o snapshot en Neon y verificar que el equipo sabe restaurarlo.
 3. Verificar en Vercel las variables de producción. El arranque exige base, GitHub OAuth, secreto
-   de NextAuth, admins, GitHub App, secreto de webhook, Google Sheets y Google Groups. No debe
+   de NextAuth, admins, GitHub App, secreto de webhook y Google Sheets. Los canales de comunicación
+   (ej. Google Groups) son opcionales — sin sus env vars, el canal simplemente no hace nada. No debe
    existir `ENABLE_DEV_LOGIN`.
 4. Verificar en GitHub la callback OAuth y el webhook del dominio definitivo. La App debe estar
    instalada en la organización y suscripta a `Check suite`, `Push`, `Repository` y `Member`.
@@ -21,13 +22,15 @@ modifica la base de datos.
    `production` necesita el secret `DATABASE_URL` de Neon.
 2. Esperar el resultado exitoso y recién entonces promover el mismo commit en Vercel.
 3. Consultar `GET /api/health`; debe responder `200` y `{"ok":true,"database":"ok",...}`.
-4. Entrar como docente a `/admin/operaciones`. GitHub, Sheets y Groups deben estar en verde y no
-   debe haber deliveries fallidos sin explicar.
+4. Entrar como docente a `/admin/operaciones`. GitHub y Sheets deben estar en verde; cada canal de
+   comunicación configurado también — uno apagado a propósito aparece como "Revisar" y no bloquea.
+   No debe haber deliveries fallidos sin explicar.
 5. Hacer el canary con un assignment descartable:
    - un docente lo crea y publica;
    - un alumno de prueba completa registro y acepta un TP individual;
    - dos alumnos forman un grupo y aceptan un TP grupal;
-   - se confirma repo, colaboradores, email en Google Groups y actualización de CI por webhook.
+   - se confirma repo, colaboradores, suscripción a los canales configurados y actualización de CI
+     por webhook.
 6. Si la comisión ya tenía grupos en Sheets, ejecutar una sola vez **Importar grupos desde
    Sheets**. Desde ese momento Classroom es la fuente de verdad.
 
@@ -43,8 +46,8 @@ modifica la base de datos.
 - Los repos sólo se borran para assignments archivados, después de previsualizar la lista y
   escribir el slug exacto. Esta acción sigue siendo irreversible: antes de usarla conservar los
   repos o exportarlos según la política de la materia.
-- Las altas masivas de alumnos y miembros de Google Groups se procesan en lotes acotados; repetir
-  la acción admin hasta que no queden pendientes.
+- Las altas masivas de alumnos y las suscripciones a canales de comunicación se procesan en lotes
+  acotados; repetir la acción admin hasta que no queden pendientes.
 
 ## Incidente y rollback
 

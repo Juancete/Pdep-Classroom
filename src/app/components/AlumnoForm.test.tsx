@@ -134,52 +134,47 @@ describe("AlumnoForm", () => {
     });
   });
 
-  describe("warning de suscripción al grupo", () => {
-    function mockRegistroOk(groupSubscription?: string) {
-      const body = groupSubscription
-        ? { ok: true, groupSubscription }
+  describe("warning de canales de comunicación", () => {
+    function mockRegistroOk(canalesConError?: string[]) {
+      const body = canalesConError
+        ? { ok: true, canalesConError }
         : { ok: true };
       vi.mocked(fetch).mockResolvedValue(
         new Response(JSON.stringify(body), { status: 200 })
       );
     }
 
-    const WARNING_PATTERN = /no pudimos suscribirte al grupo/i;
-
-    it("muestra el warning cuando groupSubscription === 'error'", async () => {
-      mockRegistroOk("error");
+    it("muestra el warning con el asunto del canal que falló", async () => {
+      mockRegistroOk(["suscribirte al grupo de Google del curso"]);
       renderForm();
       fireEvent.submit(screen.getByRole("button").closest("form")!);
       await waitFor(() =>
-        expect(screen.getByRole("alert")).toHaveTextContent(WARNING_PATTERN)
+        expect(screen.getByRole("alert")).toHaveTextContent(
+          "No pudimos suscribirte al grupo de Google del curso."
+        )
       );
     });
 
-    it("no muestra el warning cuando groupSubscription === 'added'", async () => {
-      mockRegistroOk("added");
+    it("enumera varios canales fallidos en un solo warning", async () => {
+      mockRegistroOk(["hacer A", "hacer B"]);
+      renderForm();
+      fireEvent.submit(screen.getByRole("button").closest("form")!);
+      await waitFor(() =>
+        expect(screen.getByRole("alert")).toHaveTextContent(
+          "No pudimos hacer A ni hacer B."
+        )
+      );
+    });
+
+    it("no muestra el warning cuando canalesConError viene vacío", async () => {
+      mockRegistroOk([]);
       renderForm({ successMessage: "Listo" });
       fireEvent.submit(screen.getByRole("button").closest("form")!);
       await waitFor(() => screen.getByText("Listo"));
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
 
-    it("no muestra el warning cuando groupSubscription === 'already_member'", async () => {
-      mockRegistroOk("already_member");
-      renderForm({ successMessage: "Listo" });
-      fireEvent.submit(screen.getByRole("button").closest("form")!);
-      await waitFor(() => screen.getByText("Listo"));
-      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    });
-
-    it("no muestra el warning cuando groupSubscription === 'skipped'", async () => {
-      mockRegistroOk("skipped");
-      renderForm({ successMessage: "Listo" });
-      fireEvent.submit(screen.getByRole("button").closest("form")!);
-      await waitFor(() => screen.getByText("Listo"));
-      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    });
-
-    it("no muestra el warning cuando la respuesta no trae groupSubscription (ej. /api/perfil)", async () => {
+    it("no muestra el warning cuando la respuesta no trae canalesConError", async () => {
       mockRegistroOk();
       renderForm({ successMessage: "Listo" });
       fireEvent.submit(screen.getByRole("button").closest("form")!);
@@ -214,15 +209,18 @@ describe("AlumnoForm", () => {
       expect(screen.queryByText(SYNC_WARNING_PATTERN)).not.toBeInTheDocument();
     });
 
-    it("muestra ambos warnings cuando fallan Google Group y sync de grupos", async () => {
-      mockOkConBody({ groupSubscription: "error", gruposSync: "error" });
+    it("muestra ambos warnings cuando falla un canal y la sync de grupos", async () => {
+      mockOkConBody({
+        canalesConError: ["suscribirte al grupo de Google del curso"],
+        gruposSync: "error",
+      });
       renderForm();
       fireEvent.submit(screen.getByRole("button").closest("form")!);
       await waitFor(() => {
         const alerts = screen.getAllByRole("alert");
         expect(alerts).toHaveLength(2);
       });
-      expect(screen.getByText(/no pudimos suscribirte al grupo/i)).toBeInTheDocument();
+      expect(screen.getByText(/no pudimos suscribirte al grupo de google/i)).toBeInTheDocument();
       expect(screen.getByText(SYNC_WARNING_PATTERN)).toBeInTheDocument();
     });
   });

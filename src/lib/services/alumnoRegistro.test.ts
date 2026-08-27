@@ -249,7 +249,7 @@ describe("confirmarYProcesarAlumno", () => {
     mockUpsertAlumno.mockResolvedValue(undefined);
     mockMarcarRegistroConfirmado.mockResolvedValue(undefined);
     mockUpsertarAlumnoEnSheets.mockResolvedValue({ ok: true });
-    mockEjecutarHooksPostConfirmacion.mockResolvedValue({ groupSubscription: "added", gruposSync: "ok" });
+    mockEjecutarHooksPostConfirmacion.mockResolvedValue({ canalesConError: [], gruposSync: "ok" });
   });
 
   it("propaga el resultado { ok: false } cuando confirmarDatosAlumno falla", async () => {
@@ -264,7 +264,7 @@ describe("confirmarYProcesarAlumno", () => {
     expect(resultado).toEqual({
       ok: true,
       comision: comisionActiva,
-      hooks: { groupSubscription: "added", gruposSync: "ok" },
+      hooks: { canalesConError: [], gruposSync: "ok" },
     });
   });
 
