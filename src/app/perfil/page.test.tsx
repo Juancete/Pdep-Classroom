@@ -10,8 +10,7 @@ const mockGetAlumnoByGithub = vi.fn();
 const mockGetComisionActiva = vi.fn();
 const mockVerificarConsistenciaAlumno = vi.fn();
 const mockIntentarSincronizarGrupos = vi.fn();
-const mockIntentarSincronizarGoogleGroup = vi.fn();
-const mockIsGoogleGroupsConfigured = vi.fn();
+const mockResolverEstadoDeSincronizacion = vi.fn();
 const mockRedirect = vi.fn().mockImplementation((url: string) => {
   throw new Error(`REDIRECT:${url}`);
 });
@@ -35,13 +34,9 @@ vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
     mockIntentarSincronizarGrupos(...args),
 }));
 
-vi.mock("@/lib/services/intentarSincronizarGoogleGroup", () => ({
-  intentarSincronizarGoogleGroup: (...args: unknown[]) =>
-    mockIntentarSincronizarGoogleGroup(...args),
-}));
-
-vi.mock("@/lib/googleGroups", () => ({
-  isGoogleGroupsConfigured: () => mockIsGoogleGroupsConfigured(),
+vi.mock("@/lib/services/estadoDeSincronizacion", () => ({
+  resolverEstadoDeSincronizacion: (...args: unknown[]) =>
+    mockResolverEstadoDeSincronizacion(...args),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -91,6 +86,11 @@ function makeAlumno(overrides: Partial<Alumno> = {}): Alumno {
 
 const comisionActiva = { id: "c1", spreadsheetId: "sheet-xyz" };
 
+/** Doble mínimo de un canal pendiente para inyectar en el mock de estadoDeSincronizacion. */
+function makeCanalPendiente(sincronizar = vi.fn().mockResolvedValue({ estado: "sincronizada" })) {
+  return { nombre: "google_groups", asuntoPendiente: () => "suscribirte al grupo de Google del curso", sincronizar };
+}
+
 // ── Tests ────────────────────────────────────────────────────
 
 describe("Perfil page", () => {
@@ -99,8 +99,13 @@ describe("Perfil page", () => {
     mockGetComisionActiva.mockResolvedValue(comisionActiva);
     mockVerificarConsistenciaAlumno.mockResolvedValue(undefined);
     mockIntentarSincronizarGrupos.mockResolvedValue(undefined);
-    mockIntentarSincronizarGoogleGroup.mockResolvedValue({ status: "added" });
-    mockIsGoogleGroupsConfigured.mockReturnValue(false);
+    // Por defecto refleja los flags propios del alumno (asuntosDeSyncPendientes)
+    // y no aporta canales pendientes — se sobreescribe puntualmente donde hace falta.
+    mockResolverEstadoDeSincronizacion.mockImplementation(async (alumno: Alumno) => ({
+      hayPendientes: alumno.asuntosDeSyncPendientes().length > 0,
+      mensaje: "",
+      canalesPendientes: [],
+    }));
     mockRedirect.mockImplementation((url: string) => {
       throw new Error(`REDIRECT:${url}`);
     });
@@ -160,12 +165,11 @@ describe("Perfil page", () => {
       mockAuth.mockResolvedValue(makeSession("juangarcia"));
     });
 
-    it("no dispara ninguna sync si ningún flag está prendido", async () => {
+    it("no dispara ninguna sync si nada está pendiente", async () => {
       mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
       await PerfilPage();
       expect(mockVerificarConsistenciaAlumno).not.toHaveBeenCalled();
       expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
-      expect(mockIntentarSincronizarGoogleGroup).not.toHaveBeenCalled();
     });
 
     it("llama a verificarConsistenciaAlumno si alumnoSyncFallidoEn está prendido", async () => {
@@ -228,44 +232,49 @@ describe("Perfil page", () => {
       await expect(PerfilPage()).resolves.toBeDefined();
     });
 
-    it("reintenta Google Groups cuando está configurado y pendiente", async () => {
-      mockIsGoogleGroupsConfigured.mockReturnValue(true);
-      mockGetAlumnoByGithub.mockResolvedValue(
-        makeAlumno({ googleGroupEstado: "fallido" })
-      );
+    it("reintenta un canal pendiente llamando a canal.sincronizar", async () => {
+      const sincronizar = vi.fn().mockResolvedValue({ estado: "sincronizada" });
+      mockResolverEstadoDeSincronizacion.mockResolvedValue({
+        hayPendientes: true,
+        mensaje: "No pudimos suscribirte al grupo de Google del curso.",
+        canalesPendientes: [makeCanalPendiente(sincronizar)],
+      });
+      mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
 
       await PerfilPage();
 
-      expect(mockIntentarSincronizarGoogleGroup).toHaveBeenCalledWith(
-        "juangarcia"
-      );
+      expect(sincronizar).toHaveBeenCalledWith("juangarcia");
     });
 
-    it("no presenta omitido como pendiente mientras la integración está desactivada", async () => {
-      mockGetAlumnoByGithub.mockResolvedValue(
-        makeAlumno({ googleGroupEstado: "omitido" })
-      );
+    it("no llama a sincronizar cuando no hay canales pendientes", async () => {
+      const sincronizar = vi.fn();
+      mockResolverEstadoDeSincronizacion.mockResolvedValue({
+        hayPendientes: false,
+        mensaje: "",
+        canalesPendientes: [],
+      });
+      mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
 
       await PerfilPage();
 
-      expect(mockIntentarSincronizarGoogleGroup).not.toHaveBeenCalled();
+      expect(sincronizar).not.toHaveBeenCalled();
     });
 
-    it("reintenta Google Groups aunque falle getComisionActiva", async () => {
-      mockIsGoogleGroupsConfigured.mockReturnValue(true);
+    it("reintenta el canal pendiente aunque falle getComisionActiva", async () => {
+      const sincronizar = vi.fn().mockResolvedValue({ estado: "sincronizada" });
+      mockResolverEstadoDeSincronizacion.mockResolvedValue({
+        hayPendientes: true,
+        mensaje: "",
+        canalesPendientes: [makeCanalPendiente(sincronizar)],
+      });
       mockGetAlumnoByGithub.mockResolvedValue(
-        makeAlumno({
-          gruposSyncFallidoEn: new Date("2026-04-01"),
-          googleGroupEstado: "fallido",
-        })
+        makeAlumno({ gruposSyncFallidoEn: new Date("2026-04-01") })
       );
       mockGetComisionActiva.mockRejectedValue(new Error("DB caída"));
 
       await expect(PerfilPage()).resolves.toBeDefined();
 
-      expect(mockIntentarSincronizarGoogleGroup).toHaveBeenCalledWith(
-        "juangarcia"
-      );
+      expect(sincronizar).toHaveBeenCalledWith("juangarcia");
       expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
     });
   });

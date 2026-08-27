@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockIntentarSincronizarGoogleGroup = vi.fn();
+const mockCanalesActivos = vi.fn();
 const mockIntentarSincronizarGrupos = vi.fn();
 
-vi.mock("./intentarSincronizarGoogleGroup", () => ({
-  intentarSincronizarGoogleGroup: (...args: unknown[]) =>
-    mockIntentarSincronizarGoogleGroup(...args),
+vi.mock("@/lib/canales", () => ({
+  canalesActivos: (...args: unknown[]) => mockCanalesActivos(...args),
 }));
 
 vi.mock("./intentarSincronizarGrupos", () => ({
@@ -15,7 +14,7 @@ vi.mock("./intentarSincronizarGrupos", () => ({
 
 import {
   ejecutarHooksPostConfirmacion,
-  hookGoogleGroups,
+  hookCanalesDeComunicacion,
   hookGruposSync,
   HOOKS_CONFIRMACION_ALUMNO,
   HOOKS_IMPORTACION_ALUMNO,
@@ -31,31 +30,52 @@ function makeCtx(overrides: Partial<ContextoAlumno> = {}): ContextoAlumno {
   };
 }
 
-describe("hookGoogleGroups", () => {
+function makeCanalFalso(overrides: {
+  asunto?: string;
+  sincronizar?: ReturnType<typeof vi.fn>;
+} = {}) {
+  return {
+    asuntoPendiente: () => overrides.asunto ?? "hacer algo",
+    sincronizar: overrides.sincronizar ?? vi.fn().mockResolvedValue({ estado: "sincronizada" }),
+  };
+}
+
+describe("hookCanalesDeComunicacion", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockIntentarSincronizarGoogleGroup.mockResolvedValue({ status: "added" });
   });
 
-  it("delega por githubUsername y devuelve el status", async () => {
-    const resultado = await hookGoogleGroups(
+  it("recorre los canales activos y no llama a los inactivos (canalesActivos ya los filtró)", async () => {
+    const canalActivo = makeCanalFalso();
+    mockCanalesActivos.mockReturnValue([canalActivo]);
+
+    const resultado = await hookCanalesDeComunicacion(
       makeCtx({ githubUsername: "anagarcia" })
     );
 
-    expect(mockIntentarSincronizarGoogleGroup).toHaveBeenCalledWith(
-      "anagarcia"
-    );
-    expect(resultado).toEqual({ groupSubscription: "added" });
+    expect(canalActivo.sincronizar).toHaveBeenCalledWith("anagarcia");
+    expect(resultado).toEqual({ canalesConError: [] });
   });
 
-  it("propaga un resultado degradado sin lanzar", async () => {
-    mockIntentarSincronizarGoogleGroup.mockResolvedValue({
-      status: "error",
-      error: "boom",
+  it("acumula el asunto de cada canal que falla, sin frenar a los demás", async () => {
+    const canalOk = makeCanalFalso({ asunto: "hacer A" });
+    const canalRoto = makeCanalFalso({
+      asunto: "hacer B",
+      sincronizar: vi.fn().mockResolvedValue({ estado: "error", error: "boom" }),
     });
+    mockCanalesActivos.mockReturnValue([canalOk, canalRoto]);
 
-    await expect(hookGoogleGroups(makeCtx())).resolves.toEqual({
-      groupSubscription: "error",
+    const resultado = await hookCanalesDeComunicacion(makeCtx());
+
+    expect(canalOk.sincronizar).toHaveBeenCalled();
+    expect(canalRoto.sincronizar).toHaveBeenCalled();
+    expect(resultado).toEqual({ canalesConError: ["hacer B"] });
+  });
+
+  it("sin canales activos no llama a nada y devuelve la lista vacía", async () => {
+    mockCanalesActivos.mockReturnValue([]);
+    await expect(hookCanalesDeComunicacion(makeCtx())).resolves.toEqual({
+      canalesConError: [],
     });
   });
 });
@@ -93,16 +113,16 @@ describe("ejecutarHooksPostConfirmacion", () => {
   });
 
   it("mergea resultados en orden", async () => {
-    const hookA = vi.fn().mockResolvedValue({ groupSubscription: "added" });
+    const hookA = vi.fn().mockResolvedValue({ canalesConError: [] });
     const hookB = vi.fn().mockResolvedValue({
-      groupSubscription: "already_member",
+      canalesConError: ["hacer algo"],
       gruposSync: "ok",
     });
 
     await expect(
       ejecutarHooksPostConfirmacion(makeCtx(), [hookA, hookB])
     ).resolves.toEqual({
-      groupSubscription: "already_member",
+      canalesConError: ["hacer algo"],
       gruposSync: "ok",
     });
   });
@@ -111,25 +131,19 @@ describe("ejecutarHooksPostConfirmacion", () => {
 describe("políticas por origen", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockIntentarSincronizarGoogleGroup.mockResolvedValue({ status: "added" });
+    mockCanalesActivos.mockReturnValue([makeCanalFalso()]);
     mockIntentarSincronizarGrupos.mockResolvedValue(undefined);
   });
 
-  it("registro y perfil ejecutan Google Groups y grupos de TP", async () => {
-    await ejecutarHooksPostConfirmacion(
-      makeCtx(),
-      HOOKS_CONFIRMACION_ALUMNO
-    );
-    expect(mockIntentarSincronizarGoogleGroup).toHaveBeenCalledOnce();
+  it("registro y perfil ejecutan los canales de comunicación y grupos de TP", async () => {
+    await ejecutarHooksPostConfirmacion(makeCtx(), HOOKS_CONFIRMACION_ALUMNO);
+    expect(mockCanalesActivos).toHaveBeenCalledOnce();
     expect(mockIntentarSincronizarGrupos).toHaveBeenCalledOnce();
   });
 
-  it("la importación ejecuta solo Google Groups", async () => {
-    await ejecutarHooksPostConfirmacion(
-      makeCtx(),
-      HOOKS_IMPORTACION_ALUMNO
-    );
-    expect(mockIntentarSincronizarGoogleGroup).toHaveBeenCalledOnce();
+  it("la importación ejecuta solo los canales de comunicación", async () => {
+    await ejecutarHooksPostConfirmacion(makeCtx(), HOOKS_IMPORTACION_ALUMNO);
+    expect(mockCanalesActivos).toHaveBeenCalledOnce();
     expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
   });
 });

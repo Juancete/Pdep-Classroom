@@ -4,8 +4,7 @@ import { redirect } from "next/navigation";
 import { AlumnoForm } from "@/app/components/AlumnoForm";
 import { verificarConsistenciaAlumno } from "@/lib/services/verificarConsistenciaAlumno";
 import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
-import { intentarSincronizarGoogleGroup } from "@/lib/services/intentarSincronizarGoogleGroup";
-import { isGoogleGroupsConfigured } from "@/lib/googleGroups";
+import { resolverEstadoDeSincronizacion } from "@/lib/services/estadoDeSincronizacion";
 import type { SessionPdepUser } from "@/types";
 
 export default async function PerfilPage() {
@@ -18,13 +17,13 @@ export default async function PerfilPage() {
   const alumno = await getAlumnoByGithub(githubUsername);
   if (!alumno) redirect("/registro");
 
-  // Reintento on-demand: si alguno de los flags de sync está prendido,
+  // Reintento on-demand: si alguno de los asuntos de sync está pendiente,
   // el alumno probablemente entró acá específicamente para resolverlo.
   // Las sincronizaciones son independientes y se invocan solo si su estado
   // persistido indica que necesitan reintento.
   // Protegemos defensivamente: una excepción inesperada no debe romper el render.
-  const googleGroupsConfigurado = isGoogleGroupsConfigured();
-  if (alumno.tieneSyncPendiente(googleGroupsConfigurado)) {
+  const estadoDeSincronizacion = await resolverEstadoDeSincronizacion(alumno);
+  if (estadoDeSincronizacion.hayPendientes) {
     const tareas: Promise<unknown>[] = [];
     if (alumno.tieneSyncDeAlumnoFallido() || alumno.tieneSyncDeGruposFallido()) {
       tareas.push(
@@ -50,8 +49,8 @@ export default async function PerfilPage() {
         })()
       );
     }
-    if (alumno.tieneGoogleGroupPendiente(googleGroupsConfigurado)) {
-      tareas.push(intentarSincronizarGoogleGroup(githubUsername));
+    for (const canal of estadoDeSincronizacion.canalesPendientes) {
+      tareas.push(canal.sincronizar(githubUsername));
     }
     await Promise.allSettled(tareas);
   }

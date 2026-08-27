@@ -11,8 +11,9 @@ const mockGetAlumnos = vi.fn();
 const mockGetSheetNames = vi.fn();
 const mockRedirect = vi.fn();
 const mockGetAlumnosConGruposSyncPendiente = vi.fn();
-const mockGetAlumnosConGoogleGroupPendiente = vi.fn();
-const mockIsGoogleGroupsConfigured = vi.fn();
+const mockGetSuscripcionesPendientesDeComision = vi.fn();
+const mockCanalesActivos = vi.fn();
+const mockCanalPorNombre = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
@@ -23,12 +24,13 @@ vi.mock("@/lib/repositories", () => ({
   countAlumnos: () => mockCountAlumnos(),
   getAlumnosConGruposSyncPendiente: (...args: unknown[]) =>
     mockGetAlumnosConGruposSyncPendiente(...args),
-  getAlumnosConGoogleGroupPendiente: (...args: unknown[]) =>
-    mockGetAlumnosConGoogleGroupPendiente(...args),
+  getSuscripcionesPendientesDeComision: (...args: unknown[]) =>
+    mockGetSuscripcionesPendientesDeComision(...args),
 }));
 
-vi.mock("@/lib/googleGroups", () => ({
-  isGoogleGroupsConfigured: () => mockIsGoogleGroupsConfigured(),
+vi.mock("@/lib/canales", () => ({
+  canalesActivos: (...args: unknown[]) => mockCanalesActivos(...args),
+  canalPorNombre: (...args: unknown[]) => mockCanalPorNombre(...args),
 }));
 
 vi.mock("@/lib/sheets", () => ({
@@ -64,15 +66,15 @@ vi.mock("../../sync-grupos-button", () => ({
     ),
 }));
 
-vi.mock("../../sync-google-groups-button", () => ({
-  SyncGoogleGroupsButton: ({ comisionId }: { comisionId: string }) =>
+vi.mock("../../sync-canales-button", () => ({
+  SyncCanalesButton: ({ comisionId }: { comisionId: string }) =>
     React.createElement(
       "button",
       {
-        "data-testid": "sync-google-groups-button",
+        "data-testid": "sync-canales-button",
         "data-comision-id": comisionId,
       },
-      "Reintentar Google Groups"
+      "Reintentar suscripciones"
     ),
 }));
 
@@ -124,8 +126,9 @@ describe("Edit Comision page", () => {
     mockGetAlumnos.mockResolvedValue([]);
     mockCountAlumnos.mockResolvedValue(0);
     mockGetAlumnosConGruposSyncPendiente.mockResolvedValue([]);
-    mockGetAlumnosConGoogleGroupPendiente.mockResolvedValue([]);
-    mockIsGoogleGroupsConfigured.mockReturnValue(false);
+    mockGetSuscripcionesPendientesDeComision.mockResolvedValue([]);
+    mockCanalesActivos.mockReturnValue([]);
+    mockCanalPorNombre.mockReturnValue({ etiqueta: "Google Groups" });
     mockGetSheetNames.mockResolvedValue(["Alumnos", "Grupos"]);
   });
 
@@ -325,16 +328,16 @@ describe("Edit Comision page", () => {
     });
   });
 
-  describe("membresías de Google Groups pendientes", () => {
-    it("muestra badge, lista y retry cuando la integración está habilitada", async () => {
-      mockIsGoogleGroupsConfigured.mockReturnValue(true);
+  describe("suscripciones a canales de comunicación pendientes", () => {
+    it("muestra badge, lista y retry cuando hay canales activos", async () => {
+      mockCanalesActivos.mockReturnValue([{ nombre: "google_groups" }]);
       mockGetComision.mockResolvedValue(makeComision());
-      mockGetAlumnosConGoogleGroupPendiente.mockResolvedValue([
+      mockGetSuscripcionesPendientesDeComision.mockResolvedValue([
         {
-          githubUsername: "ana",
-          nombreCompleto: "García, Ana",
-          googleGroupUltimoError: "Sin permisos para anxxxxxx@utn.edu.ar",
-          googleGroupUltimoIntentoEn: new Date("2026-06-10T12:00:00Z"),
+          canal: "google_groups",
+          alumno: { githubUsername: "ana", nombreCompleto: "García, Ana" },
+          ultimoError: "Sin permisos para anxxxxxx@utn.edu.ar",
+          ultimoIntentoEn: new Date("2026-06-10T12:00:00Z"),
         },
       ]);
 
@@ -344,13 +347,13 @@ describe("Edit Comision page", () => {
         })) as React.ReactElement
       );
 
-      expect(html).toContain("Google Groups pendientes");
+      expect(html).toContain("Suscripciones pendientes");
       expect(html).toContain("García, Ana");
       expect(html).toContain("Sin permisos");
-      expect(html).toContain('data-testid="sync-google-groups-button"');
+      expect(html).toContain('data-testid="sync-canales-button"');
     });
 
-    it("no consulta ni muestra pendientes cuando la integración está desactivada", async () => {
+    it("no consulta ni muestra pendientes cuando no hay canales activos", async () => {
       mockGetComision.mockResolvedValue(makeComision());
 
       const html = renderToStaticMarkup(
@@ -359,8 +362,8 @@ describe("Edit Comision page", () => {
         })) as React.ReactElement
       );
 
-      expect(mockGetAlumnosConGoogleGroupPendiente).not.toHaveBeenCalled();
-      expect(html).not.toContain("Google Groups pendientes");
+      expect(mockGetSuscripcionesPendientesDeComision).not.toHaveBeenCalled();
+      expect(html).not.toContain("Suscripciones pendientes");
     });
   });
 });

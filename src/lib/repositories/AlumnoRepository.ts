@@ -1,11 +1,11 @@
 import { getEM } from "@/lib/db";
 import type { EntityManager } from "@mikro-orm/postgresql";
-import {
-  Alumno,
-  type AlumnoData,
-  type EstadoGoogleGroup,
-} from "@/domain/entities";
+import { Alumno, type AlumnoData } from "@/domain/entities";
 import type { Comision } from "@/domain/entities";
+import {
+  crearSuscripcionesFaltantes,
+  marcarSuscripcionesPendientes,
+} from "./SuscripcionAlumnoRepository";
 
 export type { AlumnoData } from "@/domain/entities";
 
@@ -81,6 +81,7 @@ export async function createAlumno(data: AlumnoData): Promise<Alumno> {
   const alumno = new Alumno();
   alumno.actualizarDatos(data);
   entityManager.persist(alumno);
+  await crearSuscripcionesFaltantes([alumno], entityManager);
   await entityManager.flush();
   return alumno;
 }
@@ -94,7 +95,11 @@ export async function upsertAlumno(data: AlumnoData): Promise<Alumno> {
   });
 
   if (existing) {
+    const emailAnterior = Alumno.normalizarEmail(existing.email);
     existing.actualizarDatos(data);
+    if (emailAnterior !== existing.email) {
+      await marcarSuscripcionesPendientes([existing.id], entityManager);
+    }
     await entityManager.flush();
     return existing;
   }
@@ -183,38 +188,6 @@ export async function getAlumnosConGruposSyncPendiente(
   );
 }
 
-export async function getAlumnosConGoogleGroupPendiente(
-  comisionId: string,
-  incluirOmitidos = false
-): Promise<Alumno[]> {
-  const entityManager = await getEM();
-  const estados: EstadoGoogleGroup[] = incluirOmitidos
-    ? ["pendiente", "fallido", "omitido"]
-    : ["pendiente", "fallido"];
-  return entityManager.find(
-    Alumno,
-    {
-      comision: { id: comisionId },
-      googleGroupEstado: { $in: estados },
-    },
-    { orderBy: { apellido: "ASC", nombre: "ASC" } }
-  );
-}
-
-export async function actualizarEstadoGoogleGroup(
-  githubUsername: string,
-  actualizar: (alumno: Alumno) => void
-): Promise<Alumno | null> {
-  const entityManager = await getEM();
-  const alumno = await entityManager.findOne(Alumno, {
-    githubUsername: Alumno.normalizarUsername(githubUsername),
-  });
-  if (!alumno) return null;
-  actualizar(alumno);
-  await entityManager.flush();
-  return alumno;
-}
-
 /** Crea o actualiza múltiples alumnos en un solo flush. */
 export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
   if (dataList.length === 0) return 0;
@@ -247,21 +220,32 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
   const existentes = await entityManager.find(Alumno, { githubUsername: { $in: githubUsernames } });
   const existentesPorGithub = new Map(existentes.map((alumno) => [alumno.githubUsername, alumno]));
 
+  const alumnosNuevos: Alumno[] = [];
+  const idsConEmailCambiado: string[] = [];
+
   for (const data of dataList) {
     const key = Alumno.normalizarUsername(data.githubUsername);
     const existing = existentesPorGithub.get(key);
     if (existing) {
+      const emailAnterior = Alumno.normalizarEmail(existing.email);
       existing.actualizarDatos(data);
+      if (emailAnterior !== existing.email) {
+        idsConEmailCambiado.push(existing.id);
+      }
     } else {
       const alumno = new Alumno();
       alumno.actualizarDatos(data);
       entityManager.persist(alumno);
+      alumnosNuevos.push(alumno);
       // Si el batch trae otra fila con el mismo github (typo o fila duplicada
       // en la planilla), debe reutilizar esta instancia — sin esto, el UNIQUE
       // de githubUsername explota en el flush con un error genérico.
       existentesPorGithub.set(key, alumno);
     }
   }
+
+  await crearSuscripcionesFaltantes(alumnosNuevos, entityManager);
+  await marcarSuscripcionesPendientes(idsConEmailCambiado, entityManager);
 
   await entityManager.flush();
   return dataList.length;

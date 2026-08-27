@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/session";
 import { getAlumnoByGithub } from "@/lib/repositories";
-import { isGoogleGroupsConfigured } from "@/lib/googleGroups";
+import { resolverEstadoDeSincronizacion } from "@/lib/services/estadoDeSincronizacion";
 
 /**
  * Banner global que avisa al alumno que algo en la sincronización con la
- * planilla o Google Groups quedó en error. Es persistente mientras alguno de
- * los estados de sincronización requiera atención.
+ * planilla o con algún canal de comunicación quedó en error. Es persistente
+ * mientras alguno de los estados de sincronización requiera atención.
  *
  * Los estados se limpian cuando un reintento funciona. Cuando eso pasa, este
  * banner desaparece en el próximo render.
@@ -18,10 +18,10 @@ export async function SyncPendingBanner() {
   const alumno = await getAlumnoByGithub(user.githubUsername);
   if (!alumno) return null;
 
-  const googleGroupsConfigurado = isGoogleGroupsConfigured();
-  if (!alumno.tieneSyncPendiente(googleGroupsConfigurado)) return null;
+  const estado = await resolverEstadoDeSincronizacion(alumno);
+  if (!estado.hayPendientes) return null;
 
-  const mensaje = alumno.mensajeDeSyncPendiente(googleGroupsConfigurado);
+  const mensaje = estado.mensaje;
 
   return (
     <div

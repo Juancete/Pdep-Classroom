@@ -1,6 +1,5 @@
-import type { AgregarMiembroResult } from "@/lib/googleGroups";
+import { canalesActivos } from "@/lib/canales";
 import { intentarSincronizarGrupos } from "./intentarSincronizarGrupos";
-import { intentarSincronizarGoogleGroup } from "./intentarSincronizarGoogleGroup";
 import type { Comision } from "@/domain/entities";
 
 export type ContextoAlumno = {
@@ -10,21 +9,29 @@ export type ContextoAlumno = {
 };
 
 export type ResultadoHooks = {
-  groupSubscription?: AgregarMiembroResult["status"];
+  canalesConError?: string[];
   gruposSync?: "ok" | "error";
 };
 
 export type HookPostConfirmacion = (ctx: ContextoAlumno) => Promise<ResultadoHooks>;
 
 /**
- * Reconcilia la membresía persistente del alumno. El servicio obtiene email y
- * estado desde DB para que la misma operación sirva también en los reintentos.
+ * Reconcilia la suscripción del alumno a cada canal de comunicación activo.
+ * El `for` no ramifica por tipo de canal — cada uno sabe reconciliarse solo
+ * (Template Method en `CanalDeComunicacion`). Un canal sin configurar ni
+ * siquiera se invoca: `canalesActivos()` ya lo filtró.
  */
-export const hookGoogleGroups: HookPostConfirmacion = async ({
+export const hookCanalesDeComunicacion: HookPostConfirmacion = async ({
   githubUsername,
 }) => {
-  const suscripcion = await intentarSincronizarGoogleGroup(githubUsername);
-  return { groupSubscription: suscripcion.status };
+  const asuntosConError: string[] = [];
+  for (const canal of canalesActivos()) {
+    const resultado = await canal.sincronizar(githubUsername);
+    if (resultado.estado === "error") {
+      asuntosConError.push(canal.asuntoPendiente());
+    }
+  }
+  return { canalesConError: asuntosConError };
 };
 
 /**
@@ -61,11 +68,13 @@ export async function ejecutarHooksPostConfirmacion(
 
 // Política por origen: qué hooks corre cada flujo del evento "alumno confirmado".
 export const HOOKS_CONFIRMACION_ALUMNO: HookPostConfirmacion[] = [
-  hookGoogleGroups,
+  hookCanalesDeComunicacion,
   hookGruposSync,
 ];
 
-// La importación admin suscribe al grupo pero NO sincroniza grupos inline: eso
-// queda en la action dedicada `sincronizarGruposDeLaComision` (lectura única de
-// la hoja, UI de progreso propia).
-export const HOOKS_IMPORTACION_ALUMNO: HookPostConfirmacion[] = [hookGoogleGroups];
+// La importación admin suscribe a los canales pero NO sincroniza grupos
+// inline: eso queda en la action dedicada `sincronizarGruposDeLaComision`
+// (lectura única de la hoja, UI de progreso propia).
+export const HOOKS_IMPORTACION_ALUMNO: HookPostConfirmacion[] = [
+  hookCanalesDeComunicacion,
+];

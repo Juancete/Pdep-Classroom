@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildRepoName,
+  enumerar,
   extractTemplateName,
   GITHUB_REPO_NAME_MAX_LENGTH,
   NombreRepositorioDemasiadoLargoError,
@@ -111,5 +112,25 @@ describe("extractTemplateName", () => {
 
   it("maneja múltiples barras (toma el último segmento)", () => {
     expect(extractTemplateName("a/b/c/template")).toBe("template");
+  });
+});
+
+// ── enumerar ─────────────────────────────────────────────────
+
+describe("enumerar", () => {
+  it("devuelve vacío para una lista vacía", () => {
+    expect(enumerar([])).toBe("");
+  });
+
+  it("devuelve el ítem tal cual cuando hay uno solo", () => {
+    expect(enumerar(["a"])).toBe("a");
+  });
+
+  it("une dos ítems con 'ni'", () => {
+    expect(enumerar(["a", "b"])).toBe("a ni b");
+  });
+
+  it("separa con coma y usa 'ni' antes del último", () => {
+    expect(enumerar(["a", "b", "c"])).toBe("a, b ni c");
   });
 });

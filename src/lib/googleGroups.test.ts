@@ -55,7 +55,7 @@ describe("agregarMiembroAGrupo", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.GOOGLE_GROUP_EMAIL = "pdep@googlegroups.com";
+    process.env.GOOGLE_GROUP_EMAIL = "pdep@utn.edu.ar";
     process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL = "admin@utn.edu.ar";
     process.env.GOOGLE_SERVICE_ACCOUNT_KEY = FAKE_SA_KEY;
     mockMembersInsert.mockResolvedValue({ data: {} });
@@ -97,7 +97,7 @@ describe("agregarMiembroAGrupo", () => {
     expect(result).toEqual({ status: "added" });
     expect(mockMembersInsert).toHaveBeenCalledWith(
       {
-        groupKey: "pdep@googlegroups.com",
+        groupKey: "pdep@utn.edu.ar",
         requestBody: { email: "juan@gmail.com", role: "MEMBER" },
       },
       expect.objectContaining({ signal: expect.any(AbortSignal) })
@@ -170,7 +170,7 @@ describe("quitarMiembroDeGrupo", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.GOOGLE_GROUP_EMAIL = "pdep@googlegroups.com";
+    process.env.GOOGLE_GROUP_EMAIL = "pdep@utn.edu.ar";
     process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL = "admin@utn.edu.ar";
     process.env.GOOGLE_SERVICE_ACCOUNT_KEY = FAKE_SA_KEY;
     mockMembersDelete.mockResolvedValue({ data: {} });
@@ -192,7 +192,7 @@ describe("quitarMiembroDeGrupo", () => {
     const result = await quitarMiembroDeGrupo("juan@gmail.com");
     expect(result).toEqual({ status: "removed" });
     expect(mockMembersDelete).toHaveBeenCalledWith(
-      { groupKey: "pdep@googlegroups.com", memberKey: "juan@gmail.com" },
+      { groupKey: "pdep@utn.edu.ar", memberKey: "juan@gmail.com" },
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     );
   });

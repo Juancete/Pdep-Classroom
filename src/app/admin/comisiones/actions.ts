@@ -7,7 +7,7 @@ import {
   getComision,
   LegajoConflictError,
   getAlumnosByComision,
-  getAlumnosConGoogleGroupPendiente,
+  getSuscripcionesPendientesDeComision,
   ComisionActivaDuplicadaError,
   reclamarImportacionGrupos,
   renovarImportacionGrupos,
@@ -25,8 +25,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { DEFAULT_COLUMN_CONFIG, type GruposColumnConfig } from "@/types";
-import { intentarSincronizarGoogleGroup } from "@/lib/services/intentarSincronizarGoogleGroup";
-import { isGoogleGroupsConfigured } from "@/lib/googleGroups";
+import { canalesActivos, canalPorNombre } from "@/lib/canales";
 
 export type ComisionFormState =
   | { ok: false; errors: Record<string, string[] | undefined> }
@@ -350,7 +349,7 @@ export async function sincronizarGruposDeLaComision(
   }
 }
 
-export type SyncGoogleGroupState =
+export type SyncCanalesState =
   | { status: "idle" }
   | {
       status: "ok";
@@ -360,36 +359,37 @@ export type SyncGoogleGroupState =
     }
   | { status: "error"; message: string };
 
-export async function sincronizarGoogleGroupsDeLaComision(
-  _prevState: SyncGoogleGroupState,
+export async function sincronizarCanalesDeLaComision(
+  _prevState: SyncCanalesState,
   formData: FormData
-): Promise<SyncGoogleGroupState> {
+): Promise<SyncCanalesState> {
   await requireAdmin();
 
   const id = formData.get("comisionId") as string;
   const comision = await getComision(id);
   if (!comision) return { status: "error", message: "Comisión no encontrada" };
 
-  const alumnos = await getAlumnosConGoogleGroupPendiente(
+  const nombresDeCanalesActivos = canalesActivos().map((canal) => canal.nombre);
+  const suscripciones = await getSuscripcionesPendientesDeComision(
     id,
-    isGoogleGroupsConfigured()
+    nombresDeCanalesActivos
   );
   let sincronizados = 0;
   let omitidos = 0;
   let aunConError = 0;
 
-  const lote = alumnos.slice(0, 20);
-  for (const alumno of lote) {
+  const lote = suscripciones.slice(0, 20);
+  for (const suscripcion of lote) {
     try {
-      const resultado = await intentarSincronizarGoogleGroup(
-        alumno.githubUsername
-      );
-      if (
-        resultado.status === "added" ||
-        resultado.status === "already_member"
-      ) {
+      const canal = canalPorNombre(suscripcion.canal);
+      if (!canal) {
+        aunConError++;
+        continue;
+      }
+      const resultado = await canal.sincronizar(suscripcion.alumno.githubUsername);
+      if (resultado.estado === "sincronizada") {
         sincronizados++;
-      } else if (resultado.status === "skipped") {
+      } else if (resultado.estado === "omitida") {
         omitidos++;
       } else {
         aunConError++;

@@ -3,8 +3,8 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import {
-  sincronizarGoogleGroupsDeLaComision,
-  type SyncGoogleGroupState,
+  sincronizarCanalesDeLaComision,
+  type SyncCanalesState,
 } from "./actions";
 
 function SubmitButton() {
@@ -15,18 +15,18 @@ function SubmitButton() {
       disabled={pending}
       className="inline-flex items-center gap-1.5 text-xs font-medium bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1 rounded-full transition-colors disabled:opacity-60"
     >
-      {pending ? "Reintentando…" : "Reintentar Google Groups"}
+      {pending ? "Reintentando…" : "Reintentar suscripciones"}
     </button>
   );
 }
 
-export function SyncGoogleGroupsButton({
+export function SyncCanalesButton({
   comisionId,
 }: {
   comisionId: string;
 }) {
-  const [state, action] = useActionState<SyncGoogleGroupState, FormData>(
-    sincronizarGoogleGroupsDeLaComision,
+  const [state, action] = useActionState<SyncCanalesState, FormData>(
+    sincronizarCanalesDeLaComision,
     { status: "idle" }
   );
 

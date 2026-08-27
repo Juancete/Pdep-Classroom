@@ -260,107 +260,33 @@ describe("Alumno — predicados de sync", () => {
     });
   });
 
-  describe("tieneSyncPendiente", () => {
-    it("devuelve false cuando ambos flags están limpios", () => {
+  describe("asuntosDeSyncPendientes", () => {
+    it("devuelve lista vacía cuando ambos flags están limpios", () => {
       const alumno = nuevoAlumno();
-      expect(alumno.tieneSyncPendiente()).toBe(false);
+      expect(alumno.asuntosDeSyncPendientes()).toEqual([]);
     });
 
-    it("devuelve true cuando solo falló la sync del alumno", () => {
+    it("incluye el asunto de alumno cuando solo falló esa sync", () => {
       const alumno = nuevoAlumno({ alumnoSyncFallidoEn: new Date() });
-      expect(alumno.tieneSyncPendiente()).toBe(true);
+      expect(alumno.asuntosDeSyncPendientes()).toEqual([
+        "reflejar tus datos de alumno en la planilla",
+      ]);
     });
 
-    it("devuelve true cuando solo falló la sync de grupos", () => {
+    it("incluye el asunto de grupos cuando solo falló esa sync", () => {
       const alumno = nuevoAlumno({ gruposSyncFallidoEn: new Date() });
-      expect(alumno.tieneSyncPendiente()).toBe(true);
+      expect(alumno.asuntosDeSyncPendientes()).toEqual([
+        "asignarte a tu grupo de TP desde la planilla",
+      ]);
     });
 
-    it("devuelve true cuando fallaron ambas syncs", () => {
+    it("incluye ambos asuntos cuando fallaron las dos syncs", () => {
       const alumno = nuevoAlumno({ alumnoSyncFallidoEn: new Date(), gruposSyncFallidoEn: new Date() });
-      expect(alumno.tieneSyncPendiente()).toBe(true);
+      expect(alumno.asuntosDeSyncPendientes()).toEqual([
+        "reflejar tus datos de alumno en la planilla",
+        "asignarte a tu grupo de TP desde la planilla",
+      ]);
     });
-  });
-
-  describe("mensajeDeSyncPendiente", () => {
-    it("devuelve string vacío cuando no hay sync pendiente", () => {
-      const alumno = nuevoAlumno();
-      expect(alumno.mensajeDeSyncPendiente()).toBe("");
-    });
-
-    it("devuelve mensaje de alumno cuando solo falló esa sync", () => {
-      const alumno = nuevoAlumno({ alumnoSyncFallidoEn: new Date() });
-      expect(alumno.mensajeDeSyncPendiente()).toBe(
-        "No pudimos reflejar tus datos de alumno en la planilla."
-      );
-    });
-
-    it("devuelve mensaje de grupos cuando solo falló esa sync", () => {
-      const alumno = nuevoAlumno({ gruposSyncFallidoEn: new Date() });
-      expect(alumno.mensajeDeSyncPendiente()).toBe(
-        "No pudimos asignarte a tu grupo de TP desde la planilla."
-      );
-    });
-
-    it("devuelve mensaje combinado cuando fallaron ambas syncs", () => {
-      const alumno = nuevoAlumno({ alumnoSyncFallidoEn: new Date(), gruposSyncFallidoEn: new Date() });
-      expect(alumno.mensajeDeSyncPendiente()).toBe(
-        "No pudimos sincronizar tus datos ni asignarte a tu grupo de TP desde la planilla."
-      );
-    });
-  });
-});
-
-describe("estado de Google Groups", () => {
-  it("solo se considera pendiente cuando la integración está habilitada", () => {
-    const alumno = nuevoAlumno({ googleGroupEstado: "fallido" });
-    expect(alumno.tieneGoogleGroupPendiente(false)).toBe(false);
-    expect(alumno.tieneGoogleGroupPendiente(true)).toBe(true);
-  });
-
-  it("acumula emails anteriores para darlos de baja", () => {
-    const alumno = nuevoAlumno({
-      googleGroupEmailSincronizado: "primero@gmail.com",
-    });
-
-    alumno.registrarEmailAgregadoAGoogleGroup("segundo@gmail.com");
-    alumno.registrarEmailAgregadoAGoogleGroup("tercero@gmail.com");
-
-    expect(alumno.googleGroupEmailSincronizado).toBe("tercero@gmail.com");
-    expect(alumno.googleGroupEmailsPendientesBaja).toEqual([
-      "primero@gmail.com",
-      "segundo@gmail.com",
-    ]);
-  });
-
-  it("no deja el email activo pendiente de baja en una secuencia A→B→A", () => {
-    const alumno = nuevoAlumno({
-      googleGroupEmailSincronizado: "a@gmail.com",
-    });
-
-    alumno.registrarEmailAgregadoAGoogleGroup("b@gmail.com");
-    alumno.registrarEmailAgregadoAGoogleGroup("a@gmail.com");
-
-    expect(alumno.googleGroupEmailSincronizado).toBe("a@gmail.com");
-    expect(alumno.googleGroupEmailsPendientesBaja).toEqual(["b@gmail.com"]);
-  });
-
-  it("marca pendiente cuando cambia el email persistido", () => {
-    const alumno = nuevoAlumno({
-      email: "viejo@gmail.com",
-      googleGroupEstado: "sincronizado",
-    });
-
-    alumno.actualizarDatos({
-      legajo: alumno.legajo,
-      apellido: alumno.apellido,
-      nombre: alumno.nombre,
-      githubUsername: alumno.githubUsername,
-      email: "nuevo@gmail.com",
-      comision: alumno.comision,
-    });
-
-    expect(alumno.googleGroupEstado).toBe("pendiente");
   });
 });
 

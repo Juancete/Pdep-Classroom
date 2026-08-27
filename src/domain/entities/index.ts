@@ -4,8 +4,14 @@ export {
   validateRegistro,
   type AlumnoData,
   type RegistroInput,
-  type EstadoGoogleGroup,
 } from "./Alumno";
+export {
+  SuscripcionAlumno,
+  NOMBRES_DE_CANAL,
+  ESTADOS_DE_SUSCRIPCION,
+  type NombreDeCanal,
+  type EstadoDeSuscripcion,
+} from "./SuscripcionAlumno";
 export { Comision } from "./Comision";
 export {
   Assignment,

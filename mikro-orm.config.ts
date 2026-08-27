@@ -11,6 +11,7 @@ import { defineConfig, ReflectMetadataProvider } from "@mikro-orm/postgresql";
 import { Migrator } from "@mikro-orm/migrations";
 import {
   Alumno,
+  SuscripcionAlumno,
   Comision,
   Assignment,
   IndividualAssignment,
@@ -38,6 +39,7 @@ export default defineConfig({
   // Entidades
   entities: [
     Alumno,
+    SuscripcionAlumno,
     Comision,
     Assignment,
     IndividualAssignment,
