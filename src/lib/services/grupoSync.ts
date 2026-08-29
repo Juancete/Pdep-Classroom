@@ -1,7 +1,10 @@
-import { getEM } from "@/lib/db";
-import { Alumno, GrupalAssignment, type Comision } from "@/domain/entities";
+import { Alumno, type Comision } from "@/domain/entities";
 import { getAsignacionesGrupos, type AsignacionGrupoRow } from "@/lib/sheets";
-import { upsertGrupoConMiembro } from "@/lib/repositories";
+import {
+  getAlumnoByGithub,
+  getGrupalAssignmentsDeComisionYParadigma,
+  upsertGrupoConMiembro,
+} from "@/lib/repositories";
 
 /**
  * Mira la hoja de grupos configurada en la comisión; si el alumno aparece,
@@ -41,15 +44,14 @@ export async function sincronizarGruposDelAlumno(
   const deEsteAlumno = asignaciones.filter((asignacion) => asignacion.githubUsername === ghNorm);
   if (deEsteAlumno.length === 0) return;
 
-  const entityManager = await getEM();
-  const alumno = await entityManager.findOne(Alumno, { githubUsername: ghNorm });
+  const alumno = await getAlumnoByGithub(ghNorm);
   if (!alumno) return;
 
   for (const asig of deEsteAlumno) {
-    const grupales = await entityManager.find(GrupalAssignment, {
-      comision: { id: comision.id },
-      paradigma: asig.paradigma,
-    });
+    const grupales = await getGrupalAssignmentsDeComisionYParadigma(
+      comision.id,
+      asig.paradigma
+    );
     for (const assignment of grupales) {
       await upsertGrupoConMiembro({
         nombreGrupo: asig.nombreGrupo,

@@ -1,4 +1,4 @@
-import type { Alumno, NombreDeCanal } from "@/domain/entities";
+import { Alumno, type NombreDeCanal } from "@/domain/entities";
 import {
   agregarMiembroAGrupo,
   isGoogleGroupsConfigured,
@@ -33,7 +33,7 @@ export class GoogleGroupsCanal extends CanalDeComunicacion {
   }
 
   destinatarioDe(alumno: Alumno): string {
-    return alumno.email.trim().toLowerCase();
+    return Alumno.normalizarEmail(alumno.email);
   }
 
   protected async darDeAlta(destinatario: string): Promise<ResultadoDeAlta> {

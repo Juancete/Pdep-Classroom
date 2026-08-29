@@ -14,6 +14,21 @@ export const NOMBRES_RESULTADO_CI = [
 
 export type NombreResultadoCI = (typeof NOMBRES_RESULTADO_CI)[number];
 
+// Se lanza al intentar reejecutar CI sobre una entrega que no tiene de dónde
+// pedir el rerequest: ni el resultado combinado lo permite
+// (`permiteReejecucion()` en `pendiente`/`sin_ci`/`sin_consultar`) ni,
+// aunque lo permita, hay check suites concretos guardados para reenviar a
+// GitHub (estado inconsistente, pero posible). Es la única fuente que usan
+// tanto `ci/rerun/route.ts` como `sincronizarCI.reejecutarCIDeEntrega` — así
+// no pueden volver a divergir en qué casos habilitan el botón. La route la
+// traduce a 409.
+export class ReejecucionCINoDisponibleError extends Error {
+  constructor(public readonly entregaId: string) {
+    super("No hay checks previos de CI para reejecutar");
+    this.name = "ReejecucionCINoDisponibleError";
+  }
+}
+
 /**
  * Resultado del estado combinado de CI (GitHub Checks) de una entrega,
  * modelado como Strategy en vez de un enum + switch — mismo idioma que

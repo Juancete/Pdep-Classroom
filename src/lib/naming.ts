@@ -62,13 +62,3 @@ export function enumerar(items: string[]): string {
   return `${items.slice(0, -1).join(", ")} ni ${items[items.length - 1]}`;
 }
 
-/**
- * Extrae el nombre del template sin la org.
- * "pdep-mn-utn/kata-template" → "kata-template"
- * "kata-template" → "kata-template"
- */
-export function extractTemplateName(templateRepo: string): string {
-  return templateRepo.includes("/")
-    ? templateRepo.split("/").pop()!
-    : templateRepo;
-}

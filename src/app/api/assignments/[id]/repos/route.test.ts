@@ -36,6 +36,19 @@ function admin(): PdepUser {
   };
 }
 
+// Fixture mínimo — sólo los campos/métodos que el handler realmente usa.
+// `permiteBorrarRepos()` delega en `EstadoAssignment.permiteBorrarRepos()`
+// (Fase 3 de la auditoría de dominio): sólo `archivado` habilita el borrado.
+function makeAssignment(estadoNombre: "borrador" | "publicado" | "archivado") {
+  return {
+    id: "a1",
+    titulo: "Kata",
+    slug: "kata",
+    estadoNombre,
+    permiteBorrarRepos: () => estadoNombre === "archivado",
+  };
+}
+
 function result(overrides = {}) {
   return {
     ok: true,
@@ -61,12 +74,7 @@ describe("DELETE /api/assignments/[id]/repos", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetCurrentUser.mockResolvedValue(admin());
-    mockGetAssignment.mockResolvedValue({
-      id: "a1",
-      titulo: "Kata",
-      slug: "kata",
-      estadoNombre: "archivado",
-    });
+    mockGetAssignment.mockResolvedValue(makeAssignment("archivado"));
     mockGetEntregasConRepoActivo.mockResolvedValue([]);
     mockBorrarRepositorios.mockResolvedValue(result());
     mockConLock.mockImplementation(
@@ -101,12 +109,7 @@ describe("DELETE /api/assignments/[id]/repos", () => {
   });
 
   it("exige archivar el assignment antes de borrar repos", async () => {
-    mockGetAssignment.mockResolvedValue({
-      id: "a1",
-      titulo: "Kata",
-      slug: "kata",
-      estadoNombre: "publicado",
-    });
+    mockGetAssignment.mockResolvedValue(makeAssignment("publicado"));
 
     const response = await DELETE(makeRequest(), {
       params: Promise.resolve({ id: "a1" }),

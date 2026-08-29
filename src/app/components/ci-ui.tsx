@@ -64,7 +64,7 @@ export const CI_UI: Record<
   error_infra: {
     etiqueta: "Error de infraestructura",
     detalle:
-      "La ejecución de CI requiere intervención manual o no llegó a correr los tests.",
+      "La ejecución de CI requiere intervención manual o no llegó a correr los tests (fallo de infraestructura).",
     className: "bg-amber-50 text-amber-800 border-amber-200",
     Icon: XCircleIcon,
   },

@@ -61,4 +61,28 @@ export class RepoDeletionAttempt {
 
   @Property({ type: "text", nullable: true })
   error?: string;
+
+  /** Cierra el intento con un resultado exitoso (`deleted`/`already_absent`). */
+  completarComo(status: Exclude<RepoDeletionStatus, "pending" | "failed">): void {
+    this.status = status;
+    this.completedAt = new Date();
+    this.error = undefined;
+  }
+
+  /** El repo se borró efectivamente en GitHub. */
+  marcarBorrado(): void {
+    this.completarComo("deleted");
+  }
+
+  /** El repo ya no existía en GitHub (idempotente: no es un fallo). */
+  marcarYaAusente(): void {
+    this.completarComo("already_absent");
+  }
+
+  /** El intento de borrado falló — conserva el motivo. */
+  marcarFallido(error: string): void {
+    this.status = "failed";
+    this.completedAt = new Date();
+    this.error = error;
+  }
 }

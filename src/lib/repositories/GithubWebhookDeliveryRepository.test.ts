@@ -203,7 +203,7 @@ describe("GithubWebhookDeliveryRepository", () => {
     });
 
     it("toma el último recibido del primer delivery, ya ordenado descendentemente", async () => {
-      const masReciente = {
+      const masReciente = Object.assign(new GithubWebhookDelivery(), {
         id: "row-2",
         deliveryId: "delivery-2",
         evento: "push",
@@ -211,19 +211,24 @@ describe("GithubWebhookDeliveryRepository", () => {
         intentos: 1,
         error: null,
         recibidoEn: new Date("2026-08-27T12:00:00Z"),
-      };
-      const anterior = {
+      });
+      const anterior = Object.assign(new GithubWebhookDelivery(), {
         ...masReciente,
         id: "row-1",
         deliveryId: "delivery-1",
         recibidoEn: new Date("2026-08-27T11:00:00Z"),
-      };
+      });
       mockEm.find.mockResolvedValueOnce([masReciente, anterior]);
       mockEm.count.mockResolvedValueOnce(2).mockResolvedValueOnce(1);
 
       const overview = await getWebhookDeliveryOverview();
 
-      expect(overview.items).toEqual([masReciente, anterior]);
+      // "procesado" no es reprocesable — B5: este campo es el que reemplaza
+      // el `["fallido", "recibido"].includes(...)` que decidía la UI sola.
+      expect(overview.items).toEqual([
+        expect.objectContaining({ id: "row-2", puedeReprocesarse: false }),
+        expect.objectContaining({ id: "row-1", puedeReprocesarse: false }),
+      ]);
       expect(overview.pendientes).toBe(2);
       expect(overview.fallidos).toBe(1);
       expect(overview.ultimoRecibidoEn).toEqual(masReciente.recibidoEn);
@@ -236,6 +241,47 @@ describe("GithubWebhookDeliveryRepository", () => {
         })
       );
       expect(mockEm.findOne).not.toHaveBeenCalled();
+    });
+
+    // B5: antes `admin/operaciones/page.tsx` decidía sola con
+    // `["fallido", "recibido"].includes(estadoProcesamiento)`, así que un
+    // delivery `procesando` con el lease vencido (la lambda que lo reclamó
+    // murió a mitad de camino) nunca ofrecía el botón de reproceso, aunque
+    // `GithubWebhookDeliveryRepository.reclamar` sí lo acepta como huérfano.
+    it("marca puedeReprocesarse=true para un procesando con el lease vencido", async () => {
+      const huerfano = Object.assign(new GithubWebhookDelivery(), {
+        id: "row-1",
+        deliveryId: "delivery-1",
+        evento: "check_suite",
+        estadoProcesamiento: "procesando",
+        intentos: 1,
+        error: null,
+        recibidoEn: new Date("2026-08-27T12:00:00Z"),
+        reclamadoEn: new Date(Date.now() - 5 * 60_000),
+      });
+      mockEm.find.mockResolvedValueOnce([huerfano]);
+
+      const overview = await getWebhookDeliveryOverview();
+
+      expect(overview.items[0]?.puedeReprocesarse).toBe(true);
+    });
+
+    it("marca puedeReprocesarse=false para un procesando dentro de la ventana del lease", async () => {
+      const enVuelo = Object.assign(new GithubWebhookDelivery(), {
+        id: "row-1",
+        deliveryId: "delivery-1",
+        evento: "check_suite",
+        estadoProcesamiento: "procesando",
+        intentos: 1,
+        error: null,
+        recibidoEn: new Date("2026-08-27T12:00:00Z"),
+        reclamadoEn: new Date(),
+      });
+      mockEm.find.mockResolvedValueOnce([enVuelo]);
+
+      const overview = await getWebhookDeliveryOverview();
+
+      expect(overview.items[0]?.puedeReprocesarse).toBe(false);
     });
   });
 });

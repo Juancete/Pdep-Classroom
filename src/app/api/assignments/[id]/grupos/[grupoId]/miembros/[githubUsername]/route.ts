@@ -3,24 +3,13 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/session";
 import { salirDeGrupo, moverAlumnoDeGrupo } from "@/lib/repositories";
 import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
-import { Alumno, type Grupo } from "@/domain/entities";
+import { Alumno } from "@/domain/entities";
 
 const CambioDeMembresiaSchema = z.object({
   motivo: z.string().trim().max(280).optional(),
 });
 
 type Params = { id: string; grupoId: string; githubUsername: string };
-
-function serializarGrupo(grupo: Grupo) {
-  return {
-    id: grupo.id,
-    nombre: grupo.nombre,
-    paradigma: grupo.paradigma,
-    maxIntegrantes: grupo.maxIntegrantes,
-    estaLleno: !grupo.isOpen(),
-    miembros: grupo.usernamesDeMiembros(),
-  };
-}
 
 // Sólo el propio alumno o un docente pueden modificar una membresía. No usa
 // `guardAdmin()` de `@/lib/api-auth`: hace falta el `githubUsername` del
@@ -81,7 +70,7 @@ export async function PUT(req: Request, props: { params: Promise<Params> }) {
     });
 
     return NextResponse.json({
-      ...serializarGrupo(grupoDestino),
+      ...grupoDestino.toResumen(),
       grupoOrigenEliminado,
     });
   } catch (error) {
@@ -120,7 +109,7 @@ export async function DELETE(req: Request, props: { params: Promise<Params> }) {
     });
 
     return NextResponse.json({
-      ...serializarGrupo(grupo),
+      ...grupo.toResumen(),
       grupoEliminado,
     });
   } catch (error) {

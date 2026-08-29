@@ -3,26 +3,20 @@ import { logger } from "@/lib/logger";
 import { mapConConcurrenciaLimitada } from "@/lib/concurrencia";
 import { mensajeOperativo } from "@/lib/mensaje-operativo";
 import { actualizarCIDeEntrega } from "@/lib/repositories";
-import { resultadoDesdeCheckRuns, type Entrega } from "@/domain/entities";
+import {
+  resultadoDesdeCheckRuns,
+  ReejecucionCINoDisponibleError,
+  type Entrega,
+} from "@/domain/entities";
 import type { EntityManager } from "@mikro-orm/postgresql";
 
 const MAX_CONCURRENT_CI_CHECKS = 5;
-
-// Evita martillar la API de GitHub cuando varias personas abren la misma
-// vista casi al mismo tiempo: si ya consultamos hace menos de este umbral,
-// no se vuelve a consultar salvo `forzar: true`.
-export const FRESCURA_CI_MS = 60_000;
 
 export type SincronizarCIResult = {
   actualizadas: number;
   omitidas: number;
   fallidas: { repoName: string; error: string }[];
 };
-
-function esReciente(fecha: Date | undefined): boolean {
-  if (!fecha) return false;
-  return Date.now() - fecha.getTime() < FRESCURA_CI_MS;
-}
 
 async function sincronizarUnaEntrega(
   entrega: Entrega,
@@ -84,8 +78,9 @@ export async function sincronizarCIDeEntregas(
   opts?: { forzar?: boolean; em?: EntityManager }
 ): Promise<SincronizarCIResult> {
   const forzar = opts?.forzar ?? false;
+  const ahora = new Date();
   const pendientes = entregas.filter(
-    (entrega) => entrega.hasRepo() && (forzar || !esReciente(entrega.ciActualizadoEn))
+    (entrega) => entrega.hasRepo() && (forzar || !entrega.tieneCIFresco(ahora))
   );
   const omitidas = entregas.length - pendientes.length;
 
@@ -114,9 +109,15 @@ export async function sincronizarCIDeEntregas(
  * ("pendiente" mientras corre).
  */
 export async function reejecutarCIDeEntrega(entrega: Entrega): Promise<void> {
-  if (!entrega.repoName || entrega.ciCheckSuiteIds.length === 0) {
-    throw new Error("No hay checks previos de CI para reejecutar");
+  // Misma fuente que el guard de `ci/rerun/route.ts` — `Entrega.puedeReejecutarCI()`
+  // combina el resultado ("reejecutable") con que realmente haya
+  // `repoName`/checkSuiteIds guardados. Antes esta condición estaba
+  // duplicada acá (con `Error` genérico) y en la route (con
+  // `permiteReejecucion()` solo) — un resultado "reejecutable" sin checks
+  // guardados pasaba el guard de la route y recién acá explotaba como 500.
+  if (!entrega.puedeReejecutarCI()) {
+    throw new ReejecucionCINoDisponibleError(entrega.id);
   }
-  await reejecutarCIEnGitHub(entrega.repoName, entrega.ciCheckSuiteIds);
+  await reejecutarCIEnGitHub(entrega.repoName!, entrega.ciCheckSuiteIds);
   await actualizarCIDeEntrega(entrega.id, { resultadoNombre: "pendiente" });
 }

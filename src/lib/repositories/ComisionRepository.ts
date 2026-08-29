@@ -74,7 +74,7 @@ export async function createComision(data: ComisionFormData): Promise<Comision> 
   return traducirErrorDeComisionActiva(async () => {
     if (!data.activa) {
       const comision = new Comision(data.anio, data.spreadsheetId);
-      comision.activa = false;
+      comision.desactivar();
       comision.columnConfig = data.columnConfig ?? { ...DEFAULT_COLUMN_CONFIG };
 
       entityManager.persist(comision);
@@ -83,10 +83,14 @@ export async function createComision(data: ComisionFormData): Promise<Comision> 
     }
 
     return entityManager.transactional(async (transaction) => {
+      // Desactivación masiva: set-based a propósito (no hay "la" comisión
+      // activa cargada todavía sobre la que delegar — Fase 2 de la
+      // auditoría de dominio, `Comision.activar()` cubre el caso de una
+      // comisión puntual).
       await transaction.nativeUpdate(Comision, {}, { activa: false });
 
       const comision = new Comision(data.anio, data.spreadsheetId);
-      comision.activa = true;
+      comision.activar();
       comision.columnConfig = data.columnConfig ?? { ...DEFAULT_COLUMN_CONFIG };
 
       transaction.persist(comision);
@@ -109,7 +113,7 @@ export async function updateComision(
 
       if (data.anio !== undefined) comision.anio = data.anio;
       if (data.spreadsheetId !== undefined) comision.spreadsheetId = data.spreadsheetId;
-      if (data.activa !== undefined) comision.activa = data.activa;
+      if (data.activa !== undefined) comision.desactivar();
       if (data.columnConfig !== undefined) comision.columnConfig = data.columnConfig;
 
       await entityManager.flush();
@@ -120,11 +124,13 @@ export async function updateComision(
       const comision = await transaction.findOne(Comision, { id });
       if (!comision) return null;
 
+      // Desactivación masiva del resto: set-based, mismo criterio que en
+      // `createComision`.
       await transaction.nativeUpdate(Comision, { id: { $ne: id } }, { activa: false });
 
       if (data.anio !== undefined) comision.anio = data.anio;
       if (data.spreadsheetId !== undefined) comision.spreadsheetId = data.spreadsheetId;
-      comision.activa = true;
+      comision.activar();
       if (data.columnConfig !== undefined) comision.columnConfig = data.columnConfig;
 
       await transaction.flush();
@@ -154,16 +160,16 @@ export async function deleteComision(id: string): Promise<void> {
   });
 }
 
-const VENTANA_IMPORTACION_GRUPOS_MS = 5 * 60_000;
-export const INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS =
-  VENTANA_IMPORTACION_GRUPOS_MS / 2;
-
 export type ReclamoImportacionGrupos =
   | { estado: "reclamada"; comision: Comision; token: string }
   | { estado: "completada" }
   | { estado: "en_proceso" }
   | { estado: "no_encontrada" };
 
+// Delega en `Comision.gruposYaImportados`/`importacionEnProceso`/
+// `reclamarImportacionDeGrupos` (Fase 2 de la auditoría de dominio) — el
+// repo sólo decide el `id` a cargar/lockear, genera el `token` (id de
+// infraestructura, no lo conoce la entidad) y flushea.
 export async function reclamarImportacionGrupos(
   id: string
 ): Promise<ReclamoImportacionGrupos> {
@@ -175,25 +181,17 @@ export async function reclamarImportacionGrupos(
       { lockMode: LockMode.PESSIMISTIC_WRITE }
     );
     if (!comision) return { estado: "no_encontrada" };
-    if (comision.gruposImportadosEn) return { estado: "completada" };
-
-    const inicio = comision.gruposImportacionIniciadaEn?.getTime();
-    if (
-      comision.gruposImportacionToken &&
-      inicio !== undefined &&
-      inicio > Date.now() - VENTANA_IMPORTACION_GRUPOS_MS
-    ) {
-      return { estado: "en_proceso" };
-    }
+    if (comision.gruposYaImportados()) return { estado: "completada" };
+    if (comision.importacionEnProceso(new Date())) return { estado: "en_proceso" };
 
     const token = randomUUID();
-    comision.gruposImportacionToken = token;
-    comision.gruposImportacionIniciadaEn = new Date();
+    comision.reclamarImportacionDeGrupos(token, new Date());
     await transaction.flush();
     return { estado: "reclamada", comision, token };
   });
 }
 
+// Delega en `Comision.completarImportacionDeGrupos`.
 export async function completarImportacionGrupos(
   id: string,
   token: string
@@ -205,15 +203,14 @@ export async function completarImportacionGrupos(
       { id },
       { lockMode: LockMode.PESSIMISTIC_WRITE }
     );
-    if (!comision || comision.gruposImportacionToken !== token) return false;
-    comision.gruposImportadosEn = new Date();
-    comision.gruposImportacionToken = undefined;
-    comision.gruposImportacionIniciadaEn = undefined;
-    await transaction.flush();
-    return true;
+    if (!comision) return false;
+    const completada = comision.completarImportacionDeGrupos(token, new Date());
+    if (completada) await transaction.flush();
+    return completada;
   });
 }
 
+// Delega en `Comision.renovarImportacion` (heartbeat del lease).
 export async function renovarImportacionGrupos(
   id: string,
   token: string
@@ -225,19 +222,14 @@ export async function renovarImportacionGrupos(
       { id },
       { lockMode: LockMode.PESSIMISTIC_WRITE }
     );
-    if (
-      !comision ||
-      Boolean(comision.gruposImportadosEn) ||
-      comision.gruposImportacionToken !== token
-    ) {
-      return false;
-    }
-    comision.gruposImportacionIniciadaEn = new Date();
-    await transaction.flush();
-    return true;
+    if (!comision) return false;
+    const renovada = comision.renovarImportacion(token, new Date());
+    if (renovada) await transaction.flush();
+    return renovada;
   });
 }
 
+// Delega en `Comision.liberarImportacion`.
 export async function liberarImportacionGrupos(
   id: string,
   token: string
@@ -249,9 +241,8 @@ export async function liberarImportacionGrupos(
       { id },
       { lockMode: LockMode.PESSIMISTIC_WRITE }
     );
-    if (!comision || comision.gruposImportacionToken !== token) return;
-    comision.gruposImportacionToken = undefined;
-    comision.gruposImportacionIniciadaEn = undefined;
+    if (!comision) return;
+    if (!comision.liberarImportacion(token)) return;
     await transaction.flush();
   });
 }

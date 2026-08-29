@@ -18,7 +18,7 @@ export function EstadoPanel({
   assignmentId,
   estado: initialEstado,
   accionesDisponibles,
-  entregasCount,
+  motivoBloqueoBorrador,
   publicadoEn,
   publicadoPor,
   archivadoEn,
@@ -27,7 +27,11 @@ export function EstadoPanel({
   assignmentId: string;
   estado: NombreEstadoAssignment;
   accionesDisponibles: NombreEstadoAssignment[];
-  entregasCount: number;
+  // Calculado en el server page con `EstadoAssignment.motivoDeBloqueo` — el
+  // panel es cliente y no puede tirar el error de dominio él mismo para
+  // leer el mensaje (Fase 3 de la auditoría de dominio). `null` si volver a
+  // borrador está permitido (o no aplica, ej. ya está en borrador).
+  motivoBloqueoBorrador: string | null;
   publicadoEn: string | null;
   publicadoPor: string | null;
   archivadoEn: string | null;
@@ -81,10 +85,8 @@ export function EstadoPanel({
               </button>
             );
           })}
-          {estado === "publicado" && !acciones.includes("borrador") && (
-            <span className="text-xs text-gray-500">
-              Con entregas ({entregasCount}) solo se puede archivar.
-            </span>
+          {motivoBloqueoBorrador && (
+            <span className="text-xs text-gray-500">{motivoBloqueoBorrador}</span>
           )}
         </div>
       </div>

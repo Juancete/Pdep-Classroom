@@ -40,7 +40,7 @@ export default async function PerfilPage() {
               )
             );
           }
-          if (alumno.tieneSyncDeGruposFallido() && !comisionActiva.gruposImportadosEn) {
+          if (alumno.tieneSyncDeGruposFallido() && !comisionActiva.gruposYaImportados()) {
             tareasDeComision.push(
               intentarSincronizarGrupos(githubUsername, comisionActiva)
             );

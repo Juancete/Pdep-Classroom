@@ -29,17 +29,24 @@ export {
 export {
   getAssignments,
   getAssignmentsDeComision,
+  getGrupalAssignmentsDeComisionYParadigma,
   getAssignment,
   createAssignment,
   updateAssignment,
   deleteAssignment,
   setInscripcionesCerradas,
   cambiarEstadoAssignment,
-  ComisionActivaRequeridaError,
+} from "./AssignmentRepository";
+// Errores de dominio de `Assignment` (viven en `Assignment.ts`, no en el
+// repositorio — B4/Fase 3 de la auditoría de dominio): se reexportan acá
+// para no romper a los callers que ya los importan desde
+// `@/lib/repositories` (ej. `api/assignments/[id]/route.ts`).
+export {
   AssignmentNoEliminableError,
+  ComisionActivaRequeridaError,
   AssignmentEstructuraInmutableError,
   AssignmentTipoInmutableError,
-} from "./AssignmentRepository";
+} from "@/domain/entities";
 
 export {
   getEntregas,
@@ -82,6 +89,7 @@ export {
   getGrupos,
   getGruposDeAlumno,
   getGruposDeAssignment,
+  getGrupoCountsByAssignment,
   getGrupoDeAlumnoEnAssignment,
   crearGrupo,
   unirseAGrupo,
@@ -101,12 +109,16 @@ export {
   renovarImportacionGrupos,
   completarImportacionGrupos,
   liberarImportacionGrupos,
-  INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS,
   ComisionActivaDuplicadaError,
   ComisionNoEliminableError,
 } from "./ComisionRepository";
 export type { ComisionFormData } from "./ComisionRepository";
 export type { ReclamoImportacionGrupos } from "./ComisionRepository";
+// `INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS` es una constante de dominio
+// (vive en `Comision.ts` junto con `VENTANA_IMPORTACION_GRUPOS_MS` — Fase 2
+// de la auditoría de dominio): se reexporta acá para no romper a los
+// callers que ya la importan desde `@/lib/repositories`.
+export { INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS } from "@/domain/entities";
 
 export {
   registrarErrorInesperado,

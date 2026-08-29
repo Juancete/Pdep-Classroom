@@ -12,6 +12,12 @@ import { randomUUID } from "crypto";
 import { Alumno } from "./Alumno";
 import type { GrupalAssignment } from "./GrupalAssignment";
 import type { Paradigma } from "@/types";
+import { PARADIGMAS } from "./domain-constants";
+
+// Reexportado para no romper imports existentes: el error es sobre
+// `Assignment` (lo lanza `Assignment.exigirGrupal()`), así que ahora vive
+// en `Assignment.ts` junto al resto de sus errores de dominio.
+export { AssignmentNoGrupalError } from "./Assignment";
 
 // Errores de negocio del flujo self-serve de inscripción a grupos. El handler
 // HTTP los traduce a 400/409 con mensajes amigables. Análogos a
@@ -60,13 +66,6 @@ export class GrupoLlenoError extends Error {
   ) {
     super(`El grupo está completo (${maxIntegrantes} integrantes).`);
     this.name = "GrupoLlenoError";
-  }
-}
-
-export class AssignmentNoGrupalError extends Error {
-  constructor(public readonly assignmentId: string) {
-    super("Este TP no es grupal.");
-    this.name = "AssignmentNoGrupalError";
   }
 }
 
@@ -121,7 +120,7 @@ export class Grupo {
   @Property({ type: "string" })
   nombreNormalizado!: string;
 
-  @Enum({ items: ["funcional", "logico", "objetos"] })
+  @Enum({ items: [...PARADIGMAS] })
   paradigma!: Paradigma;
 
   @ManyToMany({ entity: () => Alumno, pivotTable: "grupo_alumnos" })
@@ -181,8 +180,51 @@ export class Grupo {
     return this.alumnos.getItems().map((alumno) => alumno.usernameCanonico);
   }
 
-  canJoin(alumno: Alumno): boolean {
-    return this.isOpen() && !this.alumnos.contains(alumno);
+  /**
+   * Predicción usada por la UI ANTES de que `githubUsername` confirme salir
+   * del grupo: `true` si es el único integrante que queda (con lo cual
+   * salir lo dejaría vacío). Complementa `seEliminaAlSalir`, que evalúa
+   * DESPUÉS de `removeMember` — dos métodos porque la UI necesita predecir
+   * sin mutar el grupo sólo para previsualizar, mientras que el
+   * repositorio evalúa sobre el estado ya actualizado (Fase 3 de la
+   * auditoría de dominio).
+   */
+  quedaraVacioSiSale(githubUsername: string): boolean {
+    return this.cantidadMiembros() === 1 && this.contieneA(githubUsername);
+  }
+
+  /**
+   * `true` si, luego de remover a un integrante (`removeMember`), el grupo
+   * debe eliminarse: quedó vacío y no tiene entrega asociada — un grupo con
+   * entrega se preserva como registro histórico aunque quede sin
+   * integrantes. Ver `quedaraVacioSiSale` para la predicción previa que usa
+   * la UI antes de remover.
+   */
+  seEliminaAlSalir(tieneEntrega: boolean): boolean {
+    return this.estaVacio() && !tieneEntrega;
+  }
+
+  /**
+   * Resumen plano para las routes de grupos (`api/assignments/[id]/grupos/**`)
+   * — las tres tenían la misma función `serializarGrupo` duplicada
+   * byte a byte (Fase 3 de la auditoría de dominio).
+   */
+  toResumen(): {
+    id: string;
+    nombre: string;
+    paradigma: Paradigma;
+    maxIntegrantes: number;
+    estaLleno: boolean;
+    miembros: string[];
+  } {
+    return {
+      id: this.id,
+      nombre: this.nombre,
+      paradigma: this.paradigma,
+      maxIntegrantes: this.maxIntegrantes,
+      estaLleno: this.estaLleno(),
+      miembros: this.usernamesDeMiembros(),
+    };
   }
 
   addMember(alumno: Alumno): void {

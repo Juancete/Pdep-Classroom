@@ -1,6 +1,10 @@
 import { getEM } from "@/lib/db";
 import { extractDbErrorCode, UNIQUE_VIOLATION } from "./db-errors";
-import { GithubWebhookDelivery, type NombreEstadoDelivery } from "@/domain/entities";
+import {
+  GithubWebhookDelivery,
+  VENTANA_PROCESANDO_HUERFANO_MS,
+  type NombreEstadoDelivery,
+} from "@/domain/entities";
 
 /**
  * El delivery ya existe (choca contra el índice único de `deliveryId`).
@@ -16,14 +20,6 @@ export class DeliveryDuplicadoError extends Error {
     this.name = "DeliveryDuplicadoError";
   }
 }
-
-// Ventana para tratar un `procesando` como huérfano y volver a ofrecerlo
-// para reclamo: sólo pasa si la lambda que lo reclamó murió a mitad de
-// camino sin llegar a cerrar la fila (crash, timeout de la plataforma). El
-// procesamiento normal termina en milisegundos/segundos, así que 2 minutos
-// da margen de sobra sin dejar una fila realmente en vuelo disponible para
-// un segundo reclamo.
-const VENTANA_PROCESANDO_HUERFANO_MS = 120_000;
 
 function isUniqueViolation(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
@@ -77,6 +73,13 @@ export type DeliveryReclamado = {
  * `recibido_en` de hace horas, y compararlo con eso dejaría a un
  * `procesando` recién ganado disponible para un segundo reclamo de
  * inmediato — el lease nacería "vencido".
+ *
+ * El `where` del `case` de abajo (`recibido`/`fallido`, o `procesando` con
+ * lease vencido) es el filtro grueso equivalente en SQL a
+ * `GithubWebhookDelivery.puedeReprocesarse()` (Fase 2 de la auditoría de
+ * dominio) — se mantiene set-based a propósito: un load-then-save por acá
+ * no puede dar la misma garantía atómica que este único `UPDATE ...
+ * RETURNING` contra reclamos concurrentes sobre la misma fila.
  */
 async function reclamar(where: string, params: unknown[]): Promise<DeliveryReclamado | null> {
   const entityManager = await getEM();
@@ -113,9 +116,9 @@ export async function reclamarDeliveryPorDeliveryId(
   return reclamar(`"delivery_id" = ?`, [deliveryId]);
 }
 
-// Cierra en un estado terminal exitoso — limpia el payload: `procesado` e
-// `ignorado` no se vuelven a reprocesar, no hace falta conservarlo (acota
-// el crecimiento de la tabla y la retención de PII de los payloads de `push`).
+// Cierra en un estado terminal exitoso — delega en
+// `GithubWebhookDelivery.cerrarComoProcesado`/`cerrarComoIgnorado` (Fase 2
+// de la auditoría de dominio); acá sólo queda cargar, delegar y flushear.
 export async function cerrarDelivery(
   id: string,
   data: {
@@ -125,23 +128,17 @@ export async function cerrarDelivery(
 ): Promise<void> {
   const entityManager = await getEM();
   const delivery = await entityManager.findOneOrFail(GithubWebhookDelivery, { id });
-  delivery.estadoProcesamiento = data.estadoNombre;
-  delivery.entregaId = data.entregaId;
-  delivery.procesadoEn = new Date();
-  delivery.payload = null;
-  delivery.error = null;
+  delivery.cerrarComo(data.estadoNombre, data.entregaId);
   await entityManager.flush();
 }
 
 // Cierra en `fallido` conservando el payload — es lo que necesita
 // `reclamarDeliveryPorId`/`reclamarDeliveryPorDeliveryId` para volver a
-// ofrecerlo para reclamo.
+// ofrecerlo para reclamo. Delega en `GithubWebhookDelivery.fallar`.
 export async function fallarDelivery(id: string, error: string): Promise<void> {
   const entityManager = await getEM();
   const delivery = await entityManager.findOneOrFail(GithubWebhookDelivery, { id });
-  delivery.estadoProcesamiento = "fallido";
-  delivery.procesadoEn = new Date();
-  delivery.error = error;
+  delivery.fallar(error);
   await entityManager.flush();
 }
 
@@ -186,12 +183,19 @@ export type WebhookDeliveryOverview = {
     intentos: number;
     error: string | null;
     recibidoEn: Date;
+    // Única fuente para el botón de reproceso del panel admin (B5 de la
+    // auditoría de dominio): antes la UI decidía sola con
+    // `["fallido", "recibido"].includes(estadoProcesamiento)`, sin conocer
+    // el caso "procesando huérfano" (lease vencido) que el backend sí
+    // reprocesa — ver `GithubWebhookDelivery.puedeReprocesarse`.
+    puedeReprocesarse: boolean;
   }>;
 };
 
 export async function getWebhookDeliveryOverview(limit = 50): Promise<WebhookDeliveryOverview> {
   const entityManager = await getEM();
-  const [items, pendientes, fallidos] = await Promise.all([
+  const ahora = new Date();
+  const [deliveries, pendientes, fallidos] = await Promise.all([
     entityManager.find(GithubWebhookDelivery, {}, {
       orderBy: { recibidoEn: "desc" },
       limit,
@@ -205,6 +209,7 @@ export async function getWebhookDeliveryOverview(limit = 50): Promise<WebhookDel
         "intentos",
         "error",
         "recibidoEn",
+        "reclamadoEn",
       ],
     }),
     entityManager.count(GithubWebhookDelivery, {
@@ -212,6 +217,18 @@ export async function getWebhookDeliveryOverview(limit = 50): Promise<WebhookDel
     }),
     entityManager.count(GithubWebhookDelivery, { estadoProcesamiento: "fallido" }),
   ]);
+  const items = deliveries.map((delivery) => ({
+    id: delivery.id,
+    deliveryId: delivery.deliveryId,
+    evento: delivery.evento,
+    accion: delivery.accion,
+    repoName: delivery.repoName,
+    estadoProcesamiento: delivery.estadoProcesamiento,
+    intentos: delivery.intentos,
+    error: delivery.error,
+    recibidoEn: delivery.recibidoEn,
+    puedeReprocesarse: delivery.puedeReprocesarse(ahora),
+  }));
   return {
     items,
     pendientes,

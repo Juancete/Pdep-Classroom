@@ -49,7 +49,7 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
         { status: 404 }
       );
     }
-    if (assignment.estadoNombre !== "archivado") {
+    if (!assignment.permiteBorrarRepos()) {
       return NextResponse.json(
         { error: "Archivá el assignment antes de eliminar sus repositorios." },
         { status: 409 }

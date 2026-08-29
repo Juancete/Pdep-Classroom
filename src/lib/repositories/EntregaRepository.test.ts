@@ -37,6 +37,7 @@ import {
   createOrGetEntrega,
   crearEntregaSiAssignmentDisponible,
   getEntregasConRepoActivo,
+  getActiveRepoCountsByAssignment,
   getEntregaLogica,
   actualizarCIDeEntrega,
   conLockDeEntrega,
@@ -342,7 +343,51 @@ describe("EntregaRepository", () => {
     expect(mockEm.find).toHaveBeenCalledWith(Entrega, {
       assignment: { id: "a1" },
       repoDeleted: false,
+      provisionEstado: "activa",
       repoName: { $ne: null },
+    });
+  });
+
+  // B2: antes filtraba sólo `repoDeleted`/`repoName`, sin `provisionEstado`
+  // — una entrega `fallida` con `repoName` residual de un intento previo
+  // (ver `Entrega.hasRepo()`) contaba para esta lista aunque no tuviera un
+  // repo realmente activo. El filtro faltante se ve en el query pasado al
+  // ORM: sin el fix, esta aserción falla porque `provisionEstado` no está.
+  it("excluye una entrega con provisionEstado fallida aunque conserve repoName (B2)", async () => {
+    mockEm.find.mockResolvedValue([]);
+
+    await getEntregasConRepoActivo("a1");
+
+    expect(mockEm.find).toHaveBeenCalledWith(
+      Entrega,
+      expect.objectContaining({ provisionEstado: "activa" })
+    );
+  });
+
+  describe("getActiveRepoCountsByAssignment", () => {
+    it("filtra por provisionEstado activa además de repoDeleted (B2)", async () => {
+      mockEm.find.mockResolvedValue([]);
+
+      await getActiveRepoCountsByAssignment();
+
+      expect(mockEm.find).toHaveBeenCalledWith(
+        Entrega,
+        { repoDeleted: false, provisionEstado: "activa" },
+        { fields: ["assignment", "repoName"] }
+      );
+    });
+
+    it("cuenta sólo entregas con repoName entre las que devuelve el ORM", async () => {
+      const conRepo = new Entrega();
+      conRepo.assignment = { id: "a1" } as never;
+      conRepo.repoName = "tp-ana";
+      const sinRepoName = new Entrega();
+      sinRepoName.assignment = { id: "a1" } as never;
+      mockEm.find.mockResolvedValue([conRepo, sinRepoName]);
+
+      const counts = await getActiveRepoCountsByAssignment();
+
+      expect(counts.get("a1")).toBe(1);
     });
   });
 

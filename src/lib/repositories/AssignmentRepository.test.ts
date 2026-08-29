@@ -28,17 +28,23 @@ vi.mock("@/lib/db", () => ({
 import {
   cambiarEstadoAssignment,
   deleteAssignment,
-  AssignmentNoEliminableError,
   updateAssignment,
-  AssignmentEstructuraInmutableError,
-  AssignmentTipoInmutableError,
-  ComisionActivaRequeridaError,
   createAssignment,
   getAssignment,
   getAssignments,
   getAssignmentsDeComision,
+  getGrupalAssignmentsDeComisionYParadigma,
 } from "./AssignmentRepository";
-import { Assignment, Comision, IndividualAssignment } from "@/domain/entities";
+import {
+  Assignment,
+  AssignmentEstructuraInmutableError,
+  AssignmentTipoInmutableError,
+  AssignmentNoEliminableError,
+  ComisionActivaRequeridaError,
+  Comision,
+  GrupalAssignment,
+  IndividualAssignment,
+} from "@/domain/entities";
 import { LockMode } from "@mikro-orm/core";
 import { AssignmentNoEncontradoError } from "@/lib/services/assignmentAuthorization";
 import { TransicionDeEstadoInvalidaError } from "@/domain/entities/EstadoAssignment";
@@ -49,7 +55,7 @@ const assignmentData = {
   descripcion: "",
   templateRepo: "kata-template",
   tipo: "individual" as const,
-  paradigma: "funcional",
+  paradigma: "funcional" as const,
   deadline: "",
 };
 
@@ -74,6 +80,24 @@ describe("AssignmentRepository", () => {
         },
         { orderBy: { createdAt: "DESC" } }
       );
+    });
+  });
+
+  // Fase 4 de la auditoría de dominio: antes `grupoSync.ts` (un servicio)
+  // hacía este `entityManager.find` directo contra `GrupalAssignment`.
+  describe("getGrupalAssignmentsDeComisionYParadigma", () => {
+    it("busca los GrupalAssignment de la comisión que coinciden en paradigma", async () => {
+      const grupalFake = { id: "a1", paradigma: "funcional" };
+      mockEm.find.mockResolvedValueOnce([grupalFake]);
+
+      await expect(
+        getGrupalAssignmentsDeComisionYParadigma("c1", "funcional")
+      ).resolves.toEqual([grupalFake]);
+
+      expect(mockEm.find).toHaveBeenCalledWith(GrupalAssignment, {
+        comision: { id: "c1" },
+        paradigma: "funcional",
+      });
     });
   });
 
@@ -234,6 +258,22 @@ describe("AssignmentRepository", () => {
       mockEm.count.mockResolvedValueOnce(1);
 
       await expect(deleteAssignment("a1")).rejects.toMatchObject({ motivo: "entregas" });
+
+      expect(mockEm.remove).not.toHaveBeenCalled();
+    });
+
+    // B4: antes esta guarda faltaba del lado de la UI (`admin/assignments/page.tsx`
+    // sólo miraba entregasCounts), así que el panel ofrecía un botón de
+    // borrado para un caso que acá sí se rechaza.
+    it("conserva un borrador sin entregas pero con grupos asociados", async () => {
+      const assignment = new IndividualAssignment();
+      assignment.id = "a1";
+      mockEm.findOne.mockResolvedValueOnce(assignment);
+      mockEm.count
+        .mockResolvedValueOnce(0) // entregas
+        .mockResolvedValueOnce(1); // grupos
+
+      await expect(deleteAssignment("a1")).rejects.toMatchObject({ motivo: "grupos" });
 
       expect(mockEm.remove).not.toHaveBeenCalled();
     });

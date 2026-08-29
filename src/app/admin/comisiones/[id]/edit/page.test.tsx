@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import React from "react";
+import { Comision } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -102,19 +103,16 @@ import EditComisionPage from "./page";
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function makeComision(overrides?: object) {
-  return {
-    id: "c1",
-    anio: 2026,
-    spreadsheetId: "abc123",
-    activa: false,
-    columnConfig: {
-      sheetName: "Alumnos", headerRows: 1,
-      legajo: 0, apellido: 1, nombre: 2,
-      githubUsername: 3, email: 4, comision: 5,
-    },
-    ...overrides,
+function makeComision(overrides?: Partial<Comision>) {
+  const comision = new Comision(2026, "abc123");
+  comision.id = "c1";
+  comision.activa = false;
+  comision.columnConfig = {
+    sheetName: "Alumnos", headerRows: 1,
+    legajo: 0, apellido: 1, nombre: 2,
+    githubUsername: 3, email: 4,
   };
+  return Object.assign(comision, overrides);
 }
 
 // ── Tests ────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PARADIGMAS } from "@/types";
+import { PARADIGMAS, TIPOS_ASSIGNMENT } from "@/types";
 import { GRUPAL_MIN_MAX_INTEGRANTES } from "@/domain/entities/domain-constants";
 
 export const AssignmentBaseSchema = z.object({
@@ -11,8 +11,8 @@ export const AssignmentBaseSchema = z.object({
     .or(z.literal("")),
   descripcion: z.string().optional(),
   templateRepo: z.string().min(1, "El template es obligatorio"),
-  tipo: z.enum(["individual", "grupal"] as const),
-  paradigma: z.enum(PARADIGMAS as [string, ...string[]]),
+  tipo: z.enum(TIPOS_ASSIGNMENT),
+  paradigma: z.enum(PARADIGMAS),
   deadline: z.string().optional(),
   maxIntegrantes: z.coerce
     .number()

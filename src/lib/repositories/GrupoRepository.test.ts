@@ -232,7 +232,16 @@ describe("crearGrupo", () => {
     expect(mockTx.flush).toHaveBeenCalled();
   });
 
+  // Fase 3 de la auditoría de dominio: la validación de nombre/longitud
+  // ahora vive en `GrupalAssignment.crearGrupo` (única fuente, compartida
+  // con `upsertGrupoConMiembro`) y se ejecuta recién después de cargar el
+  // assignment y al alumno — antes fallaba sin tocar la DB, ahora falla
+  // sin persistir nada (mismo resultado observable para quien llama).
   it("rechaza un nombre que queda vacío después de normalizar", async () => {
+    const ana = fakeAlumno("alumno-ana", "ana");
+    mockTx.findOne.mockResolvedValueOnce(fakeGrupal());
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+
     await expect(
       crearGrupo({
         assignmentId: "a1",
@@ -242,13 +251,15 @@ describe("crearGrupo", () => {
       })
     ).rejects.toBeInstanceOf(NombreGrupoInvalidoError);
 
-    expect(getEM).not.toHaveBeenCalled();
+    expect(mockTx.persist).not.toHaveBeenCalled();
   });
 
   it("rechaza un nombre que haría superar el límite del repositorio", async () => {
+    const ana = fakeAlumno("alumno-ana", "ana");
     mockTx.findOne.mockResolvedValueOnce(
       fakeGrupal({ slug: "a".repeat(90) })
     );
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
 
     await expect(
       crearGrupo({
@@ -259,7 +270,6 @@ describe("crearGrupo", () => {
       })
     ).rejects.toBeInstanceOf(NombreRepositorioDemasiadoLargoError);
 
-    expect(mockTx.findOneOrFail).not.toHaveBeenCalled();
     expect(mockTx.persist).not.toHaveBeenCalled();
   });
 
@@ -289,6 +299,28 @@ describe("crearGrupo", () => {
     await expect(
       crearGrupo({ assignmentId: "a1", alumnoId: "alumno-ana", nombre: "x", rol: ESTUDIANTE })
     ).rejects.toBeInstanceOf(InscripcionesCerradasError);
+  });
+
+  // B3: antes este chequeo era `assignment.aceptaNuevasInscripciones()`
+  // directo, sin pasar por el rol — asimétrico con `salirDeGrupo`/
+  // `moverAlumnoDeGrupo`, que sí delegan en `RolDeUsuario.autorizarCambioDeMembresia`.
+  // Un docente resuelve siempre (ver `Docente.autorizarCambioDeMembresia`).
+  it("permite al docente crear un grupo aunque las inscripciones estén cerradas (B3)", async () => {
+    const ana = fakeAlumno("alumno-ana", "ana");
+    mockTx.findOne
+      .mockResolvedValueOnce(fakeGrupal({ inscripcionesCerradas: true })) // Assignment lookup
+      .mockResolvedValueOnce(null); // yaEnGrupo check
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+
+    const grupo = await crearGrupo({
+      assignmentId: "a1",
+      alumnoId: "alumno-ana",
+      nombre: "Los Lógicos",
+      rol: DOCENTE,
+    });
+
+    expect(grupo.alumnos.contains(ana)).toBe(true);
+    expect(mockTx.flush).toHaveBeenCalled();
   });
 
   it("lanza AlumnoYaEnGrupoDelAssignmentError si el alumno ya está en otro grupo del mismo assignment", async () => {
@@ -484,6 +516,29 @@ describe("unirseAGrupo", () => {
     await expect(
       unirseAGrupo({ assignmentId: "a1", grupoId: "g1", alumnoId: "alumno-ana", usuario: fakeUsuario("ana") })
     ).rejects.toBeInstanceOf(InscripcionesCerradasError);
+  });
+
+  // B3: mismo criterio que en `crearGrupo` — un docente puede sumar un
+  // integrante a un grupo aunque las inscripciones estén cerradas.
+  it("permite al docente sumar un alumno aunque las inscripciones estén cerradas (B3)", async () => {
+    const assignment = fakeGrupal({ inscripcionesCerradas: true });
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupo = fakeGrupo("g1", assignment, []);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupo) // Grupo
+      .mockResolvedValueOnce(null); // enOtroGrupo
+    mockTx.findOneOrFail.mockResolvedValueOnce(ana);
+
+    const resultado = await unirseAGrupo({
+      assignmentId: "a1",
+      grupoId: "g1",
+      alumnoId: "alumno-ana",
+      usuario: fakeUsuario("docente1", DOCENTE),
+    });
+
+    expect(resultado).toBe(grupo);
+    expect(grupo.alumnos.contains(ana)).toBe(true);
+    expect(mockTx.flush).toHaveBeenCalled();
   });
 
   it("lanza AlumnoYaEnGrupoDelAssignmentError si el alumno ya está en otro grupo", async () => {

@@ -1,6 +1,6 @@
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
-import { extractTemplateName, validarRepoName } from "./naming";
+import { validarRepoName } from "./naming";
 import { handleOctokitError, isRequestError } from "./github-errors";
 
 // Exportada: el router de eventos de webhooks (issue #60) la usa para
@@ -128,16 +128,20 @@ export async function addCollaborators(
 // Esto es el reemplazo directo de lo que Classroom hace (mal).
 
 export async function crearEntrega(opts: {
+  // Ya resuelto (sin org) — ver `Assignment.nombreDelTemplate()`. Antes acá
+  // se volvía a resolver con `extractTemplateName` (duplicado literal de
+  // ese método — Fase 3 de la auditoría de dominio); el único caller
+  // (`aceptarAssignment.ts`) ya pasaba el nombre resuelto, así que la
+  // segunda resolución era muerta.
   templateRepo: string;
   repoName: string;
   usernames: string[];
   descripcion?: string;
 }): Promise<{ repoUrl: string; repoName: string; repoGithubId: string }> {
   const repoName = validarRepoName(opts.repoName);
-  const templateName = extractTemplateName(opts.templateRepo);
 
   const { repoUrl, repoGithubId } = await createRepoFromTemplate({
-    templateRepo: templateName,
+    templateRepo: opts.templateRepo,
     newRepoName: repoName,
     description: opts.descripcion,
     isPrivate: true,

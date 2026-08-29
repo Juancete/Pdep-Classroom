@@ -8,16 +8,12 @@ import {
   Assignment,
   AssignmentNoEncontradoError,
   GrupoNoEncontradoError,
-  InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
   NombreGrupoDuplicadoError,
-  NombreGrupoInvalidoError,
-  AssignmentNoGrupalError,
   AlumnoNoEsMiembroDelGrupoError,
   type RolDeUsuario,
 } from "@/domain/entities";
 import type { Paradigma, PdepUser } from "@/types";
-import { buildRepoName, slugify } from "@/lib/naming";
 import { autorizarAccionSobreAssignment } from "@/lib/services/assignmentAuthorization";
 import { extractDbErrorCode, UNIQUE_VIOLATION } from "./db-errors";
 import { getEntregaLogica } from "./EntregaRepository";
@@ -27,16 +23,6 @@ const INSCRIPCION_UNICA_CONSTRAINT =
   "grupo_alumnos_assignment_alumno_unique_idx";
 const NOMBRE_GRUPO_UNICO_CONSTRAINT =
   "grupo_assignment_nombre_normalizado_unique_idx";
-
-function prepararNombreGrupo(nombre: string): {
-  nombre: string;
-  nombreNormalizado: string;
-} {
-  const nombreVisible = nombre.trim();
-  const nombreNormalizado = slugify(nombreVisible);
-  if (!nombreNormalizado) throw new NombreGrupoInvalidoError(nombre);
-  return { nombre: nombreVisible, nombreNormalizado };
-}
 
 function esViolacionDeRestriccionUnica(
   error: unknown,
@@ -126,6 +112,22 @@ export async function getGruposDeAssignment(assignmentId: string): Promise<Grupo
   );
 }
 
+// Conteo de grupos por assignmentId en una sola query — mismo molde que
+// `getEntregaCountsByAssignment` (EntregaRepository.ts). Lo usa el panel
+// admin para decidir el botón de borrado de assignment sin cargar todos los
+// grupos: `Assignment.puedeEliminarse` necesita saber si hay grupos
+// asociados, no cuáles (B4 de la auditoría de dominio).
+export async function getGrupoCountsByAssignment(): Promise<Map<string, number>> {
+  const entityManager = await getEM();
+  const grupos = await entityManager.find(Grupo, {}, { fields: ["assignment"] });
+  const map = new Map<string, number>();
+  for (const grupo of grupos) {
+    const assignmentId = grupo.assignment.id;
+    map.set(assignmentId, (map.get(assignmentId) ?? 0) + 1);
+  }
+  return map;
+}
+
 export async function getGrupoDeAlumnoEnAssignment(
   assignmentId: string,
   githubUsername: string
@@ -152,8 +154,7 @@ export async function crearGrupo(params: {
   nombre: string;
   rol: RolDeUsuario;
 }): Promise<Grupo> {
-  const { assignmentId, alumnoId, rol } = params;
-  const { nombre, nombreNormalizado } = prepararNombreGrupo(params.nombre);
+  const { assignmentId, alumnoId, nombre, rol } = params;
   const entityManager = await getEM();
 
   return traducirConflictoDeNombreGrupo(assignmentId, nombre, () =>
@@ -166,28 +167,36 @@ export async function crearGrupo(params: {
       if (!assignment) {
         throw new AssignmentNoEncontradoError(assignmentId);
       }
-      if (!(assignment instanceof GrupalAssignment)) {
-        throw new AssignmentNoGrupalError(assignmentId);
-      }
-      buildRepoName({
-        slug: assignment.slug,
-        grupoNombreNormalizado: nombreNormalizado,
-      });
+      const grupal = assignment.exigirGrupal();
 
       const alumno = await transaction.findOneOrFail(
         Alumno,
         { id: alumnoId },
         { populate: ["comision"] }
       );
-      autorizarAccionSobreAssignment({ rol }, alumno, assignment);
+      autorizarAccionSobreAssignment({ rol }, alumno, grupal);
 
       return traducirConflictoDeInscripcion(
         assignmentId,
         alumno.githubUsername,
         async () => {
-          if (!assignment.aceptaNuevasInscripciones()) {
-            throw new InscripcionesCerradasError(assignmentId);
-          }
+          // Grupo en memoria (sin persistir todavía) para poder pasarlo al
+          // contexto de autorización — recién nace, así que nunca tiene
+          // entrega. Delegar acá en el rol (B3 de la auditoría de dominio)
+          // en vez de chequear `aceptaNuevasInscripciones()` directo evita
+          // que este chequeo divergiera del que ya usan `salirDeGrupo`/
+          // `moverAlumnoDeGrupo`: un docente puede crear un grupo aunque las
+          // inscripciones estén cerradas, un alumno no. La construcción del
+          // Grupo (nombre/nombreNormalizado/validación de longitud) delega
+          // en `GrupalAssignment.crearGrupo` (Fase 3 de la auditoría de
+          // dominio) — antes vivía acá duplicada con la de `upsertGrupoConMiembro`.
+          const grupo = grupal.crearGrupo(nombre, alumno.githubUsername);
+
+          rol.autorizarCambioDeMembresia({
+            assignment: grupal,
+            grupo,
+            grupoTieneEntrega: false,
+          });
 
           const yaEnGrupo = await transaction.findOne(Grupo, {
             assignment: { id: assignmentId },
@@ -200,13 +209,6 @@ export async function crearGrupo(params: {
             );
           }
 
-          const grupo = new Grupo();
-          grupo.nombre = nombre;
-          grupo.nombreNormalizado = nombreNormalizado;
-          grupo.paradigma = assignment.paradigma;
-          grupo.assignment = assignment;
-          grupo.maxIntegrantes = assignment.maxIntegrantes;
-          grupo.creadoPor = alumno.githubUsername;
           grupo.alumnos.add(alumno);
           transaction.persist(grupo);
 
@@ -280,9 +282,16 @@ export async function unirseAGrupo(params: {
           return grupo;
         }
 
-        if (!assignment.aceptaNuevasInscripciones()) {
-          throw new InscripcionesCerradasError(assignment.id);
-        }
+        // Mismo criterio que `crearGrupo`: delega en el rol en vez de
+        // chequear `aceptaNuevasInscripciones()` directo (B3). `grupoTieneEntrega`
+        // en `false` porque acá se está sumando un integrante, no removiendo
+        // uno de un grupo que ya entregó — ese caso es el de `salirDeGrupo`/
+        // `moverAlumnoDeGrupo`.
+        rol.autorizarCambioDeMembresia({
+          assignment,
+          grupo,
+          grupoTieneEntrega: false,
+        });
 
         const enOtroGrupo = await transaction.findOne(Grupo, {
           assignment: { id: assignment.id },
@@ -398,7 +407,7 @@ export async function salirDeGrupo(params: {
 
     grupo.removeMember(alumno);
 
-    const grupoEliminado = grupo.estaVacio() && !grupoTieneEntrega;
+    const grupoEliminado = grupo.seEliminaAlSalir(grupoTieneEntrega);
     if (grupoEliminado) transaction.remove(grupo);
 
     await registrarCambioDeMembresia(transaction, {
@@ -511,7 +520,7 @@ export async function moverAlumnoDeGrupo(params: {
     let grupoOrigenEliminado = false;
     if (grupoOrigen) {
       grupoOrigen.removeMember(alumno);
-      grupoOrigenEliminado = grupoOrigen.estaVacio() && !grupoOrigenTeniaEntrega;
+      grupoOrigenEliminado = grupoOrigen.seEliminaAlSalir(grupoOrigenTeniaEntrega);
       if (grupoOrigenEliminado) transaction.remove(grupoOrigen);
       // El DELETE del pivot origen tiene que emitirse antes del INSERT del
       // destino, o el índice único (assignment_id, alumno_id) revienta: la
@@ -582,18 +591,21 @@ export async function upsertGrupoConMiembro(params: {
 
 async function ejecutarUpsertGrupoConMiembro(params: {
   nombreGrupo: string;
+  // `paradigma` ya no se usa acá — `GrupalAssignment.crearGrupo` deriva el
+  // paradigma del propio assignment, y el único caller (`grupoSync.ts`)
+  // sólo llama con assignments ya filtrados por ese mismo paradigma, así
+  // que siempre coinciden. Se conserva en la firma pública por
+  // compatibilidad (Fase 3 de la auditoría de dominio).
   paradigma: Paradigma;
   assignment: GrupalAssignment;
   alumno: Alumno;
 }): Promise<Grupo> {
-  const { paradigma, assignment, alumno } = params;
-  const { nombre: nombreGrupo, nombreNormalizado } = prepararNombreGrupo(
-    params.nombreGrupo
-  );
-  buildRepoName({
-    slug: assignment.slug,
-    grupoNombreNormalizado: nombreNormalizado,
-  });
+  const { assignment, alumno } = params;
+  // Candidato en memoria: deriva nombre/nombreNormalizado y valida la
+  // longitud del repo resultante (delegado en `GrupalAssignment.crearGrupo`
+  // — antes duplicado con `crearGrupo` de este mismo archivo). Se descarta
+  // si ya existe un grupo con ese `nombreNormalizado`.
+  const candidato = assignment.crearGrupo(params.nombreGrupo, "sheets-sync");
   const entityManager = await getEM();
 
   return traducirConflictoDeInscripcion(
@@ -604,7 +616,7 @@ async function ejecutarUpsertGrupoConMiembro(params: {
         const existente = await transaction.findOne(
           Grupo,
           {
-            nombreNormalizado,
+            nombreNormalizado: candidato.nombreNormalizado,
             assignment: { id: assignment.id },
           },
           { lockMode: LockMode.PESSIMISTIC_WRITE }
@@ -612,22 +624,16 @@ async function ejecutarUpsertGrupoConMiembro(params: {
 
         let grupo: Grupo;
         if (existente) {
-          if (existente.nombre !== nombreGrupo) {
+          if (existente.nombre !== candidato.nombre) {
             throw new NombreGrupoDuplicadoError(
               assignment.id,
-              nombreGrupo
+              candidato.nombre
             );
           }
           grupo = existente;
           await transaction.populate(grupo, ["alumnos"], { refresh: true });
         } else {
-          grupo = new Grupo();
-          grupo.nombre = nombreGrupo;
-          grupo.nombreNormalizado = nombreNormalizado;
-          grupo.paradigma = paradigma;
-          grupo.assignment = assignment;
-          grupo.maxIntegrantes = assignment.maxIntegrantes;
-          grupo.creadoPor = "sheets-sync";
+          grupo = candidato;
           transaction.persist(grupo);
         }
 
