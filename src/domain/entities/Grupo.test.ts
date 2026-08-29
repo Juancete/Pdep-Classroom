@@ -54,24 +54,6 @@ describe("Grupo", () => {
     });
   });
 
-  describe("canJoin", () => {
-    it("permite unirse si hay cupo y el alumno no es miembro", () => {
-      const grupo = nuevoGrupo(3, [fakeAlumno("ana")]);
-      expect(grupo.canJoin(fakeAlumno("bob"))).toBe(true);
-    });
-
-    it("rechaza si el alumno ya es miembro", () => {
-      const ana = fakeAlumno("ana");
-      const grupo = nuevoGrupo(3, [ana]);
-      expect(grupo.canJoin(ana)).toBe(false);
-    });
-
-    it("rechaza si el grupo está lleno", () => {
-      const grupo = nuevoGrupo(2, [fakeAlumno("ana"), fakeAlumno("bob")]);
-      expect(grupo.canJoin(fakeAlumno("cora"))).toBe(false);
-    });
-  });
-
   describe("addMember", () => {
     it("suma al alumno cuando hay cupo y no es miembro", () => {
       const grupo = nuevoGrupo(3, [fakeAlumno("ana")]);
@@ -156,6 +138,62 @@ describe("Grupo", () => {
 
     it("es false cuando tiene al menos un miembro", () => {
       expect(nuevoGrupo(3, [fakeAlumno("ana")]).estaVacio()).toBe(false);
+    });
+  });
+
+  // Fase 3 de la auditoría de dominio: antes la UI predecía con
+  // `cantidadMiembros() === 1` (sin chequear que el alumno realmente sea
+  // miembro) y el repo evaluaba post-remoción con `estaVacio() && !tieneEntrega`.
+  describe("quedaraVacioSiSale", () => {
+    it("es true si el alumno es el único integrante", () => {
+      const grupo = nuevoGrupo(3, [fakeAlumno("ana")]);
+      expect(grupo.quedaraVacioSiSale("ana")).toBe(true);
+    });
+
+    it("es false si hay más de un integrante", () => {
+      const grupo = nuevoGrupo(3, [fakeAlumno("ana"), fakeAlumno("bob")]);
+      expect(grupo.quedaraVacioSiSale("ana")).toBe(false);
+    });
+
+    it("es false si el username no pertenece al grupo (aunque sea el único miembro)", () => {
+      const grupo = nuevoGrupo(3, [fakeAlumno("ana")]);
+      expect(grupo.quedaraVacioSiSale("forastero")).toBe(false);
+    });
+  });
+
+  describe("seEliminaAlSalir", () => {
+    it("es true si el grupo quedó vacío y no tiene entrega", () => {
+      const grupo = nuevoGrupo(3);
+      expect(grupo.seEliminaAlSalir(false)).toBe(true);
+    });
+
+    it("es false si el grupo quedó vacío pero tiene entrega (se preserva como histórico)", () => {
+      const grupo = nuevoGrupo(3);
+      expect(grupo.seEliminaAlSalir(true)).toBe(false);
+    });
+
+    it("es false si el grupo no quedó vacío", () => {
+      const grupo = nuevoGrupo(3, [fakeAlumno("ana")]);
+      expect(grupo.seEliminaAlSalir(false)).toBe(false);
+    });
+  });
+
+  describe("toResumen", () => {
+    it("devuelve el resumen plano que usan las routes de grupos", () => {
+      const grupo = nuevoGrupo(3, [fakeAlumno("ana"), fakeAlumno("bob")]);
+      expect(grupo.toResumen()).toEqual({
+        id: "g1",
+        nombre: "Los Lambdas",
+        paradigma: "funcional",
+        maxIntegrantes: 3,
+        estaLleno: false,
+        miembros: ["ana", "bob"],
+      });
+    });
+
+    it("estaLleno refleja el cupo", () => {
+      const grupo = nuevoGrupo(2, [fakeAlumno("ana"), fakeAlumno("bob")]);
+      expect(grupo.toResumen().estaLleno).toBe(true);
     });
   });
 

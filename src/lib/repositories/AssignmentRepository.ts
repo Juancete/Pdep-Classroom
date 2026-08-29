@@ -2,52 +2,18 @@ import { getEM } from "@/lib/db";
 import { LockMode } from "@mikro-orm/core";
 import {
   Assignment,
+  AssignmentNoEliminableError,
   AssignmentNoEncontradoError,
+  ComisionActivaRequeridaError,
   Comision,
+  crearAssignment,
   Entrega,
   Grupo,
-  IndividualAssignment,
   GrupalAssignment,
 } from "@/domain/entities";
 import type { AssignmentFormData } from "@/lib/assignment-schema";
 import { slugify } from "@/lib/naming";
 import type { NombreEstadoAssignment, Paradigma } from "@/types";
-
-export class ComisionActivaRequeridaError extends Error {
-  constructor() {
-    super("Necesitás una comisión activa para crear assignments.");
-    this.name = "ComisionActivaRequeridaError";
-  }
-}
-
-export class AssignmentNoEliminableError extends Error {
-  constructor(public readonly motivo: "estado" | "entregas" | "grupos") {
-    const mensajes = {
-      estado: "Sólo se pueden eliminar assignments que todavía están en borrador.",
-      entregas: "El assignment tiene entregas y debe conservarse como histórico. Archivá el TP en lugar de eliminarlo.",
-      grupos: "El assignment tiene grupos asociados y debe conservarse como histórico.",
-    } as const;
-    super(mensajes[motivo]);
-    this.name = "AssignmentNoEliminableError";
-  }
-}
-
-export class AssignmentEstructuraInmutableError extends Error {
-  constructor(public readonly campos: string[]) {
-    super(
-      `No se puede cambiar ${campos.join(", ")} en un assignment publicado o archivado.`
-    );
-    this.name = "AssignmentEstructuraInmutableError";
-  }
-}
-
-export class AssignmentTipoInmutableError extends AssignmentEstructuraInmutableError {
-  constructor() {
-    super(["el tipo"]);
-    this.message = "El tipo de un assignment no se puede cambiar después de crearlo.";
-    this.name = "AssignmentTipoInmutableError";
-  }
-}
 
 // Estados en los que un assignment puede aparecer en superficies de alumno.
 // Borrador nunca; el filtrado fino de "archivado solo si tiene entrega" lo
@@ -82,11 +48,32 @@ export async function getAssignmentsDeComision(
   );
 }
 
+// Usado por el bootstrap de grupos desde Sheets (`grupoSync.ts`): sólo los
+// `GrupalAssignment` de la comisión que coinciden en paradigma con la fila
+// de la planilla — un alumno puede tener grupo en varios paradigmas, cada
+// fila de la hoja de grupos es una asignación paradigma→grupo (Fase 4 de
+// la auditoría de dominio: antes era un `entityManager.find` directo en el
+// servicio).
+export async function getGrupalAssignmentsDeComisionYParadigma(
+  comisionId: string,
+  paradigma: Paradigma
+): Promise<GrupalAssignment[]> {
+  const entityManager = await getEM();
+  return entityManager.find(GrupalAssignment, {
+    comision: { id: comisionId },
+    paradigma,
+  });
+}
+
 export async function getAssignment(id: string): Promise<Assignment | null> {
   const entityManager = await getEM();
   return entityManager.findOne(Assignment, { id }, { populate: ["comision"] });
 }
 
+// Delega en `Assignment.crear` (factory por tipo, Fase 3 de la auditoría de
+// dominio) y en `aplicarCamposExtra`; acá sólo queda resolver el slug (con
+// el fallback a partir del título — `slugify` es un util puro, no una regla
+// de negocio que la entidad deba encapsular) y setear los campos base.
 export async function createAssignment(
   data: AssignmentFormData
 ): Promise<Assignment> {
@@ -96,8 +83,7 @@ export async function createAssignment(
 
   const slug = data.slug || slugify(data.titulo);
 
-  const assignment: Assignment =
-    data.tipo === "grupal" ? new GrupalAssignment() : new IndividualAssignment();
+  const assignment = crearAssignment(data.tipo);
   assignment.aplicarCamposExtra(data);
 
   assignment.titulo = data.titulo;
@@ -113,6 +99,8 @@ export async function createAssignment(
   return assignment;
 }
 
+// Delega en `Assignment.actualizarEstructura` (Fase 3 de la auditoría de
+// dominio) — acá sólo queda cargar, delegar y flushear.
 export async function updateAssignment(
   id: string,
   data: Partial<AssignmentFormData>
@@ -121,45 +109,7 @@ export async function updateAssignment(
   const assignment = await entityManager.findOne(Assignment, { id });
   if (!assignment) return null;
 
-  if (data.tipo !== undefined && data.tipo !== assignment.tipo) {
-    if (assignment.estadoNombre === "borrador") {
-      throw new AssignmentTipoInmutableError();
-    }
-    throw new AssignmentEstructuraInmutableError(["el tipo"]);
-  }
-  if (assignment.estadoNombre !== "borrador") {
-    const campos: string[] = [];
-    const slugNuevo = data.slug === undefined
-      ? assignment.slug
-      : data.slug || slugify(data.titulo ?? assignment.titulo);
-    if (slugNuevo !== assignment.slug) campos.push("el slug");
-    if (data.templateRepo !== undefined && data.templateRepo !== assignment.templateRepo) {
-      campos.push("el template");
-    }
-    if (data.paradigma !== undefined && data.paradigma !== assignment.paradigma) {
-      campos.push("el paradigma");
-    }
-    if (
-      data.maxIntegrantes !== undefined &&
-      assignment instanceof GrupalAssignment &&
-      data.maxIntegrantes !== assignment.maxIntegrantes
-    ) {
-      campos.push("el máximo de integrantes");
-    }
-    if (campos.length > 0) throw new AssignmentEstructuraInmutableError(campos);
-  }
-
-  if (data.titulo !== undefined) assignment.titulo = data.titulo;
-  if (data.slug !== undefined)
-    assignment.slug = data.slug || slugify(data.titulo ?? assignment.titulo);
-  if (data.descripcion !== undefined) assignment.descripcion = data.descripcion;
-  if (data.templateRepo !== undefined) assignment.templateRepo = data.templateRepo;
-  if (data.paradigma !== undefined)
-    assignment.paradigma = data.paradigma as Paradigma;
-  if (data.deadline !== undefined)
-    assignment.deadline = data.deadline ? new Date(data.deadline) : undefined;
-
-  assignment.aplicarCamposExtra(data);
+  assignment.actualizarEstructura(data);
 
   await entityManager.flush();
   return assignment;
@@ -174,15 +124,14 @@ export async function deleteAssignment(id: string): Promise<void> {
       { lockMode: LockMode.PESSIMISTIC_WRITE }
     );
     if (!assignment) return;
-    if (assignment.estadoNombre !== "borrador") {
-      throw new AssignmentNoEliminableError("estado");
+
+    const tieneEntregas = (await transaction.count(Entrega, { assignment: { id } })) > 0;
+    const tieneGrupos = (await transaction.count(Grupo, { assignment: { id } })) > 0;
+    const motivo = assignment.razonNoEliminable({ tieneEntregas, tieneGrupos });
+    if (motivo) {
+      throw new AssignmentNoEliminableError(motivo);
     }
-    if ((await transaction.count(Entrega, { assignment: { id } })) > 0) {
-      throw new AssignmentNoEliminableError("entregas");
-    }
-    if ((await transaction.count(Grupo, { assignment: { id } })) > 0) {
-      throw new AssignmentNoEliminableError("grupos");
-    }
+
     transaction.remove(assignment);
     await transaction.flush();
   });

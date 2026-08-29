@@ -56,6 +56,40 @@ export abstract class EstadoAssignment {
   abstract permiteAccionesDeAlumno(): boolean;
 
   /**
+   * `true` si el estado en sí mismo no impide un borrado físico (no
+   * histórico) del assignment — sólo `borrador`. `Assignment.puedeEliminarse`
+   * combina esto con que no tenga entregas ni grupos asociados.
+   */
+  abstract permiteEliminacion(): boolean;
+
+  /**
+   * `true` si el estado habilita el borrado masivo de repos de GitHub de
+   * las entregas — sólo `archivado` (Fase 3 de la auditoría de dominio):
+   * antes se chequeaba `estadoNombre === "archivado"` suelto en 3 lugares
+   * (route de borrado de repos, panel admin, detalle de assignment).
+   */
+  abstract permiteBorrarRepos(): boolean;
+
+  /**
+   * `true` si el estado habilita editar campos estructurales (slug,
+   * template, paradigma, tipo, máximo de integrantes) — sólo `borrador`.
+   * `Assignment.actualizarEstructura` combina esto con qué campos
+   * efectivamente cambian.
+   */
+  abstract permiteEditarEstructura(): boolean;
+
+  /**
+   * `true` si en este estado ya pudo haber alumnos aceptando el TP, por lo
+   * que tiene sentido contar pendientes/aceptadas — Borrador: `false`
+   * (todavía no es aceptable); Publicado y Archivado: `true` (ya lo fue, o
+   * lo sigue siendo). No es lo mismo que `permiteEditarEstructura()`: ese
+   * predicado es sobre si la estructura puede cambiar, no sobre si hay
+   * (o pudo haber) entregas — coincidían por casualidad en Borrador y
+   * divergen en Archivado.
+   */
+  abstract esperaEntregas(): boolean;
+
+  /**
    * Resuelve la transición a `destino` dado el contexto del assignment.
    * Devuelve el nuevo estado o lanza `TransicionDeEstadoInvalidaError`.
    */
@@ -64,6 +98,29 @@ export abstract class EstadoAssignment {
     destino: NombreEstadoAssignment,
     contexto: ContextoTransicionEstado
   ): EstadoAssignment;
+
+  /**
+   * Sondea `transicionarA` sin ejecutarla: devuelve el motivo del bloqueo,
+   * o `null` si la transición está permitida. Mismo idioma que
+   * `RolDeUsuario.motivoDeBloqueoDeMembresia` — la UI y el servidor no
+   * pueden divergir, porque el texto que ve el admin ES el `message` del
+   * error que el servidor tiraría si igual manda el request.
+   */
+  motivoDeBloqueo(
+    assignmentId: string,
+    destino: NombreEstadoAssignment,
+    contexto: ContextoTransicionEstado
+  ): string | null {
+    try {
+      this.transicionarA(assignmentId, destino, contexto);
+      return null;
+    } catch (error) {
+      if (error instanceof TransicionDeEstadoInvalidaError) {
+        return error.message;
+      }
+      throw error;
+    }
+  }
 
   static desdeNombre(nombre: NombreEstadoAssignment): EstadoAssignment {
     return ESTADOS_POR_NOMBRE[nombre];
@@ -84,6 +141,22 @@ class Borrador extends EstadoAssignment {
   }
 
   permiteAccionesDeAlumno(): boolean {
+    return false;
+  }
+
+  permiteEliminacion(): boolean {
+    return true;
+  }
+
+  permiteBorrarRepos(): boolean {
+    return false;
+  }
+
+  permiteEditarEstructura(): boolean {
+    return true;
+  }
+
+  esperaEntregas(): boolean {
     return false;
   }
 
@@ -119,6 +192,22 @@ class Publicado extends EstadoAssignment {
   }
 
   permiteAccionesDeAlumno(): boolean {
+    return true;
+  }
+
+  permiteEliminacion(): boolean {
+    return false;
+  }
+
+  permiteBorrarRepos(): boolean {
+    return false;
+  }
+
+  permiteEditarEstructura(): boolean {
+    return false;
+  }
+
+  esperaEntregas(): boolean {
     return true;
   }
 
@@ -166,6 +255,22 @@ class Archivado extends EstadoAssignment {
 
   permiteAccionesDeAlumno(): boolean {
     return false;
+  }
+
+  permiteEliminacion(): boolean {
+    return false;
+  }
+
+  permiteBorrarRepos(): boolean {
+    return true;
+  }
+
+  permiteEditarEstructura(): boolean {
+    return false;
+  }
+
+  esperaEntregas(): boolean {
+    return true;
   }
 
   transicionarA(

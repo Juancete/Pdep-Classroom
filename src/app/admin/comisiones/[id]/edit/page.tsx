@@ -69,7 +69,7 @@ export default async function EditComisionPage(
             <SyncButton comisionId={comision.id} />
           </>
         )}
-        {!comision.gruposImportadosEn && (comision.columnConfig?.grupos || cantPendientesGrupos > 0) && (
+        {!comision.gruposYaImportados() && (comision.columnConfig?.grupos || cantPendientesGrupos > 0) && (
           <>
             <span
               title="La planilla se usa una sola vez como bootstrap; después Classroom es la fuente de verdad"
@@ -102,7 +102,7 @@ export default async function EditComisionPage(
         )}
       </div>
 
-      {!comision.gruposImportadosEn && cantPendientesGrupos > 0 && (
+      {!comision.gruposYaImportados() && cantPendientesGrupos > 0 && (
         <div
           className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6"
           data-testid="pendientes-grupos-lista"

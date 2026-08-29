@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PdepUser } from "@/types";
-import { Alumno, ESTUDIANTE } from "@/domain/entities";
+import { Alumno, Comision, ESTUDIANTE } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -84,7 +84,7 @@ function makeAlumno(overrides: Partial<Alumno> = {}): Alumno {
   return Object.assign(alumno, overrides);
 }
 
-const comisionActiva = { id: "c1", spreadsheetId: "sheet-xyz" };
+const comisionActiva = Object.assign(new Comision(2026, "sheet-xyz"), { id: "c1" });
 
 /** Doble mínimo de un canal pendiente para inyectar en el mock de estadoDeSincronizacion. */
 function makeCanalPendiente(sincronizar = vi.fn().mockResolvedValue({ estado: "sincronizada" })) {

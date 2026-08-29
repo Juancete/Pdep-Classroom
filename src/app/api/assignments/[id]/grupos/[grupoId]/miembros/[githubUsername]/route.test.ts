@@ -9,6 +9,8 @@ import {
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
   AlumnoNoEsMiembroDelGrupoError,
+  Grupo,
+  Alumno,
 } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
@@ -40,16 +42,19 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
   };
 }
 
-function makeGrupoEntity(overrides = {}) {
-  return {
-    id: "g1",
-    nombre: "Los Lambdas",
-    paradigma: "funcional",
-    maxIntegrantes: 3,
-    isOpen: () => true,
-    usernamesDeMiembros: () => ["ana"],
-    ...overrides,
-  };
+function makeGrupoEntity(overrides: Partial<Grupo> = {}): Grupo {
+  const grupo = new Grupo();
+  grupo.id = "g1";
+  grupo.nombre = "Los Lambdas";
+  grupo.nombreNormalizado = "los-lambdas";
+  grupo.paradigma = "funcional";
+  grupo.maxIntegrantes = 3;
+  grupo.creadoPor = "ana";
+  const miembro = Object.assign(new Alumno(), { githubUsername: "ana" });
+  Object.assign(grupo, {
+    alumnos: { getItems: () => [miembro], length: 1 },
+  });
+  return Object.assign(grupo, overrides);
 }
 
 function makeRequest(method: "PUT" | "DELETE", body?: unknown): Request {

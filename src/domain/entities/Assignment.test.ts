@@ -1,11 +1,20 @@
 import { describe, it, expect, vi } from "vitest";
-import { IndividualAssignment } from "./IndividualAssignment";
-import { GrupalAssignment, GrupoNoAsignadoError } from "./GrupalAssignment";
+import { IndividualAssignment, AlumnoNoRegistradoError } from "./IndividualAssignment";
+import {
+  GrupalAssignment,
+  GrupoNoAsignadoError,
+  GrupoSinNombreNormalizadoError,
+} from "./GrupalAssignment";
 import type { Assignment } from "./Assignment";
 import { Alumno } from "./Alumno";
 import type { Grupo } from "./Grupo";
 import { TransicionDeEstadoInvalidaError } from "./EstadoAssignment";
 import { DOCENTE, ESTUDIANTE } from "./RolDeUsuario";
+import {
+  AssignmentEstructuraInmutableError,
+  AssignmentTipoInmutableError,
+  AssignmentNoGrupalError,
+} from "./Assignment";
 
 function fakeAlumno(github: string): Alumno {
   return Object.assign(new Alumno(), { githubUsername: github });
@@ -48,7 +57,11 @@ describe("IndividualAssignment", () => {
 
   it("resolverParticipantesPara devuelve solo al usuario que acepta", async () => {
     const individual = new IndividualAssignment();
-    const participantes = await individual.resolverParticipantesPara({ githubUsername: "ana" });
+    const participantes = await individual.resolverParticipantesPara(
+      { githubUsername: "ana" },
+      vi.fn(),
+      fakeAlumno("ana")
+    );
     expect(participantes.usernames).toEqual(["ana"]);
     expect(participantes.grupoId).toBeUndefined();
   });
@@ -58,8 +71,18 @@ describe("IndividualAssignment", () => {
     // y verificar que la implementación individual no lo invoca.
     const individual: Assignment = new IndividualAssignment();
     const buscar = vi.fn();
-    await individual.resolverParticipantesPara({ githubUsername: "ana" }, buscar);
+    await individual.resolverParticipantesPara({ githubUsername: "ana" }, buscar, fakeAlumno("ana"));
     expect(buscar).not.toHaveBeenCalled();
+  });
+
+  // Fase 3 de la auditoría de dominio: antes este chequeo era
+  // `if (!grupoId && !alumno) throw AlumnoNoRegistradoError` en
+  // `aceptarAssignment.ts`, un branch por tipo fuera del dominio.
+  it("resolverParticipantesPara lanza AlumnoNoRegistradoError si el alumno no está registrado", async () => {
+    const individual = new IndividualAssignment();
+    await expect(
+      individual.resolverParticipantesPara({ githubUsername: "forastero" }, vi.fn(), null)
+    ).rejects.toBeInstanceOf(AlumnoNoRegistradoError);
   });
 
   it("requiereSeleccionDeGrupo siempre devuelve false", () => {
@@ -118,7 +141,7 @@ describe("GrupalAssignment", () => {
     const buscar = vi.fn().mockResolvedValue(
       fakeGrupo("los-lambdas", ["ana", "bob"])
     );
-    const participantes = await grupal.resolverParticipantesPara({ githubUsername: "ana" }, buscar);
+    const participantes = await grupal.resolverParticipantesPara({ githubUsername: "ana" }, buscar, null);
     expect(participantes).toEqual({
       usernames: ["ana", "bob"],
       grupoId: "los-lambdas",
@@ -131,7 +154,7 @@ describe("GrupalAssignment", () => {
     const grupal = nuevoGrupal();
     const buscar = vi.fn().mockResolvedValue(null);
     await expect(
-      grupal.resolverParticipantesPara({ githubUsername: "forastero" }, buscar)
+      grupal.resolverParticipantesPara({ githubUsername: "forastero" }, buscar, null)
     ).rejects.toBeInstanceOf(GrupoNoAsignadoError);
   });
 
@@ -139,7 +162,7 @@ describe("GrupalAssignment", () => {
     const grupal = nuevoGrupal();
     const buscar = vi.fn().mockResolvedValue(null);
     try {
-      await grupal.resolverParticipantesPara({ githubUsername: "forastero" }, buscar);
+      await grupal.resolverParticipantesPara({ githubUsername: "forastero" }, buscar, null);
       expect.fail("debería haber lanzado GrupoNoAsignadoError");
     } catch (error) {
       expect(error).toBeInstanceOf(GrupoNoAsignadoError);
@@ -185,6 +208,39 @@ describe("GrupalAssignment", () => {
   });
 });
 
+// Fase 3 de la auditoría de dominio: antes vivía como una rama
+// `grupoId ? buildRepoName({..grupoNombreNormalizado}) : buildRepoName({..githubUsername})`
+// en `aceptarAssignment.ts`.
+describe("Assignment.nombreDeRepoPara", () => {
+  it("individual: usa el slug y el username del único participante", () => {
+    const individual = new IndividualAssignment();
+    individual.slug = "kata-funcional";
+    expect(individual.nombreDeRepoPara({ usernames: ["ana"] })).toBe(
+      "kata-funcional-ana"
+    );
+  });
+
+  it("grupal: usa el slug y el nombre normalizado del grupo", () => {
+    const grupal = new GrupalAssignment();
+    grupal.slug = "tp-objetos";
+    expect(
+      grupal.nombreDeRepoPara({
+        usernames: ["ana", "bob"],
+        grupoId: "g1",
+        grupoNombreNormalizado: "los-lambdas",
+      })
+    ).toBe("tp-objetos-los-lambdas");
+  });
+
+  it("grupal: lanza GrupoSinNombreNormalizadoError si falta el nombre normalizado", () => {
+    const grupal = new GrupalAssignment();
+    grupal.slug = "tp-objetos";
+    expect(() =>
+      grupal.nombreDeRepoPara({ usernames: ["ana"] })
+    ).toThrow(GrupoSinNombreNormalizadoError);
+  });
+});
+
 describe("Assignment.nombreDelTemplate", () => {
   it("devuelve solo el nombre cuando el templateRepo incluye organización", () => {
     const individual = new IndividualAssignment();
@@ -216,6 +272,36 @@ describe("Assignment.cargarGruposCon", () => {
     const result = await grupal.cargarGruposCon(loader);
     expect(loader).toHaveBeenCalledWith("a1");
     expect(result).toBe(grupos);
+  });
+});
+
+describe("Assignment.comoGrupal / exigirGrupal", () => {
+  it("GrupalAssignment.comoGrupal devuelve la misma instancia", () => {
+    const grupal = new GrupalAssignment();
+    expect(grupal.comoGrupal()).toBe(grupal);
+  });
+
+  it("IndividualAssignment.comoGrupal devuelve null", () => {
+    const individual = new IndividualAssignment();
+    expect(individual.comoGrupal()).toBeNull();
+  });
+
+  it("GrupalAssignment.exigirGrupal devuelve la misma instancia", () => {
+    const grupal = new GrupalAssignment();
+    expect(grupal.exigirGrupal()).toBe(grupal);
+  });
+
+  it("IndividualAssignment.exigirGrupal lanza AssignmentNoGrupalError con el id del assignment", () => {
+    const individual = new IndividualAssignment();
+    individual.id = "a1";
+    expect(() => individual.exigirGrupal()).toThrow(AssignmentNoGrupalError);
+    try {
+      individual.exigirGrupal();
+      throw new Error("no debería llegar acá");
+    } catch (error) {
+      expect(error).toBeInstanceOf(AssignmentNoGrupalError);
+      expect((error as AssignmentNoGrupalError).assignmentId).toBe("a1");
+    }
   });
 });
 
@@ -332,5 +418,206 @@ describe("Assignment — ciclo de vida", () => {
     grupal.inscripcionesCerradas = false;
     grupal.transicionarA("archivado", { tieneEntregas: false }, "docente1");
     expect(grupal.aceptaNuevasInscripciones()).toBe(false);
+  });
+});
+
+// B4 de la auditoría de dominio: `AssignmentRepository.deleteAssignment`
+// exigía borrador + 0 entregas + 0 grupos, pero el botón del panel admin
+// sólo chequeaba borrador + 0 entregas — ofrecía un borrado que el server
+// rechazaba. `razonNoEliminable`/`puedeEliminarse` son ahora la única fuente
+// para las dos superficies.
+describe("Assignment.puedeEliminarse / razonNoEliminable", () => {
+  it("un borrador sin entregas ni grupos puede eliminarse", () => {
+    const individual = new IndividualAssignment();
+    individual.id = "a1";
+
+    expect(individual.razonNoEliminable({ tieneEntregas: false, tieneGrupos: false })).toBeNull();
+    expect(individual.puedeEliminarse({ tieneEntregas: false, tieneGrupos: false })).toBe(true);
+  });
+
+  it("un assignment publicado o archivado no puede eliminarse aunque no tenga entregas ni grupos", () => {
+    const individual = new IndividualAssignment();
+    individual.id = "a1";
+    individual.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+
+    expect(individual.razonNoEliminable({ tieneEntregas: false, tieneGrupos: false })).toBe("estado");
+    expect(individual.puedeEliminarse({ tieneEntregas: false, tieneGrupos: false })).toBe(false);
+  });
+
+  it("un borrador con entregas no puede eliminarse", () => {
+    const individual = new IndividualAssignment();
+    individual.id = "a1";
+
+    expect(individual.razonNoEliminable({ tieneEntregas: true, tieneGrupos: false })).toBe("entregas");
+  });
+
+  // Éste es exactamente el caso que antes divergía: la UI sólo miraba
+  // entregasCounts, así que un grupal en borrador con grupos pero sin
+  // entregas mostraba el botón de borrar aunque el server lo iba a rechazar.
+  it("un grupal en borrador con grupos pero sin entregas no puede eliminarse", () => {
+    const grupal = new GrupalAssignment();
+    grupal.id = "a1";
+
+    expect(grupal.razonNoEliminable({ tieneEntregas: false, tieneGrupos: true })).toBe("grupos");
+    expect(grupal.puedeEliminarse({ tieneEntregas: false, tieneGrupos: true })).toBe(false);
+  });
+});
+
+// Fase 3 de la auditoría de dominio: antes esta regla vivía en
+// `AssignmentRepository.updateAssignment` con un `instanceof GrupalAssignment`
+// para el caso de `maxIntegrantes` — `camposEstructuralesQueCambian` lo
+// reemplaza (Individual: `[]`, Grupal: chequea `maxIntegrantes`).
+describe("Assignment.actualizarEstructura", () => {
+  function nuevoIndividualBorrador(): IndividualAssignment {
+    const assignment = new IndividualAssignment();
+    assignment.id = "a1";
+    assignment.titulo = "Kata Funcional";
+    assignment.slug = "kata-funcional";
+    assignment.templateRepo = "kata-template";
+    assignment.paradigma = "funcional";
+    return assignment;
+  }
+
+  it("en borrador permite cambiar campos estructurales libremente", () => {
+    const assignment = nuevoIndividualBorrador();
+
+    assignment.actualizarEstructura({
+      titulo: "Kata Funcional v2",
+      slug: "kata-funcional-v2",
+      templateRepo: "otro-template",
+      paradigma: "logico",
+    });
+
+    expect(assignment.titulo).toBe("Kata Funcional v2");
+    expect(assignment.slug).toBe("kata-funcional-v2");
+    expect(assignment.templateRepo).toBe("otro-template");
+    expect(assignment.paradigma).toBe("logico");
+  });
+
+  it("título/descripción/deadline se pueden editar en cualquier estado", () => {
+    const assignment = nuevoIndividualBorrador();
+    assignment.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+
+    assignment.actualizarEstructura({
+      titulo: "Nuevo título",
+      descripcion: "Nueva descripción",
+      deadline: "2026-12-31",
+    });
+
+    expect(assignment.titulo).toBe("Nuevo título");
+    expect(assignment.descripcion).toBe("Nueva descripción");
+    expect(assignment.deadline).toEqual(new Date("2026-12-31"));
+  });
+
+  it("publicado rechaza cambiar el slug", () => {
+    const assignment = nuevoIndividualBorrador();
+    assignment.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+
+    expect(() => assignment.actualizarEstructura({ slug: "otro-slug" })).toThrow(
+      AssignmentEstructuraInmutableError
+    );
+    expect(assignment.slug).toBe("kata-funcional");
+  });
+
+  it("publicado rechaza cambiar el template y el paradigma, listando ambos campos", () => {
+    const assignment = nuevoIndividualBorrador();
+    assignment.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+
+    try {
+      assignment.actualizarEstructura({ templateRepo: "otro", paradigma: "objetos" });
+      expect.fail("debería haber lanzado AssignmentEstructuraInmutableError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(AssignmentEstructuraInmutableError);
+      expect((error as AssignmentEstructuraInmutableError).campos).toEqual([
+        "el template",
+        "el paradigma",
+      ]);
+    }
+  });
+
+  it("el tipo nunca puede cambiar — en borrador lanza el error específico", () => {
+    const assignment = nuevoIndividualBorrador();
+
+    expect(() => assignment.actualizarEstructura({ tipo: "grupal" })).toThrow(
+      AssignmentTipoInmutableError
+    );
+  });
+
+  it("el tipo nunca puede cambiar — publicado lanza el error genérico con 'el tipo'", () => {
+    const assignment = nuevoIndividualBorrador();
+    assignment.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+
+    try {
+      assignment.actualizarEstructura({ tipo: "grupal" });
+      expect.fail("debería haber lanzado AssignmentEstructuraInmutableError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(AssignmentEstructuraInmutableError);
+      expect(error).not.toBeInstanceOf(AssignmentTipoInmutableError);
+      expect((error as AssignmentEstructuraInmutableError).campos).toEqual(["el tipo"]);
+    }
+  });
+
+  it("publicado sin cambios estructurales no lanza nada", () => {
+    const assignment = nuevoIndividualBorrador();
+    assignment.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+
+    expect(() =>
+      assignment.actualizarEstructura({ slug: "kata-funcional", titulo: "Otro" })
+    ).not.toThrow();
+  });
+
+  it("el slug resuelto a partir del título cuenta como cambio estructural", () => {
+    const assignment = nuevoIndividualBorrador();
+    assignment.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+
+    // slug vacío ⇒ se deriva del título nuevo, que difiere del slug actual.
+    expect(() =>
+      assignment.actualizarEstructura({ slug: "", titulo: "Kata Distinta" })
+    ).toThrow(AssignmentEstructuraInmutableError);
+  });
+
+  it("grupal en borrador puede cambiar maxIntegrantes", () => {
+    const grupal = new GrupalAssignment();
+    grupal.id = "a2";
+    grupal.titulo = "TP Objetos";
+    grupal.slug = "tp-objetos";
+    grupal.templateRepo = "tp-template";
+    grupal.paradigma = "objetos";
+    grupal.maxIntegrantes = 3;
+
+    grupal.actualizarEstructura({ maxIntegrantes: 5 });
+
+    expect(grupal.maxIntegrantes).toBe(5);
+  });
+
+  it("grupal publicado rechaza cambiar maxIntegrantes", () => {
+    const grupal = new GrupalAssignment();
+    grupal.id = "a2";
+    grupal.titulo = "TP Objetos";
+    grupal.slug = "tp-objetos";
+    grupal.templateRepo = "tp-template";
+    grupal.paradigma = "objetos";
+    grupal.maxIntegrantes = 3;
+    grupal.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+
+    try {
+      grupal.actualizarEstructura({ maxIntegrantes: 5 });
+      expect.fail("debería haber lanzado AssignmentEstructuraInmutableError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(AssignmentEstructuraInmutableError);
+      expect((error as AssignmentEstructuraInmutableError).campos).toEqual([
+        "el máximo de integrantes",
+      ]);
+    }
+    expect(grupal.maxIntegrantes).toBe(3);
+  });
+
+  it("individual publicado ignora maxIntegrantes (camposEstructuralesQueCambian devuelve [])", () => {
+    const assignment = nuevoIndividualBorrador();
+    assignment.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+
+    expect(() =>
+      assignment.actualizarEstructura({ maxIntegrantes: 10 })
+    ).not.toThrow();
   });
 });

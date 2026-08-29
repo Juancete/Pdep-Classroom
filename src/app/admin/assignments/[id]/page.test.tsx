@@ -110,19 +110,19 @@ vi.mock("../estado-panel", () => ({
     assignmentId,
     estado,
     accionesDisponibles,
-    entregasCount,
+    motivoBloqueoBorrador,
   }: {
     assignmentId: string;
     estado: string;
     accionesDisponibles: string[];
-    entregasCount: number;
+    motivoBloqueoBorrador: string | null;
   }) => (
     <div
       data-testid="estado-panel"
       data-assignment={assignmentId}
       data-estado={estado}
       data-acciones={accionesDisponibles.join(",")}
-      data-entregas={entregasCount}
+      data-motivo={motivoBloqueoBorrador ?? ""}
     />
   ),
 }));
@@ -446,14 +446,36 @@ describe("Admin Assignment Detail Page", () => {
       expect(markup).toContain("Archivado");
     });
 
-    it("pasa las acciones disponibles y el conteo de entregas al panel de estado", async () => {
+    it("pasa las acciones disponibles al panel de estado", async () => {
       mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
       mockGetEntregas.mockResolvedValue([makeEntrega()]);
       const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       const markup = renderToStaticMarkup(element);
       expect(markup).toContain('data-estado="borrador"');
       expect(markup).toContain('data-acciones="publicado,archivado"');
-      expect(markup).toContain('data-entregas="1"');
+    });
+
+    // Fase 3 de la auditoría de dominio: antes el panel inferí­a el motivo por
+    // ausencia de la acción "borrador" en la lista; ahora el server page lo
+    // calcula con `EstadoAssignment.motivoDeBloqueo` y se lo pasa como prop.
+    it("pasa el motivo de bloqueo calculado con motivoDeBloqueo cuando hay entregas", async () => {
+      mockGetAssignment.mockResolvedValue(
+        makeIndividualAssignment({ estadoNombre: "publicado" })
+      );
+      mockGetEntregas.mockResolvedValue([makeEntrega()]);
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      const markup = renderToStaticMarkup(element);
+      expect(markup).toContain(
+        'data-motivo="No se puede pasar de &quot;publicado&quot; a &quot;borrador&quot;: tiene entregas — archivalo en vez de despublicarlo"'
+      );
+    });
+
+    it("no pasa motivo de bloqueo cuando volver a borrador está permitido", async () => {
+      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
+      mockGetEntregas.mockResolvedValue([]);
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      const markup = renderToStaticMarkup(element);
+      expect(markup).toContain('data-motivo=""');
     });
 
     it("no ofrece volver a borrador cuando el publicado ya tiene entregas", async () => {

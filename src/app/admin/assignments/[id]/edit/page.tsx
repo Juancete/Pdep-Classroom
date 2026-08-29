@@ -22,9 +22,17 @@ export default async function EditAssignmentPage(
     getEntregaCountsByAssignment(),
   ]);
   const aceptadas = entregasCounts.get(assignment.id) ?? 0;
-  const accionesDeEstado = transicionesDisponibles(assignment.estado, assignment.id, {
-    tieneEntregas: aceptadas > 0,
-  });
+  const contextoTransicion = { tieneEntregas: aceptadas > 0 };
+  const accionesDeEstado = transicionesDisponibles(
+    assignment.estado,
+    assignment.id,
+    contextoTransicion
+  );
+  const motivoBloqueoBorrador = assignment.estado.motivoDeBloqueo(
+    assignment.id,
+    "borrador",
+    contextoTransicion
+  );
 
   return (
     <div className="max-w-xl">
@@ -36,7 +44,7 @@ export default async function EditAssignmentPage(
         assignmentId={assignment.id}
         estado={assignment.estadoNombre}
         accionesDisponibles={accionesDeEstado}
-        entregasCount={aceptadas}
+        motivoBloqueoBorrador={motivoBloqueoBorrador}
         publicadoEn={assignment.publicadoEn?.toISOString() ?? null}
         publicadoPor={assignment.publicadoPor ?? null}
         archivadoEn={assignment.archivadoEn?.toISOString() ?? null}
@@ -66,7 +74,7 @@ export default async function EditAssignmentPage(
           ...assignment.extraFormDefaults(),
         }}
         submitLabel="Guardar cambios"
-        structuralLocked={assignment.estadoNombre !== "borrador"}
+        structuralLocked={!assignment.permiteEditarEstructura()}
       />
     </div>
   );

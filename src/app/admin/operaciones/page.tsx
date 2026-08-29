@@ -61,7 +61,7 @@ export default async function OperacionesPage() {
                 <td className="p-3 font-mono text-xs">{item.repoName ?? "—"}</td>
                 <td className="p-3">{item.estadoProcesamiento} · {item.intentos} intento(s)</td>
                 <td className="max-w-md break-words p-3 text-xs text-red-700">{item.error ?? "—"}</td>
-                <td className="p-3">{["fallido", "recibido"].includes(item.estadoProcesamiento) ? <ReprocessWebhookButton deliveryId={item.deliveryId} /> : "—"}</td>
+                <td className="p-3">{item.puedeReprocesarse ? <ReprocessWebhookButton deliveryId={item.deliveryId} /> : "—"}</td>
               </tr>
             ))}
             {overview.items.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-gray-500">Todavía no hay deliveries.</td></tr>}

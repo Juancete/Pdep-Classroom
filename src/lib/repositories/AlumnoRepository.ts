@@ -1,6 +1,6 @@
 import { getEM } from "@/lib/db";
 import type { EntityManager } from "@mikro-orm/postgresql";
-import { Alumno, type AlumnoData } from "@/domain/entities";
+import { Alumno, LegajoConflictError, type AlumnoData } from "@/domain/entities";
 import type { Comision } from "@/domain/entities";
 import {
   crearSuscripcionesFaltantes,
@@ -8,22 +8,10 @@ import {
 } from "./SuscripcionAlumnoRepository";
 
 export type { AlumnoData } from "@/domain/entities";
-
-// El legajo es la PK del alumno en la cursada: dos alumnos no pueden compartirlo.
-// La UNIQUE constraint de la DB ya lo garantiza, pero lanzamos este error antes
-// del flush para poder devolverle al cliente un mensaje claro y el `field`
-// afectado en vez de un crash genérico del driver.
-export class LegajoConflictError extends Error {
-  constructor(
-    public readonly legajo: string,
-    public readonly otroGithubUsername: string
-  ) {
-    super(
-      `El legajo ${legajo} ya está registrado con el usuario @${otroGithubUsername}. Verificá que sea el tuyo.`
-    );
-    this.name = "LegajoConflictError";
-  }
-}
+// `LegajoConflictError` es un error de dominio (vive en `Alumno.ts` — Fase 4
+// de la auditoría de dominio): se reexporta acá para no romper a los
+// callers que ya lo importan desde este repositorio.
+export { LegajoConflictError } from "@/domain/entities";
 
 async function assertLegajoLibreOPropio(
   legajo: string,

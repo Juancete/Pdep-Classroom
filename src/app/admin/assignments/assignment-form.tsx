@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import Link from "next/link";
-import { PARADIGMAS } from "@/types";
+import { PARADIGMAS, TIPOS_ASSIGNMENT } from "@/types";
 import { GRUPAL_MIN_MAX_INTEGRANTES } from "@/domain/entities/domain-constants";
 import type { AssignmentFormState } from "@/lib/assignment-schema";
 import { slugify } from "@/lib/naming";
@@ -289,8 +289,11 @@ export function AssignmentForm({
               onChange={(event) => setTipo(event.target.value)}
               className={`${INPUT_CLASS} appearance-none pr-8`}
             >
-              <option value="individual">Individual</option>
-              <option value="grupal">Grupal</option>
+              {TIPOS_ASSIGNMENT.map((tipoOpcion) => (
+                <option key={tipoOpcion} value={tipoOpcion}>
+                  {tipoOpcion.charAt(0).toUpperCase() + tipoOpcion.slice(1)}
+                </option>
+              ))}
             </select>
             {tipoLocked && <input type="hidden" name="tipo" value={tipo} />}
             <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-gray-400">

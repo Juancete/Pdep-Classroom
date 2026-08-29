@@ -89,7 +89,7 @@ export default async function DashboardPage() {
                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
                     {assignment.tipo}
                   </span>
-                  {assignment.estadoNombre !== "publicado" && (
+                  {!assignment.permiteAccionesDeAlumno() && (
                     <EstadoAssignmentBadge estado={assignment.estadoNombre} />
                   )}
                 </div>
@@ -122,7 +122,7 @@ export default async function DashboardPage() {
               </div>
 
               <div className="flex-shrink-0 w-full sm:w-auto flex flex-col items-end gap-1.5">
-                {entrega?.provisionEstaActiva() ? (
+                {entrega?.hasRepo() ? (
                   <a
                     href={entrega.repoUrl}
                     target="_blank"
@@ -170,7 +170,7 @@ export default async function DashboardPage() {
                 ) : (
                   <AcceptButton assignmentId={assignment.id} />
                 )}
-                {entrega?.provisionEstaActiva() && (
+                {entrega?.hasRepo() && (
                   <div className="flex items-center gap-1">
                     <CIBadge
                       resultadoNombre={entrega.ciResultadoNombre}
@@ -179,7 +179,7 @@ export default async function DashboardPage() {
                     <CIRefreshButton assignmentId={assignment.id} />
                   </div>
                 )}
-                {entrega?.provisionEstaActiva() && entrega.ciResultadoNombre !== "sin_ci" && (
+                {entrega?.hasRepo() && entrega.ciResultadoNombre !== "sin_ci" && (
                   <p className="text-[11px] text-gray-400">
                     Resultado automático — no es la nota final.
                   </p>

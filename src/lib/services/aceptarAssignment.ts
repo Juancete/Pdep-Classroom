@@ -12,7 +12,6 @@ import {
   fallarProvisionEntrega,
 } from "@/lib/repositories";
 import { addCollaborators, crearEntrega, getRepoInfo, type RepoInfo } from "@/lib/github";
-import { buildRepoName } from "@/lib/naming";
 import {
   AssignmentNoEncontradoError,
   autorizarAccionSobreAssignment,
@@ -23,13 +22,10 @@ export {
   AssignmentNoEncontradoError,
   AssignmentNoDisponibleError,
 } from "./assignmentAuthorization";
-
-export class AlumnoNoRegistradoError extends Error {
-  constructor(public readonly githubUsername: string) {
-    super("Completá tu registro antes de aceptar este assignment.");
-    this.name = "AlumnoNoRegistradoError";
-  }
-}
+// Reexportados por compatibilidad — la fuente real es el dominio
+// (`IndividualAssignment.ts`/`GrupalAssignment.ts` — Fase 3 de la
+// auditoría de dominio).
+export { AlumnoNoRegistradoError } from "@/domain/entities";
 
 export class RepositorioPreexistenteNoAdministradoError extends Error {
   constructor(public readonly repoName: string) {
@@ -38,22 +34,6 @@ export class RepositorioPreexistenteNoAdministradoError extends Error {
     );
     this.name = "RepositorioPreexistenteNoAdministradoError";
   }
-}
-
-function repoCompatibleConIntento(
-  intento: { provisionCreacionIniciadaEn?: Date; repoGithubId?: string },
-  repo: RepoInfo,
-  marcadorEntrega: string
-): boolean {
-  const inicio = intento.provisionCreacionIniciadaEn;
-  if (!inicio || !repo.createdAt) return false;
-  // GitHub informa created_at con precisión de segundos; toleramos cinco
-  // segundos hacia atrás respecto del timestamp local tomado antes del POST.
-  return (
-    ((intento.repoGithubId !== undefined && intento.repoGithubId === repo.repoGithubId) ||
-      repo.description?.includes(marcadorEntrega) === true) &&
-    repo.createdAt.getTime() >= inicio.getTime() - 5_000
-  );
 }
 
 export async function aceptarAssignment(
@@ -68,28 +48,16 @@ export async function aceptarAssignment(
   autorizarAccionSobreAssignment(user, alumno, assignment);
 
   const existente = await getEntregaDeUsuario(assignment.id, user.githubUsername);
-  if (existente?.provisionEstaActiva()) return existente;
+  if (existente?.hasRepo()) return existente;
 
   const participantes: ParticipantesResueltos = await assignment.resolverParticipantesPara(
     user,
-    getGrupoDeAlumnoEnAssignment
+    getGrupoDeAlumnoEnAssignment,
+    alumno
   );
 
-  const { usernames, grupoId, grupoNombreNormalizado } = participantes;
-  if (!grupoId && !alumno) throw new AlumnoNoRegistradoError(user.githubUsername);
-
-  if (grupoId && !grupoNombreNormalizado) {
-    throw new Error(`El grupo ${grupoId} no tiene un nombre normalizado.`);
-  }
-  const repoName = grupoId
-    ? buildRepoName({
-        slug: assignment.slug,
-        grupoNombreNormalizado,
-      })
-    : buildRepoName({
-        slug: assignment.slug,
-        githubUsername: usernames[0]!,
-      });
+  const { usernames, grupoId } = participantes;
+  const repoName = assignment.nombreDeRepoPara(participantes);
   const entrega = await crearEntregaSiAssignmentDisponible(
     {
       assignmentId: assignment.id,
@@ -101,13 +69,12 @@ export async function aceptarAssignment(
     },
     user.rol
   );
-  const marcadorEntrega = `[pdep-entrega:${entrega.id}]`;
-  const descripcionRepo = `${assignment.titulo} — PdeP ${marcadorEntrega}`;
-  if (entrega.provisionEstaActiva()) return entrega;
+  const descripcionRepo = `${assignment.titulo} — PdeP ${entrega.marcadorDeRepo()}`;
+  if (entrega.hasRepo()) return entrega;
 
   const intento = await iniciarProvisionEntrega(entrega.id);
   if (!intento) return entrega;
-  if (intento.provisionEstaActiva()) return intento;
+  if (intento.hasRepo()) return intento;
 
   let repoPreexistente: RepoInfo | null;
   try {
@@ -117,7 +84,7 @@ export async function aceptarAssignment(
     throw error;
   }
   if (repoPreexistente) {
-    if (!repoCompatibleConIntento(intento, repoPreexistente, marcadorEntrega)) {
+    if (!intento.reconoceComoPropio(repoPreexistente)) {
       const colision = new RepositorioPreexistenteNoAdministradoError(repoName);
       await fallarProvisionEntrega(entrega.id, colision.message);
       throw colision;
@@ -156,13 +123,7 @@ export async function aceptarAssignment(
       await fallarProvisionEntrega(entrega.id, mensajeOperativo(error));
       throw error;
     }
-    if (
-      !repoCompatibleConIntento(
-        intentoConCreacionIniciada,
-        repoTrasError,
-        marcadorEntrega
-      )
-    ) {
+    if (!intentoConCreacionIniciada.reconoceComoPropio(repoTrasError)) {
       const colision = new RepositorioPreexistenteNoAdministradoError(repoName);
       await fallarProvisionEntrega(entrega.id, colision.message);
       throw colision;

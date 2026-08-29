@@ -24,7 +24,7 @@ function makeProps(overrides = {}) {
     assignmentId: "a1",
     estado: "borrador" as const,
     accionesDisponibles: ["publicado", "archivado"] as NombreEstadoAssignment[],
-    entregasCount: 0,
+    motivoBloqueoBorrador: null as string | null,
     publicadoEn: null,
     publicadoPor: null,
     archivadoEn: null,
@@ -65,12 +65,26 @@ describe("EstadoPanel", () => {
         {...makeProps({
           estado: "publicado",
           accionesDisponibles: ["archivado"],
-          entregasCount: 3,
+          motivoBloqueoBorrador:
+            'No se puede pasar de "publicado" a "borrador": tiene entregas — archivalo en vez de despublicarlo',
         })}
       />
     );
     expect(screen.queryByTestId("accion-borrador")).not.toBeInTheDocument();
-    expect(screen.getByText(/con entregas \(3\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/tiene entregas/i)).toBeInTheDocument();
+  });
+
+  it("no muestra ningún motivo de bloqueo cuando volver a borrador está permitido", () => {
+    render(
+      <EstadoPanel
+        {...makeProps({
+          estado: "publicado",
+          accionesDisponibles: ["borrador", "archivado"],
+          motivoBloqueoBorrador: null,
+        })}
+      />
+    );
+    expect(screen.queryByText(/no se puede pasar/i)).not.toBeInTheDocument();
   });
 
   it("no llama al endpoint si se cancela la confirmación", async () => {

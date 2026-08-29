@@ -41,7 +41,7 @@ export const hookCanalesDeComunicacion: HookPostConfirmacion = async ({
  * degradada para el warning inmediato.
  */
 export const hookGruposSync: HookPostConfirmacion = async ({ githubUsername, comision }) => {
-  if (comision.gruposImportadosEn) return { gruposSync: "ok" };
+  if (comision.gruposYaImportados()) return { gruposSync: "ok" };
   try {
     await intentarSincronizarGrupos(githubUsername, comision);
     return { gruposSync: "ok" };

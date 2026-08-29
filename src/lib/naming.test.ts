@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   buildRepoName,
   enumerar,
-  extractTemplateName,
   GITHUB_REPO_NAME_MAX_LENGTH,
   NombreRepositorioDemasiadoLargoError,
   slugify,
@@ -96,22 +95,6 @@ describe("slugify", () => {
 
   it("solo caracteres no permitidos devuelve vacío", () => {
     expect(slugify("  +++ /._  ")).toBe("");
-  });
-});
-
-// ── extractTemplateName ─────────────────────────────────────
-
-describe("extractTemplateName", () => {
-  it("extrae nombre sin org", () => {
-    expect(extractTemplateName("pdep-mn-utn/kata-template")).toBe("kata-template");
-  });
-
-  it("devuelve tal cual si no tiene org", () => {
-    expect(extractTemplateName("kata-template")).toBe("kata-template");
-  });
-
-  it("maneja múltiples barras (toma el último segmento)", () => {
-    expect(extractTemplateName("a/b/c/template")).toBe("template");
   });
 });
 

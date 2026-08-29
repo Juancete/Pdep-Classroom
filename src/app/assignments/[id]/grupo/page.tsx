@@ -6,7 +6,7 @@ import {
   getGruposDeAssignment,
   getEntregaLogica,
 } from "@/lib/repositories";
-import { GrupalAssignment } from "@/domain/entities";
+import type { GrupalAssignment } from "@/domain/entities";
 import { GrupoSelector } from "./grupo-selector";
 import { MiGrupo } from "./mi-grupo";
 import type { GrupoResumen } from "./mi-grupo";
@@ -27,12 +27,14 @@ export default async function GrupoPage(
       : getAlumnoByGithub(user.githubUsername, true),
   ]);
 
-  if (!assignment || !(assignment instanceof GrupalAssignment)) {
+  if (!assignment) {
     notFound();
   }
 
+  let grupal: GrupalAssignment;
   try {
-    autorizarAccionSobreAssignment(user, alumno, assignment);
+    grupal = assignment.exigirGrupal();
+    autorizarAccionSobreAssignment(user, alumno, grupal);
   } catch {
     notFound();
   }
@@ -49,20 +51,14 @@ export default async function GrupoPage(
     : null;
 
   function serializar(grupo: (typeof grupos)[number]): GrupoResumen {
-    return {
-      id: grupo.id,
-      nombre: grupo.nombre,
-      paradigma: grupo.paradigma,
-      maxIntegrantes: grupo.maxIntegrantes,
-      estaLleno: grupo.estaLleno(),
-      etiquetaCupo: grupo.etiquetaCupo(),
-      miembros: grupo.usernamesDeMiembros(),
-    };
+    // `toResumen()` cubre los campos comunes con las routes de grupos —
+    // acá se agrega `etiquetaCupo`, específico de esta pantalla.
+    return { ...grupo.toResumen(), etiquetaCupo: grupo.etiquetaCupo() };
   }
 
   const motivoBloqueo = miGrupo
     ? user.rol.motivoDeBloqueoDeMembresia({
-        assignment,
+        assignment: grupal,
         grupo: miGrupo,
         grupoTieneEntrega: !!entrega,
       })
@@ -85,7 +81,7 @@ export default async function GrupoPage(
         </a>
         <h1 className="text-2xl font-bold mt-2">{assignment.titulo}</h1>
         <p className="text-gray-500 text-sm mt-1">
-          TP grupal · hasta {assignment.maxIntegrantes} integrantes ·{" "}
+          TP grupal · hasta {grupal.maxIntegrantes} integrantes ·{" "}
           {assignment.paradigma}
         </p>
       </div>
@@ -97,14 +93,14 @@ export default async function GrupoPage(
           tieneEntrega={!!entrega}
           githubUsername={user.githubUsername}
           motivoBloqueo={motivoBloqueo}
-          esUltimoMiembro={miGrupo.cantidadMiembros() === 1}
+          esUltimoMiembro={miGrupo.quedaraVacioSiSale(user.githubUsername)}
           gruposDisponibles={gruposDisponibles}
         />
       ) : (
         <GrupoSelector
           assignmentId={params.id}
           grupos={grupos.map(serializar)}
-          inscripcionesCerradas={assignment.inscripcionesCerradas}
+          inscripcionesCerradas={grupal.inscripcionesCerradas}
         />
       )}
     </div>

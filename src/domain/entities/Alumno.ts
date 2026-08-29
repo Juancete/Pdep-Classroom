@@ -16,6 +16,23 @@ export interface AlumnoData extends RegistroInput {
   registroConfirmadoEn?: Comision;
 }
 
+// El legajo es la PK del alumno en la cursada: dos alumnos no pueden
+// compartirlo. La UNIQUE constraint de la DB ya lo garantiza, pero se
+// lanza este error antes del flush para poder devolverle al cliente un
+// mensaje claro y el `field` afectado en vez de un crash genérico del
+// driver (Fase 4 de la auditoría de dominio: vivía en `AlumnoRepository.ts`).
+export class LegajoConflictError extends Error {
+  constructor(
+    public readonly legajo: string,
+    public readonly otroGithubUsername: string
+  ) {
+    super(
+      `El legajo ${legajo} ya está registrado con el usuario @${otroGithubUsername}. Verificá que sea el tuyo.`
+    );
+    this.name = "LegajoConflictError";
+  }
+}
+
 // Regex de email RFC-lite: una arroba, algún dominio, un punto después.
 // Suficiente para detectar typos comunes sin sobre-complicar.
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

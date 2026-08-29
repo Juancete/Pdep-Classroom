@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Comision } from "@/domain/entities";
 
 const mockCanalesActivos = vi.fn();
 const mockIntentarSincronizarGrupos = vi.fn();
@@ -25,7 +26,7 @@ function makeCtx(overrides: Partial<ContextoAlumno> = {}): ContextoAlumno {
   return {
     githubUsername: "juangarcia",
     email: "juan@gmail.com",
-    comision: { id: "c1" } as never,
+    comision: Object.assign(new Comision(2026, "sheet-xyz"), { id: "c1" }),
     ...overrides,
   };
 }
