@@ -15,7 +15,8 @@ modifica la base de datos.
    instalada en la organización y suscripta a `Check suite`, `Push`, `Repository` y `Member`.
 5. Evitar que un auto-deploy de producción se adelante a la migración. Usar promoción manual o
    pausar temporalmente ese auto-deploy con `vercel git disconnect` (o desde el dashboard:
-   Settings → Git → Disconnect). Debe revertirse al final del release (ver paso 4 de "Release").
+   Settings → Git → Disconnect). La desconexión detiene todos los deploys por Git, tanto producción
+   como previews. Debe revertirse al final del release (ver paso 4 de "Release").
 
 ## Release
 
