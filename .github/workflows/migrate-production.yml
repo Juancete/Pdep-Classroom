@@ -20,6 +20,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Verificar secret DATABASE_URL
+        if: env.DATABASE_URL == ''
+        run: |
+          echo "::error::El secret DATABASE_URL del environment 'production' está vacío o no existe. Cargarlo con: gh secret set DATABASE_URL --env production"
+          exit 1
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.2
