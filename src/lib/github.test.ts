@@ -92,7 +92,7 @@ describe("crearEntrega", () => {
 
     await expect(
       crearEntrega({
-        templateRepo: "pdep-mn-utn/template",
+        templateRepo: "template",
         repoName: "tp-los-lambdas",
         usernames: ["ana", "bob"],
       })
@@ -108,10 +108,35 @@ describe("crearEntrega", () => {
     expect(mockAddCollaborator).toHaveBeenCalledTimes(2);
   });
 
+  // Fase 3 de la auditoría de dominio: `crearEntrega` ya no resuelve el
+  // nombre del template él mismo (antes usaba `extractTemplateName`,
+  // duplicado de `Assignment.nombreDelTemplate()`) — recibe el nombre ya
+  // resuelto del caller y lo pasa tal cual a `createRepoFromTemplate`.
+  it("pasa el templateRepo recibido tal cual, sin volver a resolverlo", async () => {
+    mockCreateUsingTemplate.mockResolvedValue({
+      data: {
+        html_url: "https://github.com/pdep-mn-utn/tp-los-lambdas",
+        full_name: "pdep-mn-utn/tp-los-lambdas",
+        id: 987654,
+      },
+    });
+    mockAddCollaborator.mockResolvedValue(undefined);
+
+    await crearEntrega({
+      templateRepo: "kata-template",
+      repoName: "tp-los-lambdas",
+      usernames: ["ana"],
+    });
+
+    expect(mockCreateUsingTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({ template_repo: "kata-template" })
+    );
+  });
+
   it("rechaza un nombre demasiado largo antes de invocar GitHub", async () => {
     await expect(
       crearEntrega({
-        templateRepo: "pdep-mn-utn/template",
+        templateRepo: "template",
         repoName: "a".repeat(101),
         usernames: ["ana"],
       })
@@ -286,12 +311,19 @@ describe("getRepoInfo", () => {
 
   it("devuelve el id numérico y la URL cuando el repo existe", async () => {
     mockReposGet.mockResolvedValue({
-      data: { id: 555666, html_url: "https://github.com/pdep-mn-utn/tp-ana" },
+      data: {
+        id: 555666,
+        html_url: "https://github.com/pdep-mn-utn/tp-ana",
+        description: "TP — PdeP",
+        created_at: "2026-08-23T12:00:00Z",
+      },
     });
 
     await expect(getRepoInfo("tp-ana")).resolves.toEqual({
       repoGithubId: "555666",
       repoUrl: "https://github.com/pdep-mn-utn/tp-ana",
+      description: "TP — PdeP",
+      createdAt: new Date("2026-08-23T12:00:00Z"),
     });
   });
 

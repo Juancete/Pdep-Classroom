@@ -48,7 +48,7 @@ describe("PATCH /api/perfil", () => {
     mockConfirmarYProcesarAlumno.mockResolvedValue({
       ok: true,
       comision: { id: "c1" },
-      hooks: { groupSubscription: "already_member", gruposSync: "ok" },
+      hooks: { canalesConError: [], gruposSync: "ok" },
     });
   });
 
@@ -56,7 +56,7 @@ describe("PATCH /api/perfil", () => {
     const response = await PATCH(makeRequest(validBody));
     const json = await response.json();
     expect(response.status).toBe(200);
-    expect(json).toEqual({ ok: true, groupSubscription: "already_member" });
+    expect(json).toEqual({ ok: true, canalesConError: [] });
   });
 
   it("no incluye gruposSync en el body cuando el hook no falla", async () => {
@@ -69,7 +69,7 @@ describe("PATCH /api/perfil", () => {
     mockConfirmarYProcesarAlumno.mockResolvedValue({
       ok: true,
       comision: { id: "c1" },
-      hooks: { groupSubscription: "already_member", gruposSync: "error" },
+      hooks: { canalesConError: [], gruposSync: "error" },
     });
     const response = await PATCH(makeRequest(validBody));
     const json = await response.json();
@@ -83,15 +83,15 @@ describe("PATCH /api/perfil", () => {
     expect(inputPasado.githubUsername).toBe("juangarcia");
   });
 
-  it("la respuesta incluye groupSubscription (perfil también suscribe al grupo)", async () => {
+  it("la respuesta incluye canalesConError (perfil también sincroniza canales)", async () => {
     mockConfirmarYProcesarAlumno.mockResolvedValue({
       ok: true,
       comision: { id: "c1" },
-      hooks: { groupSubscription: "added" },
+      hooks: { canalesConError: ["suscribirte al grupo de Google del curso"] },
     });
     const response = await PATCH(makeRequest(validBody));
     const json = await response.json();
-    expect(json.groupSubscription).toBe("added");
+    expect(json.canalesConError).toEqual(["suscribirte al grupo de Google del curso"]);
   });
 
   it("devuelve 400 con el error del servicio cuando ok:false", async () => {

@@ -4,14 +4,29 @@
 
 Reemplazo liviano de GitHub Classroom para la cátedra de Paradigmas de Programación (UTN FRBA).
 
-Crea repos desde templates en la org `pdep-mn-utn` y da acceso a los alumnos, sin depender de GitHub Classroom.
+Centraliza el alta de alumnos, la suscripción al grupo de correo, la creación de TPs individuales y
+grupales y el mantenimiento de los repositorios de la organización. Los repos se crean desde
+templates en `pdep-mn-utn`, con colaboradores, CI y actividad sincronizados desde GitHub, sin
+depender de GitHub Classroom.
+
+Funciones principales:
+
+- registro con GitHub, persistencia en PostgreSQL y espejo en Google Sheets;
+- suscripción y reconciliación por lotes a canales de comunicación (Google Groups hoy, extensible);
+- assignments en borrador, publicados y archivados, individuales o grupales;
+- autogestión de grupos con invariantes de cupo y auditoría de membresías;
+- aprovisionamiento reintentable e idempotente de repositorios;
+- estado de CI y actividad actualizado mediante webhooks firmados;
+- paneles docentes para entregas, errores, integraciones y mantenimiento seguro;
+- importación única de grupos desde Sheets cuando la cursada ya está en marcha.
 
 ## Stack
 
 - **Next.js 16** (App Router) + React 19 + TypeScript
 - **NextAuth v5** con GitHub OAuth
-- **Octokit** para la API de GitHub
-- **Google Sheets API** para leer alumnos (padrón, notas, registro)
+- **Octokit** + **GitHub App** para repos, colaboradores, CI y webhooks
+- **Google Sheets API** para padrón, registro y bootstrap de grupos
+- **Google Admin SDK** para suscribir y reconciliar el grupo de correo
 - **MikroORM 6** + PostgreSQL para persistencia (assignments, grupos, entregas, comisiones)
 - **Vercel** + **Neon** para deploy
 
@@ -222,6 +237,11 @@ por comisión al mapear las columnas de esa hoja:
 Un alumno puede figurar en un grupo distinto por cada paradigma; si una celda queda vacía, no
 sincroniza grupo para ese paradigma.
 
+La hoja es sólo la fuente de **carga inicial**. Después de ejecutar “Importar grupos desde Sheets”
+para una comisión, la base de Classroom pasa a ser la fuente de verdad: las altas, bajas y cambios
+se hacen desde la aplicación y una sincronización posterior no vuelve a agregar miembros quitados
+manualmente. La fecha de esa importación queda visible en la edición de la comisión.
+
 ### 5. Configurar la base de datos
 
 La app usa PostgreSQL via MikroORM. El esquema se crea con migraciones.
@@ -317,15 +337,21 @@ O desde el dashboard de Vercel: **Settings → Environment Variables → Add**.
 
 **Migraciones en producción:**
 
-El script `vercel-build` (`package.json`) corre `pnpm db:migration:up` **antes** de cada build:
+Las migraciones están separadas del build: `vercel-build` sólo compila. Esto evita que dos builds
+de Vercel intenten modificar el schema en paralelo. Antes de promover una versión que requiere un
+schema nuevo hay que ejecutar manualmente el workflow **Migrate production database** de GitHub
+Actions, configurado con el secret `DATABASE_URL` en el environment protegido `Production`. Ese
+secret es independiente de la variable homónima de Vercel: hay que configurar ambos.
 
-```json
-"vercel-build": "npm run db:migration:up && npm run build"
+```bash
+# Alternativa equivalente desde una terminal autorizada
+DATABASE_URL="postgresql://..." pnpm release:migrate
 ```
 
-Es decir, las migraciones pendientes se aplican solas en cada deploy — no hace falta correrlas a
-mano contra Neon. La implicancia: toda migración nueva tiene que ser segura de correr desatendida
-en producción (idempotente, sin downtime largo, sin asumir que alguien va a mirar la salida).
+La secuencia de release es: preparar el PR `development → master`, pausar el auto-deploy, crear un
+restore point, mergear, migrar el commit resultante, promover exactamente ese commit y hacer el
+smoke test. El detalle y el procedimiento de recuperación están en
+[`docs/production-runbook.md`](docs/production-runbook.md).
 
 #### Scripts de DB disponibles
 
@@ -384,18 +410,24 @@ para entrar como cualquier alumno.
 
 ```bash
 pnpm i -g vercel
-vercel          # vincula el proyecto, hace el primer deploy a preview
-vercel --prod   # promueve a producción
+vercel          # vincula el proyecto y crea un preview
 ```
+
+No ejecutar `vercel --prod` hasta haber configurado las variables, aplicado las migraciones y
+completado los controles de las secciones siguientes. En este repositorio `development` es la rama
+de integración y `master` es la rama de producción; cada release se prepara con un PR
+`development → master`.
 
 #### 9.2 Configurar variables de entorno
 
 Cada variable se agrega con `vercel env add`. El CLI pregunta el valor y en qué entornos aplicarlo (Production / Preview / Development).
 
-**Obligatorias** (sin ellas, login o el acceso a GitHub no funcionan):
+En producción todas las integraciones listadas abajo son obligatorias. Cuando
+`VERCEL_ENV=production`, [`src/instrumentation.ts`](src/instrumentation.ts) cancela el arranque si
+falta alguna variable requerida o si existe `ENABLE_DEV_LOGIN`.
 
 ```bash
-# Base de datos (Neon — connection string pooled). Sin ella cae a localhost:5432 en silencio.
+# Base de datos (Neon — connection string pooled)
 vercel env add DATABASE_URL
 
 # GitHub OAuth App — sin esto el login con GitHub no funciona
@@ -409,33 +441,38 @@ vercel env add NEXTAUTH_SECRET               # npx auth secret
 vercel env add ADMIN_GITHUB_USERNAMES        # usernames separados por coma
 ```
 
-**Acceso a GitHub para crear/borrar repos** — usar la GitHub App (recomendado) o el PAT, no ambos:
+**Acceso a GitHub para crear/borrar repos** — en producción se exige la GitHub App. El PAT queda
+sólo como fallback de desarrollo local:
 
 ```bash
-# Opción A: GitHub App instalada en la org (recomendado)
+# GitHub App instalada en la org
 vercel env add GITHUB_APP_ID
 vercel env add GITHUB_APP_PRIVATE_KEY        # base64 del .pem, sin saltos de línea
 vercel env add GITHUB_APP_INSTALLATION_ID
 
-# Opción B: PAT clásico (fallback, ver §3) — si falta el trío de arriba, se usa este
-vercel env add GITHUB_PAT
-
 vercel env add GITHUB_ORG                    # opcional, default "pdep-mn-utn" si se omite
 ```
 
-**Google Sheets** — requerida sólo si usás el registro/sincronización de alumnos desde planilla:
+**Google Sheets** — requerida en producción para el registro/sincronización de alumnos:
 
 ```bash
 vercel env add GOOGLE_SERVICE_ACCOUNT_KEY    # base64 del JSON
 ```
 
-**Google Groups (opcional)** — si se omiten ambas, el feature queda desactivado sin romper nada;
-si se setea sólo `GOOGLE_GROUP_EMAIL` sin la otra, el server **no arranca** (ver §"Suscripción
-automática a Google Group" más abajo):
+**Canal de comunicación: Google Groups** — opcional. Sin estas dos variables el canal simplemente no
+existe (ver sección "Canales de comunicación" más abajo); si seteás sólo una de las dos, la
+validación de arranque rompe el boot (misconfig, no falta de config):
 
 ```bash
 vercel env add GOOGLE_GROUP_EMAIL
 vercel env add GOOGLE_WORKSPACE_ADMIN_EMAIL
+```
+
+**Webhook de GitHub** — obligatorio en producción y debe coincidir con el secret configurado en la
+GitHub App. Admite varios valores separados por coma durante una rotación:
+
+```bash
+vercel env add GITHUB_WEBHOOK_SECRET
 ```
 
 **Nunca en producción** — sólo para local, y sólo además de `NODE_ENV=development` (que `next dev`
@@ -461,14 +498,37 @@ vercel env add NOMBRE_VARIABLE
 
 #### 9.3 Migraciones en producción
 
-No hace falta correrlas a mano: `vercel-build` ejecuta `pnpm db:migration:up` antes de cada build
-(ver §5.2). Si igual necesitás aplicarlas manualmente contra Neon (por ejemplo, para probar una
-migración antes de deployar), apuntá `DATABASE_URL` a la connection string de Neon:
+El workflow sólo puede despacharse cuando existe en la rama por defecto (`master`). Para una
+promoción con migraciones, seguir este orden:
+
+1. Abrir el PR `development → master` y confirmar CI verde.
+2. Pausar el auto-deploy de producción de Vercel; los previews pueden seguir habilitados.
+3. Crear un restore point en Neon y anotar qué commit se va a promover.
+4. Configurar `DATABASE_URL` en GitHub → **Settings → Environments → Production**.
+5. Mergear el PR y anotar el SHA resultante de `master`.
+6. Ejecutar **Actions → Migrate production database → Run workflow** sobre `master` y esperar el
+   resultado exitoso.
+7. Promover o redesplegar en Vercel exactamente el SHA migrado; no otro commit más nuevo.
+
+Desde una terminal autenticada, los pasos 6 y el seguimiento pueden iniciarse con:
+
+```bash
+gh workflow run migrate-production.yml --ref master
+gh run list --workflow migrate-production.yml --limit 1
+gh run watch RUN_ID --exit-status
+```
+
+El environment `Production` puede requerir aprobación docente. Como alternativa de emergencia se
+puede ejecutar el mismo comando desde una terminal autorizada, aunque el workflow deja una mejor
+auditoría:
 
 ```bash
 DATABASE_URL="postgresql://user:pass@ep-xxx.neon.tech/pdep_classroom?sslmode=require" \
-  pnpm db:migration:up
+  pnpm release:migrate
 ```
+
+No reactivar el auto-deploy hasta que la migración y el primer smoke test hayan terminado. El build
+no toca la base y no reemplaza este procedimiento.
 
 #### 9.4 Actualizar URLs de callback
 
@@ -481,13 +541,39 @@ Después del deploy, actualizar la GitHub OAuth App con la URL real de Vercel:
 
 Una vez en producción, entrar como admin y crear al menos una comisión activa en `/admin/comisiones` con el ID de la planilla de Google Sheets. Sin una comisión activa, las páginas de alumnos, registro y perfil no funcionan.
 
+#### 9.6 Smoke test y bootstrap de una cursada existente
+
+Después de promover el deploy:
+
+1. Consultar `GET /api/health`: debe responder HTTP 200 con `ok: true`, `database: "ok"` y el SHA
+   desplegado en `version`.
+2. Entrar como docente al tablero **Diagnóstico** (`/admin/operaciones`): base, GitHub App, Sheets y
+   cada canal de comunicación configurado deben estar en verde. Un canal sin configurar aparece
+   como "Revisar" — es esperable si todavía no armaste su infraestructura, no bloquea el deploy.
+   Revisar cualquier delivery fallido antes de habilitar alumnos reales.
+3. Hacer un canary con datos descartables: registrar un alumno, publicar y aceptar un TP individual
+   y formar un grupo de dos alumnos para aceptar uno grupal. Confirmar repos, colaboradores,
+   suscripción a los canales configurados, webhook y CI.
+4. Si la materia ya empezó, sincronizar el padrón desde Sheets y procesar las suscripciones a
+   canales de comunicación por lotes hasta que no queden pendientes.
+5. Si ya existían grupos en la planilla, ejecutar **Importar grupos desde Sheets** una sola vez por
+   comisión. La operación usa un lease renovable para impedir dos importaciones concurrentes; al
+   completarse, Classroom pasa a ser la única fuente de verdad de grupos.
+
+No importar grupos reales antes de que el canary termine correctamente.
+
 ## Cómo funciona
 
 ### Para docentes
 
-1. Entrar como admin → ir a **Assignments**
-2. Crear assignment: elegir template, paradigma, tipo (individual/grupal)
-3. Compartir el link de la app con los alumnos (por mail, Google Groups, etc.)
+1. Crear o seleccionar la comisión activa y sincronizar el padrón inicial.
+2. Crear un assignment en borrador: elegir template, paradigma y tipo individual o grupal. El tipo
+   es el discriminador persistido y no se puede convertir después de crear el assignment.
+3. Revisar su configuración y publicarlo para habilitar acciones de alumnos.
+4. Compartir el link de la app; los alumnos registrados se suscriben a los canales de comunicación
+   que estén configurados (ej. Google Groups).
+5. Al finalizar, archivarlo para impedir nuevas aceptaciones y conservar sus entregas como
+   histórico.
 
 ### Para alumnos
 
@@ -497,7 +583,8 @@ Una vez en producción, entrar como admin y crear al menos una comisión activa 
    entrega todavía; el docente puede administrar integrantes manualmente en cualquier momento desde
    el panel admin.
 3. Clickear **Aceptar** → se crea el repo en `pdep-mn-utn` con el alumno (o todo el grupo, si es
-   grupal) como collaborator
+   grupal) como collaborator. Si GitHub falla después de iniciar la creación, la entrega queda
+   visible y se puede reintentar sin crear repos duplicados.
 
 ### Repos creados
 
@@ -513,6 +600,33 @@ identificador se consideran duplicados.
 GitHub limita el nombre de un repo a 100 caracteres — un `slug` de assignment largo combinado con
 un username o nombre de grupo largo puede superarlo. En ese caso, aceptar el TP (o crear/unirse al
 grupo) falla con un error explícito en vez de crear un repo con el nombre truncado.
+
+Cada repo nuevo incluye un marcador estable de la entrega y guarda el `repoGithubId`. Eso permite
+reconciliar reintentos aunque cambie el título del TP, y evita adoptar silenciosamente un repo ajeno
+que tenga el mismo nombre.
+
+### Ciclo de vida y mantenimiento
+
+- **Borrador:** editable y eliminable sólo mientras no tenga entregas ni grupos. Los campos
+  estructurales se sellan al publicar; el tipo queda fijo desde la creación por ser el discriminador
+  STI de la entidad.
+- **Publicado:** visible y aceptable por alumnos. Puede archivarse, pero no eliminarse como atajo.
+- **Archivado:** conserva el acceso a repos ya creados e impide nuevas acciones de alumnos. Un
+  docente todavía puede diagnosticar o reintentar una provisión fallida.
+- El borrado masivo de repos sólo está disponible para assignments archivados, muestra primero la
+  lista afectada y exige escribir el slug exacto. La operación es irreversible y deja auditoría.
+- Una comisión sólo puede eliminarse si está inactiva y no tiene alumnos ni assignments asociados.
+
+### Diagnóstico y recuperación
+
+`/admin/operaciones` concentra el diagnóstico de base de datos, GitHub App, Google Sheets, Google
+Groups y webhooks. También muestra deliveries recientes y permite reprocesar los que quedaron
+recibidos o fallidos. Los errores inesperados sanitizados se consultan en `/admin/errores`, con un
+badge para pendientes.
+
+El aprovisionamiento de repositorios persiste estado, cantidad de intentos y último error. Una
+entrega fallida puede retomarse; antes de asociar un repo preexistente se valida su id o el marcador
+estable y la ventana temporal de creación. Las colisiones requieren intervención docente.
 
 ## CI en Classroom
 
@@ -707,7 +821,8 @@ inmediato, rompiendo la exclusión mutua justo en el caso que el reproceso exist
 
 ### Reintentos
 
-Un delivery `fallido` (o `recibido`/`procesando` abandonado) se puede reprocesar con
+Un delivery `fallido` (o `recibido`/`procesando` abandonado) se puede reprocesar desde la pantalla
+admin **Diagnóstico** o con
 `POST /api/webhooks/github/reprocesar` (sólo admin), con `{ "deliveryId": "..." }` para uno puntual
 o sin body para tomar hasta 50 candidatos en orden de llegada — cada uno se reclama atómicamente
 antes de procesarse. El schema es estricto: un typo en la clave (`deliverId` en vez de
@@ -743,7 +858,7 @@ mikro-orm.config.ts                            # Config de MikroORM (CLI + runti
 migrations/                                    # Migraciones commiteadas + snapshot del schema
 tests/migrations/                              # Tests de integración contra Postgres real
 src/
-├── instrumentation.ts                         # Validaciones de arranque (ej. config de Google Groups)
+├── instrumentation.ts                         # Validaciones de arranque (ej. misconfig de un canal)
 ├── proxy.ts                                   # Auth proxy (protege rutas /admin, /dashboard, etc.)
 ├── app/
 │   ├── api/
@@ -827,6 +942,7 @@ src/
 │       ├── Comision.ts                        # Incluye columnConfig para la planilla
 │       ├── Entrega.ts
 │       ├── Alumno.ts
+│       ├── SuscripcionAlumno.ts               # Estado de suscripción de un alumno a un canal (1 fila por canal)
 │       ├── Grupo.ts
 │       ├── CambioDeMembresia.ts               # Auditoría de altas/bajas/cambios de integrantes
 │       ├── RepoDeletionAttempt.ts             # Auditoría de borrado de repos
@@ -836,9 +952,13 @@ src/
 │   ├── auth.ts / auth.config.ts / auth.events.ts   # NextAuth: config, providers (GitHub + login de desarrollo), eventos
 │   ├── github.ts                              # Octokit: crear/eliminar repos, collaborators, templates
 │   ├── github-errors.ts                       # Tipado y manejo de errores de la API de GitHub
-│   ├── naming.ts                              # Funciones puras: slugify, buildRepoName
+│   ├── naming.ts                              # Funciones puras: slugify, buildRepoName, enumerar
 │   ├── sheets.ts                              # Google Sheets: leer/escribir alumnos y grupos
-│   ├── googleGroups.ts                        # Alta/baja en Google Groups (opcional, ver más abajo)
+│   ├── googleGroups.ts                        # Cliente de la Admin SDK Directory API (alta/baja de miembros)
+│   ├── canales/                               # Canales de comunicación como Template Method — ver más abajo
+│   │   ├── CanalDeComunicacion.ts             # Clase abstracta: algoritmo de reconciliación
+│   │   ├── GoogleGroupsCanal.ts               # Único canal concreto hoy
+│   │   └── index.ts                           # Registro: CANALES_DE_COMUNICACION, canalesActivos()
 │   ├── session.ts                             # requireUser / requireAdmin
 │   ├── proxy-authorization.ts                 # Reglas de redirect que usa proxy.ts
 │   ├── api-auth.ts                            # Middleware de auth para API routes
@@ -856,7 +976,7 @@ src/
 │   │   ├── importarAlumnosDeComision.ts       # Sheets → DB, bulk por comisión
 │   │   ├── grupoSync.ts                       # Sheets → DB, membresía de grupos (sólo aditivo)
 │   │   ├── intentarSincronizarGrupos.ts       # Wrapper con retry/flag de falla de grupoSync
-│   │   ├── intentarSincronizarGoogleGroup.ts  # Wrapper con retry/flag de falla de Google Groups
+│   │   ├── estadoDeSincronizacion.ts          # Combina asuntos pendientes (alumno + canales) en un mensaje
 │   │   ├── hooksPostConfirmacion.ts           # Orquesta los sync post-registro
 │   │   ├── verificarConsistenciaAlumno.ts     # Chequeos de consistencia DB↔Sheets
 │   │   ├── borrarRepositoriosDeAssignment.ts  # Borrado auditado de repos de un assignment
@@ -867,6 +987,7 @@ src/
 │   ├── mensaje-operativo.ts                   # Redacta secretos de un mensaje de error antes de mostrarlo/persistirlo
 │   └── repositories/                          # Acceso a datos por entidad
 │       ├── AlumnoRepository.ts
+│       ├── SuscripcionAlumnoRepository.ts     # Estado de suscripción por (alumno, canal)
 │       ├── AssignmentRepository.ts
 │       ├── ComisionRepository.ts
 │       ├── EntregaRepository.ts
@@ -916,30 +1037,75 @@ El flujo de registro reemplaza la carga manual en la planilla:
 6. Recién si la DB aceptó el alta, se hace un upsert del alumno en la hoja "Alumnos" de la
    spreadsheet — y si esto falla, el registro en la DB **no se revierte** (el alumno igual entra al
    dashboard; el alta en Sheets se puede reintentar después)
-7. Se intenta suscribir al alumno al Google Group de la materia (opcional, ver más abajo)
+7. Se intenta suscribir al alumno a cada canal de comunicación configurado (opcional; ver
+   "Canales de comunicación" más abajo)
 8. Redirige al dashboard
 
 La **DB es la autoridad** para la coherencia legajo↔GitHub (ahí se valida y se rechazan
 duplicados); la planilla se mantiene como espejo para uso de los docentes. La sincronización de
-grupos desde Sheets es la excepción: ahí la planilla sigue siendo la entrada, aunque sólo agrega
-membresías, nunca las saca (ver [issue #28](https://github.com/Juancete/Pdep-Classroom/issues/28)).
+grupos desde Sheets es una carga inicial por comisión; una vez importada, los grupos se administran
+en Classroom y la DB queda como autoridad.
 
-## Suscripción automática a Google Group
+## Canales de comunicación
 
-Al completarse el alta de un alumno, lo suscribimos al Google Group de la materia — así el docente no tiene que agregarlo a mano y el alumno empieza a recibir los mails del grupo desde el primer día.
+Al completarse el alta (o la edición) de un alumno, la app lo suscribe a cada **canal de
+comunicación** que esté configurado — hoy, Google Groups. La idea es que el docente no tenga que
+agregar a nadie a mano y el alumno reciba los avisos del curso desde el primer día.
 
-El feature es **opcional**: si las variables de entorno no están configuradas, el endpoint de registro no hace nada con Groups. Si están configuradas y la suscripción falla (permisos, red, etc.), el alta del alumno **igual se completa** y se le muestra un aviso al alumno para que avise al docente. El detalle del error queda en los logs del server.
+La suscripción se modela como **Template Method** (`src/lib/canales/CanalDeComunicacion.ts`): el
+algoritmo de reconciliación — registrar el intento, dar de alta el destinatario actual, drenar
+identidades anteriores pendientes de baja, marcar sincronizado — vive una sola vez en la clase
+abstracta. Cada canal concreto sólo aporta:
 
-Si un alumno ya era miembro del grupo (por ejemplo, se registró, lo dieron de baja y se vuelve a registrar), la API de Google responde 409 y tratamos ese caso como éxito silencioso — la UI no le muestra nada especial.
+- `estaConfigurado()` — si sus env vars están completas.
+- `destinatarioDe(alumno)` — la identidad del alumno en ese canal (un email para Google Groups; el
+  ID de una cuenta de Discord si algún día se agrega ese canal), o `null` si el alumno todavía no la
+  tiene.
+- `darDeAlta` / `darDeBaja` — cómo hablar con el servicio externo.
 
-### Variables de entorno
+El estado de cada suscripción (pendiente/sincronizada/fallida/omitida, último error, identidades
+pendientes de baja) se persiste una fila por `(alumno, canal)` en `suscripcion_alumno` —
+`src/domain/entities/SuscripcionAlumno.ts`.
+
+**Un canal sin configurar no existe para el alumno.** No hay error, no hay banner, no se acumula
+estado "fallido" — `canalesActivos()` (`src/lib/canales/index.ts`) lo filtra antes de tocarlo. El
+docente sí lo ve: `/admin/operaciones` marca "Revisar" para cada canal apagado.
+
+Si un alumno ya era miembro del canal (se registró, lo dieron de baja y se vuelve a registrar), se
+trata como éxito idempotente — la UI no le muestra nada especial.
+
+### Agregar un canal nuevo
+
+1. Escribir la subclase en `src/lib/canales/` con las cinco primitivas (`nombre`, `etiqueta`,
+   `estaConfigurado`, `asuntoPendiente`, `destinatarioDe`, `darDeAlta`, `darDeBaja`).
+2. Sumar su nombre a `NOMBRES_DE_CANAL` en `src/domain/entities/SuscripcionAlumno.ts`.
+3. Registrar la instancia en `CANALES_DE_COMUNICACION` (`src/lib/canales/index.ts`).
+4. Migración que ensancha el `CHECK` de `suscripcion_alumno.canal` y backfillea una fila
+   `pendiente` por alumno existente — molde: `Migration20260827120000_suscripcion_alumno.ts`.
+
+Nada en `hooksPostConfirmacion.ts`, las rutas API, `AlumnoForm.tsx` ni la action de sincronización
+admin necesita tocarse: todos recorren `canalesActivos()` sin ramificar por tipo.
+
+### Google Groups — variables de entorno
 
 | Variable | Rol |
 |---|---|
-| `GOOGLE_GROUP_EMAIL` | Email del grupo al que suscribimos a los alumnos (ej: `pdep-2026@googlegroups.com`). Dejalo vacío para desactivar el feature. |
-| `GOOGLE_WORKSPACE_ADMIN_EMAIL` | Usuario admin del Workspace que la service account impersona para poder agregar miembros al grupo. Obligatorio si `GOOGLE_GROUP_EMAIL` está seteada. |
+| `GOOGLE_GROUP_EMAIL` | Email del grupo al que suscribimos a los alumnos. |
+| `GOOGLE_WORKSPACE_ADMIN_EMAIL` | Usuario admin del Workspace que la service account impersona para poder agregar miembros al grupo. |
 
-Si seteás `GOOGLE_GROUP_EMAIL` sin `GOOGLE_WORKSPACE_ADMIN_EMAIL`, el server falla al arrancar (ver [`src/instrumentation.ts`](src/instrumentation.ts)) — preferimos romper el boot antes que dejar que la misconfig le caiga al alumno en la cara.
+Ambas son **opcionales**: sin ellas, el canal de Google Groups no hace nada. Si seteás
+`GOOGLE_GROUP_EMAIL` sin `GOOGLE_WORKSPACE_ADMIN_EMAIL`, el server falla al arrancar (ver
+[`src/instrumentation.ts`](src/instrumentation.ts)) — preferimos romper el boot antes que dejar que
+la misconfig le caiga al alumno en la cara.
+
+**Requisito real, no obvio:** el grupo tiene que estar creado **dentro de un dominio Google
+Workspace** (Google Admin Console → Directorio → Grupos, o "Groups for Business"), en el **mismo
+dominio** que el admin impersonado. Un grupo de consumidor (`algo@googlegroups.com`) **no sirve**:
+la Admin SDK Directory API sólo administra grupos del dominio Workspace que autorizó la
+domain-wide delegation de la service account — impersonar un admin de Workspace contra un grupo de
+`@googlegroups.com` falla con `401 unauthorized_client` antes de siquiera consultar el grupo. No
+hace falta pagar Google Workspace para esto: **Cloud Identity Free** (gratis, hasta 50 usuarios)
+incluye administración de grupos y alcanza con verificar un dominio propio.
 
 ### Setup en Google (primera vez)
 
@@ -957,21 +1123,24 @@ Reutilizamos la service account que ya está en `GOOGLE_SERVICE_ACCOUNT_KEY` —
    - Scope: `https://www.googleapis.com/auth/admin.directory.group.member`.
    - Authorize.
 
-4. **Elegir el admin a impersonar**.
+4. **Crear (o elegir) el grupo dentro del Workspace** y **elegir el admin a impersonar**.
+   - El grupo tiene que vivir en el dominio del Workspace — ver el requisito de arriba.
    - Cualquier usuario del Workspace con permisos para administrar el grupo (típicamente un docente con rol de admin). Ese email va en `GOOGLE_WORKSPACE_ADMIN_EMAIL`.
 
 5. **Setear las env vars** en `.env.local` (desarrollo) y en el panel de Vercel (producción):
    ```bash
-   GOOGLE_GROUP_EMAIL=pdep-2026@googlegroups.com
-   GOOGLE_WORKSPACE_ADMIN_EMAIL=docente-admin@utn.edu.ar
+   GOOGLE_GROUP_EMAIL=pdep@tudominio.edu.ar
+   GOOGLE_WORKSPACE_ADMIN_EMAIL=docente-admin@tudominio.edu.ar
    ```
+   (Ambas tienen que estar en el **mismo dominio** — ver el requisito real más arriba.)
 
 6. **Reiniciar el server**. Si la config quedó bien, el boot pasa sin ruido y el próximo registro va a suscribir al alumno.
 
 ### Troubleshooting
 
-- **El server no arranca con error "GOOGLE_WORKSPACE_ADMIN_EMAIL no está configurada"** → setea la variable o vacía `GOOGLE_GROUP_EMAIL` para desactivar el feature.
-- **El registro completa OK pero el alumno ve el aviso ámbar** → buscá el log con el prefijo `Error al suscribir al Google Group` **en Vercel → Project → Deployments → el deploy activo → Runtime Logs** (en local, aparece en la terminal donde corrés `next dev`). El log incluye `github=<handle>` del alumno y el detalle devuelto por la API. Causas típicas: falta habilitar la Admin SDK API, el scope no está autorizado, o el admin impersonado no tiene permiso sobre el grupo.
+- **El server no arranca con error "GOOGLE_WORKSPACE_ADMIN_EMAIL no está configurada"** → setea la variable o vacía `GOOGLE_GROUP_EMAIL` para desactivar el canal.
+- **`401 unauthorized_client`** → el grupo o el admin no viven en un dominio Google Workspace real (por ejemplo, el grupo es `@googlegroups.com`), o el admin impersonado no es una cuenta de ese Workspace. Ver "Requisito real" más arriba.
+- **El registro completa OK pero el alumno ve el aviso ámbar** → buscá el log con el prefijo `Error al sincronizar el canal google_groups` **en Vercel → Project → Deployments → el deploy activo → Runtime Logs** (en local, aparece en la terminal donde corrés `next dev`). El log incluye `githubUsername` del alumno y el detalle devuelto por la API. Causas típicas: falta habilitar la Admin SDK API, el scope no está autorizado, o el admin impersonado no tiene permiso sobre el grupo.
 - **La API devuelve 403 "Not Authorized to access this resource/api"** → típicamente el scope no está autorizado en el Workspace, o la Domain-Wide Delegation quedó con el Client ID equivocado.
 
 ## TODOs sugeridos
@@ -993,8 +1162,8 @@ Reutilizamos la service account que ya está en `GOOGLE_SERVICE_ACCOUNT_KEY` —
 - [x] Ciclo de vida de assignments (borrador/publicado/archivado) con auditoría de quién publicó o archivó
 - [x] Auto-gestión de grupos: crear, unirse, salir y cambiarse, con administración manual desde el panel docente
 - [x] Procesar eventos de GitHub mediante webhooks ([#60](https://github.com/Juancete/Pdep-Classroom/issues/60)) — ver [Webhooks de GitHub](#webhooks-de-github); cubre `check_suite`, `push`, `repository` y `member`
-- [ ] Observabilidad ([#18](https://github.com/Juancete/Pdep-Classroom/issues/18)) — tabla `error_log` + pantalla `/admin/errores` + badge en el header con no leídos (PR 2 del refactor de logging, hoy los 500 solo logguean por pino a Vercel)
-- [ ] Reconciliar grupos importados desde Sheets en vez de sólo acumular miembros ([#28](https://github.com/Juancete/Pdep-Classroom/issues/28)) — hoy la sync es puramente aditiva y puede pisar una baja o un cambio hecho a mano (ver "Registro de alumnos" más arriba)
+- [x] Observabilidad ([#18](https://github.com/Juancete/Pdep-Classroom/issues/18)) — tabla `error_log`, pantalla `/admin/errores`, badge de pendientes y diagnóstico de integraciones/webhooks en `/admin/operaciones`
+- [x] Definir autoridad de grupos ([#28](https://github.com/Juancete/Pdep-Classroom/issues/28)) — Sheets se importa una sola vez por comisión y luego Classroom es la fuente de verdad
 
 ## API de GitHub — Estabilidad
 

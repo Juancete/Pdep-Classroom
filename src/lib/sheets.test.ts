@@ -1,4 +1,30 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+// ── Mock de googleapis (sólo lo usan los tests de escritura en Sheets) ──
+
+const mockValuesGet = vi.fn();
+const mockValuesUpdate = vi.fn();
+const mockValuesAppend = vi.fn();
+
+vi.mock("googleapis", () => ({
+  google: {
+    auth: {
+      GoogleAuth: function (...args: unknown[]) {
+        return args;
+      },
+    },
+    sheets: () => ({
+      spreadsheets: {
+        values: {
+          get: (...args: unknown[]) => mockValuesGet(...args),
+          update: (...args: unknown[]) => mockValuesUpdate(...args),
+          append: (...args: unknown[]) => mockValuesAppend(...args),
+        },
+      },
+    }),
+  },
+}));
+
 import {
   parseAlumnosRows,
   parseAsignacionesGrupos,
@@ -358,6 +384,59 @@ describe("upsertarAlumnoEnSheets – validaciones", () => {
     await expect(upsertarAlumnoEnSheets(valid, undefined)).rejects.toThrow(
       "No hay una comisión activa"
     );
+  });
+});
+
+// Fase 4 de la auditoría de dominio: el camino de update no escribía la
+// columna `githubUsername` normalizada — sólo lo hacía el camino de
+// append (alta nueva). Un alumno cuya fila ya existía con el username en
+// otro formato (mayúsculas, con `@`) nunca se corregía en la planilla.
+describe("upsertarAlumnoEnSheets – actualiza una fila existente", () => {
+  const SA_KEY = Buffer.from(
+    JSON.stringify({
+      client_email: "sa@proyecto.iam.gserviceaccount.com",
+      private_key: "FAKE_PRIVATE_KEY",
+    })
+  ).toString("base64");
+  const ENV_BACKUP = { ...process.env };
+
+  const valid = {
+    legajo: "12345",
+    apellido: "García",
+    nombre: "Juan",
+    githubUsername: "juangarcia",
+    email: "juan@gmail.com",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.GOOGLE_SERVICE_ACCOUNT_KEY = SA_KEY;
+  });
+
+  afterEach(() => {
+    process.env = { ...ENV_BACKUP };
+  });
+
+  it("normaliza y escribe githubUsername en la fila existente, igual que el alta", async () => {
+    // Fila existente con el username sin normalizar (mayúsculas) — la
+    // búsqueda igual la encuentra porque compara normalizado.
+    const filaExistente = ["12345", "García", "Juan", "JuanGarcia", "viejo@mail.com"];
+    mockValuesGet
+      .mockResolvedValueOnce({ data: { values: [filaExistente] } }) // findAlumnoRowIndex
+      .mockResolvedValueOnce({ data: { values: [filaExistente] } }); // fila puntual a actualizar
+    mockValuesUpdate.mockResolvedValue({ data: {} });
+
+    const result = await upsertarAlumnoEnSheets(valid, "sheet-1");
+
+    expect(result).toEqual({ ok: true });
+    expect(mockValuesUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestBody: {
+          values: [["12345", "García", "Juan", "juangarcia", "juan@gmail.com"]],
+        },
+      })
+    );
+    expect(mockValuesAppend).not.toHaveBeenCalled();
   });
 });
 

@@ -54,6 +54,78 @@ describe("EstadoAssignment.permiteAccionesDeAlumno", () => {
   });
 });
 
+describe("EstadoAssignment.permiteEliminacion", () => {
+  it("solo borrador habilita el borrado físico del assignment", () => {
+    expect(EstadoAssignment.desdeNombre("borrador").permiteEliminacion()).toBe(true);
+    expect(EstadoAssignment.desdeNombre("publicado").permiteEliminacion()).toBe(false);
+    expect(EstadoAssignment.desdeNombre("archivado").permiteEliminacion()).toBe(false);
+  });
+});
+
+describe("EstadoAssignment.permiteBorrarRepos", () => {
+  it("solo archivado habilita el borrado masivo de repos", () => {
+    expect(EstadoAssignment.desdeNombre("borrador").permiteBorrarRepos()).toBe(false);
+    expect(EstadoAssignment.desdeNombre("publicado").permiteBorrarRepos()).toBe(false);
+    expect(EstadoAssignment.desdeNombre("archivado").permiteBorrarRepos()).toBe(true);
+  });
+});
+
+describe("EstadoAssignment.permiteEditarEstructura", () => {
+  it("solo borrador habilita editar campos estructurales", () => {
+    expect(EstadoAssignment.desdeNombre("borrador").permiteEditarEstructura()).toBe(true);
+    expect(EstadoAssignment.desdeNombre("publicado").permiteEditarEstructura()).toBe(false);
+    expect(EstadoAssignment.desdeNombre("archivado").permiteEditarEstructura()).toBe(false);
+  });
+});
+
+// Ajuste post-Fase 3: `admin/assignments/[id]/page.tsx` reusaba
+// `permiteEditarEstructura()` para decidir si mostrar el contador
+// "Pendientes" — coincidían por casualidad sólo en borrador, pero el
+// nombre no describía la condición real ("¿pudo haber entregas?").
+describe("EstadoAssignment.esperaEntregas", () => {
+  it("borrador no espera entregas todavía", () => {
+    expect(EstadoAssignment.desdeNombre("borrador").esperaEntregas()).toBe(false);
+  });
+
+  it("publicado y archivado sí esperan/tuvieron entregas", () => {
+    expect(EstadoAssignment.desdeNombre("publicado").esperaEntregas()).toBe(true);
+    expect(EstadoAssignment.desdeNombre("archivado").esperaEntregas()).toBe(true);
+  });
+});
+
+// Fase 3 de la auditoría de dominio — mismo idioma que
+// `RolDeUsuario.motivoDeBloqueoDeMembresia`: el texto que ve el admin en
+// `estado-panel.tsx` ES el `message` del error que tiraría el servidor.
+describe("EstadoAssignment.motivoDeBloqueo", () => {
+  it("devuelve null cuando la transición está permitida", () => {
+    expect(
+      EstadoAssignment.desdeNombre("publicado").motivoDeBloqueo(ASSIGNMENT_ID, "borrador", {
+        tieneEntregas: false,
+      })
+    ).toBeNull();
+  });
+
+  it("devuelve el mensaje del error tipado cuando la transición está bloqueada", () => {
+    const motivo = EstadoAssignment.desdeNombre("publicado").motivoDeBloqueo(
+      ASSIGNMENT_ID,
+      "borrador",
+      { tieneEntregas: true }
+    );
+    expect(motivo).toBe(
+      'No se puede pasar de "publicado" a "borrador": tiene entregas — archivalo en vez de despublicarlo'
+    );
+  });
+
+  it("un archivado nunca puede volver a borrador — devuelve el motivo estructural", () => {
+    const motivo = EstadoAssignment.desdeNombre("archivado").motivoDeBloqueo(
+      ASSIGNMENT_ID,
+      "borrador",
+      { tieneEntregas: false }
+    );
+    expect(motivo).toContain("un archivado solo puede volver a publicarse");
+  });
+});
+
 describe("EstadoAssignment.transicionarA — matriz de transiciones", () => {
   it("borrador → borrador es no-op", () => {
     expect(transicionar("borrador", "borrador").nombre).toBe("borrador");

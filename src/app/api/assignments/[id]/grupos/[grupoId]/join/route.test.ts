@@ -10,6 +10,8 @@ import {
   GrupoLlenoError,
   DOCENTE,
   ESTUDIANTE,
+  Grupo,
+  Alumno,
 } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
@@ -45,17 +47,21 @@ function makeAlumno(id = "alumno-ana", github = "ana") {
   return { id, githubUsername: github, comision: { id: "c1" } };
 }
 
-function makeGrupoEntity(overrides = {}) {
-  return {
-    id: "g1",
-    nombre: "Los Lambdas",
-    paradigma: "funcional",
-    maxIntegrantes: 3,
-    isOpen: () => true,
-    alumnos: { getItems: () => [{ githubUsername: "bob" }, { githubUsername: "ana" }] },
-    usernamesDeMiembros: () => ["bob", "ana"],
-    ...overrides,
-  };
+function makeGrupoEntity(overrides: Partial<Grupo> = {}): Grupo {
+  const grupo = new Grupo();
+  grupo.id = "g1";
+  grupo.nombre = "Los Lambdas";
+  grupo.nombreNormalizado = "los-lambdas";
+  grupo.paradigma = "funcional";
+  grupo.maxIntegrantes = 3;
+  grupo.creadoPor = "bob";
+  const miembros = ["bob", "ana"].map((github) =>
+    Object.assign(new Alumno(), { githubUsername: github })
+  );
+  Object.assign(grupo, {
+    alumnos: { getItems: () => miembros, length: miembros.length },
+  });
+  return Object.assign(grupo, overrides);
 }
 
 function makeRequest(): Request {

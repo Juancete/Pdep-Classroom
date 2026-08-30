@@ -49,7 +49,7 @@ describe("POST /api/registro", () => {
     mockConfirmarYProcesarAlumno.mockResolvedValue({
       ok: true,
       comision: { id: "c1" },
-      hooks: { groupSubscription: "added", gruposSync: "ok" },
+      hooks: { canalesConError: [], gruposSync: "ok" },
     });
   });
 
@@ -57,7 +57,7 @@ describe("POST /api/registro", () => {
     const response = await POST(makeRequest(validBody));
     const json = await response.json();
     expect(response.status).toBe(200);
-    expect(json).toEqual({ ok: true, groupSubscription: "added" });
+    expect(json).toEqual({ ok: true, canalesConError: [] });
   });
 
   it("no incluye gruposSync en el body cuando el hook no falla", async () => {
@@ -70,7 +70,7 @@ describe("POST /api/registro", () => {
     mockConfirmarYProcesarAlumno.mockResolvedValue({
       ok: true,
       comision: { id: "c1" },
-      hooks: { groupSubscription: "added", gruposSync: "error" },
+      hooks: { canalesConError: [], gruposSync: "error" },
     });
     const response = await POST(makeRequest(validBody));
     const json = await response.json();
@@ -162,34 +162,34 @@ describe("POST /api/registro", () => {
     expect(json.error).not.toContain("boom");
   });
 
-  describe("suscripción al Google Group", () => {
-    it("devuelve groupSubscription:'added'", async () => {
+  describe("suscripción a canales de comunicación", () => {
+    it("devuelve canalesConError vacío cuando todos sincronizaron", async () => {
       const response = await POST(makeRequest(validBody));
       const json = await response.json();
-      expect(json.groupSubscription).toBe("added");
+      expect(json.canalesConError).toEqual([]);
     });
 
-    it("devuelve groupSubscription:'already_member'", async () => {
+    it("devuelve el asunto del canal que falló sin romper el registro", async () => {
       mockConfirmarYProcesarAlumno.mockResolvedValue({
         ok: true,
         comision: { id: "c1" },
-        hooks: { groupSubscription: "already_member" },
-      });
-      const response = await POST(makeRequest(validBody));
-      const json = await response.json();
-      expect(json.groupSubscription).toBe("already_member");
-    });
-
-    it("devuelve groupSubscription:'error' sin romper el registro", async () => {
-      mockConfirmarYProcesarAlumno.mockResolvedValue({
-        ok: true,
-        comision: { id: "c1" },
-        hooks: { groupSubscription: "error" },
+        hooks: { canalesConError: ["suscribirte al grupo de Google del curso"] },
       });
       const response = await POST(makeRequest(validBody));
       const json = await response.json();
       expect(response.status).toBe(200);
-      expect(json.groupSubscription).toBe("error");
+      expect(json.canalesConError).toEqual(["suscribirte al grupo de Google del curso"]);
+    });
+
+    it("devuelve canalesConError vacío cuando el hook no lo trae", async () => {
+      mockConfirmarYProcesarAlumno.mockResolvedValue({
+        ok: true,
+        comision: { id: "c1" },
+        hooks: {},
+      });
+      const response = await POST(makeRequest(validBody));
+      const json = await response.json();
+      expect(json.canalesConError).toEqual([]);
     });
 
     it("no llama al servicio si la validación github↔sesión falla antes", async () => {

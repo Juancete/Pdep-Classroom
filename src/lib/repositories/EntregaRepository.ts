@@ -36,9 +36,8 @@ export async function getEntregasDeUsuario(
   const entityManager = await getEM();
   const entregas = await entityManager.find(Entrega, {});
   const map = new Map<string, Entrega>();
-  const normalized = githubUsername.toLowerCase();
   for (const entrega of entregas) {
-    if (entrega.githubUsernames.some((username) => username.toLowerCase() === normalized)) {
+    if (entrega.perteneceA(githubUsername)) {
       map.set(entrega.assignment.id, entrega);
     }
   }
@@ -51,13 +50,7 @@ export async function getEntregaDeUsuario(
 ): Promise<Entrega | null> {
   const entityManager = await getEM();
   const entregas = await entityManager.find(Entrega, { assignment: { id: assignmentId } });
-  return (
-    entregas.find((entrega) =>
-      entrega.githubUsernames.some(
-        (username) => username.toLowerCase() === githubUsername.toLowerCase()
-      )
-    ) ?? null
-  );
+  return entregas.find((entrega) => entrega.perteneceA(githubUsername)) ?? null;
 }
 
 export async function getEntregaPorId(
@@ -107,8 +100,7 @@ export async function asegurarRepoGithubId(
 ): Promise<void> {
   const entityManager = await getEM();
   const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
-  if (entrega.repoGithubId) return;
-  entrega.repoGithubId = repoGithubId;
+  if (!entrega.autocompletarRepoGithubId(repoGithubId)) return;
   await entityManager.flush();
 }
 
@@ -150,11 +142,15 @@ export async function getEntregaCountsByAssignment(): Promise<Map<string, number
   return map;
 }
 
+// Mismo criterio que `Entrega.hasRepo()` (B2 de la auditoría de dominio):
+// antes sólo filtraba `repoDeleted`/`repoName` y contaba también una entrega
+// `fallida` con `repoName` residual de un intento previo, divergiendo del
+// conteo que usa `sincronizarCI` para elegir qué entregas consultar.
 export async function getActiveRepoCountsByAssignment(): Promise<Map<string, number>> {
   const entityManager = await getEM();
   const entregas = await entityManager.find(
     Entrega,
-    { repoDeleted: false },
+    { repoDeleted: false, provisionEstado: "activa" },
     { fields: ["assignment", "repoName"] }
   );
   const map = new Map<string, number>();
@@ -166,6 +162,8 @@ export async function getActiveRepoCountsByAssignment(): Promise<Map<string, num
   return map;
 }
 
+// Mismo criterio que `Entrega.hasRepo()` — ver comentario de
+// `getActiveRepoCountsByAssignment`.
 export async function getEntregasConRepoActivo(
   assignmentId: string
 ): Promise<Entrega[]> {
@@ -173,15 +171,14 @@ export async function getEntregasConRepoActivo(
   return entityManager.find(Entrega, {
     assignment: { id: assignmentId },
     repoDeleted: false,
+    provisionEstado: "activa",
     repoName: { $ne: null },
   });
 }
 
-// Persiste el resultado de la última consulta de CI (issue #58).
-// Sólo actualiza esas columnas, no toca el resto de la entrega. Cada campo
-// es tri-estado: omitido/`undefined` conserva el valor ya guardado (ej. al
-// pasar a "pendiente" tras pedir un rerun, sin tener todavía un check nuevo
-// que reporte), `null` lo limpia explícitamente (ej. al pasar a "sin_ci").
+// Persiste el resultado de la última consulta de CI (issue #58) — delega en
+// `Entrega.registrarResultadoCI` (Fase 2 de la auditoría de dominio): acá
+// sólo queda cargar, delegar y flushear.
 export async function actualizarCIDeEntrega(
   entregaId: string,
   data: {
@@ -195,12 +192,7 @@ export async function actualizarCIDeEntrega(
 ): Promise<void> {
   const entityManager = em ?? (await getEM());
   const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
-  entrega.ciResultadoNombre = data.resultadoNombre;
-  if (data.checkSuiteIds !== undefined) entrega.ciCheckSuiteIds = data.checkSuiteIds ?? [];
-  if (data.commitSha !== undefined) entrega.ciCommitSha = data.commitSha ?? undefined;
-  if (data.detalleUrl !== undefined) entrega.ciDetalleUrl = data.detalleUrl ?? undefined;
-  if (data.ejecutadoEn !== undefined) entrega.ciEjecutadoEn = data.ejecutadoEn ?? undefined;
-  entrega.ciActualizadoEn = new Date();
+  entrega.registrarResultadoCI(data);
   await entityManager.flush();
 }
 
@@ -225,9 +217,9 @@ export async function conLockDeEntrega<T>(
 }
 
 // Actividad reciente del repo (issue #60) — la escribe el webhook de `push`.
-// Guard de orden: un redelivery tardío de un push viejo no puede pisar uno
-// más nuevo, así que se compara contra lo que ya está guardado antes de
-// escribir.
+// Delega en `Entrega.registrarPush` (guard de orden adentro — Fase 2 de la
+// auditoría de dominio); acá sólo queda cargar, delegar y flushear si se
+// aplicó.
 export async function actualizarActividadDeEntrega(
   entregaId: string,
   data: { pusheadoEn: Date; commitSha: string; por: string },
@@ -235,38 +227,15 @@ export async function actualizarActividadDeEntrega(
 ): Promise<void> {
   const entityManager = em ?? (await getEM());
   const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
-  if (entrega.ultimoPushEn && entrega.ultimoPushEn >= data.pusheadoEn) return;
-  entrega.ultimoPushEn = data.pusheadoEn;
-  entrega.ultimoPushSha = data.commitSha;
-  entrega.ultimoPushPor = data.por;
+  if (!entrega.registrarPush(data)) return;
   await entityManager.flush();
-}
-
-// `true` sólo si un evento `repository` con fecha `eventoActualizadoEn` es
-// ESTRICTAMENTE más viejo que el último ya aplicado — GitHub no garantiza
-// el orden de entrega, así que un `deleted`/`renamed` demorado no puede
-// pisar uno más nuevo que ya se procesó. Sin fecha (payload sin
-// `updated_at`), nunca se considera viejo — se aplica igual, mismo criterio
-// defensivo que el fallback de `push` cuando falta el timestamp.
-//
-// Comparación estricta (`>`, no `>=`): `repository.updated_at` viaja en
-// segundos, así que dos operaciones sobre el mismo repo dentro del mismo
-// segundo (ej. un rename seguido de inmediato por un delete) comparten
-// timestamp. Con `>=`, si el rename se procesa primero, el delete
-// "empatado" se rechazaría por viejo y el repo quedaría marcado como
-// activo pese a haberse borrado — un resultado peor que simplemente dejar
-// ganar al que se procesó último en un empate genuino.
-function esEventoRepositoryViejo(entrega: Entrega, eventoActualizadoEn?: Date): boolean {
-  return Boolean(
-    eventoActualizadoEn &&
-      entrega.repoEventoActualizadoEn &&
-      entrega.repoEventoActualizadoEn > eventoActualizadoEn
-  );
 }
 
 // El webhook de `repository.deleted` (issue #60) — mismo campo que ya
 // escribe `completarIntentoBorradoRepo` cuando el borrado lo inicia
-// Classroom, así que la grilla de entregas no necesita distinguir el origen.
+// Classroom, así que la grilla de entregas no necesita distinguir el
+// origen. Delega en `Entrega.marcarRepoBorrado` (guard de orden de
+// `esEventoRepositoryViejo` adentro — Fase 2 de la auditoría de dominio).
 export async function marcarRepoBorrado(
   entregaId: string,
   eventoActualizadoEn?: Date,
@@ -274,15 +243,15 @@ export async function marcarRepoBorrado(
 ): Promise<void> {
   const entityManager = em ?? (await getEM());
   const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
-  if (esEventoRepositoryViejo(entrega, eventoActualizadoEn)) return;
-  entrega.repoDeleted = true;
-  if (eventoActualizadoEn) entrega.repoEventoActualizadoEn = eventoActualizadoEn;
+  if (!entrega.marcarRepoBorrado(eventoActualizadoEn)) return;
   await entityManager.flush();
 }
 
 // El webhook de `repository.renamed` (issue #60): el repo sigue siendo el
 // mismo, sólo cambia de nombre/URL — se busca por el nombre viejo (o por
-// `repoGithubId`, ver `getEntregaPorRepoGithubId`) y se reescribe.
+// `repoGithubId`, ver `getEntregaPorRepoGithubId`) y se reescribe. Delega
+// en `Entrega.aplicarEventoRepository` (mismo guard de orden que
+// `marcarRepoBorrado`).
 export async function renombrarRepoDeEntrega(
   entregaId: string,
   data: { repoName: string; repoUrl: string; eventoActualizadoEn?: Date },
@@ -290,15 +259,15 @@ export async function renombrarRepoDeEntrega(
 ): Promise<void> {
   const entityManager = em ?? (await getEM());
   const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
-  if (esEventoRepositoryViejo(entrega, data.eventoActualizadoEn)) return;
-  entrega.repoName = data.repoName;
-  entrega.repoUrl = data.repoUrl;
-  if (data.eventoActualizadoEn) entrega.repoEventoActualizadoEn = data.eventoActualizadoEn;
+  if (!entrega.aplicarEventoRepository(data, data.eventoActualizadoEn)) return;
   await entityManager.flush();
 }
 
 // El webhook de `member.added`/`member.removed` (issue #60): reconcilia el
-// array denormalizado de colaboradores con acceso al repo.
+// array denormalizado de colaboradores con acceso al repo. Delega en
+// `Entrega.agregarColaborador`/`quitarColaborador` (comparación normalizada
+// con `Alumno.normalizarUsername` — antes se comparaba a mano con
+// `.toLowerCase()`, sin quitar el `@` inicial).
 export async function actualizarColaboradoresDeEntrega(
   entregaId: string,
   data: { agregar?: string; quitar?: string },
@@ -307,23 +276,8 @@ export async function actualizarColaboradoresDeEntrega(
   const entityManager = em ?? (await getEM());
   const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
   let cambio = false;
-  if (data.agregar) {
-    const normalizado = data.agregar.toLowerCase();
-    if (!entrega.githubUsernames.some((username) => username.toLowerCase() === normalizado)) {
-      entrega.githubUsernames = [...entrega.githubUsernames, data.agregar];
-      cambio = true;
-    }
-  }
-  if (data.quitar) {
-    const normalizado = data.quitar.toLowerCase();
-    const actualizados = entrega.githubUsernames.filter(
-      (username) => username.toLowerCase() !== normalizado
-    );
-    if (actualizados.length !== entrega.githubUsernames.length) {
-      entrega.githubUsernames = actualizados;
-      cambio = true;
-    }
-  }
+  if (data.agregar && entrega.agregarColaborador(data.agregar)) cambio = true;
+  if (data.quitar && entrega.quitarColaborador(data.quitar)) cambio = true;
   if (cambio) await entityManager.flush();
 }
 
@@ -331,7 +285,7 @@ export async function createEntrega(
   data: {
     assignmentId: string;
     repoName: string;
-    repoUrl: string;
+    repoUrl?: string;
     githubUsernames: string[];
     alumnoId?: string;
     grupoId?: string;
@@ -342,6 +296,7 @@ export async function createEntrega(
     // real: dos renames del mismo repo entregados fuera de orden ANTES de
     // que cualquier webhook haya podido guardar el id se pierden.
     repoGithubId?: string;
+    provisionEstado?: "pendiente" | "activa" | "fallida";
   },
   em?: EntityManager
 ): Promise<Entrega> {
@@ -355,6 +310,7 @@ export async function createEntrega(
   entrega.repoUrl = data.repoUrl;
   entrega.githubUsernames = data.githubUsernames;
   entrega.repoGithubId = data.repoGithubId;
+  entrega.provisionEstado = data.provisionEstado ?? "activa";
 
   if (data.alumnoId) {
     entrega.alumno = entityManager.getReference(Alumno, data.alumnoId);
@@ -367,6 +323,69 @@ export async function createEntrega(
   entityManager.persist(entrega);
   await entityManager.flush();
   return entrega;
+}
+
+const VENTANA_PROVISION_EN_VUELO_MS = 120_000;
+
+// Reclama el aprovisionamiento bajo lock. Si otra request ya lo está
+// ejecutando, devuelve null para que el segundo click observe la misma fila
+// pendiente sin volver a crear el repo en GitHub. Un intento abandonado se
+// puede reclamar de nuevo pasados dos minutos.
+export async function iniciarProvisionEntrega(entregaId: string): Promise<Entrega | null> {
+  const entityManager = await getEM();
+  return entityManager.transactional(async (transaction) => {
+    const entrega = await transaction.findOneOrFail(
+      Entrega,
+      { id: entregaId },
+      {
+        populate: ["assignment", "grupo", "alumno"],
+        lockMode: LockMode.PESSIMISTIC_WRITE,
+      }
+    );
+    if (entrega.hasRepo()) return entrega;
+    const enVueloDesde = entrega.provisionActualizadoEn?.getTime();
+    if (
+      entrega.provisionEstado === "pendiente" &&
+      entrega.provisionIntentos > 0 &&
+      enVueloDesde !== undefined &&
+      enVueloDesde > Date.now() - VENTANA_PROVISION_EN_VUELO_MS
+    ) {
+      return null;
+    }
+    entrega.iniciarProvision();
+    await transaction.flush();
+    return entrega;
+  });
+}
+
+export async function marcarCreacionGithubIniciada(entregaId: string): Promise<Entrega> {
+  const entityManager = await getEM();
+  const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
+  entrega.marcarCreacionGithubIniciada();
+  await entityManager.flush();
+  return entrega;
+}
+
+export async function completarProvisionEntrega(
+  entregaId: string,
+  data: { repoName: string; repoUrl: string; repoGithubId?: string }
+): Promise<Entrega> {
+  const entityManager = await getEM();
+  const entrega = await entityManager.findOneOrFail(
+    Entrega,
+    { id: entregaId },
+    { populate: ["assignment", "grupo", "alumno"] }
+  );
+  entrega.completarProvision(data);
+  await entityManager.flush();
+  return entrega;
+}
+
+export async function fallarProvisionEntrega(entregaId: string, error: string): Promise<void> {
+  const entityManager = await getEM();
+  const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
+  entrega.fallarProvision(error.slice(0, 2_000));
+  await entityManager.flush();
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -401,11 +420,12 @@ export async function createOrGetEntrega(
   data: {
     assignmentId: string;
     repoName: string;
-    repoUrl: string;
+    repoUrl?: string;
     githubUsernames: string[];
     alumnoId?: string;
     grupoId?: string;
     repoGithubId?: string;
+    provisionEstado?: "pendiente" | "activa" | "fallida";
   },
   em?: EntityManager
 ): Promise<Entrega> {
@@ -435,11 +455,12 @@ export async function crearEntregaSiAssignmentDisponible(
   data: {
     assignmentId: string;
     repoName: string;
-    repoUrl: string;
+    repoUrl?: string;
     githubUsernames: string[];
     alumnoId?: string;
     grupoId?: string;
     repoGithubId?: string;
+    provisionEstado?: "pendiente" | "activa" | "fallida";
   },
   rol: RolDeUsuario
 ): Promise<Entrega> {

@@ -7,7 +7,7 @@ import { DOCENTE, ESTUDIANTE } from "@/domain/entities";
 
 const mockGetCurrentUser = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
-const mockIsGoogleGroupsConfigured = vi.fn();
+const mockResolverEstadoDeSincronizacion = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
@@ -17,8 +17,9 @@ vi.mock("@/lib/repositories", () => ({
   getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
 }));
 
-vi.mock("@/lib/googleGroups", () => ({
-  isGoogleGroupsConfigured: () => mockIsGoogleGroupsConfigured(),
+vi.mock("@/lib/services/estadoDeSincronizacion", () => ({
+  resolverEstadoDeSincronizacion: (...args: unknown[]) =>
+    mockResolverEstadoDeSincronizacion(...args),
 }));
 
 vi.mock("next/link", () => ({
@@ -65,7 +66,11 @@ describe("Nav", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetAlumnoByGithub.mockResolvedValue(null);
-    mockIsGoogleGroupsConfigured.mockReturnValue(false);
+    mockResolverEstadoDeSincronizacion.mockResolvedValue({
+      hayPendientes: false,
+      mensaje: "",
+      canalesPendientes: [],
+    });
   });
 
   it("muestra el nombre de la app", async () => {
@@ -112,9 +117,11 @@ describe("Nav", () => {
 
   it("pasa el estado pendiente al menú del alumno", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser());
-    mockIsGoogleGroupsConfigured.mockReturnValue(true);
-    mockGetAlumnoByGithub.mockResolvedValue({
-      tieneSyncPendiente: () => true,
+    mockGetAlumnoByGithub.mockResolvedValue({ id: "alumno-1" });
+    mockResolverEstadoDeSincronizacion.mockResolvedValue({
+      hayPendientes: true,
+      mensaje: "No pudimos suscribirte al grupo de Google del curso.",
+      canalesPendientes: [],
     });
 
     const html = renderToStaticMarkup(await Nav());

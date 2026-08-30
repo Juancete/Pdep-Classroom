@@ -11,6 +11,7 @@ import { defineConfig, ReflectMetadataProvider } from "@mikro-orm/postgresql";
 import { Migrator } from "@mikro-orm/migrations";
 import {
   Alumno,
+  SuscripcionAlumno,
   Comision,
   Assignment,
   IndividualAssignment,
@@ -23,16 +24,22 @@ import {
   ErrorLog,
 } from "./src/domain/entities";
 
+const databaseUrl = process.env.DATABASE_URL;
+if (process.env.VERCEL_ENV === "production" && !databaseUrl) {
+  throw new Error("DATABASE_URL es obligatoria en producción.");
+}
+
 export default defineConfig({
   // Conexión
-  clientUrl: process.env.DATABASE_URL ?? "postgresql://localhost:5432/pdep_classroom",
+  clientUrl: databaseUrl ?? "postgresql://localhost:5432/pdep_classroom",
   driverOptions: {
-    connection: { ssl: process.env.DATABASE_URL?.includes("neon.tech") ? { rejectUnauthorized: false } : false },
+    connection: { ssl: databaseUrl?.includes("neon.tech") ? { rejectUnauthorized: false } : false },
   },
 
   // Entidades
   entities: [
     Alumno,
+    SuscripcionAlumno,
     Comision,
     Assignment,
     IndividualAssignment,

@@ -1,6 +1,6 @@
 import { getCurrentUser } from "@/lib/session";
 import { getAlumnoByGithub } from "@/lib/repositories";
-import { isGoogleGroupsConfigured } from "@/lib/googleGroups";
+import { resolverEstadoDeSincronizacion } from "@/lib/services/estadoDeSincronizacion";
 import Link from "next/link";
 import { NavMenu, type NavLink } from "./nav-menu";
 
@@ -10,9 +10,9 @@ export async function Nav() {
     user && user.rol.veBannerDeSincronizacion()
       ? await getAlumnoByGithub(user.githubUsername).catch(() => null)
       : null;
-  const hasPendingSync = Boolean(
-    alumno?.tieneSyncPendiente(isGoogleGroupsConfigured())
-  );
+  const hasPendingSync = alumno
+    ? (await resolverEstadoDeSincronizacion(alumno)).hayPendientes
+    : false;
 
   const links: NavLink[] = user
     ? [{ href: "/dashboard", label: "Mis TPs" }, ...user.rol.itemsDeNavegacion()]

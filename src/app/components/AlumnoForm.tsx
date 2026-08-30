@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useApiCall } from "@/app/hooks/useApiCall";
 import { ALUMNO_LEGAJO_PATTERN, ALUMNO_EMAIL_PATTERN } from "@/domain/entities/domain-constants";
+import { enumerar } from "@/lib/naming";
 
 const INPUT_CLASS =
   "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pdep-500 focus:border-pdep-500 outline-none";
@@ -43,7 +44,7 @@ export function AlumnoForm({
   const router = useRouter();
   const { loading, error, call } = useApiCall();
   const [success, setSuccess] = useState(false);
-  const [groupWarning, setGroupWarning] = useState(false);
+  const [canalesConError, setCanalesConError] = useState<string[]>([]);
   const [gruposSyncWarning, setGruposSyncWarning] = useState(false);
   const [fieldError, setFieldError] = useState<{ message: string; field: string } | null>(null);
 
@@ -71,9 +72,11 @@ export function AlumnoForm({
         }
         throw new Error(json.error ?? "Error al guardar");
       }
-      const hasGroupWarning = json.groupSubscription === "error";
+      const canalesFallidos: string[] = Array.isArray(json.canalesConError)
+        ? json.canalesConError
+        : [];
       const hasGruposSyncWarning = json.gruposSync === "error";
-      setGroupWarning(hasGroupWarning);
+      setCanalesConError(canalesFallidos);
       setGruposSyncWarning(hasGruposSyncWarning);
       setSuccess(true);
       // Revalidamos el árbol server para que el banner global
@@ -83,7 +86,7 @@ export function AlumnoForm({
       // Damos más tiempo antes de redirigir si hay que mostrar un warning
       // para que el alumno alcance a leerlo.
       if (onSuccessRedirect) {
-        const delay = hasGroupWarning || hasGruposSyncWarning ? 5000 : 1500;
+        const delay = canalesFallidos.length > 0 || hasGruposSyncWarning ? 5000 : 1500;
         setTimeout(() => { window.location.href = onSuccessRedirect; }, delay);
       }
     });
@@ -95,12 +98,12 @@ export function AlumnoForm({
         <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
           <p className="text-green-700 font-medium">{successMessage}</p>
         </div>
-        {groupWarning && (
+        {canalesConError.length > 0 && (
           <div
             role="alert"
             className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-800"
           >
-            No pudimos suscribirte al grupo del curso. Avisale a un docente para que te agregue manualmente.
+            No pudimos {enumerar(canalesConError)}. Avisale a un docente para que lo resuelva.
           </div>
         )}
         {gruposSyncWarning && (

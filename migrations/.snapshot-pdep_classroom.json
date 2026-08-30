@@ -155,7 +155,9 @@
       "schema": "public",
       "indexes": [
         {
-          "columnNames": ["last_seen_at"],
+          "columnNames": [
+            "last_seen_at"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "error_log_acknowledged_retention_idx",
@@ -164,7 +166,9 @@
           "expression": "CREATE INDEX error_log_acknowledged_retention_idx ON public.error_log USING btree (last_seen_at) WHERE (acknowledged_at IS NOT NULL)"
         },
         {
-          "columnNames": ["fingerprint"],
+          "columnNames": [
+            "fingerprint"
+          ],
           "composite": false,
           "constraint": true,
           "keyName": "error_log_fingerprint_unique",
@@ -172,7 +176,9 @@
           "primary": false
         },
         {
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": false,
           "keyName": "error_log_pkey",
@@ -180,7 +186,11 @@
           "primary": true
         },
         {
-          "columnNames": ["route", "last_seen_at", "id"],
+          "columnNames": [
+            "route",
+            "last_seen_at",
+            "id"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "error_log_route_last_seen_idx",
@@ -188,7 +198,10 @@
           "primary": false
         },
         {
-          "columnNames": ["last_seen_at", "id"],
+          "columnNames": [
+            "last_seen_at",
+            "id"
+          ],
           "composite": true,
           "constraint": false,
           "keyName": "error_log_unread_last_seen_idx",
@@ -369,107 +382,6 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
-        },
-        "google_group_estado": {
-          "name": "google_group_estado",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": "'pendiente'",
-          "comment": null,
-          "enumItems": [
-            "pendiente",
-            "sincronizado",
-            "fallido",
-            "omitido"
-          ],
-          "mappedType": "enum"
-        },
-        "google_group_email_sincronizado": {
-          "name": "google_group_email_sincronizado",
-          "type": "varchar(255)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": 255,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
-        "google_group_emails_pendientes_baja": {
-          "name": "google_group_emails_pendientes_baja",
-          "type": "text[]",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": "'{}'",
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "array"
-        },
-        "google_group_ultimo_error": {
-          "name": "google_group_ultimo_error",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "text"
-        },
-        "google_group_ultimo_intento_en": {
-          "name": "google_group_ultimo_intento_en",
-          "type": "timestamptz(6)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        },
-        "google_group_sincronizado_en": {
-          "name": "google_group_sincronizado_en",
-          "type": "timestamptz(6)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "datetime"
         }
       },
       "name": "alumno",
@@ -533,6 +445,215 @@
           ],
           "updateRule": "cascade",
           "deleteRule": "set null"
+        }
+      },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "alumno_id": {
+          "name": "alumno_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "canal": {
+          "name": "canal",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [
+            "google_groups"
+          ],
+          "mappedType": "enum"
+        },
+        "estado": {
+          "name": "estado",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'pendiente'",
+          "comment": null,
+          "enumItems": [
+            "pendiente",
+            "sincronizada",
+            "fallida",
+            "omitida"
+          ],
+          "mappedType": "enum"
+        },
+        "destinatario_sincronizado": {
+          "name": "destinatario_sincronizado",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "destinatarios_pendientes_baja": {
+          "name": "destinatarios_pendientes_baja",
+          "type": "text[]",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'{}'",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "array"
+        },
+        "ultimo_error": {
+          "name": "ultimo_error",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "ultimo_intento_en": {
+          "name": "ultimo_intento_en",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "sincronizado_en": {
+          "name": "sincronizado_en",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "name": "suscripcion_alumno",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "suscripcion_alumno_canal_estado_idx",
+          "columnNames": [
+            "canal",
+            "estado"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "suscripcion_alumno_alumno_canal_unique",
+          "columnNames": [
+            "alumno_id",
+            "canal"
+          ],
+          "composite": true,
+          "constraint": true,
+          "primary": false,
+          "unique": true
+        },
+        {
+          "keyName": "suscripcion_alumno_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "suscripcion_alumno_alumno_id_foreign": {
+          "constraintName": "suscripcion_alumno_alumno_id_foreign",
+          "columnNames": [
+            "alumno_id"
+          ],
+          "localTableName": "public.suscripcion_alumno",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.alumno",
+          "deleteRule": "cascade",
+          "updateRule": "cascade"
         }
       },
       "nativeEnums": {},
@@ -1316,6 +1437,54 @@
           "enumItems": [],
           "mappedType": "boolean"
         },
+        "grupos_importados_en": {
+          "name": "grupos_importados_en",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "grupos_importacion_token": {
+          "name": "grupos_importacion_token",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "grupos_importacion_iniciada_en": {
+          "name": "grupos_importacion_iniciada_en",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
         "column_config": {
           "name": "column_config",
           "type": "jsonb",
@@ -1468,6 +1637,90 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "provision_estado": {
+          "name": "provision_estado",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'activa'",
+          "comment": null,
+          "enumItems": [
+            "pendiente",
+            "activa",
+            "fallida"
+          ],
+          "mappedType": "enum"
+        },
+        "provision_ultimo_error": {
+          "name": "provision_ultimo_error",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "provision_intentos": {
+          "name": "provision_intentos",
+          "type": "int4",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 32,
+          "scale": 0,
+          "default": "0",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "provision_creacion_iniciada_en": {
+          "name": "provision_creacion_iniciada_en",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "provision_actualizado_en": {
+          "name": "provision_actualizado_en",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
           "unique": false,
           "length": 6,
           "precision": null,
@@ -1731,6 +1984,18 @@
           "keyName": "entrega_ci_resultado_idx",
           "unique": false,
           "primary": false
+        },
+        {
+          "columnNames": [
+            "provision_estado",
+            "provision_actualizado_en"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "entrega_provision_estado_actualizado_idx",
+          "unique": false,
+          "primary": false,
+          "expression": "CREATE INDEX entrega_provision_estado_actualizado_idx ON public.entrega USING btree (provision_estado, provision_actualizado_en) WHERE (provision_estado <> 'activa'::text)"
         },
         {
           "columnNames": [

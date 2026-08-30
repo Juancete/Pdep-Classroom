@@ -40,19 +40,19 @@ vi.mock("../../estado-panel", () => ({
     assignmentId,
     estado,
     accionesDisponibles,
-    entregasCount,
+    motivoBloqueoBorrador,
   }: {
     assignmentId: string;
     estado: string;
     accionesDisponibles: string[];
-    entregasCount: number;
+    motivoBloqueoBorrador: string | null;
   }) =>
     React.createElement("div", {
       "data-testid": "estado-panel",
       "data-assignment": assignmentId,
       "data-estado": estado,
       "data-acciones": accionesDisponibles.join(","),
-      "data-entregas": entregasCount,
+      "data-motivo": motivoBloqueoBorrador ?? "",
     }),
 }));
 
@@ -201,7 +201,7 @@ describe("Edit Assignment page", () => {
   });
 
   describe("panel de estado", () => {
-    it("pasa las acciones disponibles y el conteo de entregas al panel", async () => {
+    it("pasa las acciones disponibles al panel", async () => {
       mockGetAssignment.mockResolvedValue(makeAssignment());
       mockGetEntregaCountsByAssignment.mockResolvedValue(new Map([["a1", 1]]));
 
@@ -210,7 +210,20 @@ describe("Edit Assignment page", () => {
 
       expect(html).toContain('data-estado="borrador"');
       expect(html).toContain('data-acciones="publicado,archivado"');
-      expect(html).toContain('data-entregas="1"');
+    });
+
+    // Fase 3 de la auditoría de dominio — ver el mismo caso en
+    // admin/assignments/[id]/page.test.tsx.
+    it("pasa el motivo de bloqueo cuando publicado con entregas no puede volver a borrador", async () => {
+      mockGetAssignment.mockResolvedValue(makeAssignment({ estadoNombre: "publicado" }));
+      mockGetEntregaCountsByAssignment.mockResolvedValue(new Map([["a1", 1]]));
+
+      const element = await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
+      const html = renderToStaticMarkup(element as React.ReactElement);
+
+      expect(html).toContain(
+        'data-motivo="No se puede pasar de &quot;publicado&quot; a &quot;borrador&quot;: tiene entregas — archivalo en vez de despublicarlo"'
+      );
     });
 
     it("no ofrece volver a borrador cuando el publicado ya tiene entregas", async () => {

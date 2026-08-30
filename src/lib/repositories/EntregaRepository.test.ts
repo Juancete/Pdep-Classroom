@@ -37,6 +37,7 @@ import {
   createOrGetEntrega,
   crearEntregaSiAssignmentDisponible,
   getEntregasConRepoActivo,
+  getActiveRepoCountsByAssignment,
   getEntregaLogica,
   actualizarCIDeEntrega,
   conLockDeEntrega,
@@ -46,6 +47,8 @@ import {
   actualizarColaboradoresDeEntrega,
   getEntregaPorRepoGithubId,
   asegurarRepoGithubId,
+  iniciarProvisionEntrega,
+  marcarCreacionGithubIniciada,
 } from "./EntregaRepository";
 
 function fakeAssignmentDisponible(disponible: boolean) {
@@ -340,7 +343,51 @@ describe("EntregaRepository", () => {
     expect(mockEm.find).toHaveBeenCalledWith(Entrega, {
       assignment: { id: "a1" },
       repoDeleted: false,
+      provisionEstado: "activa",
       repoName: { $ne: null },
+    });
+  });
+
+  // B2: antes filtraba sólo `repoDeleted`/`repoName`, sin `provisionEstado`
+  // — una entrega `fallida` con `repoName` residual de un intento previo
+  // (ver `Entrega.hasRepo()`) contaba para esta lista aunque no tuviera un
+  // repo realmente activo. El filtro faltante se ve en el query pasado al
+  // ORM: sin el fix, esta aserción falla porque `provisionEstado` no está.
+  it("excluye una entrega con provisionEstado fallida aunque conserve repoName (B2)", async () => {
+    mockEm.find.mockResolvedValue([]);
+
+    await getEntregasConRepoActivo("a1");
+
+    expect(mockEm.find).toHaveBeenCalledWith(
+      Entrega,
+      expect.objectContaining({ provisionEstado: "activa" })
+    );
+  });
+
+  describe("getActiveRepoCountsByAssignment", () => {
+    it("filtra por provisionEstado activa además de repoDeleted (B2)", async () => {
+      mockEm.find.mockResolvedValue([]);
+
+      await getActiveRepoCountsByAssignment();
+
+      expect(mockEm.find).toHaveBeenCalledWith(
+        Entrega,
+        { repoDeleted: false, provisionEstado: "activa" },
+        { fields: ["assignment", "repoName"] }
+      );
+    });
+
+    it("cuenta sólo entregas con repoName entre las que devuelve el ORM", async () => {
+      const conRepo = new Entrega();
+      conRepo.assignment = { id: "a1" } as never;
+      conRepo.repoName = "tp-ana";
+      const sinRepoName = new Entrega();
+      sinRepoName.assignment = { id: "a1" } as never;
+      mockEm.find.mockResolvedValue([conRepo, sinRepoName]);
+
+      const counts = await getActiveRepoCountsByAssignment();
+
+      expect(counts.get("a1")).toBe(1);
     });
   });
 
@@ -544,6 +591,63 @@ describe("EntregaRepository", () => {
 
       expect(entrega.repoGithubId).toBe("555");
       expect(mockEm.flush).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("iniciarProvisionEntrega", () => {
+    it("reclama y persiste el primer intento bajo lock", async () => {
+      const entrega = new Entrega();
+      entrega.provisionEstado = "pendiente";
+      entrega.provisionIntentos = 0;
+      mockEm.findOneOrFail.mockResolvedValueOnce(entrega);
+
+      await expect(iniciarProvisionEntrega("e1")).resolves.toBe(entrega);
+
+      expect(entrega.provisionIntentos).toBe(1);
+      expect(mockEm.findOneOrFail).toHaveBeenCalledWith(
+        Entrega,
+        { id: "e1" },
+        expect.objectContaining({ lockMode: LockMode.PESSIMISTIC_WRITE })
+      );
+      expect(mockEm.flush).toHaveBeenCalled();
+    });
+
+    it("no reclama otra vez un intento reciente en vuelo", async () => {
+      const entrega = new Entrega();
+      entrega.provisionEstado = "pendiente";
+      entrega.provisionIntentos = 1;
+      entrega.provisionActualizadoEn = new Date();
+      mockEm.findOneOrFail.mockResolvedValueOnce(entrega);
+
+      await expect(iniciarProvisionEntrega("e1")).resolves.toBeNull();
+
+      expect(entrega.provisionIntentos).toBe(1);
+      expect(mockEm.flush).not.toHaveBeenCalled();
+    });
+
+    it("reclama otra vez un intento vencido", async () => {
+      const entrega = new Entrega();
+      entrega.provisionEstado = "pendiente";
+      entrega.provisionIntentos = 1;
+      entrega.provisionActualizadoEn = new Date(Date.now() - 121_000);
+      mockEm.findOneOrFail.mockResolvedValueOnce(entrega);
+
+      await expect(iniciarProvisionEntrega("e1")).resolves.toBe(entrega);
+
+      expect(entrega.provisionIntentos).toBe(2);
+      expect(mockEm.flush).toHaveBeenCalled();
+    });
+  });
+
+  describe("marcarCreacionGithubIniciada", () => {
+    it("persiste y devuelve la entrega con el timestamp estable", async () => {
+      const entrega = new Entrega();
+      mockEm.findOneOrFail.mockResolvedValueOnce(entrega);
+
+      await expect(marcarCreacionGithubIniciada("e1")).resolves.toBe(entrega);
+
+      expect(entrega.provisionCreacionIniciadaEn).toBeInstanceOf(Date);
+      expect(mockEm.flush).toHaveBeenCalledOnce();
     });
   });
 

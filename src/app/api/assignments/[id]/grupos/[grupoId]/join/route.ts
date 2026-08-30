@@ -2,18 +2,6 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { getAlumnoByGithub, unirseAGrupo } from "@/lib/repositories";
 import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
-import type { Grupo } from "@/domain/entities";
-
-function serializarGrupo(grupo: Grupo) {
-  return {
-    id: grupo.id,
-    nombre: grupo.nombre,
-    paradigma: grupo.paradigma,
-    maxIntegrantes: grupo.maxIntegrantes,
-    estaLleno: !grupo.isOpen(),
-    miembros: grupo.usernamesDeMiembros(),
-  };
-}
 
 export async function POST(_req: Request, props: { params: Promise<{ id: string; grupoId: string }> }) {
   const params = await props.params;
@@ -38,7 +26,7 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string;
       usuario: user,
     });
 
-    return NextResponse.json(serializarGrupo(grupo));
+    return NextResponse.json(grupo.toResumen());
   } catch (error) {
     return (
       respuestaDeErrorDeDominio(error) ??

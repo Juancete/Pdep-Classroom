@@ -458,6 +458,20 @@ describe("Dashboard page", () => {
       expect(html).not.toContain("Elegir grupo");
     });
 
+    it("informa una provisión fallida archivada sin ofrecer reintento al alumno", async () => {
+      const archivado = makeAssignment({ id: "a-archivado" });
+      archivado.transicionarA("archivado", { tieneEntregas: true }, "docente1");
+      const entrega = makeEntrega({ provisionEstado: "fallida", repoUrl: undefined });
+      mockGetAssignmentsDeComision.mockResolvedValue([archivado]);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map([["a-archivado", entrega]]));
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("No se pudo crear el repo antes de archivar el TP");
+      expect(html).not.toContain("Podés reintentar");
+      expect(html).not.toContain('data-testid="accept-button"');
+    });
+
     it("no muestra un archivado sin entrega", async () => {
       const archivado = makeAssignment({ id: "a-archivado", titulo: "TP Archivado" });
       archivado.transicionarA("archivado", { tieneEntregas: false }, "docente1");

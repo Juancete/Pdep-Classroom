@@ -6,7 +6,22 @@ import {
   Assignment,
   type ParticipantesResueltos,
   type FuentesDeConteo,
+  type BuscadorDeGrupoDelAlumno,
 } from "./Assignment";
+import { buildRepoName } from "@/lib/naming";
+
+// Lanzado cuando un alumno todavía no completó su registro (falta el
+// `Alumno` en la base) e intenta aceptar un TP individual — un TP grupal
+// no lo necesita para este chequeo puntual, ahí lo resuelve
+// `GrupoNoAsignadoError` si no tiene grupo (Fase 3 de la auditoría de
+// dominio: antes vivía en `aceptarAssignment.ts`, un servicio, no en el
+// dominio).
+export class AlumnoNoRegistradoError extends Error {
+  constructor(public readonly githubUsername: string) {
+    super("Completá tu registro antes de aceptar este assignment.");
+    this.name = "AlumnoNoRegistradoError";
+  }
+}
 
 @Entity({ discriminatorValue: "individual" })
 export class IndividualAssignment extends Assignment {
@@ -22,10 +37,17 @@ export class IndividualAssignment extends Assignment {
     return (await fuentes.getAlumnosDelCurso()).length;
   }
 
-  async resolverParticipantesPara(user: {
-    githubUsername: string;
-  }): Promise<ParticipantesResueltos> {
+  async resolverParticipantesPara(
+    user: { githubUsername: string },
+    _buscarGrupoDelAlumno: BuscadorDeGrupoDelAlumno,
+    alumno: Alumno | null
+  ): Promise<ParticipantesResueltos> {
+    if (!alumno) throw new AlumnoNoRegistradoError(user.githubUsername);
     return { usernames: [user.githubUsername] };
+  }
+
+  nombreDeRepoPara(participantes: ParticipantesResueltos): string {
+    return buildRepoName({ slug: this.slug, githubUsername: participantes.usernames[0]! });
   }
 
   requiereSeleccionDeGrupo(_user: { rol: RolDeUsuario }, _grupo: Grupo | null): boolean {
@@ -46,5 +68,9 @@ export class IndividualAssignment extends Assignment {
 
   cargarGruposCon(_loader: (assignmentId: string) => Promise<Grupo[]>): Promise<Grupo[]> {
     return Promise.resolve([]);
+  }
+
+  comoGrupal(): null {
+    return null;
   }
 }

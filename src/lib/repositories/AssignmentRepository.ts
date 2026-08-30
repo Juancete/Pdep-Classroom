@@ -1,23 +1,19 @@
-import { getEM, deleteEntity } from "@/lib/db";
+import { getEM } from "@/lib/db";
 import { LockMode } from "@mikro-orm/core";
 import {
   Assignment,
+  AssignmentNoEliminableError,
   AssignmentNoEncontradoError,
+  ComisionActivaRequeridaError,
   Comision,
+  crearAssignment,
   Entrega,
-  IndividualAssignment,
+  Grupo,
   GrupalAssignment,
 } from "@/domain/entities";
 import type { AssignmentFormData } from "@/lib/assignment-schema";
 import { slugify } from "@/lib/naming";
 import type { NombreEstadoAssignment, Paradigma } from "@/types";
-
-export class ComisionActivaRequeridaError extends Error {
-  constructor() {
-    super("Necesitás una comisión activa para crear assignments.");
-    this.name = "ComisionActivaRequeridaError";
-  }
-}
 
 // Estados en los que un assignment puede aparecer en superficies de alumno.
 // Borrador nunca; el filtrado fino de "archivado solo si tiene entrega" lo
@@ -52,11 +48,32 @@ export async function getAssignmentsDeComision(
   );
 }
 
+// Usado por el bootstrap de grupos desde Sheets (`grupoSync.ts`): sólo los
+// `GrupalAssignment` de la comisión que coinciden en paradigma con la fila
+// de la planilla — un alumno puede tener grupo en varios paradigmas, cada
+// fila de la hoja de grupos es una asignación paradigma→grupo (Fase 4 de
+// la auditoría de dominio: antes era un `entityManager.find` directo en el
+// servicio).
+export async function getGrupalAssignmentsDeComisionYParadigma(
+  comisionId: string,
+  paradigma: Paradigma
+): Promise<GrupalAssignment[]> {
+  const entityManager = await getEM();
+  return entityManager.find(GrupalAssignment, {
+    comision: { id: comisionId },
+    paradigma,
+  });
+}
+
 export async function getAssignment(id: string): Promise<Assignment | null> {
   const entityManager = await getEM();
   return entityManager.findOne(Assignment, { id }, { populate: ["comision"] });
 }
 
+// Delega en `Assignment.crear` (factory por tipo, Fase 3 de la auditoría de
+// dominio) y en `aplicarCamposExtra`; acá sólo queda resolver el slug (con
+// el fallback a partir del título — `slugify` es un util puro, no una regla
+// de negocio que la entidad deba encapsular) y setear los campos base.
 export async function createAssignment(
   data: AssignmentFormData
 ): Promise<Assignment> {
@@ -66,8 +83,7 @@ export async function createAssignment(
 
   const slug = data.slug || slugify(data.titulo);
 
-  const assignment: Assignment =
-    data.tipo === "grupal" ? new GrupalAssignment() : new IndividualAssignment();
+  const assignment = crearAssignment(data.tipo);
   assignment.aplicarCamposExtra(data);
 
   assignment.titulo = data.titulo;
@@ -83,6 +99,8 @@ export async function createAssignment(
   return assignment;
 }
 
+// Delega en `Assignment.actualizarEstructura` (Fase 3 de la auditoría de
+// dominio) — acá sólo queda cargar, delegar y flushear.
 export async function updateAssignment(
   id: string,
   data: Partial<AssignmentFormData>
@@ -91,24 +109,32 @@ export async function updateAssignment(
   const assignment = await entityManager.findOne(Assignment, { id });
   if (!assignment) return null;
 
-  if (data.titulo !== undefined) assignment.titulo = data.titulo;
-  if (data.slug !== undefined)
-    assignment.slug = data.slug || slugify(data.titulo ?? assignment.titulo);
-  if (data.descripcion !== undefined) assignment.descripcion = data.descripcion;
-  if (data.templateRepo !== undefined) assignment.templateRepo = data.templateRepo;
-  if (data.paradigma !== undefined)
-    assignment.paradigma = data.paradigma as Paradigma;
-  if (data.deadline !== undefined)
-    assignment.deadline = data.deadline ? new Date(data.deadline) : undefined;
-
-  assignment.aplicarCamposExtra(data);
+  assignment.actualizarEstructura(data);
 
   await entityManager.flush();
   return assignment;
 }
 
 export async function deleteAssignment(id: string): Promise<void> {
-  await deleteEntity(Assignment, id);
+  const entityManager = await getEM();
+  await entityManager.transactional(async (transaction) => {
+    const assignment = await transaction.findOne(
+      Assignment,
+      { id },
+      { lockMode: LockMode.PESSIMISTIC_WRITE }
+    );
+    if (!assignment) return;
+
+    const tieneEntregas = (await transaction.count(Entrega, { assignment: { id } })) > 0;
+    const tieneGrupos = (await transaction.count(Grupo, { assignment: { id } })) > 0;
+    const motivo = assignment.razonNoEliminable({ tieneEntregas, tieneGrupos });
+    if (motivo) {
+      throw new AssignmentNoEliminableError(motivo);
+    }
+
+    transaction.remove(assignment);
+    await transaction.flush();
+  });
 }
 
 export async function setInscripcionesCerradas(

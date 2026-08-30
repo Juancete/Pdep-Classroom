@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PdepUser } from "@/types";
-import { GrupalAssignment, IndividualAssignment, DOCENTE, ESTUDIANTE } from "@/domain/entities";
+import { Grupo, Alumno, GrupalAssignment, IndividualAssignment, DOCENTE, ESTUDIANTE } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -103,25 +103,19 @@ function makeGrupo(
   miembros: string[],
   maxIntegrantes = 3,
   nombre = `grupo-${id}`
-) {
-  const lleno = miembros.length >= maxIntegrantes;
-  return {
-    id,
-    nombre,
-    paradigma: "objetos",
-    maxIntegrantes,
-    isOpen: () => !lleno,
-    estaLleno: () => lleno,
-    etiquetaCupo: () => lleno
-      ? `Completo (${maxIntegrantes}/${maxIntegrantes})`
-      : `${miembros.length}/${maxIntegrantes} integrantes`,
-    contieneA: (username: string) => miembros.some((member) => member.toLowerCase() === username.toLowerCase()),
-    usernamesDeMiembros: () => miembros,
-    cantidadMiembros: () => miembros.length,
-    alumnos: {
-      getItems: () => miembros.map((username) => ({ githubUsername: username })),
-    },
-  };
+): Grupo {
+  const grupo = new Grupo();
+  grupo.id = id;
+  grupo.nombre = nombre;
+  grupo.nombreNormalizado = nombre;
+  grupo.paradigma = "objetos";
+  grupo.maxIntegrantes = maxIntegrantes;
+  grupo.creadoPor = miembros[0] ?? "alguien";
+  const items = miembros.map((username) => Object.assign(new Alumno(), { githubUsername: username }));
+  Object.assign(grupo, {
+    alumnos: { getItems: () => items, length: items.length },
+  });
+  return grupo;
 }
 
 // ── Tests ────────────────────────────────────────────────────

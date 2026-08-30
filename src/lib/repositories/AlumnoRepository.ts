@@ -1,29 +1,17 @@
 import { getEM } from "@/lib/db";
 import type { EntityManager } from "@mikro-orm/postgresql";
-import {
-  Alumno,
-  type AlumnoData,
-  type EstadoGoogleGroup,
-} from "@/domain/entities";
+import { Alumno, LegajoConflictError, type AlumnoData } from "@/domain/entities";
 import type { Comision } from "@/domain/entities";
+import {
+  crearSuscripcionesFaltantes,
+  marcarSuscripcionesPendientes,
+} from "./SuscripcionAlumnoRepository";
 
 export type { AlumnoData } from "@/domain/entities";
-
-// El legajo es la PK del alumno en la cursada: dos alumnos no pueden compartirlo.
-// La UNIQUE constraint de la DB ya lo garantiza, pero lanzamos este error antes
-// del flush para poder devolverle al cliente un mensaje claro y el `field`
-// afectado en vez de un crash genérico del driver.
-export class LegajoConflictError extends Error {
-  constructor(
-    public readonly legajo: string,
-    public readonly otroGithubUsername: string
-  ) {
-    super(
-      `El legajo ${legajo} ya está registrado con el usuario @${otroGithubUsername}. Verificá que sea el tuyo.`
-    );
-    this.name = "LegajoConflictError";
-  }
-}
+// `LegajoConflictError` es un error de dominio (vive en `Alumno.ts` — Fase 4
+// de la auditoría de dominio): se reexporta acá para no romper a los
+// callers que ya lo importan desde este repositorio.
+export { LegajoConflictError } from "@/domain/entities";
 
 async function assertLegajoLibreOPropio(
   legajo: string,
@@ -81,6 +69,7 @@ export async function createAlumno(data: AlumnoData): Promise<Alumno> {
   const alumno = new Alumno();
   alumno.actualizarDatos(data);
   entityManager.persist(alumno);
+  await crearSuscripcionesFaltantes([alumno], entityManager);
   await entityManager.flush();
   return alumno;
 }
@@ -94,7 +83,11 @@ export async function upsertAlumno(data: AlumnoData): Promise<Alumno> {
   });
 
   if (existing) {
+    const emailAnterior = Alumno.normalizarEmail(existing.email);
     existing.actualizarDatos(data);
+    if (emailAnterior !== existing.email) {
+      await marcarSuscripcionesPendientes([existing.id], entityManager);
+    }
     await entityManager.flush();
     return existing;
   }
@@ -183,38 +176,6 @@ export async function getAlumnosConGruposSyncPendiente(
   );
 }
 
-export async function getAlumnosConGoogleGroupPendiente(
-  comisionId: string,
-  incluirOmitidos = false
-): Promise<Alumno[]> {
-  const entityManager = await getEM();
-  const estados: EstadoGoogleGroup[] = incluirOmitidos
-    ? ["pendiente", "fallido", "omitido"]
-    : ["pendiente", "fallido"];
-  return entityManager.find(
-    Alumno,
-    {
-      comision: { id: comisionId },
-      googleGroupEstado: { $in: estados },
-    },
-    { orderBy: { apellido: "ASC", nombre: "ASC" } }
-  );
-}
-
-export async function actualizarEstadoGoogleGroup(
-  githubUsername: string,
-  actualizar: (alumno: Alumno) => void
-): Promise<Alumno | null> {
-  const entityManager = await getEM();
-  const alumno = await entityManager.findOne(Alumno, {
-    githubUsername: Alumno.normalizarUsername(githubUsername),
-  });
-  if (!alumno) return null;
-  actualizar(alumno);
-  await entityManager.flush();
-  return alumno;
-}
-
 /** Crea o actualiza múltiples alumnos en un solo flush. */
 export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
   if (dataList.length === 0) return 0;
@@ -247,15 +208,23 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
   const existentes = await entityManager.find(Alumno, { githubUsername: { $in: githubUsernames } });
   const existentesPorGithub = new Map(existentes.map((alumno) => [alumno.githubUsername, alumno]));
 
+  const alumnosNuevos: Alumno[] = [];
+  const idsConEmailCambiado: string[] = [];
+
   for (const data of dataList) {
     const key = Alumno.normalizarUsername(data.githubUsername);
     const existing = existentesPorGithub.get(key);
     if (existing) {
+      const emailAnterior = Alumno.normalizarEmail(existing.email);
       existing.actualizarDatos(data);
+      if (emailAnterior !== existing.email) {
+        idsConEmailCambiado.push(existing.id);
+      }
     } else {
       const alumno = new Alumno();
       alumno.actualizarDatos(data);
       entityManager.persist(alumno);
+      alumnosNuevos.push(alumno);
       // Si el batch trae otra fila con el mismo github (typo o fila duplicada
       // en la planilla), debe reutilizar esta instancia — sin esto, el UNIQUE
       // de githubUsername explota en el flush con un error genérico.
@@ -263,11 +232,17 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
     }
   }
 
+  await crearSuscripcionesFaltantes(alumnosNuevos, entityManager);
+  await marcarSuscripcionesPendientes(idsConEmailCambiado, entityManager);
+
   await entityManager.flush();
   return dataList.length;
 }
 
-export async function countAlumnos(): Promise<number> {
+export async function countAlumnos(comisionId?: string): Promise<number> {
   const entityManager = await getEM();
-  return entityManager.count(Alumno, {});
+  return entityManager.count(
+    Alumno,
+    comisionId ? { comision: { id: comisionId } } : {}
+  );
 }

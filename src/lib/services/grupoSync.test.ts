@@ -5,8 +5,8 @@ import type { GruposColumnConfig } from "@/types";
 
 const mockGetAsignacionesGrupos = vi.fn();
 const mockUpsertGrupoConMiembro = vi.fn();
-const mockEmFindOne = vi.fn();
-const mockEmFind = vi.fn();
+const mockGetAlumnoByGithub = vi.fn();
+const mockGetGrupalAssignmentsDeComisionYParadigma = vi.fn();
 
 vi.mock("@/lib/sheets", async () => {
   const actual = await vi.importActual<typeof import("@/lib/sheets")>("@/lib/sheets");
@@ -18,13 +18,9 @@ vi.mock("@/lib/sheets", async () => {
 
 vi.mock("@/lib/repositories", () => ({
   upsertGrupoConMiembro: (params: unknown) => mockUpsertGrupoConMiembro(params),
-}));
-
-vi.mock("@/lib/db", () => ({
-  getEM: () => ({
-    findOne: (...args: unknown[]) => mockEmFindOne(...args),
-    find: (...args: unknown[]) => mockEmFind(...args),
-  }),
+  getAlumnoByGithub: (githubUsername: string) => mockGetAlumnoByGithub(githubUsername),
+  getGrupalAssignmentsDeComisionYParadigma: (comisionId: string, paradigma: string) =>
+    mockGetGrupalAssignmentsDeComisionYParadigma(comisionId, paradigma),
 }));
 
 import { sincronizarGruposDelAlumno } from "./grupoSync";
@@ -78,8 +74,8 @@ describe("sincronizarGruposDelAlumno", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetAsignacionesGrupos.mockResolvedValue([]);
-    mockEmFindOne.mockResolvedValue(alumnoFake);
-    mockEmFind.mockResolvedValue([]);
+    mockGetAlumnoByGithub.mockResolvedValue(alumnoFake);
+    mockGetGrupalAssignmentsDeComisionYParadigma.mockResolvedValue([]);
     mockUpsertGrupoConMiembro.mockResolvedValue(undefined);
   });
 
@@ -101,7 +97,7 @@ describe("sincronizarGruposDelAlumno", () => {
     mockGetAsignacionesGrupos.mockResolvedValue([
       { githubUsername: "juangarcia", paradigma: "funcional", nombreGrupo: "Los Lambdas" },
     ]);
-    mockEmFind.mockResolvedValue([]);
+    mockGetGrupalAssignmentsDeComisionYParadigma.mockResolvedValue([]);
     await sincronizarGruposDelAlumno("juangarcia", comisionConGrupos);
     expect(mockUpsertGrupoConMiembro).not.toHaveBeenCalled();
   });
@@ -110,7 +106,7 @@ describe("sincronizarGruposDelAlumno", () => {
     mockGetAsignacionesGrupos.mockResolvedValue([
       { githubUsername: "juangarcia", paradigma: "funcional", nombreGrupo: "Los Lambdas" },
     ]);
-    mockEmFind.mockResolvedValue([
+    mockGetGrupalAssignmentsDeComisionYParadigma.mockResolvedValue([
       grupalAssignmentFake,
       { ...grupalAssignmentFake, id: "asg2" },
     ]);
@@ -130,7 +126,7 @@ describe("sincronizarGruposDelAlumno", () => {
     mockGetAsignacionesGrupos.mockResolvedValue([
       { githubUsername: "juangarcia", paradigma: "funcional", nombreGrupo: "Los Lambdas" },
     ]);
-    mockEmFind.mockResolvedValue([grupalAssignmentFake]);
+    mockGetGrupalAssignmentsDeComisionYParadigma.mockResolvedValue([grupalAssignmentFake]);
 
     await sincronizarGruposDelAlumno("JuanGarcia", comisionConGrupos);
 
@@ -151,7 +147,7 @@ describe("sincronizarGruposDelAlumno", () => {
     mockGetAsignacionesGrupos.mockResolvedValue([
       { githubUsername: "juangarcia", paradigma: "funcional", nombreGrupo: "Los Lambdas" },
     ]);
-    mockEmFind.mockResolvedValue([grupalAssignmentFake]);
+    mockGetGrupalAssignmentsDeComisionYParadigma.mockResolvedValue([grupalAssignmentFake]);
     mockUpsertGrupoConMiembro.mockRejectedValue(new Error("DB conflict"));
 
     await expect(
@@ -163,7 +159,7 @@ describe("sincronizarGruposDelAlumno", () => {
     const prefetched = [
       { githubUsername: "juangarcia", paradigma: "funcional" as const, nombreGrupo: "Los Lambdas" },
     ];
-    mockEmFind.mockResolvedValue([grupalAssignmentFake]);
+    mockGetGrupalAssignmentsDeComisionYParadigma.mockResolvedValue([grupalAssignmentFake]);
 
     await sincronizarGruposDelAlumno("juangarcia", comisionConGrupos, prefetched);
 
@@ -181,7 +177,7 @@ describe("sincronizarGruposDelAlumno", () => {
     mockGetAsignacionesGrupos.mockResolvedValue([
       { githubUsername: "juangarcia", paradigma: "funcional", nombreGrupo: "Los Lambdas" },
     ]);
-    mockEmFindOne.mockResolvedValue(null);
+    mockGetAlumnoByGithub.mockResolvedValue(null);
 
     await sincronizarGruposDelAlumno("juangarcia", comisionConGrupos);
 
