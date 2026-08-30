@@ -14,24 +14,31 @@ modifica la base de datos.
 4. Verificar en GitHub la callback OAuth y el webhook del dominio definitivo. La App debe estar
    instalada en la organización y suscripta a `Check suite`, `Push`, `Repository` y `Member`.
 5. Evitar que un auto-deploy de producción se adelante a la migración. Usar promoción manual o
-   pausar temporalmente ese auto-deploy.
+   pausar temporalmente ese auto-deploy con `vercel git disconnect` (o desde el dashboard:
+   Settings → Git → Disconnect). La desconexión detiene todos los deploys por Git, tanto producción
+   como previews. Debe revertirse al final del release (ver paso 4 de "Release").
 
 ## Release
 
 1. Ejecutar **Actions → Migrate production database → Run workflow**. El environment protegido
-   `production` necesita el secret `DATABASE_URL` de Neon.
+   `production` necesita el secret `DATABASE_URL` de Neon. Si el run falla en el step "Verificar
+   secret DATABASE_URL", recargar el secret con `gh secret set DATABASE_URL --env production`
+   usando el valor de Neon (no está en Vercel: ahí la variable es sensitive y no se puede leer).
 2. Esperar el resultado exitoso y recién entonces promover el mismo commit en Vercel.
 3. Consultar `GET /api/health`; debe responder `200` y `{"ok":true,"database":"ok",...}`.
-4. Entrar como docente a `/admin/operaciones`. GitHub y Sheets deben estar en verde; cada canal de
+4. Reconectar el repo con `vercel git connect`. Verificar con `vercel project inspect
+   pdep-classroom` que figura el repo conectado, y confirmar con `vercel inspect
+   https://pdep-classroom.vercel.app` que el commit en producción es el SHA migrado.
+5. Entrar como docente a `/admin/operaciones`. GitHub y Sheets deben estar en verde; cada canal de
    comunicación configurado también — uno apagado a propósito aparece como "Revisar" y no bloquea.
    No debe haber deliveries fallidos sin explicar.
-5. Hacer el canary con un assignment descartable:
+6. Hacer el canary con un assignment descartable:
    - un docente lo crea y publica;
    - un alumno de prueba completa registro y acepta un TP individual;
    - dos alumnos forman un grupo y aceptan un TP grupal;
    - se confirma repo, colaboradores, suscripción a los canales configurados y actualización de CI
      por webhook.
-6. Si la comisión ya tenía grupos en Sheets, ejecutar una sola vez **Importar grupos desde
+7. Si la comisión ya tenía grupos en Sheets, ejecutar una sola vez **Importar grupos desde
    Sheets**. Desde ese momento Classroom es la fuente de verdad.
 
 ## Operación habitual
