@@ -212,6 +212,7 @@ export async function upsertarAlumnoEnSheets(
   existingRow[columnConfig.legajo] = input.legajo.trim();
   existingRow[columnConfig.apellido] = input.apellido.trim();
   existingRow[columnConfig.nombre] = input.nombre.trim();
+  existingRow[columnConfig.githubUsername] = githubNormalizado;
   existingRow[columnConfig.email] = Alumno.normalizarEmail(input.email);
 
   await sheets.spreadsheets.values.update({

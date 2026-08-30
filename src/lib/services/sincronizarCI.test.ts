@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Entrega } from "@/domain/entities";
+import { Entrega, ReejecucionCINoDisponibleError } from "@/domain/entities";
 
 const mockGetEstadoCI = vi.fn();
 const mockReejecutar = vi.fn();
@@ -26,7 +26,12 @@ import { sincronizarCIDeEntregas, reejecutarCIDeEntrega } from "./sincronizarCI"
 
 function entregaConRepo(
   index: number,
-  overrides?: Partial<Pick<Entrega, "repoName" | "repoDeleted" | "ciActualizadoEn" | "ciCheckSuiteIds">>
+  overrides?: Partial<
+    Pick<
+      Entrega,
+      "repoName" | "repoDeleted" | "ciActualizadoEn" | "ciCheckSuiteIds" | "ciResultadoNombre"
+    >
+  >
 ): Entrega {
   const item = new Entrega();
   item.id = `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
@@ -170,7 +175,10 @@ describe("reejecutarCIDeEntrega", () => {
   });
 
   it("pide el rerequest en GitHub y deja la entrega en pendiente", async () => {
-    const entrega = entregaConRepo(1, { ciCheckSuiteIds: ["111", "222"] });
+    const entrega = entregaConRepo(1, {
+      ciResultadoNombre: "passing",
+      ciCheckSuiteIds: ["111", "222"],
+    });
 
     await reejecutarCIDeEntrega(entrega);
 
@@ -183,7 +191,26 @@ describe("reejecutarCIDeEntrega", () => {
   it("rechaza si no hay check suites previos para reejecutar", async () => {
     const entrega = entregaConRepo(1);
 
-    await expect(reejecutarCIDeEntrega(entrega)).rejects.toThrow();
+    await expect(reejecutarCIDeEntrega(entrega)).rejects.toBeInstanceOf(
+      ReejecucionCINoDisponibleError
+    );
+    expect(mockReejecutar).not.toHaveBeenCalled();
+  });
+
+  // B1: `permiteReejecucion()` da `true` para "passing" sin mirar
+  // `ciCheckSuiteIds` (no tiene acceso a esos datos, es un Strategy sin
+  // estado propio). Antes esta combinación tiraba un `Error` genérico que
+  // la route no traducía a 409 — ver `ci/rerun/route.test.ts` para el caso
+  // equivalente del lado de la route.
+  it("rechaza con el error tipado si el resultado es reejecutable pero no quedaron check suites guardados", async () => {
+    const entrega = entregaConRepo(1, {
+      ciResultadoNombre: "passing",
+      ciCheckSuiteIds: [],
+    });
+
+    await expect(reejecutarCIDeEntrega(entrega)).rejects.toBeInstanceOf(
+      ReejecucionCINoDisponibleError
+    );
     expect(mockReejecutar).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -11,9 +11,14 @@ const mockGetAsignacionesGrupos = vi.fn();
 const mockGetAlumnosByComision = vi.fn();
 const mockIntentarSincronizarGrupos = vi.fn();
 const mockImportarAlumnosDeComision = vi.fn();
-const mockGetAlumnosConGoogleGroupPendiente = vi.fn();
-const mockIntentarSincronizarGoogleGroup = vi.fn();
-const mockIsGoogleGroupsConfigured = vi.fn();
+const mockGetSuscripcionesPendientesDeComision = vi.fn();
+const mockCanalesActivos = vi.fn();
+const mockCanalPorNombre = vi.fn();
+const mockSincronizarCanal = vi.fn();
+const mockReclamarImportacionGrupos = vi.fn();
+const mockRenovarImportacionGrupos = vi.fn();
+const mockCompletarImportacionGrupos = vi.fn();
+const mockLiberarImportacionGrupos = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
@@ -46,10 +51,19 @@ vi.mock("@/lib/repositories", () => ({
   getComision: (...args: unknown[]) => mockGetComision(...args),
   getAlumnosByComision: (...args: unknown[]) =>
     mockGetAlumnosByComision(...args),
-  getAlumnosConGoogleGroupPendiente: (...args: unknown[]) =>
-    mockGetAlumnosConGoogleGroupPendiente(...args),
+  getSuscripcionesPendientesDeComision: (...args: unknown[]) =>
+    mockGetSuscripcionesPendientesDeComision(...args),
+  reclamarImportacionGrupos: (...args: unknown[]) =>
+    mockReclamarImportacionGrupos(...args),
+  renovarImportacionGrupos: (...args: unknown[]) =>
+    mockRenovarImportacionGrupos(...args),
+  completarImportacionGrupos: (...args: unknown[]) =>
+    mockCompletarImportacionGrupos(...args),
+  liberarImportacionGrupos: (...args: unknown[]) =>
+    mockLiberarImportacionGrupos(...args),
   LegajoConflictError: FakeLegajoConflictError,
   ComisionActivaDuplicadaError: FakeComisionActivaDuplicadaError,
+  INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS: 150_000,
 }));
 
 vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
@@ -57,13 +71,9 @@ vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
     mockIntentarSincronizarGrupos(...args),
 }));
 
-vi.mock("@/lib/services/intentarSincronizarGoogleGroup", () => ({
-  intentarSincronizarGoogleGroup: (...args: unknown[]) =>
-    mockIntentarSincronizarGoogleGroup(...args),
-}));
-
-vi.mock("@/lib/googleGroups", () => ({
-  isGoogleGroupsConfigured: () => mockIsGoogleGroupsConfigured(),
+vi.mock("@/lib/canales", () => ({
+  canalesActivos: (...args: unknown[]) => mockCanalesActivos(...args),
+  canalPorNombre: (...args: unknown[]) => mockCanalPorNombre(...args),
 }));
 
 const { FakeLecturaPlanillaAlumnosError } = vi.hoisted(() => {
@@ -100,8 +110,10 @@ import {
   actualizarComision,
   sincronizarAlumnos,
   sincronizarGruposDeLaComision,
-  sincronizarGoogleGroupsDeLaComision,
+  sincronizarCanalesDeLaComision,
 } from "./actions";
+
+afterEach(() => vi.useRealTimers());
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -397,17 +409,48 @@ describe("sincronizarGruposDeLaComision", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireAdmin.mockResolvedValue(undefined);
-    mockGetComision.mockResolvedValue(comision);
+    mockReclamarImportacionGrupos.mockResolvedValue({
+      estado: "reclamada",
+      comision,
+      token: "lease-1",
+    });
+    mockCompletarImportacionGrupos.mockResolvedValue(true);
+    mockRenovarImportacionGrupos.mockResolvedValue(true);
+    mockLiberarImportacionGrupos.mockResolvedValue(undefined);
     mockGetAlumnosByComision.mockResolvedValue([]);
     mockIntentarSincronizarGrupos.mockResolvedValue(undefined);
     mockGetAsignacionesGrupos.mockResolvedValue(asignacionesFake);
   });
 
   it("devuelve error si la comisión no existe", async () => {
-    mockGetComision.mockResolvedValue(null);
+    mockReclamarImportacionGrupos.mockResolvedValue({ estado: "no_encontrada" });
     const result = await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
     expect(result).toEqual({ status: "error", message: "Comisión no encontrada" });
     expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+  });
+
+  it("no inicia otro lote mientras una importación conserva el lease", async () => {
+    mockReclamarImportacionGrupos.mockResolvedValue({ estado: "en_proceso" });
+
+    await expect(
+      sincronizarGruposDeLaComision({ status: "idle" }, makeFd())
+    ).resolves.toEqual({
+      status: "error",
+      message: "Ya hay una importación de grupos en proceso. Volvé a intentar en unos minutos.",
+    });
+    expect(mockGetAlumnosByComision).not.toHaveBeenCalled();
+  });
+
+  it("no reimporta una comisión cuyo bootstrap ya terminó", async () => {
+    mockReclamarImportacionGrupos.mockResolvedValue({ estado: "completada" });
+
+    await expect(
+      sincronizarGruposDeLaComision({ status: "idle" }, makeFd())
+    ).resolves.toEqual({
+      status: "error",
+      message: "Los grupos ya fueron importados. Classroom es ahora la fuente de verdad; administralos desde la app.",
+    });
+    expect(mockGetAlumnosByComision).not.toHaveBeenCalled();
   });
 
   it("devuelve ok con 0 sincronizados cuando no hay alumnos en la comisión", async () => {
@@ -415,6 +458,8 @@ describe("sincronizarGruposDeLaComision", () => {
     expect(result).toEqual({ status: "ok", sincronizados: 0, aunConError: 0 });
     expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
     expect(mockGetAsignacionesGrupos).not.toHaveBeenCalled();
+    expect(mockCompletarImportacionGrupos).toHaveBeenCalledWith("c1", "lease-1");
+    expect(mockLiberarImportacionGrupos).not.toHaveBeenCalled();
   });
 
   it("corre para todos los alumnos de la comisión (no solo los pendientes)", async () => {
@@ -458,10 +503,16 @@ describe("sincronizarGruposDeLaComision", () => {
       message: "No se pudo leer la hoja de grupos: rate limited",
     });
     expect(mockIntentarSincronizarGrupos).not.toHaveBeenCalled();
+    expect(mockCompletarImportacionGrupos).not.toHaveBeenCalled();
+    expect(mockLiberarImportacionGrupos).toHaveBeenCalledWith("c1", "lease-1");
   });
 
   it("no lee la hoja si la comisión no tiene config de grupos", async () => {
-    mockGetComision.mockResolvedValue({ id: "c1", spreadsheetId: "sheet-xyz", columnConfig: {}, gruposConfig: () => undefined });
+    mockReclamarImportacionGrupos.mockResolvedValue({
+      estado: "reclamada",
+      comision: { id: "c1", spreadsheetId: "sheet-xyz", columnConfig: {}, gruposConfig: () => undefined },
+      token: "lease-1",
+    });
     mockGetAlumnosByComision.mockResolvedValue([{ githubUsername: "ana" }]);
 
     await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
@@ -488,6 +539,65 @@ describe("sincronizarGruposDeLaComision", () => {
     const result = await sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
 
     expect(result).toEqual({ status: "ok", sincronizados: 2, aunConError: 1 });
+    expect(mockCompletarImportacionGrupos).not.toHaveBeenCalled();
+    expect(mockLiberarImportacionGrupos).toHaveBeenCalledWith("c1", "lease-1");
+  });
+
+  it("libera el lease si no puede completar la importación", async () => {
+    mockCompletarImportacionGrupos.mockResolvedValue(false);
+
+    await expect(
+      sincronizarGruposDeLaComision({ status: "idle" }, makeFd())
+    ).resolves.toEqual({
+      status: "error",
+      message: "La importación perdió su reserva. Volvé a intentarla.",
+    });
+    expect(mockLiberarImportacionGrupos).toHaveBeenCalledWith("c1", "lease-1");
+  });
+
+  it("renueva periódicamente el lease mientras un alumno sigue procesándose", async () => {
+    vi.useFakeTimers();
+    mockGetAlumnosByComision.mockResolvedValue([{ githubUsername: "ana" }]);
+    let terminarSincronizacion!: () => void;
+    mockIntentarSincronizarGrupos.mockImplementation(
+      () => new Promise<void>((resolve) => { terminarSincronizacion = resolve; })
+    );
+
+    const resultado = sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mockIntentarSincronizarGrupos).toHaveBeenCalledOnce();
+
+    await vi.advanceTimersByTimeAsync(150_000);
+    expect(mockRenovarImportacionGrupos).toHaveBeenCalledWith("c1", "lease-1");
+
+    terminarSincronizacion();
+    await expect(resultado).resolves.toEqual({
+      status: "ok",
+      sincronizados: 1,
+      aunConError: 0,
+    });
+  });
+
+  it("detiene el lote si el heartbeat detecta que perdió el lease", async () => {
+    vi.useFakeTimers();
+    mockGetAlumnosByComision.mockResolvedValue([{ githubUsername: "ana" }]);
+    mockRenovarImportacionGrupos.mockResolvedValue(false);
+    let terminarSincronizacion!: () => void;
+    mockIntentarSincronizarGrupos.mockImplementation(
+      () => new Promise<void>((resolve) => { terminarSincronizacion = resolve; })
+    );
+
+    const resultado = sincronizarGruposDeLaComision({ status: "idle" }, makeFd());
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(150_000);
+    terminarSincronizacion();
+
+    await expect(resultado).resolves.toEqual({
+      status: "error",
+      message: "La importación perdió su reserva. Volvé a intentarla.",
+    });
+    expect(mockCompletarImportacionGrupos).not.toHaveBeenCalled();
+    expect(mockLiberarImportacionGrupos).toHaveBeenCalledWith("c1", "lease-1");
   });
 
   it("requiere admin antes de ejecutar", async () => {
@@ -498,7 +608,7 @@ describe("sincronizarGruposDeLaComision", () => {
   });
 });
 
-describe("sincronizarGoogleGroupsDeLaComision", () => {
+describe("sincronizarCanalesDeLaComision", () => {
   function makeFd(): FormData {
     return makeFormData({ comisionId: "c1" });
   }
@@ -507,21 +617,22 @@ describe("sincronizarGoogleGroupsDeLaComision", () => {
     vi.clearAllMocks();
     mockRequireAdmin.mockResolvedValue(undefined);
     mockGetComision.mockResolvedValue({ id: "c1" });
-    mockGetAlumnosConGoogleGroupPendiente.mockResolvedValue([]);
-    mockIsGoogleGroupsConfigured.mockReturnValue(true);
+    mockGetSuscripcionesPendientesDeComision.mockResolvedValue([]);
+    mockCanalesActivos.mockReturnValue([{ nombre: "google_groups" }]);
+    mockCanalPorNombre.mockReturnValue({ sincronizar: mockSincronizarCanal });
   });
 
   it("requiere admin", async () => {
     mockRequireAdmin.mockRejectedValue(new Error("forbidden"));
     await expect(
-      sincronizarGoogleGroupsDeLaComision({ status: "idle" }, makeFd())
+      sincronizarCanalesDeLaComision({ status: "idle" }, makeFd())
     ).rejects.toThrow("forbidden");
   });
 
   it("devuelve error si la comisión no existe", async () => {
     mockGetComision.mockResolvedValue(null);
     await expect(
-      sincronizarGoogleGroupsDeLaComision({ status: "idle" }, makeFd())
+      sincronizarCanalesDeLaComision({ status: "idle" }, makeFd())
     ).resolves.toEqual({
       status: "error",
       message: "Comisión no encontrada",
@@ -529,64 +640,61 @@ describe("sincronizarGoogleGroupsDeLaComision", () => {
   });
 
   it("procesa solo pendientes y agrega los resultados", async () => {
-    mockGetAlumnosConGoogleGroupPendiente.mockResolvedValue([
-      { githubUsername: "ana" },
-      { githubUsername: "bruno" },
-      { githubUsername: "cintia" },
+    mockGetSuscripcionesPendientesDeComision.mockResolvedValue([
+      { canal: "google_groups", alumno: { githubUsername: "ana" } },
+      { canal: "google_groups", alumno: { githubUsername: "bruno" } },
+      { canal: "google_groups", alumno: { githubUsername: "cintia" } },
     ]);
-    mockIntentarSincronizarGoogleGroup
-      .mockResolvedValueOnce({ status: "added" })
-      .mockResolvedValueOnce({ status: "skipped" })
-      .mockResolvedValueOnce({ status: "error", error: "boom" });
+    mockSincronizarCanal
+      .mockResolvedValueOnce({ estado: "sincronizada" })
+      .mockResolvedValueOnce({ estado: "omitida" })
+      .mockResolvedValueOnce({ estado: "error", error: "boom" });
 
     await expect(
-      sincronizarGoogleGroupsDeLaComision({ status: "idle" }, makeFd())
+      sincronizarCanalesDeLaComision({ status: "idle" }, makeFd())
     ).resolves.toEqual({
       status: "ok",
       sincronizados: 1,
       omitidos: 1,
       aunConError: 1,
     });
-    expect(mockGetAlumnosConGoogleGroupPendiente).toHaveBeenCalledWith(
+    expect(mockGetSuscripcionesPendientesDeComision).toHaveBeenCalledWith(
       "c1",
-      true
+      ["google_groups"]
     );
   });
 
   it("continúa con el lote cuando un alumno lanza una excepción", async () => {
-    mockGetAlumnosConGoogleGroupPendiente.mockResolvedValue([
-      { githubUsername: "ana" },
-      { githubUsername: "bruno" },
+    mockGetSuscripcionesPendientesDeComision.mockResolvedValue([
+      { canal: "google_groups", alumno: { githubUsername: "ana" } },
+      { canal: "google_groups", alumno: { githubUsername: "bruno" } },
     ]);
-    mockIntentarSincronizarGoogleGroup
+    mockSincronizarCanal
       .mockRejectedValueOnce(new Error("error inesperado"))
-      .mockResolvedValueOnce({ status: "added" });
+      .mockResolvedValueOnce({ estado: "sincronizada" });
 
     await expect(
-      sincronizarGoogleGroupsDeLaComision({ status: "idle" }, makeFd())
+      sincronizarCanalesDeLaComision({ status: "idle" }, makeFd())
     ).resolves.toEqual({
       status: "ok",
       sincronizados: 1,
       omitidos: 0,
       aunConError: 1,
     });
-    expect(mockIntentarSincronizarGoogleGroup).toHaveBeenCalledTimes(2);
+    expect(mockSincronizarCanal).toHaveBeenCalledTimes(2);
   });
 
-  it("no incluye omitidos cuando la integración está desactivada", async () => {
-    mockIsGoogleGroupsConfigured.mockReturnValue(false);
+  it("no consulta ni procesa nada cuando no hay canales activos", async () => {
+    mockCanalesActivos.mockReturnValue([]);
 
     await expect(
-      sincronizarGoogleGroupsDeLaComision({ status: "idle" }, makeFd())
+      sincronizarCanalesDeLaComision({ status: "idle" }, makeFd())
     ).resolves.toEqual({
       status: "ok",
       sincronizados: 0,
       omitidos: 0,
       aunConError: 0,
     });
-    expect(mockGetAlumnosConGoogleGroupPendiente).toHaveBeenCalledWith(
-      "c1",
-      false
-    );
+    expect(mockGetSuscripcionesPendientesDeComision).toHaveBeenCalledWith("c1", []);
   });
 });

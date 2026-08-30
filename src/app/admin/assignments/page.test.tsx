@@ -8,6 +8,7 @@ const mockRequireAdmin = vi.fn();
 const mockGetAssignments = vi.fn();
 const mockGetEntregaCountsByAssignment = vi.fn();
 const mockGetActiveRepoCountsByAssignment = vi.fn();
+const mockGetGrupoCountsByAssignment = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
@@ -17,6 +18,7 @@ vi.mock("@/lib/repositories", () => ({
   getAssignments: (filtro?: unknown) => mockGetAssignments(filtro),
   getEntregaCountsByAssignment: () => mockGetEntregaCountsByAssignment(),
   getActiveRepoCountsByAssignment: () => mockGetActiveRepoCountsByAssignment(),
+  getGrupoCountsByAssignment: () => mockGetGrupoCountsByAssignment(),
 }));
 
 vi.mock("next/link", () => ({
@@ -112,6 +114,7 @@ describe("Admin Assignments page", () => {
     mockRequireAdmin.mockResolvedValue(undefined);
     mockGetEntregaCountsByAssignment.mockResolvedValue(new Map());
     mockGetActiveRepoCountsByAssignment.mockResolvedValue(new Map());
+    mockGetGrupoCountsByAssignment.mockResolvedValue(new Map());
   });
 
   it("siempre llama a requireAdmin", async () => {
@@ -254,6 +257,21 @@ describe("Admin Assignments page", () => {
       const html = renderToStaticMarkup(element);
       expect(html).toContain("Eliminar Kata Funcional");
       expect(html).toContain('data-compact="true"');
+    });
+
+    // B4: antes el botón sólo miraba `estadoNombre === "borrador"` y
+    // `entregasCounts`, sin conteo de grupos — se ofrecía un borrado que
+    // `AssignmentRepository.deleteAssignment` iba a rechazar con
+    // `AssignmentNoEliminableError("grupos")`.
+    it("no muestra el botón de eliminar cuando el assignment tiene grupos asociados (B4)", async () => {
+      mockGetAssignments.mockResolvedValue([
+        makeAssignment({ id: "tp-1", titulo: "Kata Funcional" }),
+      ]);
+      mockGetGrupoCountsByAssignment.mockResolvedValue(new Map([["tp-1", 1]]));
+
+      const element = await AdminAssignmentsPage({});
+      const html = renderToStaticMarkup(element);
+      expect(html).not.toContain("Eliminar Kata Funcional");
     });
   });
 

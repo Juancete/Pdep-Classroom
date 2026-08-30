@@ -7,6 +7,7 @@ import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 import {
   aceptarAssignment,
   AlumnoNoRegistradoError,
+  RepositorioPreexistenteNoAdministradoError,
   AssignmentNoEncontradoError,
 } from "@/lib/services/aceptarAssignment";
 import {
@@ -40,6 +41,9 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
     }
     if (error instanceof AssignmentNoDisponibleError) {
       return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    if (error instanceof RepositorioPreexistenteNoAdministradoError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
     }
     if (
       error instanceof GrupoNoAsignadoError ||

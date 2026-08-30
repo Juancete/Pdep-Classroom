@@ -124,6 +124,7 @@ class Docente extends RolDeUsuario {
       { href: "/admin/grupos", label: "Grupos" },
       { href: "/admin/comisiones", label: "Comisiones" },
       { href: "/admin/alumnos", label: "Alumnos" },
+      { href: "/admin/operaciones", label: "Diagnóstico" },
     ];
   }
 

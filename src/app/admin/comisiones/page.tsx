@@ -66,7 +66,9 @@ export default async function AdminComisionesPage() {
                     >
                       Editar
                     </a>
-                    <DeleteComisionButton id={comision.id} anio={comision.anio} />
+                    {!comision.activa && (
+                      <DeleteComisionButton id={comision.id} anio={comision.anio} />
+                    )}
                   </div>
                 </DataCell>
               </DataRow>

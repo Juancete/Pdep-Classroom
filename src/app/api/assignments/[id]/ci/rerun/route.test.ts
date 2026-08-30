@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DOCENTE, ESTUDIANTE } from "@/domain/entities/RolDeUsuario";
+import { ReejecucionCINoDisponibleError } from "@/domain/entities/ResultadoCI";
 
 const mockGetCurrentUser = vi.fn();
 const mockGetEntregaPorId = vi.fn();
@@ -31,7 +32,7 @@ function makeEntrega(overrides: Record<string, unknown> = {}) {
   return {
     id: "e1",
     assignment: { id: "a1" },
-    resultadoCI: { permiteReejecucion: () => true },
+    puedeReejecutarCI: () => true,
     ...overrides,
   };
 }
@@ -85,16 +86,32 @@ describe("POST /api/assignments/[id]/ci/rerun", () => {
     expect(mockReejecutar).not.toHaveBeenCalled();
   });
 
-  it("devuelve 409 si el resultado actual no permite reejecución", async () => {
+  it("devuelve 409 si Entrega.puedeReejecutarCI() da false", async () => {
     mockGetCurrentUser.mockResolvedValue({ githubUsername: "docente1", rol: DOCENTE });
     mockGetEntregaPorId.mockResolvedValue(
-      makeEntrega({ resultadoCI: { permiteReejecucion: () => false } })
+      makeEntrega({ puedeReejecutarCI: () => false })
     );
     const response = await POST(makeRequest({ entregaId: "e1" }), {
       params: Promise.resolve({ id: "a1" }),
     });
     expect(response.status).toBe(409);
     expect(mockReejecutar).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 409 (no 500) si el servicio igual rechaza con el error tipado", async () => {
+    // Defensa en profundidad: aunque la route y el servicio llaman al mismo
+    // `Entrega.puedeReejecutarCI()` (ya no pueden divergir — B1), si el
+    // servicio se invocara por otra vía y rechazara con el error tipado, la
+    // route lo traduce a 409 en vez de caer al 500 genérico.
+    mockGetCurrentUser.mockResolvedValue({ githubUsername: "docente1", rol: DOCENTE });
+    mockGetEntregaPorId.mockResolvedValue(makeEntrega());
+    mockReejecutar.mockRejectedValue(new ReejecucionCINoDisponibleError("e1"));
+
+    const response = await POST(makeRequest({ entregaId: "e1" }), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+
+    expect(response.status).toBe(409);
   });
 
   it("reejecuta y devuelve 200 en el camino feliz", async () => {

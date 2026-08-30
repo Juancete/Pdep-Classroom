@@ -13,8 +13,7 @@ import { EntregasTable } from "./entregas-table";
 import { DeleteReposButton } from "../delete-repos-button";
 import { GruposPanel } from "./grupos-panel";
 import type { GrupoAdminResumen, AlumnoSinGrupoResumen } from "./grupos-panel";
-import { GrupalAssignment, Alumno, transicionesDisponibles } from "@/domain/entities";
-import type { Grupo } from "@/domain/entities";
+import { Alumno, transicionesDisponibles } from "@/domain/entities";
 import { RepoDeletionHistory } from "./repo-deletion-history";
 import { HistorialDeMembresias } from "./historial-membresias";
 import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
@@ -68,9 +67,17 @@ export default async function AssignmentDetailPage(
   const aceptadas = entregas.length;
   const pendientes = Math.max(0, total - aceptadas);
 
-  const accionesDeEstado = transicionesDisponibles(assignment.estado, assignment.id, {
-    tieneEntregas: aceptadas > 0,
-  });
+  const contextoTransicion = { tieneEntregas: aceptadas > 0 };
+  const accionesDeEstado = transicionesDisponibles(
+    assignment.estado,
+    assignment.id,
+    contextoTransicion
+  );
+  const motivoBloqueoBorrador = assignment.estado.motivoDeBloqueo(
+    assignment.id,
+    "borrador",
+    contextoTransicion
+  );
 
   const alumnosPorUsername = new Map<string, Alumno>(
     alumnos.map((alumno) => [alumno.usernameCanonico, alumno])
@@ -83,8 +90,10 @@ export default async function AssignmentDetailPage(
     entregas.map((entrega) => entrega.grupo?.id).filter((id): id is string => Boolean(id))
   );
 
+  const grupal = assignment.comoGrupal();
+
   let gruposPanel: React.ReactNode = null;
-  if (assignment instanceof GrupalAssignment) {
+  if (grupal) {
     const gruposSerializados: GrupoAdminResumen[] = grupos.map((grupo) => ({
       id: grupo.id,
       nombre: grupo.nombre,
@@ -99,7 +108,7 @@ export default async function AssignmentDetailPage(
       })),
     }));
 
-    const alumnosSinGrupoSerializados: AlumnoSinGrupoResumen[] = assignment
+    const alumnosSinGrupoSerializados: AlumnoSinGrupoResumen[] = grupal
       .alumnosSinGrupo(alumnos, grupos)
       .map((alumno) => ({
         username: alumno.githubUsername,
@@ -109,7 +118,7 @@ export default async function AssignmentDetailPage(
     gruposPanel = (
       <GruposPanel
         assignmentId={params.id}
-        inscripcionesCerradas={assignment.inscripcionesCerradas}
+        inscripcionesCerradas={grupal.inscripcionesCerradas}
         grupos={gruposSerializados}
         alumnosSinGrupo={alumnosSinGrupoSerializados}
       />
@@ -122,6 +131,9 @@ export default async function AssignmentDetailPage(
     repoName: entrega.repoName,
     repoUrl: entrega.repoUrl,
     repoDeleted: entrega.repoDeleted,
+    provisionEstado: entrega.provisionEstado,
+    provisionUltimoError: entrega.provisionUltimoError,
+    provisionIntentos: entrega.provisionIntentos,
     estadoRepo: entrega.estadoRepo(),
     createdAt: new Date(entrega.createdAt).toLocaleDateString("es-AR"),
     nombreCompleto: entrega.githubUsernames
@@ -160,11 +172,9 @@ export default async function AssignmentDetailPage(
         <div className="flex items-center gap-3">
           <DeleteReposButton
             assignmentId={assignment.id}
-            activeRepoCount={
-              entregas.filter(
-                (entrega) => Boolean(entrega.repoName) && !entrega.repoDeleted
-              ).length
-            }
+            assignmentSlug={assignment.slug}
+            deletionEnabled={assignment.permiteBorrarRepos()}
+            activeRepoCount={entregas.filter((entrega) => entrega.hasRepo()).length}
           />
           <Link
             href={`/admin/assignments/${assignment.id}/edit`}
@@ -183,7 +193,7 @@ export default async function AssignmentDetailPage(
         assignmentId={assignment.id}
         estado={assignment.estadoNombre}
         accionesDisponibles={accionesDeEstado}
-        entregasCount={aceptadas}
+        motivoBloqueoBorrador={motivoBloqueoBorrador}
         publicadoEn={assignment.publicadoEn?.toISOString() ?? null}
         publicadoPor={assignment.publicadoPor ?? null}
         archivadoEn={assignment.archivadoEn?.toISOString() ?? null}
@@ -214,17 +224,18 @@ export default async function AssignmentDetailPage(
         </p>
       </div>
 
-      {/* Contadores: "Pendientes" no aplica a un borrador, todavía no aceptable. */}
+      {/* Contadores: "Pendientes" no aplica a un borrador, todavía no
+          aceptable. */}
       <div
         className={`grid gap-4 mb-6 ${
-          assignment.estadoNombre === "borrador" ? "grid-cols-2" : "grid-cols-3"
+          assignment.esperaEntregas() ? "grid-cols-3" : "grid-cols-2"
         }`}
       >
         <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
           <div className="text-3xl font-bold text-pdep-600">{aceptadas}</div>
           <div className="text-sm text-gray-500 mt-1">Aceptadas</div>
         </div>
-        {assignment.estadoNombre !== "borrador" && (
+        {assignment.esperaEntregas() && (
           <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
             <div className="text-3xl font-bold text-amber-600">{pendientes}</div>
             <div className="text-sm text-gray-500 mt-1">Pendientes</div>
@@ -248,7 +259,7 @@ export default async function AssignmentDetailPage(
         history={deletionHistory}
       />
 
-      {assignment instanceof GrupalAssignment && (
+      {grupal && (
         <HistorialDeMembresias
           assignmentId={assignment.id}
           historial={historialMembresias}

@@ -18,7 +18,8 @@ import {
  * Resultado de `confirmarDatosAlumno` — discriminated union con el status HTTP
  * sugerido y, cuando aplica, el `field` para que el form lo pinte inline. En
  * el caso OK devolvemos la `comision` para que el handler pueda encadenar
- * acciones accesorias (sync de grupos, Google Groups) sin volver a consultarla.
+ * acciones accesorias (sync de grupos, canales de comunicación) sin volver a
+ * consultarla.
  */
 export type ResultadoConfirmacion =
   | { ok: true; comision: Comision }
@@ -123,8 +124,8 @@ export type ResultadoConfirmacionConHooks =
 /**
  * Orquesta el evento completo "alumno confirmado/actualizado" para los flujos de
  * un único alumno (registro y perfil): confirma los datos y dispara los hooks
- * accesorios (Google Groups + sync de grupos). La ruta sólo valida entrada,
- * llama acá y traduce el resultado a HTTP.
+ * accesorios (canales de comunicación + sync de grupos). La ruta sólo valida
+ * entrada, llama acá y traduce el resultado a HTTP.
  */
 export async function confirmarYProcesarAlumno(
   input: RegistroInput

@@ -89,7 +89,7 @@ export default async function DashboardPage() {
                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
                     {assignment.tipo}
                   </span>
-                  {assignment.estadoNombre !== "publicado" && (
+                  {!assignment.permiteAccionesDeAlumno() && (
                     <EstadoAssignmentBadge estado={assignment.estadoNombre} />
                   )}
                 </div>
@@ -122,7 +122,7 @@ export default async function DashboardPage() {
               </div>
 
               <div className="flex-shrink-0 w-full sm:w-auto flex flex-col items-end gap-1.5">
-                {entrega ? (
+                {entrega?.hasRepo() ? (
                   <a
                     href={entrega.repoUrl}
                     target="_blank"
@@ -144,6 +144,21 @@ export default async function DashboardPage() {
                     </svg>
                     Ir al repo
                   </a>
+                ) : entrega ? (
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-xs text-amber-700">
+                      {puedeAdministrar || assignment.permiteAccionesDeAlumno()
+                        ? entrega.provisionEstado === "fallida"
+                          ? "No se pudo crear el repo. Podés reintentar."
+                          : "Estamos creando el repositorio."
+                        : entrega.provisionEstado === "fallida"
+                          ? "No se pudo crear el repo antes de archivar el TP. Consultá al equipo docente."
+                          : "La creación del repo quedó pendiente antes de archivar el TP."}
+                    </span>
+                    {(puedeAdministrar || assignment.permiteAccionesDeAlumno()) && (
+                      <AcceptButton assignmentId={assignment.id} />
+                    )}
+                  </div>
                 ) : assignment.requiereSeleccionDeGrupo(user, grupo) ? (
                   <a
                     href={`/assignments/${assignment.id}/grupo`}
@@ -155,7 +170,7 @@ export default async function DashboardPage() {
                 ) : (
                   <AcceptButton assignmentId={assignment.id} />
                 )}
-                {entrega && (
+                {entrega?.hasRepo() && (
                   <div className="flex items-center gap-1">
                     <CIBadge
                       resultadoNombre={entrega.ciResultadoNombre}
@@ -164,7 +179,7 @@ export default async function DashboardPage() {
                     <CIRefreshButton assignmentId={assignment.id} />
                   </div>
                 )}
-                {entrega && entrega.ciResultadoNombre !== "sin_ci" && (
+                {entrega?.hasRepo() && entrega.ciResultadoNombre !== "sin_ci" && (
                   <p className="text-[11px] text-gray-400">
                     Resultado automático — no es la nota final.
                   </p>

@@ -13,12 +13,14 @@ const {
   mockAceptarAssignment,
   FakeAlumnoNoRegistradoError,
   FakeAssignmentNoEncontradoError,
+  FakeRepositorioPreexistenteError,
 } = vi.hoisted(() => ({
   mockGetCurrentUser: vi.fn(),
   mockCheckRateLimit: vi.fn(),
   mockAceptarAssignment: vi.fn(),
   FakeAlumnoNoRegistradoError: class AlumnoNoRegistradoError extends Error {},
   FakeAssignmentNoEncontradoError: class AssignmentNoEncontradoError extends Error {},
+  FakeRepositorioPreexistenteError: class RepositorioPreexistenteNoAdministradoError extends Error {},
 }));
 
 vi.mock("@/lib/session", () => ({
@@ -35,6 +37,7 @@ vi.mock("@/lib/services/aceptarAssignment", () => {
       mockAceptarAssignment(assignmentId, user),
     AlumnoNoRegistradoError: FakeAlumnoNoRegistradoError,
     AssignmentNoEncontradoError: FakeAssignmentNoEncontradoError,
+    RepositorioPreexistenteNoAdministradoError: FakeRepositorioPreexistenteError,
   };
 });
 

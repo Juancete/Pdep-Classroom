@@ -21,6 +21,9 @@ export type EntregaRow = {
   repoName?: string;
   repoUrl?: string;
   repoDeleted: boolean;
+  provisionEstado?: "pendiente" | "activa" | "fallida";
+  provisionUltimoError?: string;
+  provisionIntentos?: number;
   estadoRepo: "borrado" | "activo" | "sin-repo";
   createdAt: string;
   nombreCompleto: string;
@@ -97,6 +100,15 @@ export function EntregasTable({
                   </span>
                 </DataCell>
                 <DataCell label="Repositorio">
+                  {entrega.provisionEstado && entrega.provisionEstado !== "activa" && (
+                    <div className={`mb-1 text-xs ${entrega.provisionEstado === "fallida" ? "text-red-600" : "text-amber-700"}`}>
+                      {entrega.provisionEstado === "fallida" ? "Aprovisionamiento fallido" : "Aprovisionamiento pendiente"}
+                      {(entrega.provisionIntentos ?? 0) > 0 ? ` · ${entrega.provisionIntentos} intento(s)` : ""}
+                      {entrega.provisionUltimoError && (
+                        <span className="block break-words text-[11px] text-gray-500">{entrega.provisionUltimoError}</span>
+                      )}
+                    </div>
+                  )}
                   {entrega.estadoRepo === "borrado" && (
                     <span className="text-red-400 text-xs">Repositorio borrado</span>
                   )}

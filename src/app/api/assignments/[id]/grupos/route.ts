@@ -9,23 +9,11 @@ import {
 } from "@/lib/repositories";
 import { AssignmentNoEncontradoError } from "@/domain/entities";
 import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
-import type { Grupo } from "@/domain/entities";
 import { autorizarAccesoAssignment } from "@/lib/services/assignmentAuthorization";
 
 const CrearGrupoSchema = z.object({
   nombre: z.string().trim().min(1).max(100),
 });
-
-function serializarGrupo(grupo: Grupo) {
-  return {
-    id: grupo.id,
-    nombre: grupo.nombre,
-    paradigma: grupo.paradigma,
-    maxIntegrantes: grupo.maxIntegrantes,
-    estaLleno: !grupo.isOpen(),
-    miembros: grupo.usernamesDeMiembros(),
-  };
-}
 
 export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -45,7 +33,7 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
     autorizarAccesoAssignment(user, alumno, assignment);
 
     const grupos = await getGruposDeAssignment(params.id);
-    return NextResponse.json(grupos.map(serializarGrupo));
+    return NextResponse.json(grupos.map((grupo) => grupo.toResumen()));
   } catch (error) {
     return (
       respuestaDeErrorDeDominio(error) ??
@@ -88,7 +76,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       rol: user.rol,
     });
 
-    return NextResponse.json(serializarGrupo(grupo), { status: 201 });
+    return NextResponse.json(grupo.toResumen(), { status: 201 });
   } catch (error) {
     return (
       respuestaDeErrorDeDominio(error) ??

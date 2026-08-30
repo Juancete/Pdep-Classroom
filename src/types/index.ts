@@ -1,11 +1,18 @@
-import { normalizarGithubUsername } from "@/domain/entities/domain-constants";
+import {
+  normalizarGithubUsername,
+  PARADIGMAS,
+  type Paradigma,
+  TIPOS_ASSIGNMENT,
+  type TipoAssignment,
+} from "@/domain/entities/domain-constants";
 import type { RolDeUsuario, NombreRolDeUsuario } from "@/domain/entities/RolDeUsuario";
 export { normalizarGithubUsername };
 
 // ── Paradigmas ──────────────────────────────────────────────
-export type Paradigma = "funcional" | "logico" | "objetos";
-
-export const PARADIGMAS: Paradigma[] = ["funcional", "logico", "objetos"];
+// Fuente única en `domain-constants.ts` (Fase 4 de la auditoría de
+// dominio) — acá sólo se reexportan para no romper a los callers que ya
+// importan `Paradigma`/`PARADIGMAS`/`TipoAssignment` desde `@/types`.
+export { PARADIGMAS, type Paradigma, TIPOS_ASSIGNMENT, type TipoAssignment };
 
 // ── Configuración de columnas del spreadsheet ───────────────
 
@@ -42,8 +49,6 @@ export const DEFAULT_COLUMN_CONFIG: ColumnConfig = {
 };
 
 // ── Assignment ──────────────────────────────────────────────
-
-export type TipoAssignment = "individual" | "grupal";
 
 export type { NombreEstadoAssignment } from "@/domain/entities/EstadoAssignment";
 

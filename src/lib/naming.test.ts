@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildRepoName,
-  extractTemplateName,
+  enumerar,
   GITHUB_REPO_NAME_MAX_LENGTH,
   NombreRepositorioDemasiadoLargoError,
   slugify,
@@ -98,18 +98,22 @@ describe("slugify", () => {
   });
 });
 
-// ── extractTemplateName ─────────────────────────────────────
+// ── enumerar ─────────────────────────────────────────────────
 
-describe("extractTemplateName", () => {
-  it("extrae nombre sin org", () => {
-    expect(extractTemplateName("pdep-mn-utn/kata-template")).toBe("kata-template");
+describe("enumerar", () => {
+  it("devuelve vacío para una lista vacía", () => {
+    expect(enumerar([])).toBe("");
   });
 
-  it("devuelve tal cual si no tiene org", () => {
-    expect(extractTemplateName("kata-template")).toBe("kata-template");
+  it("devuelve el ítem tal cual cuando hay uno solo", () => {
+    expect(enumerar(["a"])).toBe("a");
   });
 
-  it("maneja múltiples barras (toma el último segmento)", () => {
-    expect(extractTemplateName("a/b/c/template")).toBe("template");
+  it("une dos ítems con 'ni'", () => {
+    expect(enumerar(["a", "b"])).toBe("a ni b");
+  });
+
+  it("separa con coma y usa 'ni' antes del último", () => {
+    expect(enumerar(["a", "b", "c"])).toBe("a, b ni c");
   });
 });

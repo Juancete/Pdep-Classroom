@@ -43,6 +43,11 @@ export async function iniciarIntentoBorradoRepo(data: {
   return attempt;
 }
 
+// Delega en `RepoDeletionAttempt.marcarBorrado`/`marcarYaAusente` y en
+// `Entrega.marcarRepoBorrado` (Fase 2 de la auditoría de dominio); acá sólo
+// queda cargar las dos entidades, delegar y flushear. Sin
+// `eventoActualizadoEn` — este borrado lo inicia Classroom (no un webhook
+// de GitHub), así que no hay guard de orden que aplicar.
 export async function completarIntentoBorradoRepo(data: {
   attemptId: string;
   entregaId: string;
@@ -54,14 +59,13 @@ export async function completarIntentoBorradoRepo(data: {
       transaction.findOneOrFail(RepoDeletionAttempt, { id: data.attemptId }),
       transaction.findOneOrFail(Entrega, { id: data.entregaId }),
     ]);
-    attempt.status = data.status;
-    attempt.completedAt = new Date();
-    attempt.error = undefined;
-    entrega.repoDeleted = true;
+    attempt.completarComo(data.status);
+    entrega.marcarRepoBorrado();
     await transaction.flush();
   });
 }
 
+// Delega en `RepoDeletionAttempt.marcarFallido`.
 export async function fallarIntentoBorradoRepo(
   attemptId: string,
   error: string
@@ -70,9 +74,7 @@ export async function fallarIntentoBorradoRepo(
   const attempt = await entityManager.findOneOrFail(RepoDeletionAttempt, {
     id: attemptId,
   });
-  attempt.status = "failed";
-  attempt.completedAt = new Date();
-  attempt.error = error;
+  attempt.marcarFallido(error);
   await entityManager.flush();
 }
 

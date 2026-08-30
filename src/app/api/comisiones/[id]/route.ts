@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { guardAdmin } from "@/lib/api-auth";
-import { getComision, deleteComision } from "@/lib/repositories";
+import {
+  ComisionNoEliminableError,
+  getComision,
+  deleteComision,
+} from "@/lib/repositories";
+import { internalServerError } from "@/lib/api-errors";
 
 export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -12,6 +17,15 @@ export async function DELETE(_req: Request, props: { params: Promise<{ id: strin
     return NextResponse.json({ error: "Comisión no encontrada" }, { status: 404 });
   }
 
-  await deleteComision(params.id);
-  return NextResponse.json({ ok: true });
+  try {
+    await deleteComision(params.id);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    if (error instanceof ComisionNoEliminableError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    return internalServerError("DELETE /api/comisiones/[id]", error, {
+      comisionId: params.id,
+    });
+  }
 }

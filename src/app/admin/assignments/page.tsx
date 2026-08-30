@@ -3,6 +3,7 @@ import {
   getAssignments,
   getEntregaCountsByAssignment,
   getActiveRepoCountsByAssignment,
+  getGrupoCountsByAssignment,
 } from "@/lib/repositories";
 import Link from "next/link";
 import { DeleteAssignmentButton } from "./delete-button";
@@ -36,10 +37,11 @@ export default async function AdminAssignmentsPage(props: {
     ? (searchParams.estado as NombreEstadoAssignment)
     : undefined;
 
-  const [assignments, entregasCounts, activeRepoCounts] = await Promise.all([
+  const [assignments, entregasCounts, activeRepoCounts, gruposCounts] = await Promise.all([
     getAssignments(estadoFilter ? { estado: estadoFilter } : undefined),
     getEntregaCountsByAssignment(),
     getActiveRepoCountsByAssignment(),
+    getGrupoCountsByAssignment(),
   ]);
 
   const sorted = [...assignments].sort(
@@ -185,14 +187,21 @@ export default async function AdminAssignmentsPage(props: {
                     />
                     <DeleteReposButton
                       assignmentId={assignment.id}
+                      assignmentSlug={assignment.slug}
+                      deletionEnabled={assignment.permiteBorrarRepos()}
                       activeRepoCount={activeRepoCounts.get(assignment.id) ?? 0}
                       compact
                     />
-                    <DeleteAssignmentButton
-                      id={assignment.id}
-                      titulo={assignment.titulo}
-                      compact
-                    />
+                    {assignment.puedeEliminarse({
+                      tieneEntregas: (entregasCounts.get(assignment.id) ?? 0) > 0,
+                      tieneGrupos: (gruposCounts.get(assignment.id) ?? 0) > 0,
+                    }) && (
+                      <DeleteAssignmentButton
+                        id={assignment.id}
+                        titulo={assignment.titulo}
+                        compact
+                      />
+                    )}
                   </div>
                 </DataCell>
               </DataRow>

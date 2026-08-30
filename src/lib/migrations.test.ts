@@ -66,6 +66,40 @@ describe("migrations", () => {
     expect(migration).toContain('"google_group_ultimo_error"');
   });
 
+  it("crea suscripcion_alumno, backfillea desde google_group_* y dropea las columnas viejas", () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        "migrations",
+        "Migration20260827120000_suscripcion_alumno.ts"
+      ),
+      "utf8"
+    );
+
+    expect(migration).toContain('create table "suscripcion_alumno"');
+    expect(migration).toContain(
+      '"canal" text check ("canal" in (\'google_groups\')) not null'
+    );
+    expect(migration).toContain(
+      'check ("estado" in (\'pendiente\', \'sincronizada\', \'fallida\', \'omitida\'))'
+    );
+    expect(migration).toContain(
+      'constraint "suscripcion_alumno_alumno_canal_unique" unique ("alumno_id", "canal")'
+    );
+    expect(migration).toContain(
+      'foreign key ("alumno_id") references "alumno" ("id")'
+    );
+    expect(migration).toContain('insert into "suscripcion_alumno"');
+    expect(migration).toContain("from \"alumno\";");
+    expect(migration).toContain('drop column "google_group_estado"');
+    expect(migration).toContain('drop column "google_group_sincronizado_en"');
+    // down(): re-agrega las columnas y las repuebla desde suscripcion_alumno
+    // antes de dropear la tabla — el orden importa para no perder datos.
+    expect(migration).toContain('add column "google_group_estado" text');
+    expect(migration).toContain('from "suscripcion_alumno" as "s"');
+    expect(migration).toContain('drop table if exists "suscripcion_alumno"');
+  });
+
   it("garantiza membresía única por assignment y prepara el locking de cupos", () => {
     const migration = readFileSync(
       join(
@@ -232,6 +266,9 @@ describe("migrations", () => {
       )
     ) as { tables: SnapshotTable[] };
     const alumno = snapshot.tables.find((table) => table.name === "alumno");
+    const suscripcionAlumno = snapshot.tables.find(
+      (table) => table.name === "suscripcion_alumno"
+    );
     const assignment = snapshot.tables.find(
       (table) => table.name === "assignment"
     );
@@ -250,15 +287,34 @@ describe("migrations", () => {
       (table) => table.name === "github_webhook_delivery"
     );
 
-    expect(alumno?.columns.google_group_emails_pendientes_baja).toMatchObject({
+    // Las columnas google_group_* migraron a suscripcion_alumno — ver
+    // Migration20260827120000_suscripcion_alumno.
+    expect(alumno?.columns).not.toHaveProperty("google_group_estado");
+    expect(alumno?.columns).not.toHaveProperty("google_group_email_sincronizado");
+    expect(alumno?.columns).not.toHaveProperty("google_group_emails_pendientes_baja");
+    expect(alumno?.columns).not.toHaveProperty("google_group_ultimo_error");
+    expect(alumno?.columns).not.toHaveProperty("google_group_ultimo_intento_en");
+    expect(alumno?.columns).not.toHaveProperty("google_group_sincronizado_en");
+
+    expect(
+      suscripcionAlumno?.columns.destinatarios_pendientes_baja
+    ).toMatchObject({
       nullable: false,
       default: "'{}'",
     });
-    expect(alumno?.columns).toHaveProperty("google_group_estado");
-    expect(alumno?.columns).toHaveProperty("google_group_email_sincronizado");
-    expect(alumno?.columns).toHaveProperty("google_group_ultimo_error");
-    expect(alumno?.columns).toHaveProperty("google_group_ultimo_intento_en");
-    expect(alumno?.columns).toHaveProperty("google_group_sincronizado_en");
+    expect(suscripcionAlumno?.columns).toHaveProperty("canal");
+    expect(suscripcionAlumno?.columns).toHaveProperty("estado");
+    expect(suscripcionAlumno?.columns).toHaveProperty("destinatario_sincronizado");
+    expect(suscripcionAlumno?.indexes).toContainEqual(
+      expect.objectContaining({
+        keyName: "suscripcion_alumno_alumno_canal_unique",
+        unique: true,
+      })
+    );
+    expect(
+      suscripcionAlumno?.foreignKeys.suscripcion_alumno_alumno_id_foreign
+        .deleteRule
+    ).toBe("cascade");
     expect(
       alumno?.foreignKeys.alumno_comision_id_foreign.deleteRule
     ).toBe("cascade");
