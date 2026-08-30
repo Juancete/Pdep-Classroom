@@ -502,13 +502,19 @@ El workflow sólo puede despacharse cuando existe en la rama por defecto (`maste
 promoción con migraciones, seguir este orden:
 
 1. Abrir el PR `development → master` y confirmar CI verde.
-2. Pausar el auto-deploy de producción de Vercel; los previews pueden seguir habilitados.
+2. Pausar el auto-deploy de producción de Vercel (`vercel git disconnect`); los previews pueden
+   seguir habilitados.
 3. Crear un restore point en Neon y anotar qué commit se va a promover.
-4. Configurar `DATABASE_URL` en GitHub → **Settings → Environments → Production**.
+4. Configurar `DATABASE_URL` en GitHub → **Settings → Environments → Production**. Verificar con
+   `gh secret list --env production` que existe: un secret con valor vacío también pasa ese
+   listado, pero hace fallar el workflow en el step "Verificar secret DATABASE_URL".
 5. Mergear el PR y anotar el SHA resultante de `master`.
 6. Ejecutar **Actions → Migrate production database → Run workflow** sobre `master` y esperar el
    resultado exitoso.
-7. Promover o redesplegar en Vercel exactamente el SHA migrado; no otro commit más nuevo.
+7. Promover o redesplegar en Vercel exactamente el SHA migrado; no otro commit más nuevo. Luego
+   reactivar el auto-deploy con `vercel git connect` y verificar con `vercel project inspect
+   pdep-classroom` y `vercel inspect https://tu-dominio.vercel.app` (debe listar el SHA esperado)
+   — ver detalle en `docs/production-runbook.md`.
 
 Desde una terminal autenticada, los pasos 6 y el seguimiento pueden iniciarse con:
 
@@ -527,8 +533,8 @@ DATABASE_URL="postgresql://user:pass@ep-xxx.neon.tech/pdep_classroom?sslmode=req
   pnpm release:migrate
 ```
 
-No reactivar el auto-deploy hasta que la migración y el primer smoke test hayan terminado. El build
-no toca la base y no reemplaza este procedimiento.
+No reactivar el auto-deploy hasta que la migración y el primer smoke test hayan terminado (ver
+paso 7). El build no toca la base y no reemplaza este procedimiento.
 
 #### 9.4 Actualizar URLs de callback
 
