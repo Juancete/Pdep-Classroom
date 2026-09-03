@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser } from "@/infrastructure/auth/session";
 import {
   conLockBorradoReposAssignment,
   getAssignment,
   getEntregasConRepoActivo,
-} from "@/lib/repositories";
-import { borrarRepositoriosDeAssignment } from "@/lib/services/borrarRepositoriosDeAssignment";
+} from "@/infrastructure/repositories";
+import { borrarRepositoriosDeAssignment } from "@/application/borrarRepositoriosDeAssignment";
 import { internalServerError } from "@/lib/api-errors";
 
 export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {

@@ -6,17 +6,17 @@ const mockGetEntregasConRepoActivo = vi.fn();
 const mockGetEntregaDeUsuario = vi.fn();
 const mockSincronizar = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getEntregasConRepoActivo: (assignmentId: string) => mockGetEntregasConRepoActivo(assignmentId),
   getEntregaDeUsuario: (assignmentId: string, githubUsername: string) =>
     mockGetEntregaDeUsuario(assignmentId, githubUsername),
 }));
 
-vi.mock("@/lib/services/sincronizarCI", () => ({
+vi.mock("@/application/sincronizarCI", () => ({
   sincronizarCIDeEntregas: (entregas: unknown[], opts: unknown) =>
     mockSincronizar(entregas, opts),
 }));

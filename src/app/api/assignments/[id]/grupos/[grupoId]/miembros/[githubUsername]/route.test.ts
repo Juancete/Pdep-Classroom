@@ -19,11 +19,11 @@ const mockGetCurrentUser = vi.fn();
 const mockSalirDeGrupo = vi.fn();
 const mockMoverAlumnoDeGrupo = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   salirDeGrupo: (params: unknown) => mockSalirDeGrupo(params),
   moverAlumnoDeGrupo: (params: unknown) => mockMoverAlumnoDeGrupo(params),
 }));

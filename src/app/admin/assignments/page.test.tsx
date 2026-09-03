@@ -10,11 +10,11 @@ const mockGetEntregaCountsByAssignment = vi.fn();
 const mockGetActiveRepoCountsByAssignment = vi.fn();
 const mockGetGrupoCountsByAssignment = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getAssignments: (filtro?: unknown) => mockGetAssignments(filtro),
   getEntregaCountsByAssignment: () => mockGetEntregaCountsByAssignment(),
   getActiveRepoCountsByAssignment: () => mockGetActiveRepoCountsByAssignment(),

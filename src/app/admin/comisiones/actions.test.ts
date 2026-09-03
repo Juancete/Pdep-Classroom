@@ -20,7 +20,7 @@ const mockRenovarImportacionGrupos = vi.fn();
 const mockCompletarImportacionGrupos = vi.fn();
 const mockLiberarImportacionGrupos = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
@@ -45,7 +45,7 @@ const { FakeLegajoConflictError, FakeComisionActivaDuplicadaError } = vi.hoisted
   return { FakeLegajoConflictError, FakeComisionActivaDuplicadaError };
 });
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   createComision: (...args: unknown[]) => mockCreateComision(...args),
   updateComision: (...args: unknown[]) => mockUpdateComision(...args),
   getComision: (...args: unknown[]) => mockGetComision(...args),
@@ -66,12 +66,12 @@ vi.mock("@/lib/repositories", () => ({
   INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS: 150_000,
 }));
 
-vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
+vi.mock("@/application/intentarSincronizarGrupos", () => ({
   intentarSincronizarGrupos: (...args: unknown[]) =>
     mockIntentarSincronizarGrupos(...args),
 }));
 
-vi.mock("@/lib/canales", () => ({
+vi.mock("@/infrastructure/canales", () => ({
   canalesActivos: (...args: unknown[]) => mockCanalesActivos(...args),
   canalPorNombre: (...args: unknown[]) => mockCanalPorNombre(...args),
 }));
@@ -87,13 +87,13 @@ const { FakeLecturaPlanillaAlumnosError } = vi.hoisted(() => {
   return { FakeLecturaPlanillaAlumnosError };
 });
 
-vi.mock("@/lib/services/importarAlumnosDeComision", () => ({
+vi.mock("@/application/importarAlumnosDeComision", () => ({
   importarAlumnosDeComision: (...args: unknown[]) =>
     mockImportarAlumnosDeComision(...args),
   LecturaPlanillaAlumnosError: FakeLecturaPlanillaAlumnosError,
 }));
 
-vi.mock("@/lib/sheets", () => ({
+vi.mock("@/infrastructure/sheets", () => ({
   getAsignacionesGrupos: (...args: unknown[]) => mockGetAsignacionesGrupos(...args),
 }));
 

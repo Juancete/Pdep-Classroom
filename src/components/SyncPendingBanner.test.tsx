@@ -8,15 +8,15 @@ const mockGetCurrentUser = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
 const mockResolverEstadoDeSincronizacion = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
 }));
 
-vi.mock("@/lib/services/estadoDeSincronizacion", () => ({
+vi.mock("@/application/estadoDeSincronizacion", () => ({
   resolverEstadoDeSincronizacion: (...args: unknown[]) =>
     mockResolverEstadoDeSincronizacion(...args),
 }));

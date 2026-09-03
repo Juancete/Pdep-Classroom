@@ -1,6 +1,6 @@
-import { getCurrentUser } from "@/lib/session";
-import { getAlumnoByGithub } from "@/lib/repositories";
-import { resolverEstadoDeSincronizacion } from "@/lib/services/estadoDeSincronizacion";
+import { getCurrentUser } from "@/infrastructure/auth/session";
+import { getAlumnoByGithub } from "@/infrastructure/repositories";
+import { resolverEstadoDeSincronizacion } from "@/application/estadoDeSincronizacion";
 import Link from "next/link";
 import { NavMenu, type NavLink } from "./nav-menu";
 

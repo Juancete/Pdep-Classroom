@@ -16,11 +16,11 @@ const mockRedirect = vi.fn().mockImplementation((url: string) => {
   throw new Error(`REDIRECT:${url}`);
 });
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   requireUser: () => mockRequireUser(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getAssignments: () => mockGetAssignments(),
   getAssignmentsDeComision: (comisionId: string) =>
     mockGetAssignmentsDeComision(comisionId),

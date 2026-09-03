@@ -13,15 +13,15 @@ const mockRedirect = vi.fn().mockImplementation((url: string) => {
   throw new Error(`REDIRECT:${url}`);
 });
 
-vi.mock("@/lib/auth", () => ({
+vi.mock("@/infrastructure/auth/auth", () => ({
   auth: () => mockAuth(),
 }));
 
-vi.mock("@/lib/sheets", () => ({
+vi.mock("@/infrastructure/sheets", () => ({
   getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoDeSheets(...args),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoDeDB(...args),
   getComisionActiva: () => mockGetComisionActiva(),
 }));

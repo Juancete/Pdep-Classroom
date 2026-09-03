@@ -3,7 +3,7 @@ import type { PdepUser } from "@/types";
 import {
   AccesoAssignmentProhibidoError,
   GrupoNoEncontradoError,
-} from "@/lib/services/assignmentAuthorization";
+} from "@/application/assignmentAuthorization";
 import {
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
@@ -20,11 +20,11 @@ const mockGetCurrentUser = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
 const mockUnirseAGrupo = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
   unirseAGrupo: (params: unknown) => mockUnirseAGrupo(params),
 }));

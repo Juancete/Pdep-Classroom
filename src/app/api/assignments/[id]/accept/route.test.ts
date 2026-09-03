@@ -4,7 +4,7 @@ import { Entrega, GrupoNoAsignadoError, ESTUDIANTE } from "@/domain/entities";
 import {
   AccesoAssignmentProhibidoError,
   AssignmentNoDisponibleError,
-} from "@/lib/services/assignmentAuthorization";
+} from "@/application/assignmentAuthorization";
 import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
 const {
@@ -23,7 +23,7 @@ const {
   FakeRepositorioPreexistenteError: class RepositorioPreexistenteNoAdministradoError extends Error {},
 }));
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
 }));
 
@@ -31,7 +31,7 @@ vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: (key: string) => mockCheckRateLimit(key),
 }));
 
-vi.mock("@/lib/services/aceptarAssignment", () => {
+vi.mock("@/application/aceptarAssignment", () => {
   return {
     aceptarAssignment: (assignmentId: string, user: PdepUser) =>
       mockAceptarAssignment(assignmentId, user),

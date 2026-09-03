@@ -7,7 +7,7 @@ const mockAcknowledgeAll = vi.fn();
 const mockPurge = vi.fn();
 
 vi.mock("@/lib/api-auth", () => ({ guardAdmin: () => mockGuardAdmin() }));
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getUnreadErrorLogCount: () => mockCount(),
   acknowledgeErrorLog: (...args: unknown[]) => mockAcknowledge(...args),
   acknowledgeAllErrorLogs: () => mockAcknowledgeAll(),

@@ -306,7 +306,7 @@ real: el snapshot quedó dos PRs sin actualizarse). Verificalo con:
 pnpm test:migrations   # corre las migraciones contra Postgres real (requiere MIGRATION_TEST_DATABASE_URL)
 ```
 
-y con las aserciones de `src/lib/migrations.test.ts`, que leen el snapshot commiteado.
+y con las aserciones de `src/infrastructure/migrations.test.ts`, que leen el snapshot commiteado.
 
 #### 5.2 Producción (Neon + Vercel)
 
@@ -695,7 +695,7 @@ de checks combinados de GitHub):
 | resto (`success` / `neutral` / `skipped`) | Passing |
 
 Un repo sin ningún check configurado no rompe nada más de la vista — se degrada a un badge gris
-"Sin CI" (`src/lib/services/sincronizarCI.ts`, `src/domain/entities/ResultadoCI.ts`).
+"Sin CI" (`src/application/sincronizarCI.ts`, `src/domain/entities/ResultadoCI.ts`).
 
 ### Frescura y reejecución
 
@@ -959,18 +959,44 @@ src/
 │       ├── RepoDeletionAttempt.ts             # Auditoría de borrado de repos
 │       ├── EstadoDelivery.ts                  # Estado de un delivery de webhook, como Strategy
 │       └── GithubWebhookDelivery.ts           # Auditoría de deliveries de webhook (dedup por delivery id)
-├── lib/
-│   ├── auth.ts / auth.config.ts / auth.events.ts   # NextAuth: config, providers (GitHub + login de desarrollo), eventos
-│   ├── github.ts                              # Octokit: crear/eliminar repos, collaborators, templates
-│   ├── github-errors.ts                       # Tipado y manejo de errores de la API de GitHub
-│   ├── naming.ts                              # Funciones puras: slugify, buildRepoName, enumerar
-│   ├── sheets.ts                              # Google Sheets: leer/escribir alumnos y grupos
-│   ├── googleGroups.ts                        # Cliente de la Admin SDK Directory API (alta/baja de miembros)
+├── application/                                # Casos de uso — acá vive la lógica de negocio
+│   ├── aceptarAssignment.ts                   # Aceptar un TP: crea entrega + repo
+│   ├── assignmentAuthorization.ts             # Quién puede ver/operar sobre un assignment
+│   ├── alumnoRegistro.ts                      # Alta de alumno (DB primero, después Sheets)
+│   ├── importarAlumnosDeComision.ts           # Sheets → DB, bulk por comisión
+│   ├── grupoSync.ts                           # Sheets → DB, membresía de grupos (sólo aditivo)
+│   ├── intentarSincronizarGrupos.ts           # Wrapper con retry/flag de falla de grupoSync
+│   ├── estadoDeSincronizacion.ts              # Combina asuntos pendientes (alumno + canales) en un mensaje
+│   ├── hooksPostConfirmacion.ts               # Orquesta los sync post-registro
+│   ├── verificarConsistenciaAlumno.ts         # Chequeos de consistencia DB↔Sheets
+│   ├── borrarRepositoriosDeAssignment.ts      # Borrado auditado de repos de un assignment
+│   ├── sincronizarCI.ts                       # Consulta y cachea el estado de CI
+│   ├── recibirWebhookGithub.ts                # Dedup + estado de un delivery entrante, reproceso
+│   └── procesarEventoGithub.ts                # Router evento → efecto sobre la entrega correspondiente
+├── infrastructure/
+│   ├── db.ts                                  # Singleton MikroORM (getOrm / getEM)
+│   ├── auth/
+│   │   ├── auth.ts / auth.config.ts / auth.events.ts   # NextAuth: config, providers (GitHub + login de desarrollo), eventos
+│   │   └── session.ts                         # requireUser / requireAdmin
+│   ├── repositories/                          # Acceso a datos por entidad
+│   │   ├── AlumnoRepository.ts
+│   │   ├── SuscripcionAlumnoRepository.ts     # Estado de suscripción por (alumno, canal)
+│   │   ├── AssignmentRepository.ts
+│   │   ├── ComisionRepository.ts
+│   │   ├── EntregaRepository.ts
+│   │   ├── GrupoRepository.ts
+│   │   ├── CambioDeMembresiaRepository.ts
+│   │   ├── RepoDeletionAttemptRepository.ts
+│   │   └── GithubWebhookDeliveryRepository.ts
 │   ├── canales/                               # Canales de comunicación como Template Method — ver más abajo
 │   │   ├── CanalDeComunicacion.ts             # Clase abstracta: algoritmo de reconciliación
 │   │   ├── GoogleGroupsCanal.ts               # Único canal concreto hoy
 │   │   └── index.ts                           # Registro: CANALES_DE_COMUNICACION, canalesActivos()
-│   ├── session.ts                             # requireUser / requireAdmin
+│   ├── github.ts                              # Octokit: crear/eliminar repos, collaborators, templates
+│   ├── github-errors.ts                       # Tipado y manejo de errores de la API de GitHub
+│   ├── sheets.ts                              # Google Sheets: leer/escribir alumnos y grupos
+│   └── googleGroups.ts                        # Cliente de la Admin SDK Directory API (alta/baja de miembros)
+├── lib/                                        # Glue de Next/HTTP y utilidades puras
 │   ├── proxy-authorization.ts                 # Reglas de redirect que usa proxy.ts
 │   ├── api-auth.ts                            # Middleware de auth para API routes
 │   ├── api-errors.ts                          # Traducción de errores de dominio a respuestas HTTP
@@ -979,33 +1005,9 @@ src/
 │   ├── entrega-query.ts                       # Helpers de consulta sobre entregas
 │   ├── webhook-firma.ts                       # Verifica X-Hub-Signature-256 (con rotación de secreto)
 │   ├── logger.ts                              # Logging estructurado (pino)
-│   ├── db.ts                                  # Singleton MikroORM (getOrm / getEM)
-│   ├── services/                              # Casos de uso — acá vive la lógica de negocio
-│   │   ├── aceptarAssignment.ts               # Aceptar un TP: crea entrega + repo
-│   │   ├── assignmentAuthorization.ts         # Quién puede ver/operar sobre un assignment
-│   │   ├── alumnoRegistro.ts                  # Alta de alumno (DB primero, después Sheets)
-│   │   ├── importarAlumnosDeComision.ts       # Sheets → DB, bulk por comisión
-│   │   ├── grupoSync.ts                       # Sheets → DB, membresía de grupos (sólo aditivo)
-│   │   ├── intentarSincronizarGrupos.ts       # Wrapper con retry/flag de falla de grupoSync
-│   │   ├── estadoDeSincronizacion.ts          # Combina asuntos pendientes (alumno + canales) en un mensaje
-│   │   ├── hooksPostConfirmacion.ts           # Orquesta los sync post-registro
-│   │   ├── verificarConsistenciaAlumno.ts     # Chequeos de consistencia DB↔Sheets
-│   │   ├── borrarRepositoriosDeAssignment.ts  # Borrado auditado de repos de un assignment
-│   │   ├── sincronizarCI.ts                   # Consulta y cachea el estado de CI
-│   │   ├── recibirWebhookGithub.ts            # Dedup + estado de un delivery entrante, reproceso
-│   │   └── procesarEventoGithub.ts            # Router evento → efecto sobre la entrega correspondiente
+│   ├── naming.ts                              # Funciones puras: slugify, buildRepoName, enumerar
 │   ├── concurrencia.ts                        # mapConConcurrenciaLimitada (pool de workers genérico)
-│   ├── mensaje-operativo.ts                   # Redacta secretos de un mensaje de error antes de mostrarlo/persistirlo
-│   └── repositories/                          # Acceso a datos por entidad
-│       ├── AlumnoRepository.ts
-│       ├── SuscripcionAlumnoRepository.ts     # Estado de suscripción por (alumno, canal)
-│       ├── AssignmentRepository.ts
-│       ├── ComisionRepository.ts
-│       ├── EntregaRepository.ts
-│       ├── GrupoRepository.ts
-│       ├── CambioDeMembresiaRepository.ts
-│       ├── RepoDeletionAttemptRepository.ts
-│       └── GithubWebhookDeliveryRepository.ts
+│   └── mensaje-operativo.ts                   # Redacta secretos de un mensaje de error antes de mostrarlo/persistirlo
 └── types/index.ts                             # ColumnConfig, PdepUser, tipos del dominio
 ```
 
@@ -1020,15 +1022,15 @@ pnpm test:migrations   # migraciones + invariantes contra Postgres real (requier
 ```
 
 La mayoría son tests puros (dominio, servicios) o de componentes con las dependencias externas
-mockeadas — `lib/github.test.ts` y `lib/googleGroups.test.ts`, por ejemplo, sí mockean Octokit y la
+mockeadas — `infrastructure/github.test.ts` y `infrastructure/googleGroups.test.ts`, por ejemplo, sí mockean Octokit y la
 Admin SDK. Una muestra representativa:
 
 - **lib/naming.test.ts** — `buildRepoName`, `slugify`, `extractTemplateName`
-- **lib/sheets.test.ts** — `parseAlumnosRows`, `parseAsignacionesGrupos`, `validateRegistro`
-- **lib/github-errors.test.ts** — manejo y tipado de errores de GitHub
+- **infrastructure/sheets.test.ts** — `parseAlumnosRows`, `parseAsignacionesGrupos`, `validateRegistro`
+- **infrastructure/github-errors.test.ts** — manejo y tipado de errores de GitHub
 - **lib/rate-limit.test.ts** — lógica de rate limiting
 - **domain/entities/\*.test.ts** — reglas de dominio (ciclo de vida, roles, membresía de grupos)
-- **lib/services/\*.test.ts** — casos de uso (aceptar TP, registro, sync de Sheets)
+- **application/\*.test.ts** — casos de uso (aceptar TP, registro, sync de Sheets)
 - **admin/assignments/actions.test.ts** — server actions CRUD de assignments
 - **admin/comisiones/actions.test.ts** — server actions CRUD de comisiones
 - **api/assignments/[id]/\*.test.ts** — rutas de aceptación, estado, grupos e inscripciones
@@ -1063,7 +1065,7 @@ Al completarse el alta (o la edición) de un alumno, la app lo suscribe a cada *
 comunicación** que esté configurado — hoy, Google Groups. La idea es que el docente no tenga que
 agregar a nadie a mano y el alumno reciba los avisos del curso desde el primer día.
 
-La suscripción se modela como **Template Method** (`src/lib/canales/CanalDeComunicacion.ts`): el
+La suscripción se modela como **Template Method** (`src/infrastructure/canales/CanalDeComunicacion.ts`): el
 algoritmo de reconciliación — registrar el intento, dar de alta el destinatario actual, drenar
 identidades anteriores pendientes de baja, marcar sincronizado — vive una sola vez en la clase
 abstracta. Cada canal concreto sólo aporta:
@@ -1079,7 +1081,7 @@ pendientes de baja) se persiste una fila por `(alumno, canal)` en `suscripcion_a
 `src/domain/entities/SuscripcionAlumno.ts`.
 
 **Un canal sin configurar no existe para el alumno.** No hay error, no hay banner, no se acumula
-estado "fallido" — `canalesActivos()` (`src/lib/canales/index.ts`) lo filtra antes de tocarlo. El
+estado "fallido" — `canalesActivos()` (`src/infrastructure/canales/index.ts`) lo filtra antes de tocarlo. El
 docente sí lo ve: `/admin/operaciones` marca "Revisar" para cada canal apagado.
 
 Si un alumno ya era miembro del canal (se registró, lo dieron de baja y se vuelve a registrar), se
@@ -1087,10 +1089,10 @@ trata como éxito idempotente — la UI no le muestra nada especial.
 
 ### Agregar un canal nuevo
 
-1. Escribir la subclase en `src/lib/canales/` con las cinco primitivas (`nombre`, `etiqueta`,
+1. Escribir la subclase en `src/infrastructure/canales/` con las cinco primitivas (`nombre`, `etiqueta`,
    `estaConfigurado`, `asuntoPendiente`, `destinatarioDe`, `darDeAlta`, `darDeBaja`).
 2. Sumar su nombre a `NOMBRES_DE_CANAL` en `src/domain/entities/SuscripcionAlumno.ts`.
-3. Registrar la instancia en `CANALES_DE_COMUNICACION` (`src/lib/canales/index.ts`).
+3. Registrar la instancia en `CANALES_DE_COMUNICACION` (`src/infrastructure/canales/index.ts`).
 4. Migración que ensancha el `CHECK` de `suscripcion_alumno.canal` y backfillea una fila
    `pendiente` por alumno existente — molde: `Migration20260827120000_suscripcion_alumno.ts`.
 

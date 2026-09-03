@@ -6,11 +6,11 @@ import { ESTUDIANTE } from "@/domain/entities";
 const mockRequireUser = vi.fn();
 const mockConfirmarYProcesarAlumno = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   requireUser: () => mockRequireUser(),
 }));
 
-vi.mock("@/lib/services/alumnoRegistro", () => ({
+vi.mock("@/application/alumnoRegistro", () => ({
   confirmarYProcesarAlumno: (...args: unknown[]) =>
     mockConfirmarYProcesarAlumno(...args),
 }));

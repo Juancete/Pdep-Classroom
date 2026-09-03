@@ -1,4 +1,4 @@
-import { signIn } from "@/lib/auth";
+import { signIn } from "@/infrastructure/auth/auth";
 
 export default function LoginPage() {
   const adminUsernames = (process.env.ADMIN_GITHUB_USERNAMES ?? "")

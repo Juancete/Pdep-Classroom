@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { requireAdmin } from "@/lib/session";
-import { getErrorLogsPage, getUnreadErrorLogCount } from "@/lib/repositories";
+import { requireAdmin } from "@/infrastructure/auth/session";
+import { getErrorLogsPage, getUnreadErrorLogCount } from "@/infrastructure/repositories";
 import {
   DataBody,
   DataCell,

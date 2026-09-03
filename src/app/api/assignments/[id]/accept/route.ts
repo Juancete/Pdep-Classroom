@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser } from "@/infrastructure/auth/session";
 import { GrupoNoAsignadoError } from "@/domain/entities";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { internalServerError } from "@/lib/api-errors";
@@ -9,11 +9,11 @@ import {
   AlumnoNoRegistradoError,
   RepositorioPreexistenteNoAdministradoError,
   AssignmentNoEncontradoError,
-} from "@/lib/services/aceptarAssignment";
+} from "@/application/aceptarAssignment";
 import {
   AccesoAssignmentProhibidoError,
   AssignmentNoDisponibleError,
-} from "@/lib/services/assignmentAuthorization";
+} from "@/application/assignmentAuthorization";
 
 export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;

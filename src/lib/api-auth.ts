@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser, requireUser } from "@/lib/session";
+import { getCurrentUser, requireUser } from "@/infrastructure/auth/session";
 
 const UNAUTHORIZED = { error: "No autorizado" };
 

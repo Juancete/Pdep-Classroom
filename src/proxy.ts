@@ -1,5 +1,5 @@
 import NextAuth from "next-auth";
-import { authConfig } from "@/lib/auth.config";
+import { authConfig } from "@/infrastructure/auth/auth.config";
 import { getProxyRedirectPath } from "@/lib/proxy-authorization";
 import { NextResponse } from "next/server";
 

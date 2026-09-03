@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/session";
+import { requireAdmin } from "@/infrastructure/auth/session";
 import {
   getAssignment,
   getEntregas,
@@ -6,7 +6,7 @@ import {
   getGruposDeAssignment,
   getRepoDeletionHistory,
   getHistorialDeMembresias,
-} from "@/lib/repositories";
+} from "@/infrastructure/repositories";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { EntregasTable } from "./entregas-table";

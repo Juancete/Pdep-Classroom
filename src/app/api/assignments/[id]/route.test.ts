@@ -8,11 +8,11 @@ const mockGetAssignment = vi.fn();
 const mockDeleteAssignment = vi.fn();
 const mockUpdateAssignment = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   AssignmentNoEliminableError: class AssignmentNoEliminableError extends Error {},
   AssignmentEstructuraInmutableError: class AssignmentEstructuraInmutableError extends Error {},
   getAssignment: (id: string) => mockGetAssignment(id),

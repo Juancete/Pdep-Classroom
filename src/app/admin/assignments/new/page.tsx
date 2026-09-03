@@ -1,5 +1,5 @@
-import { requireAdmin } from "@/lib/session";
-import { listarTemplates } from "@/lib/github";
+import { requireAdmin } from "@/infrastructure/auth/session";
+import { listarTemplates } from "@/infrastructure/github";
 import { AssignmentForm } from "../assignment-form";
 import { crearAssignment } from "../actions";
 export default async function NewAssignmentPage() {

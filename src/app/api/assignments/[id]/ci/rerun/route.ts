@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getCurrentUser } from "@/lib/session";
-import { getEntregaPorId } from "@/lib/repositories";
-import { reejecutarCIDeEntrega } from "@/lib/services/sincronizarCI";
+import { getCurrentUser } from "@/infrastructure/auth/session";
+import { getEntregaPorId } from "@/infrastructure/repositories";
+import { reejecutarCIDeEntrega } from "@/application/sincronizarCI";
 import { ReejecucionCINoDisponibleError } from "@/domain/entities";
 import { internalServerError } from "@/lib/api-errors";
 

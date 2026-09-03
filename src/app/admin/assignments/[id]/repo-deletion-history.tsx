@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { RepoDeletionHistoryPage } from "@/lib/repositories";
+import type { RepoDeletionHistoryPage } from "@/infrastructure/repositories";
 import type { RepoDeletionStatus } from "@/domain/entities";
 
 const STATUS_LABELS: Record<RepoDeletionStatus, string> = {
