@@ -72,16 +72,14 @@ import {
   GrupoConEntregaError,
   DOCENTE,
   ESTUDIANTE,
-} from "@/domain/entities";
-import type { PdepUser } from "@/types";
-import { IndividualAssignment } from "@/domain/entities/IndividualAssignment";
-import { LockMode, type Collection } from "@mikro-orm/core";
-import {
   AccesoAssignmentProhibidoError,
   AssignmentNoDisponibleError,
   AssignmentNoEncontradoError,
   GrupoNoEncontradoError,
-} from "@/application/assignmentAuthorization";
+} from "@/domain/entities";
+import type { PdepUser } from "@/types";
+import { IndividualAssignment } from "@/domain/entities/IndividualAssignment";
+import { LockMode, type Collection } from "@mikro-orm/core";
 import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
 // ── Helpers ──────────────────────────────────────────────────

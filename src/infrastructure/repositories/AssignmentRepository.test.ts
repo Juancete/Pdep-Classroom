@@ -44,9 +44,9 @@ import {
   Comision,
   GrupalAssignment,
   IndividualAssignment,
+  AssignmentNoEncontradoError,
 } from "@/domain/entities";
 import { LockMode } from "@mikro-orm/core";
-import { AssignmentNoEncontradoError } from "@/application/assignmentAuthorization";
 import { TransicionDeEstadoInvalidaError } from "@/domain/entities/EstadoAssignment";
 
 const assignmentData = {

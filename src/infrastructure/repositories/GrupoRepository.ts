@@ -14,7 +14,6 @@ import {
   type RolDeUsuario,
 } from "@/domain/entities";
 import type { Paradigma, PdepUser } from "@/types";
-import { autorizarAccionSobreAssignment } from "@/application/assignmentAuthorization";
 import { extractDbErrorCode, UNIQUE_VIOLATION } from "./db-errors";
 import { getEntregaLogica } from "./EntregaRepository";
 import { registrarCambioDeMembresia } from "./CambioDeMembresiaRepository";
@@ -174,7 +173,7 @@ export async function crearGrupo(params: {
         { id: alumnoId },
         { populate: ["comision"] }
       );
-      autorizarAccionSobreAssignment({ rol }, alumno, grupal);
+      rol.autorizarAccionSobreAssignment(alumno, grupal);
 
       return traducirConflictoDeInscripcion(
         assignmentId,
@@ -272,7 +271,7 @@ export async function unirseAGrupo(params: {
       { id: alumnoId },
       { populate: ["comision"] }
     );
-    autorizarAccionSobreAssignment({ rol }, alumno, assignment);
+    rol.autorizarAccionSobreAssignment(alumno, assignment);
 
     return traducirConflictoDeInscripcion(
       assignmentId,

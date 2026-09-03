@@ -30,8 +30,15 @@ vi.mock("@/infrastructure/db", () => ({
 }));
 
 import { LockMode } from "@mikro-orm/core";
-import { Alumno, Assignment, Entrega, Grupo, DOCENTE, ESTUDIANTE } from "@/domain/entities";
-import { AssignmentNoDisponibleError } from "@/application/assignmentAuthorization";
+import {
+  Alumno,
+  Assignment,
+  Entrega,
+  Grupo,
+  DOCENTE,
+  ESTUDIANTE,
+  AssignmentNoDisponibleError,
+} from "@/domain/entities";
 import {
   createEntrega,
   createOrGetEntrega,

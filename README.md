@@ -1011,6 +1011,13 @@ src/
 └── types/index.ts                             # ColumnConfig, PdepUser, tipos del dominio
 ```
 
+### Regla de dependencias entre capas
+
+- `domain/` sólo importa de `domain/`, `types/` y utilidades puras de `lib/` (`naming`, `concurrencia`).
+- `application/` importa de `domain/`, `infrastructure/` y `lib/`.
+- `infrastructure/` importa de `domain/` y `lib/`. Excepción documentada: `infrastructure/auth/auth.events.ts` dispara un caso de uso de `application/` al reaccionar al login.
+- `lib/` importa de `domain/` y `types/`; sólo `api-auth.ts` importa `infrastructure/auth/session`.
+
 ## Tests
 
 ```bash
