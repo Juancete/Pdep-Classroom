@@ -8,11 +8,11 @@ const mockBorrarRepositorios = vi.fn();
 const mockConLock = vi.fn();
 const mockGetEntregasConRepoActivo = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
   getEntregasConRepoActivo: (id: string) => mockGetEntregasConRepoActivo(id),
   conLockBorradoReposAssignment: (
@@ -21,7 +21,7 @@ vi.mock("@/lib/repositories", () => ({
   ) => mockConLock(assignmentId, operation),
 }));
 
-vi.mock("@/lib/services/borrarRepositoriosDeAssignment", () => ({
+vi.mock("@/application/borrarRepositoriosDeAssignment", () => ({
   borrarRepositoriosDeAssignment: (data: unknown) => mockBorrarRepositorios(data),
 }));
 

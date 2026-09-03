@@ -1,16 +1,16 @@
 import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/session";
+import { requireUser } from "@/infrastructure/auth/session";
 import {
   getAssignment,
   getAlumnoByGithub,
   getGruposDeAssignment,
   getEntregaLogica,
-} from "@/lib/repositories";
+} from "@/infrastructure/repositories";
 import type { GrupalAssignment } from "@/domain/entities";
 import { GrupoSelector } from "./grupo-selector";
 import { MiGrupo } from "./mi-grupo";
 import type { GrupoResumen } from "./mi-grupo";
-import { autorizarAccionSobreAssignment } from "@/lib/services/assignmentAuthorization";
+import { autorizarAccionSobreAssignment } from "@/application/assignmentAuthorization";
 
 export default async function GrupoPage(
   props: {

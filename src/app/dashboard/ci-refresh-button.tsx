@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useApiCall } from "@/hooks/useApiCall";
 import { RefreshIcon, SpinnerIcon } from "@/components/icons";
-import type { SincronizarCIResult } from "@/lib/services/sincronizarCI";
+import type { SincronizarCIResult } from "@/application/sincronizarCI";
 
 // Botón chico del dashboard del alumno: sincroniza sólo su propia entrega.
 // Sin auto-refresh al montar (a diferencia del admin) — evitar multiplicar

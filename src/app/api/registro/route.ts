@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/session";
-import { type RegistroInput } from "@/lib/sheets";
+import { requireUser } from "@/infrastructure/auth/session";
+import { type RegistroInput } from "@/infrastructure/sheets";
 import { Alumno } from "@/domain/entities";
 import { usernameCanonicoDe } from "@/types";
 import { internalServerError, parseJsonObjectBody } from "@/lib/api-errors";
-import { confirmarYProcesarAlumno } from "@/lib/services/alumnoRegistro";
+import { confirmarYProcesarAlumno } from "@/application/alumnoRegistro";
 
 export async function POST(req: Request) {
   try {

@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/session";
+import { requireUser } from "@/infrastructure/auth/session";
 import {
   getAssignments,
   getAssignmentsDeComision,
@@ -6,7 +6,7 @@ import {
   getAlumnoByGithub,
   getComisionActiva,
   getGruposDeAlumno,
-} from "@/lib/repositories";
+} from "@/infrastructure/repositories";
 import { AcceptButton } from "./accept-button";
 import { redirect } from "next/navigation";
 import Link from "next/link";

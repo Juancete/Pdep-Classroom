@@ -6,7 +6,7 @@ import {
   getAssignment,
   deleteAssignment,
   updateAssignment,
-} from "@/lib/repositories";
+} from "@/infrastructure/repositories";
 import { internalServerError } from "@/lib/api-errors";
 import { AssignmentBaseSchema } from "@/lib/assignment-schema";
 

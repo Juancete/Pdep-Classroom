@@ -4,7 +4,7 @@ import { internalErrorSinPersistencia } from "@/lib/api-errors";
 import {
   ERROR_LOG_RETENTION_DAYS,
   purgeAcknowledgedErrorLogs,
-} from "@/lib/repositories";
+} from "@/infrastructure/repositories";
 
 const ROUTE = "POST /api/admin/errores/purge";
 

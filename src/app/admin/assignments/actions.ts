@@ -1,12 +1,12 @@
 "use server";
 
-import { requireAdmin } from "@/lib/session";
+import { requireAdmin } from "@/infrastructure/auth/session";
 import {
   ComisionActivaRequeridaError,
   AssignmentEstructuraInmutableError,
   createAssignment,
   updateAssignment,
-} from "@/lib/repositories";
+} from "@/infrastructure/repositories";
 import { redirect } from "next/navigation";
 import { AssignmentSchema, AssignmentFormState } from "@/lib/assignment-schema";
 

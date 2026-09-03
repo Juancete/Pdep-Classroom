@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { getCurrentUser } from "@/lib/session";
-import { getAlumnoByGithub } from "@/lib/repositories";
-import { resolverEstadoDeSincronizacion } from "@/lib/services/estadoDeSincronizacion";
+import { getCurrentUser } from "@/infrastructure/auth/session";
+import { getAlumnoByGithub } from "@/infrastructure/repositories";
+import { resolverEstadoDeSincronizacion } from "@/application/estadoDeSincronizacion";
 
 /**
  * Banner global que avisa al alumno que algo en la sincronización con la

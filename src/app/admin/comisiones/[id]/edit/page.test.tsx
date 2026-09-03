@@ -16,11 +16,11 @@ const mockGetSuscripcionesPendientesDeComision = vi.fn();
 const mockCanalesActivos = vi.fn();
 const mockCanalPorNombre = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getComision: (id: string) => mockGetComision(id),
   countAlumnos: () => mockCountAlumnos(),
   getAlumnosConGruposSyncPendiente: (...args: unknown[]) =>
@@ -29,12 +29,12 @@ vi.mock("@/lib/repositories", () => ({
     mockGetSuscripcionesPendientesDeComision(...args),
 }));
 
-vi.mock("@/lib/canales", () => ({
+vi.mock("@/infrastructure/canales", () => ({
   canalesActivos: (...args: unknown[]) => mockCanalesActivos(...args),
   canalPorNombre: (...args: unknown[]) => mockCanalPorNombre(...args),
 }));
 
-vi.mock("@/lib/sheets", () => ({
+vi.mock("@/infrastructure/sheets", () => ({
   getAlumnos: (...args: unknown[]) => mockGetAlumnos(...args),
   getSheetNames: (...args: unknown[]) => mockGetSheetNames(...args),
 }));

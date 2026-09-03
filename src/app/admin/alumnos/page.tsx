@@ -1,6 +1,6 @@
-import { requireAdmin } from "@/lib/session";
-import { getAlumnos } from "@/lib/sheets";
-import { getComisionActiva } from "@/lib/repositories";
+import { requireAdmin } from "@/infrastructure/auth/session";
+import { getAlumnos } from "@/infrastructure/sheets";
+import { getComisionActiva } from "@/infrastructure/repositories";
 import Link from "next/link";
 import {
   DataTable,

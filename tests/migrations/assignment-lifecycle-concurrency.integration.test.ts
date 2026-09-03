@@ -12,17 +12,17 @@ import ormConfig from "../../mikro-orm.config";
 
 const ormHolder = vi.hoisted(() => ({ orm: undefined as MikroORM | undefined }));
 
-vi.mock("@/lib/db", () => ({
+vi.mock("@/infrastructure/db", () => ({
   getEM: async () => {
     if (!ormHolder.orm) throw new Error("ORM de integración no inicializado");
     return ormHolder.orm.em.fork();
   },
 }));
 
-import { cambiarEstadoAssignment } from "../../src/lib/repositories/AssignmentRepository";
-import { crearEntregaSiAssignmentDisponible } from "../../src/lib/repositories/EntregaRepository";
+import { cambiarEstadoAssignment } from "../../src/infrastructure/repositories/AssignmentRepository";
+import { crearEntregaSiAssignmentDisponible } from "../../src/infrastructure/repositories/EntregaRepository";
 import { TransicionDeEstadoInvalidaError, ESTUDIANTE } from "../../src/domain/entities";
-import { AssignmentNoDisponibleError } from "../../src/lib/services/assignmentAuthorization";
+import { AssignmentNoDisponibleError } from "../../src/application/assignmentAuthorization";
 
 const LIFECYCLE_MIGRATION = "Migration20260814180000_assignment_lifecycle";
 

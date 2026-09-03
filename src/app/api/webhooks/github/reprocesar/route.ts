@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { guardAdmin } from "@/lib/api-auth";
 import { internalServerError } from "@/lib/api-errors";
-import { reprocesarDeliveries } from "@/lib/services/recibirWebhookGithub";
+import { reprocesarDeliveries } from "@/application/recibirWebhookGithub";
 
 // `deliveryId` opcional: sin body (o sin ese campo), reprocesa el lote de
 // deliveries reprocesables más viejos; con `deliveryId`, sólo ese.

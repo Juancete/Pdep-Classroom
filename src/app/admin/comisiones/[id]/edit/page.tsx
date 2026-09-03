@@ -1,19 +1,19 @@
-import { requireAdmin } from "@/lib/session";
+import { requireAdmin } from "@/infrastructure/auth/session";
 import {
   getComision,
   countAlumnos,
   getAlumnosConGruposSyncPendiente,
   getSuscripcionesPendientesDeComision,
-} from "@/lib/repositories";
+} from "@/infrastructure/repositories";
 import type { Alumno } from "@/domain/entities";
-import { getAlumnos, getSheetNames } from "@/lib/sheets";
+import { getAlumnos, getSheetNames } from "@/infrastructure/sheets";
 import { redirect } from "next/navigation";
 import { ComisionForm } from "../../comision-form";
 import { actualizarComision } from "../../actions";
 import { SyncButton } from "../../sync-button";
 import { SyncGruposButton } from "../../sync-grupos-button";
 import { SyncCanalesButton } from "../../sync-canales-button";
-import { canalesActivos, canalPorNombre } from "@/lib/canales";
+import { canalesActivos, canalPorNombre } from "@/infrastructure/canales";
 
 export default async function EditComisionPage(
   props: {

@@ -1,10 +1,10 @@
-import { requireAdmin } from "@/lib/session";
+import { requireAdmin } from "@/infrastructure/auth/session";
 import {
   getAssignments,
   getEntregaCountsByAssignment,
   getActiveRepoCountsByAssignment,
   getGrupoCountsByAssignment,
-} from "@/lib/repositories";
+} from "@/infrastructure/repositories";
 import Link from "next/link";
 import { DeleteAssignmentButton } from "./delete-button";
 import { DeleteReposButton } from "./delete-repos-button";

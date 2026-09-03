@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getCurrentUser } from "@/lib/session";
-import { cambiarEstadoAssignment } from "@/lib/repositories";
-import { AssignmentNoEncontradoError } from "@/lib/services/assignmentAuthorization";
+import { getCurrentUser } from "@/infrastructure/auth/session";
+import { cambiarEstadoAssignment } from "@/infrastructure/repositories";
+import { AssignmentNoEncontradoError } from "@/application/assignmentAuthorization";
 import { TransicionDeEstadoInvalidaError } from "@/domain/entities";
 import { internalServerError } from "@/lib/api-errors";
 

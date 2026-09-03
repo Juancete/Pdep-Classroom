@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { HistorialDeMembresiasPage } from "@/lib/repositories";
+import type { HistorialDeMembresiasPage } from "@/infrastructure/repositories";
 import type { AccionCambioMembresia, OrigenCambioMembresia } from "@/domain/entities";
 
 const ACCION_LABELS: Record<AccionCambioMembresia, string> = {

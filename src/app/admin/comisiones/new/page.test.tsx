@@ -6,7 +6,7 @@ import React from "react";
 
 const mockRequireAdmin = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
