@@ -9,7 +9,7 @@ import {
   DataHeaderCell,
   DataRow,
   DataTable,
-} from "@/app/components/DataTable";
+} from "@/components/DataTable";
 import { AcknowledgeErrorButton, ErrorLogBulkActions } from "./error-log-actions";
 
 function parsePage(value: string | string[] | undefined): number {

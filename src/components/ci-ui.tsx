@@ -4,7 +4,7 @@ import {
   XCircleIcon,
   SpinnerIcon,
   RefreshIcon,
-} from "@/app/components/icons";
+} from "@/components/icons";
 import type { ComponentType } from "react";
 
 // Presentación por resultado de CI: etiqueta, detalle, color e ícono son

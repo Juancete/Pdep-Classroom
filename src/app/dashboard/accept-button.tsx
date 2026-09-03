@@ -1,6 +1,6 @@
 "use client";
 
-import { useApiCall } from "@/app/hooks/useApiCall";
+import { useApiCall } from "@/hooks/useApiCall";
 
 export function AcceptButton({ assignmentId }: { assignmentId: string }) {
   const { loading, error, call } = useApiCall();

@@ -922,13 +922,6 @@ src/
 │   │   ├── grupo-selector.tsx                 # Elegir o crear grupo (client)
 │   │   ├── mi-grupo.tsx                       # Ver el grupo actual y sus integrantes
 │   │   └── acciones-de-membresia.tsx          # Salir / cambiarse de grupo (client)
-│   ├── components/
-│   │   ├── AlumnoForm.tsx                     # Form reutilizable registro/edición alumno
-│   │   ├── CIBadge.tsx                        # Badge de resultado de CI (server)
-│   │   ├── ci-ui.tsx                          # Tabla de presentación (etiqueta/color/ícono) por resultado
-│   │   └── PageSkeleton.tsx                   # Skeleton de carga genérico
-│   ├── hooks/
-│   │   └── useApiCall.ts                      # Hook genérico para llamadas a la API REST
 │   ├── dashboard/
 │   │   ├── page.tsx                           # Dashboard alumno: TPs pendientes y estado
 │   │   ├── accept-button.tsx                  # Botón aceptar TP (client)
@@ -936,11 +929,19 @@ src/
 │   ├── registro/page.tsx                      # Registro de alumno (con AlumnoForm)
 │   ├── perfil/page.tsx                        # Editar perfil alumno (con AlumnoForm)
 │   ├── login/page.tsx                         # Página de login (GitHub + login de desarrollo opcional)
-│   ├── nav.tsx                                # Barra de navegación (server component)
-│   ├── logout-button.tsx                      # Botón de logout (client)
 │   ├── error.tsx                              # Boundary de error global
 │   ├── layout.tsx                             # Layout raíz con nav y sesión
 │   └── page.tsx                               # Landing
+├── components/
+│   ├── AlumnoForm.tsx                         # Form reutilizable registro/edición alumno
+│   ├── CIBadge.tsx                            # Badge de resultado de CI (server)
+│   ├── ci-ui.tsx                              # Tabla de presentación (etiqueta/color/ícono) por resultado
+│   ├── PageSkeleton.tsx                       # Skeleton de carga genérico
+│   └── layout/
+│       ├── nav.tsx                            # Barra de navegación (server component)
+│       └── logout-button.tsx                  # Botón de logout (client)
+├── hooks/
+│   └── useApiCall.ts                          # Hook genérico para llamadas a la API REST
 ├── domain/
 │   └── entities/                              # Entidades MikroORM + lógica de dominio
 │       ├── Assignment.ts                      # Base abstracta

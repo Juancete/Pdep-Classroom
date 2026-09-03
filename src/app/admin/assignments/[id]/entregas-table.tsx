@@ -8,9 +8,9 @@ import {
   DataBody,
   DataRow,
   DataCell,
-} from "@/app/components/DataTable";
+} from "@/components/DataTable";
 import { matcheaEntregaQuery } from "@/lib/entrega-query";
-import { CIBadge } from "@/app/components/CIBadge";
+import { CIBadge } from "@/components/CIBadge";
 import { CISyncButton } from "./ci-sync-button";
 import { CIRerunButton } from "./ci-rerun-button";
 import type { NombreResultadoCI } from "@/domain/entities";

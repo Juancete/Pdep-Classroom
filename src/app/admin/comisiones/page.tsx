@@ -9,7 +9,7 @@ import {
   DataRow,
   DataCell,
   DataEmpty,
-} from "@/app/components/DataTable";
+} from "@/components/DataTable";
 
 export default async function AdminComisionesPage() {
   await requireAdmin();

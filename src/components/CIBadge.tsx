@@ -2,7 +2,7 @@
 // (y con ella MikroORM) al bundle del cliente cuando este componente se
 // renderiza desde un client component (`entregas-table.tsx`).
 import type { NombreResultadoCI } from "@/domain/entities";
-import { CI_UI } from "@/app/components/ci-ui";
+import { CI_UI } from "@/components/ci-ui";
 
 export function CIBadge({
   resultadoNombre,

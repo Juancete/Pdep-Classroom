@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { SpinnerIcon } from "@/app/components/icons";
+import { SpinnerIcon } from "@/components/icons";
 import { ACCIONES_ESTADO } from "./estado-acciones";
 import { useTransicionDeEstado } from "./useTransicionDeEstado";
 import type { NombreEstadoAssignment } from "@/types";

@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ERROR_LOGS_CHANGED_EVENT } from "@/app/use-error-log-count";
+import { ERROR_LOGS_CHANGED_EVENT } from "@/components/layout/use-error-log-count";
 
 const mockRefresh = vi.fn();
 
