@@ -1016,7 +1016,7 @@ src/
 - `domain/` sólo importa de `domain/`, `types/` y utilidades puras de `lib/` (`naming`, `concurrencia`).
 - `application/` importa de `domain/`, `infrastructure/` y `lib/`.
 - `infrastructure/` importa de `domain/` y `lib/`. Excepción documentada: `infrastructure/auth/auth.events.ts` dispara un caso de uso de `application/` al reaccionar al login.
-- `lib/` importa de `domain/` y `types/`; sólo `api-auth.ts` importa `infrastructure/auth/session`.
+- `lib/` importa de `domain/` y `types/`. Dos excepciones de glue HTTP: `api-auth.ts` usa `infrastructure/auth/session` y `api-errors.ts` carga perezosamente `infrastructure/repositories/ErrorLogRepository` para persistir errores.
 
 ## Tests
 
