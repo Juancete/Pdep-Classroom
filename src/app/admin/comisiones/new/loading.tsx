@@ -1,1 +1,1 @@
-export { ComisionNuevaLoading as default } from "@/app/components/RouteLoadingStates";
+export { ComisionNuevaLoading as default } from "@/components/RouteLoadingStates";

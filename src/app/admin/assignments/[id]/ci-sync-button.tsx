@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useApiCall } from "@/app/hooks/useApiCall";
-import { RefreshIcon, SpinnerIcon } from "@/app/components/icons";
+import { useApiCall } from "@/hooks/useApiCall";
+import { RefreshIcon, SpinnerIcon } from "@/components/icons";
 import type { SincronizarCIResult } from "@/lib/services/sincronizarCI";
 
 // Encabezado de la tabla de entregas: fuerza la sincronización del estado de

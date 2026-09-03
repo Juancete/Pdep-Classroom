@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { useApiCall } from "@/app/hooks/useApiCall";
+import { useApiCall } from "@/hooks/useApiCall";
 import { ALUMNO_LEGAJO_PATTERN, ALUMNO_EMAIL_PATTERN } from "@/domain/entities/domain-constants";
 import { enumerar } from "@/lib/naming";
 

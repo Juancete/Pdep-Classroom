@@ -16,7 +16,7 @@ import type { GrupoAdminResumen, AlumnoSinGrupoResumen } from "./grupos-panel";
 import { Alumno, transicionesDisponibles } from "@/domain/entities";
 import { RepoDeletionHistory } from "./repo-deletion-history";
 import { HistorialDeMembresias } from "./historial-membresias";
-import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
+import { EstadoAssignmentBadge } from "@/components/EstadoAssignmentBadge";
 import { EstadoPanel } from "../estado-panel";
 
 function paginaDeQuery(valor: string | string[] | undefined): number {

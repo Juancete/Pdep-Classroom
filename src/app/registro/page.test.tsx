@@ -30,7 +30,7 @@ vi.mock("next/navigation", () => ({
   redirect: (url: string) => mockRedirect(url),
 }));
 
-vi.mock("@/app/components/AlumnoForm", () => ({
+vi.mock("@/components/AlumnoForm", () => ({
   AlumnoForm: ({
     defaultValues,
     submitLabel,

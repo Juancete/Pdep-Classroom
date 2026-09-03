@@ -1,1 +1,1 @@
-export { AlumnosLoading as default } from "@/app/components/RouteLoadingStates";
+export { AlumnosLoading as default } from "@/components/RouteLoadingStates";

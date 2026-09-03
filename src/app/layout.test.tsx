@@ -32,7 +32,7 @@ vi.mock("next/link", () => ({
   }) => <a href={href}>{children}</a>,
 }));
 
-vi.mock("./logout-button", () => ({
+vi.mock("@/components/layout/logout-button", () => ({
   UserMenu: ({
     username,
     hasPendingSync,
@@ -46,7 +46,7 @@ vi.mock("./logout-button", () => ({
   ),
 }));
 
-import { Nav } from "./nav";
+import { Nav } from "@/components/layout/nav";
 
 // ── Helpers ─────────────────────────────────────────────────
 

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ERROR_LOGS_CHANGED_EVENT } from "@/app/use-error-log-count";
+import { ERROR_LOGS_CHANGED_EVENT } from "@/components/layout/use-error-log-count";
 
 type Feedback = { type: "success" | "error"; message: string } | null;
 

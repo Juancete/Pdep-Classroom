@@ -5,7 +5,7 @@ import {
   getComisionActiva,
 } from "@/lib/repositories";
 import { redirect } from "next/navigation";
-import { AlumnoForm } from "@/app/components/AlumnoForm";
+import { AlumnoForm } from "@/components/AlumnoForm";
 import type { SessionPdepUser } from "@/types";
 
 export default async function RegistroPage() {

@@ -1,1 +1,1 @@
-export { ComisionEditarLoading as default } from "@/app/components/RouteLoadingStates";
+export { ComisionEditarLoading as default } from "@/components/RouteLoadingStates";

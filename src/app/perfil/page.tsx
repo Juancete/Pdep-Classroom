@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { getAlumnoByGithub, getComisionActiva } from "@/lib/repositories";
 import { redirect } from "next/navigation";
-import { AlumnoForm } from "@/app/components/AlumnoForm";
+import { AlumnoForm } from "@/components/AlumnoForm";
 import { verificarConsistenciaAlumno } from "@/lib/services/verificarConsistenciaAlumno";
 import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
 import { resolverEstadoDeSincronizacion } from "@/lib/services/estadoDeSincronizacion";

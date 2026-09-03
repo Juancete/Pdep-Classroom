@@ -1,1 +1,1 @@
-export { AssignmentNuevoLoading as default } from "@/app/components/RouteLoadingStates";
+export { AssignmentNuevoLoading as default } from "@/components/RouteLoadingStates";

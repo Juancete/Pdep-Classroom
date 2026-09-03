@@ -11,9 +11,9 @@ import { DeleteReposButton } from "./delete-repos-button";
 import { EstadoQuickActions } from "./estado-quick-actions";
 import { NOMBRES_ESTADO_ASSIGNMENT, transicionesDisponibles } from "@/domain/entities";
 import type { NombreEstadoAssignment } from "@/types";
-import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
-import { IconLink } from "@/app/components/IconLink";
-import { EyeIcon, PencilIcon } from "@/app/components/icons";
+import { EstadoAssignmentBadge } from "@/components/EstadoAssignmentBadge";
+import { IconLink } from "@/components/IconLink";
+import { EyeIcon, PencilIcon } from "@/components/icons";
 import {
   DataTable,
   DataHeader,
@@ -22,7 +22,7 @@ import {
   DataRow,
   DataCell,
   DataEmpty,
-} from "@/app/components/DataTable";
+} from "@/components/DataTable";
 
 export default async function AdminAssignmentsPage(props: {
   searchParams?: Promise<{ estado?: string }>;
