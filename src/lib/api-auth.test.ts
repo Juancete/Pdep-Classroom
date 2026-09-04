@@ -4,7 +4,7 @@ import { DOCENTE, ESTUDIANTE } from "@/domain/entities";
 const mockGetCurrentUser = vi.fn();
 const mockRequireUser = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
   requireUser: () => mockRequireUser(),
 }));

@@ -1,5 +1,5 @@
 import type { NombreEstadoAssignment } from "@/types";
-import { PublishIcon, ArchiveIcon, UndoIcon } from "@/app/components/icons";
+import { PublishIcon, ArchiveIcon, UndoIcon } from "@/components/icons";
 import type { ComponentType } from "react";
 
 // Config por transición: texto del botón, ícono, consecuencia explicada en

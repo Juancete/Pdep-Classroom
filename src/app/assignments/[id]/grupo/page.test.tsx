@@ -12,11 +12,11 @@ const mockGetGruposDeAssignment = vi.fn();
 const mockGetEntregaLogica = vi.fn();
 const mockNotFound = vi.fn(() => { throw new Error("NOT_FOUND"); });
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   requireUser: () => mockRequireUser(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
   getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
   getGruposDeAssignment: (id: string) => mockGetGruposDeAssignment(id),

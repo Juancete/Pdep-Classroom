@@ -1,10 +1,10 @@
-import { auth } from "@/lib/auth";
-import { getAlumnoByGithub, getComisionActiva } from "@/lib/repositories";
+import { auth } from "@/infrastructure/auth/auth";
+import { getAlumnoByGithub, getComisionActiva } from "@/infrastructure/repositories";
 import { redirect } from "next/navigation";
-import { AlumnoForm } from "@/app/components/AlumnoForm";
-import { verificarConsistenciaAlumno } from "@/lib/services/verificarConsistenciaAlumno";
-import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
-import { resolverEstadoDeSincronizacion } from "@/lib/services/estadoDeSincronizacion";
+import { AlumnoForm } from "@/components/AlumnoForm";
+import { verificarConsistenciaAlumno } from "@/application/verificarConsistenciaAlumno";
+import { intentarSincronizarGrupos } from "@/application/intentarSincronizarGrupos";
+import { resolverEstadoDeSincronizacion } from "@/application/estadoDeSincronizacion";
 import type { SessionPdepUser } from "@/types";
 
 export default async function PerfilPage() {

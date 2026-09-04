@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { guardAdmin } from "@/lib/api-auth";
 import { internalErrorSinPersistencia } from "@/lib/api-errors";
-import { acknowledgeAllErrorLogs } from "@/lib/repositories";
+import { acknowledgeAllErrorLogs } from "@/infrastructure/repositories";
 
 const ROUTE = "POST /api/admin/errores/acknowledge-all";
 

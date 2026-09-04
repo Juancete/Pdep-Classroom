@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/session";
+import { requireUser } from "@/infrastructure/auth/session";
 import {
   getAssignments,
   getAssignmentsDeComision,
@@ -6,13 +6,13 @@ import {
   getAlumnoByGithub,
   getComisionActiva,
   getGruposDeAlumno,
-} from "@/lib/repositories";
+} from "@/infrastructure/repositories";
 import { AcceptButton } from "./accept-button";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { Grupo } from "@/domain/entities";
-import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
-import { CIBadge } from "@/app/components/CIBadge";
+import { EstadoAssignmentBadge } from "@/components/EstadoAssignmentBadge";
+import { CIBadge } from "@/components/CIBadge";
 import { CIRefreshButton } from "./ci-refresh-button";
 
 export default async function DashboardPage() {

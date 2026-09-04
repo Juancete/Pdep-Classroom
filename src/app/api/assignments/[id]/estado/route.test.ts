@@ -14,16 +14,16 @@ const {
   FakeTransicionDeEstadoInvalidaError: class TransicionDeEstadoInvalidaError extends Error {},
 }));
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   cambiarEstadoAssignment: (id: string, estado: string, porUsuario: string) =>
     mockCambiarEstadoAssignment(id, estado, porUsuario),
 }));
 
-vi.mock("@/lib/services/assignmentAuthorization", () => ({
+vi.mock("@/application/assignmentAuthorization", () => ({
   AssignmentNoEncontradoError: FakeAssignmentNoEncontradoError,
 }));
 

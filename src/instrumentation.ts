@@ -15,7 +15,7 @@ export async function register() {
 }
 
 // GOOGLE_GROUP_EMAIL / GOOGLE_WORKSPACE_ADMIN_EMAIL NO están acá a propósito:
-// el canal de Google Groups (ver src/lib/canales/) es opcional — sin esas
+// el canal de Google Groups (ver src/infrastructure/canales/) es opcional — sin esas
 // vars simplemente no hace nada, no rompe el boot. GOOGLE_SERVICE_ACCOUNT_KEY
 // sí es obligatoria: la usa Google Sheets, que no es opcional.
 const REQUIRED_PRODUCTION_ENV = [
@@ -50,9 +50,9 @@ export function assertProductionConfig(): void {
 }
 
 // Queda inline y sin cambios tras el refactor a canales de comunicación
-// (ver src/lib/canales/): sigue siendo la única validación de Google Groups
+// (ver src/infrastructure/canales/): sigue siendo la única validación de Google Groups
 // que corre acá — a propósito NO se la reemplaza por algo que itere el
-// registro de canales, porque `src/lib/canales/index.ts` importa
+// registro de canales, porque `src/infrastructure/canales/index.ts` importa
 // `GoogleGroupsCanal`, que arrastra `googleapis`, y esta función corre en
 // `register()` (ver comentario de arriba sobre el bundle Edge).
 export function assertGoogleGroupsConfig(): void {

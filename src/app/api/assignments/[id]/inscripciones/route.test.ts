@@ -10,7 +10,7 @@ vi.mock("@/lib/api-auth", () => ({
   guardAdmin: () => mockGuardAdmin(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   setInscripcionesCerradas: (id: string, cerrada: boolean) =>
     mockSetInscripcionesCerradas(id, cerrada),
 }));

@@ -23,7 +23,7 @@ import { slugify } from "@/lib/naming";
 
 // Dependencias de lectura que las subclases pueden usar desde sus métodos
 // polimórficos — se pasan como parámetro para que las entidades no importen
-// `@/lib/repositories` (mantiene el dominio testeable sin mocks globales).
+// `@/infrastructure/repositories` (mantiene el dominio testeable sin mocks globales).
 //
 // `getAlumnosDelCurso` es un thunk, no la lista ya cargada: el caller puede
 // querer arrancar la query en paralelo con otras y pasarle la misma promise
@@ -55,7 +55,7 @@ export type ParticipantesResueltos =
 // Subconjunto estructural de `AssignmentFormData` (lib/assignment-schema.ts)
 // que puede tocar `actualizarEstructura` — se declara acá en vez de
 // importar ese tipo para no acoplar la entidad a la capa de formularios/zod
-// (mismo criterio que `FuentesDeConteo` con `@/lib/repositories`).
+// (mismo criterio que `FuentesDeConteo` con `@/infrastructure/repositories`).
 export interface DatosEstructurales {
   tipo?: TipoAssignment;
   titulo?: string;
@@ -71,8 +71,8 @@ export interface DatosEstructurales {
 }
 
 // Errores de dominio sobre la existencia/disponibilidad de un assignment.
-// Viven acá (no en la capa de servicios) para que los repositorios puedan
-// lanzarlos sin importar hacia arriba desde `@/lib/services`.
+// Viven acá (no en la capa de aplicación) para que los repositorios puedan
+// lanzarlos sin importar hacia arriba desde `@/application`.
 export class AssignmentNoEncontradoError extends Error {
   constructor(public readonly assignmentId: string) {
     super("Assignment no encontrado");

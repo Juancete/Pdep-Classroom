@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { Nav } from "./nav";
-import { SyncPendingBanner } from "./components/SyncPendingBanner";
+import { Nav } from "@/components/layout/nav";
+import { SyncPendingBanner } from "@/components/SyncPendingBanner";
 
 export const metadata: Metadata = {
   title: "PdeP Classroom",

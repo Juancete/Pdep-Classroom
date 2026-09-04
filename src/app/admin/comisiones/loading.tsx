@@ -1,1 +1,1 @@
-export { ComisionesLoading as default } from "@/app/components/RouteLoadingStates";
+export { ComisionesLoading as default } from "@/components/RouteLoadingStates";

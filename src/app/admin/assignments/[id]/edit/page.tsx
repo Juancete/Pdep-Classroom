@@ -1,6 +1,6 @@
-import { requireAdmin } from "@/lib/session";
-import { getAssignment, getEntregaCountsByAssignment } from "@/lib/repositories";
-import { listarTemplates } from "@/lib/github";
+import { requireAdmin } from "@/infrastructure/auth/session";
+import { getAssignment, getEntregaCountsByAssignment } from "@/infrastructure/repositories";
+import { listarTemplates } from "@/infrastructure/github";
 import { redirect } from "next/navigation";
 import { AssignmentForm } from "../../assignment-form";
 import { actualizarAssignment } from "../../actions";

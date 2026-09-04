@@ -16,11 +16,11 @@ const mockGetRepoDeletionHistory = vi.fn();
 const mockGetHistorialDeMembresias = vi.fn();
 const mockRedirect = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
   getEntregas: (id: string) => mockGetEntregas(id),
   getAlumnos: () => mockGetAlumnos(),

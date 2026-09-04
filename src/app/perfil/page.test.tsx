@@ -15,26 +15,26 @@ const mockRedirect = vi.fn().mockImplementation((url: string) => {
   throw new Error(`REDIRECT:${url}`);
 });
 
-vi.mock("@/lib/auth", () => ({
+vi.mock("@/infrastructure/auth/auth", () => ({
   auth: () => mockAuth(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
   getComisionActiva: () => mockGetComisionActiva(),
 }));
 
-vi.mock("@/lib/services/verificarConsistenciaAlumno", () => ({
+vi.mock("@/application/verificarConsistenciaAlumno", () => ({
   verificarConsistenciaAlumno: (...args: unknown[]) =>
     mockVerificarConsistenciaAlumno(...args),
 }));
 
-vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
+vi.mock("@/application/intentarSincronizarGrupos", () => ({
   intentarSincronizarGrupos: (...args: unknown[]) =>
     mockIntentarSincronizarGrupos(...args),
 }));
 
-vi.mock("@/lib/services/estadoDeSincronizacion", () => ({
+vi.mock("@/application/estadoDeSincronizacion", () => ({
   resolverEstadoDeSincronizacion: (...args: unknown[]) =>
     mockResolverEstadoDeSincronizacion(...args),
 }));
@@ -43,7 +43,7 @@ vi.mock("next/navigation", () => ({
   redirect: (url: string) => mockRedirect(url),
 }));
 
-vi.mock("@/app/components/AlumnoForm", () => ({
+vi.mock("@/components/AlumnoForm", () => ({
   AlumnoForm: ({ defaultValues }: { defaultValues: { githubUsername: string; legajo?: string; email?: string } }) => (
     <div
       data-testid="alumno-form"

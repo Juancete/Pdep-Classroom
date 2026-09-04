@@ -8,11 +8,11 @@ const mockGetAssignments = vi.fn();
 const mockGetAssignmentsDeComision = vi.fn();
 const mockGetEntregasDeUsuario = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
   getAssignments: () => mockGetAssignments(),
   getAssignmentsDeComision: (comisionId: string) =>

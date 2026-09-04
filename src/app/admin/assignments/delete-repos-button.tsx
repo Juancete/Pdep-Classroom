@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useApiCall } from "@/app/hooks/useApiCall";
-import { FolderMinusIcon, SpinnerIcon } from "@/app/components/icons";
-import type { DeleteAssignmentReposResult } from "@/lib/services/borrarRepositoriosDeAssignment";
+import { useApiCall } from "@/hooks/useApiCall";
+import { FolderMinusIcon, SpinnerIcon } from "@/components/icons";
+import type { DeleteAssignmentReposResult } from "@/application/borrarRepositoriosDeAssignment";
 
 export function DeleteReposButton({
   assignmentId,

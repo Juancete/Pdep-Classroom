@@ -1,11 +1,11 @@
-import { auth } from "@/lib/auth";
-import { getAlumnoByGithub as getAlumnoDeSheets } from "@/lib/sheets";
+import { auth } from "@/infrastructure/auth/auth";
+import { getAlumnoByGithub as getAlumnoDeSheets } from "@/infrastructure/sheets";
 import {
   getAlumnoByGithub as getAlumnoDeDB,
   getComisionActiva,
-} from "@/lib/repositories";
+} from "@/infrastructure/repositories";
 import { redirect } from "next/navigation";
-import { AlumnoForm } from "@/app/components/AlumnoForm";
+import { AlumnoForm } from "@/components/AlumnoForm";
 import type { SessionPdepUser } from "@/types";
 
 export default async function RegistroPage() {

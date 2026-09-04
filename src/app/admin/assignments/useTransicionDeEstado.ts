@@ -1,6 +1,6 @@
 "use client";
 
-import { useApiCall } from "@/app/hooks/useApiCall";
+import { useApiCall } from "@/hooks/useApiCall";
 import type { NombreEstadoAssignment } from "@/types";
 
 // Llamada al PATCH de transición, compartida entre `EstadoPanel` y

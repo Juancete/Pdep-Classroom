@@ -123,7 +123,7 @@ export function internalServerError(
         // Import perezoso: las rutas que sólo construyen una respuesta 500 no
         // cargan MikroORM en su grafo inicial (mismo criterio que auth.events).
         const { registrarErrorInesperado } = await import(
-          "./repositories/ErrorLogRepository"
+          "@/infrastructure/repositories/ErrorLogRepository"
         );
         await registrarErrorInesperado(errorLog);
       } catch (persistenceError) {

@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser } from "@/infrastructure/auth/session";
 import {
   getAlumnoByGithub,
   getAssignment,
   getGruposDeAssignment,
   crearGrupo,
-} from "@/lib/repositories";
+} from "@/infrastructure/repositories";
 import { AssignmentNoEncontradoError } from "@/domain/entities";
 import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
-import { autorizarAccesoAssignment } from "@/lib/services/assignmentAuthorization";
+import { autorizarAccesoAssignment } from "@/application/assignmentAuthorization";
 
 const CrearGrupoSchema = z.object({
   nombre: z.string().trim().min(1).max(100),
