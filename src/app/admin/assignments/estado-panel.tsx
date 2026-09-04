@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
-import { SpinnerIcon } from "@/app/components/icons";
+import { EstadoAssignmentBadge } from "@/components/EstadoAssignmentBadge";
+import { SpinnerIcon } from "@/components/icons";
 import { ACCIONES_ESTADO } from "./estado-acciones";
 import { useTransicionDeEstado } from "./useTransicionDeEstado";
 import type { NombreEstadoAssignment } from "@/types";

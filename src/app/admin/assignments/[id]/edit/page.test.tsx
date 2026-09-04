@@ -11,16 +11,16 @@ const mockGetEntregaCountsByAssignment = vi.fn();
 const mockListarTemplates = vi.fn();
 const mockRedirect = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
   getEntregaCountsByAssignment: () => mockGetEntregaCountsByAssignment(),
 }));
 
-vi.mock("@/lib/github", () => ({
+vi.mock("@/infrastructure/github", () => ({
   listarTemplates: () => mockListarTemplates(),
 }));
 

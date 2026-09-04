@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { guardAdmin } from "@/lib/api-auth";
 import { internalErrorSinPersistencia } from "@/lib/api-errors";
-import { acknowledgeErrorLog } from "@/lib/repositories";
+import { acknowledgeErrorLog } from "@/infrastructure/repositories";
 
 const ROUTE = "PATCH /api/admin/errores/[id]";
 

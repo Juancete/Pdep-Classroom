@@ -1,6 +1,6 @@
 "use server";
 
-import { requireAdmin } from "@/lib/session";
+import { requireAdmin } from "@/infrastructure/auth/session";
 import {
   createComision,
   updateComision,
@@ -14,18 +14,18 @@ import {
   completarImportacionGrupos,
   liberarImportacionGrupos,
   INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS,
-} from "@/lib/repositories";
-import { getAsignacionesGrupos, getSheetNames, type AsignacionGrupoRow } from "@/lib/sheets";
-import { intentarSincronizarGrupos } from "@/lib/services/intentarSincronizarGrupos";
+} from "@/infrastructure/repositories";
+import { getAsignacionesGrupos, getSheetNames, type AsignacionGrupoRow } from "@/infrastructure/sheets";
+import { intentarSincronizarGrupos } from "@/application/intentarSincronizarGrupos";
 import {
   importarAlumnosDeComision,
   LecturaPlanillaAlumnosError,
-} from "@/lib/services/importarAlumnosDeComision";
+} from "@/application/importarAlumnosDeComision";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { DEFAULT_COLUMN_CONFIG, type GruposColumnConfig } from "@/types";
-import { canalesActivos, canalPorNombre } from "@/lib/canales";
+import { canalesActivos, canalPorNombre } from "@/infrastructure/canales";
 
 export type ComisionFormState =
   | { ok: false; errors: Record<string, string[] | undefined> }

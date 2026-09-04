@@ -11,11 +11,11 @@ const { FakeComisionActivaRequeridaError } = vi.hoisted(() => ({
   FakeComisionActivaRequeridaError: class FakeComisionActivaRequeridaError extends Error {},
 }));
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   ComisionActivaRequeridaError: FakeComisionActivaRequeridaError,
   createAssignment: (...args: unknown[]) => mockCreateAssignment(...args),
   updateAssignment: (...args: unknown[]) => mockUpdateAssignment(...args),

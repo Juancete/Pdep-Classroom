@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/session";
-import { getAlumnoByGithub, unirseAGrupo } from "@/lib/repositories";
+import { getCurrentUser } from "@/infrastructure/auth/session";
+import { getAlumnoByGithub, unirseAGrupo } from "@/infrastructure/repositories";
 import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
 
 export async function POST(_req: Request, props: { params: Promise<{ id: string; grupoId: string }> }) {

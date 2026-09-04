@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/session";
-import { type RegistroInput } from "@/lib/sheets";
+import { requireUser } from "@/infrastructure/auth/session";
+import { type RegistroInput } from "@/infrastructure/sheets";
 import { internalServerError, parseJsonObjectBody } from "@/lib/api-errors";
-import { confirmarYProcesarAlumno } from "@/lib/services/alumnoRegistro";
+import { confirmarYProcesarAlumno } from "@/application/alumnoRegistro";
 
 type PerfilInput = Omit<RegistroInput, "githubUsername">;
 

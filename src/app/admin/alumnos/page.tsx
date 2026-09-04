@@ -1,6 +1,6 @@
-import { requireAdmin } from "@/lib/session";
-import { getAlumnos } from "@/lib/sheets";
-import { getComisionActiva } from "@/lib/repositories";
+import { requireAdmin } from "@/infrastructure/auth/session";
+import { getAlumnos } from "@/infrastructure/sheets";
+import { getComisionActiva } from "@/infrastructure/repositories";
 import Link from "next/link";
 import {
   DataTable,
@@ -10,7 +10,7 @@ import {
   DataRow,
   DataCell,
   DataEmpty,
-} from "@/app/components/DataTable";
+} from "@/components/DataTable";
 
 export default async function AdminAlumnosPage() {
   await requireAdmin();

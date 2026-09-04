@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { requireAdmin } from "@/lib/session";
-import { getErrorLogsPage, getUnreadErrorLogCount } from "@/lib/repositories";
+import { requireAdmin } from "@/infrastructure/auth/session";
+import { getErrorLogsPage, getUnreadErrorLogCount } from "@/infrastructure/repositories";
 import {
   DataBody,
   DataCell,
@@ -9,7 +9,7 @@ import {
   DataHeaderCell,
   DataRow,
   DataTable,
-} from "@/app/components/DataTable";
+} from "@/components/DataTable";
 import { AcknowledgeErrorButton, ErrorLogBulkActions } from "./error-log-actions";
 
 function parsePage(value: string | string[] | undefined): number {

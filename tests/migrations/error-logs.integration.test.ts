@@ -6,7 +6,7 @@ import {
   acknowledgeErrorLog,
   purgeAcknowledgedErrorLogs,
   registrarErrorInesperado,
-} from "../../src/lib/repositories/ErrorLogRepository";
+} from "../../src/infrastructure/repositories/ErrorLogRepository";
 
 const PREVIOUS_MIGRATION = "Migration20260820120000_webhook_deliveries";
 const ERROR_LOG_MIGRATION = "Migration20260821120000_error_logs";

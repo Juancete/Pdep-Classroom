@@ -9,15 +9,15 @@ const mockGetCurrentUser = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
 const mockResolverEstadoDeSincronizacion = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
 }));
 
-vi.mock("@/lib/services/estadoDeSincronizacion", () => ({
+vi.mock("@/application/estadoDeSincronizacion", () => ({
   resolverEstadoDeSincronizacion: (...args: unknown[]) =>
     mockResolverEstadoDeSincronizacion(...args),
 }));
@@ -32,7 +32,7 @@ vi.mock("next/link", () => ({
   }) => <a href={href}>{children}</a>,
 }));
 
-vi.mock("./logout-button", () => ({
+vi.mock("@/components/layout/logout-button", () => ({
   UserMenu: ({
     username,
     hasPendingSync,
@@ -46,7 +46,7 @@ vi.mock("./logout-button", () => ({
   ),
 }));
 
-import { Nav } from "./nav";
+import { Nav } from "@/components/layout/nav";
 
 // ── Helpers ─────────────────────────────────────────────────
 

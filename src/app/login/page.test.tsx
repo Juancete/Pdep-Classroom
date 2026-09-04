@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 // ── Mocks ────────────────────────────────────────────────────
 
-vi.mock("@/lib/auth", () => ({
+vi.mock("@/infrastructure/auth/auth", () => ({
   signIn: vi.fn(),
 }));
 

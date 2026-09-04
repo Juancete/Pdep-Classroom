@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const execute = vi.fn();
 
-vi.mock("@/lib/db", () => ({
+vi.mock("@/infrastructure/db", () => ({
   getEM: vi.fn(async () => ({
     getConnection: () => ({ execute }),
   })),

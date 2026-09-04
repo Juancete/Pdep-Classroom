@@ -1,1 +1,1 @@
-export { GruposLoading as default } from "@/app/components/RouteLoadingStates";
+export { GruposLoading as default } from "@/components/RouteLoadingStates";

@@ -3,7 +3,7 @@ import type { PdepUser } from "@/types";
 import {
   AccesoAssignmentProhibidoError,
   AssignmentNoEncontradoError,
-} from "@/lib/services/assignmentAuthorization";
+} from "@/application/assignmentAuthorization";
 import {
   AssignmentNoGrupalError,
   InscripcionesCerradasError,
@@ -25,11 +25,11 @@ const mockGetAssignment = vi.fn();
 const mockGetGruposDeAssignment = vi.fn();
 const mockCrearGrupo = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
   getAssignment: (id: string) => mockGetAssignment(id),
   getGruposDeAssignment: (id: string) => mockGetGruposDeAssignment(id),

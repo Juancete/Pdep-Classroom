@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/session";
+import { requireAdmin } from "@/infrastructure/auth/session";
 import { ComisionForm } from "../comision-form";
 import { crearComision } from "../actions";
 

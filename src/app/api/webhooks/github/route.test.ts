@@ -5,7 +5,7 @@ const mockReclamar = vi.fn();
 const mockProcesarDeliveryReclamado = vi.fn();
 const mockAfter = vi.fn();
 
-vi.mock("@/lib/services/recibirWebhookGithub", () => ({
+vi.mock("@/application/recibirWebhookGithub", () => ({
   reclamarDeliveryEntrante: (...args: unknown[]) => mockReclamar(...args),
   procesarDeliveryReclamado: (...args: unknown[]) => mockProcesarDeliveryReclamado(...args),
   MAX_WEBHOOK_BODY_BYTES: 1_048_576,

@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useApiCall } from "@/app/hooks/useApiCall";
-import { PlayIcon, SpinnerIcon } from "@/app/components/icons";
+import { useApiCall } from "@/hooks/useApiCall";
+import { PlayIcon, SpinnerIcon } from "@/components/icons";
 
 // Botón ícono-solo para pedir la reejecución de CI de una entrega — mismo
 // idioma que `EstadoQuickActions`: `useApiCall`, confirm() previo,

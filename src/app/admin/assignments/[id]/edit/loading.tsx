@@ -1,1 +1,1 @@
-export { AssignmentEditarLoading as default } from "@/app/components/RouteLoadingStates";
+export { AssignmentEditarLoading as default } from "@/components/RouteLoadingStates";

@@ -17,8 +17,8 @@ export default defineConfig({
       include: ["src/**"],
       exclude: [
         // Infraestructura que depende de servicios externos
-        "src/lib/auth.ts",
-        "src/lib/db.ts",
+        "src/infrastructure/auth/auth.ts",
+        "src/infrastructure/db.ts",
         "src/app/api/auth/**",
         // Tipos
         "src/types/**",

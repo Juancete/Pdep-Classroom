@@ -13,7 +13,7 @@ import ormConfig from "../../mikro-orm.config";
 
 const ormHolder = vi.hoisted(() => ({ orm: undefined as MikroORM | undefined }));
 
-vi.mock("@/lib/db", () => ({
+vi.mock("@/infrastructure/db", () => ({
   getEM: async () => {
     if (!ormHolder.orm) throw new Error("ORM de integración no inicializado");
     return ormHolder.orm.em.fork();
@@ -29,7 +29,7 @@ import {
   crearGrupo,
   unirseAGrupo,
   upsertGrupoConMiembro,
-} from "../../src/lib/repositories/GrupoRepository";
+} from "../../src/infrastructure/repositories/GrupoRepository";
 import { Alumno, GrupalAssignment, ESTUDIANTE } from "../../src/domain/entities";
 import type { PdepUser } from "../../src/types";
 

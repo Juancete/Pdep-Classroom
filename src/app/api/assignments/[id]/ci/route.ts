@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getCurrentUser } from "@/lib/session";
-import { getEntregasConRepoActivo, getEntregaDeUsuario } from "@/lib/repositories";
-import { sincronizarCIDeEntregas } from "@/lib/services/sincronizarCI";
+import { getCurrentUser } from "@/infrastructure/auth/session";
+import { getEntregasConRepoActivo, getEntregaDeUsuario } from "@/infrastructure/repositories";
+import { sincronizarCIDeEntregas } from "@/application/sincronizarCI";
 import { internalServerError } from "@/lib/api-errors";
 
 // `forzar` ignora el control de frescura del caché — lo usa el botón

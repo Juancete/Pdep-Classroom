@@ -8,7 +8,7 @@ vi.mock("next/server", async (importOriginal) => {
   const actual = await importOriginal<typeof import("next/server")>();
   return { ...actual, after: (task: () => unknown) => mockAfter(task) };
 });
-vi.mock("./repositories/ErrorLogRepository", () => ({
+vi.mock("@/infrastructure/repositories/ErrorLogRepository", () => ({
   registrarErrorInesperado: (...args: unknown[]) => mockRegistrar(...args),
 }));
 vi.mock("./logger", () => ({ logger: { error: (...args: unknown[]) => mockLoggerError(...args) } }));

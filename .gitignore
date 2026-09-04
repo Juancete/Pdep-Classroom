@@ -7,3 +7,4 @@ temp/
 tsconfig.tsbuildinfo
 coverage/
 .vercel
+.pnpm-store/

@@ -4,7 +4,7 @@ import {
   ComisionNoEliminableError,
   getComision,
   deleteComision,
-} from "@/lib/repositories";
+} from "@/infrastructure/repositories";
 import { internalServerError } from "@/lib/api-errors";
 
 export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {

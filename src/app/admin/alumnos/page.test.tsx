@@ -8,15 +8,15 @@ const mockRequireAdmin = vi.fn();
 const mockGetAlumnos = vi.fn();
 const mockGetComisionActiva = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
-vi.mock("@/lib/sheets", () => ({
+vi.mock("@/infrastructure/sheets", () => ({
   getAlumnos: () => mockGetAlumnos(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getComisionActiva: () => mockGetComisionActiva(),
 }));
 
