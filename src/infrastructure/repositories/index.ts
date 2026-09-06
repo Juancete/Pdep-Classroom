@@ -23,7 +23,6 @@ export {
   getSuscripcionesPendientesDeComision,
   getSuscripcionesDeAlumno,
   crearSuscripcionesFaltantes,
-  marcarSuscripcionesPendientes,
 } from "./SuscripcionAlumnoRepository";
 
 export {

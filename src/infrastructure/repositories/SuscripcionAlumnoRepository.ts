@@ -134,21 +134,3 @@ export async function crearSuscripcionesFaltantes(
     }
   }
 }
-
-/**
- * Vuelve a "pendiente" (con el error limpio) todas las suscripciones de los
- * alumnos dados, en cualquier canal. Se usa cuando cambia un dato de
- * identidad del alumno (hoy el email) que invalida lo ya sincronizado.
- */
-export async function marcarSuscripcionesPendientes(
-  alumnoIds: string[],
-  entityManager: EntityManager
-): Promise<void> {
-  if (alumnoIds.length === 0) return;
-  const suscripciones = await entityManager.find(SuscripcionAlumno, {
-    alumno: { $in: alumnoIds },
-  });
-  for (const suscripcion of suscripciones) {
-    suscripcion.marcarPendiente();
-  }
-}
