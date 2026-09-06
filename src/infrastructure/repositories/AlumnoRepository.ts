@@ -1,11 +1,8 @@
 import { getEM } from "@/infrastructure/db";
 import type { EntityManager } from "@mikro-orm/postgresql";
-import { Alumno, LegajoConflictError, type AlumnoData } from "@/domain/entities";
+import { Alumno, SuscripcionAlumno, LegajoConflictError, type AlumnoData } from "@/domain/entities";
 import type { Comision } from "@/domain/entities";
-import {
-  crearSuscripcionesFaltantes,
-  marcarSuscripcionesPendientes,
-} from "./SuscripcionAlumnoRepository";
+import { crearSuscripcionesFaltantes } from "./SuscripcionAlumnoRepository";
 
 export type { AlumnoData } from "@/domain/entities";
 // `LegajoConflictError` es un error de dominio (vive en `Alumno.ts` — Fase 4
@@ -67,7 +64,7 @@ export async function createAlumno(data: AlumnoData): Promise<Alumno> {
   await assertLegajoLibreOPropio(data.legajo, data.githubUsername);
   const entityManager = await getEM();
   const alumno = new Alumno();
-  alumno.actualizarDatos(data);
+  alumno.actualizarDatos(data, []);
   entityManager.persist(alumno);
   await crearSuscripcionesFaltantes([alumno], entityManager);
   await entityManager.flush();
@@ -83,11 +80,8 @@ export async function upsertAlumno(data: AlumnoData): Promise<Alumno> {
   });
 
   if (existing) {
-    const emailAnterior = Alumno.normalizarEmail(existing.email);
-    existing.actualizarDatos(data);
-    if (emailAnterior !== existing.email) {
-      await marcarSuscripcionesPendientes([existing.id], entityManager);
-    }
+    const suscripciones = await entityManager.find(SuscripcionAlumno, { alumno: existing });
+    existing.actualizarDatos(data, suscripciones);
     await entityManager.flush();
     return existing;
   }
@@ -207,22 +201,26 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
   const githubUsernames = [...githubPorLegajo.values()];
   const existentes = await entityManager.find(Alumno, { githubUsername: { $in: githubUsernames } });
   const existentesPorGithub = new Map(existentes.map((alumno) => [alumno.githubUsername, alumno]));
+  const suscripciones = existentes.length === 0 ? [] : await entityManager.find(SuscripcionAlumno, {
+    alumno: { $in: existentes.map((alumno) => alumno.id) },
+  });
+  const suscripcionesPorAlumno = new Map<string, SuscripcionAlumno[]>();
+  for (const suscripcion of suscripciones) {
+    const propias = suscripcionesPorAlumno.get(suscripcion.alumno.id) ?? [];
+    propias.push(suscripcion);
+    suscripcionesPorAlumno.set(suscripcion.alumno.id, propias);
+  }
 
   const alumnosNuevos: Alumno[] = [];
-  const idsConEmailCambiado: string[] = [];
 
   for (const data of dataList) {
     const key = Alumno.normalizarUsername(data.githubUsername);
     const existing = existentesPorGithub.get(key);
     if (existing) {
-      const emailAnterior = Alumno.normalizarEmail(existing.email);
-      existing.actualizarDatos(data);
-      if (emailAnterior !== existing.email) {
-        idsConEmailCambiado.push(existing.id);
-      }
+      existing.actualizarDatos(data, suscripcionesPorAlumno.get(existing.id) ?? []);
     } else {
       const alumno = new Alumno();
-      alumno.actualizarDatos(data);
+      alumno.actualizarDatos(data, []);
       entityManager.persist(alumno);
       alumnosNuevos.push(alumno);
       // Si el batch trae otra fila con el mismo github (typo o fila duplicada
@@ -233,7 +231,6 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
   }
 
   await crearSuscripcionesFaltantes(alumnosNuevos, entityManager);
-  await marcarSuscripcionesPendientes(idsConEmailCambiado, entityManager);
 
   await entityManager.flush();
   return dataList.length;

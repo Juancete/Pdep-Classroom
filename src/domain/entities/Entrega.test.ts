@@ -8,6 +8,18 @@ function nuevaEntrega(overrides: Partial<Entrega> = {}): Entrega {
   return Object.assign(entrega, overrides);
 }
 
+describe("Entrega.tieneConflictoDeRepoGithubId", () => {
+  it.each([
+    ["123", "456", true],
+    ["123", "123", false],
+    [undefined, "123", false],
+    ["123", undefined, false],
+    [undefined, undefined, false],
+  ] as const)("ID guardado %s e ID recibido %s: conflicto %s", (guardado, recibido, conflicto) => {
+    expect(nuevaEntrega({ repoGithubId: guardado }).tieneConflictoDeRepoGithubId(recibido)).toBe(conflicto);
+  });
+});
+
 describe("Entrega.hasRepo", () => {
   it("devuelve true cuando hay repoUrl y no fue borrado", () => {
     const entrega = nuevaEntrega({ repoUrl: "https://github.com/org/repo", repoDeleted: false });

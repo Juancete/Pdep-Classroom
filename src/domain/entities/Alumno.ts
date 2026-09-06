@@ -1,6 +1,7 @@
 import { Entity, ManyToOne, PrimaryKey, Property } from "@mikro-orm/core";
 import { randomUUID } from "crypto";
 import { Comision } from "./Comision";
+import type { SuscripcionAlumno } from "./SuscripcionAlumno";
 import { ALUMNO_LEGAJO_PATTERN, ALUMNO_EMAIL_PATTERN, normalizarGithubUsername } from "./domain-constants";
 
 export interface RegistroInput {
@@ -120,6 +121,7 @@ export class Alumno {
   // Aplica solo los campos de RegistroInput (sin comisión ni confirmación).
   // Usado por parseAlumnosRows en sheets.ts, donde los Alumno son transitorios
   // (DTOs de planilla) y la comisión se inyecta en el call site de upsertAlumnos.
+  // Para actualizar alumnos persistidos, usar actualizarDatos con sus suscripciones.
   aplicarRegistro(input: RegistroInput): void {
     this.legajo = input.legajo.trim();
     this.nombre = input.nombre.trim();
@@ -128,16 +130,26 @@ export class Alumno {
     this.email = Alumno.normalizarEmail(input.email);
   }
 
-  // Nota: quien llame a esto y necesite invalidar suscripciones a canales de
-  // comunicación por cambio de email es responsable de compararlo antes/después
-  // — ver `upsertAlumno`/`upsertAlumnos` en `AlumnoRepository`, que llaman a
-  // `marcarSuscripcionesPendientes`. La entidad no conoce los canales.
-  actualizarDatos(data: AlumnoData): void {
+  // Requiere todas las suscripciones del alumno ya cargadas, incluidos canales
+  // inactivos. Para un alumno nuevo, pasar []. No realiza cargas implícitas.
+  actualizarDatos(data: AlumnoData, suscripciones: readonly SuscripcionAlumno[]): void {
+    const emailAnterior = Alumno.normalizarEmail(this.email);
     this.aplicarRegistro(data);
     this.comision = data.comision;
     if (data.registroConfirmadoEn !== undefined) {
       this.registroConfirmadoEn = data.registroConfirmadoEn;
     }
+    if (emailAnterior !== this.email) {
+      for (const suscripcion of suscripciones) {
+        if (suscripcion.alumno.id === this.id) suscripcion.marcarPendiente();
+      }
+    }
+  }
+
+  suscripcionesPendientes(suscripciones: readonly SuscripcionAlumno[]): SuscripcionAlumno[] {
+    return suscripciones.filter(
+      (suscripcion) => suscripcion.alumno.id === this.id && suscripcion.estaPendiente()
+    );
   }
 
   toRegistroInput(): RegistroInput {
@@ -191,7 +203,7 @@ export class Alumno {
    * Asuntos de sincronización propios del alumno — datos hacia la planilla y
    * asignación a grupo de TP. No incluye canales de comunicación externos
    * (Google Groups, etc.): esos viven en `SuscripcionAlumno`, una entidad
-   * aparte que la entidad `Alumno` no conoce. `estadoDeSincronizacion.ts`
+   * aparte, consultada mediante `suscripcionesPendientes`. `estadoDeSincronizacion.ts`
    * combina esta lista con la de los canales activos para armar el mensaje
    * final — un asunto por feature, enumerados, en vez de una cadena de `if`
    * que enumere combinaciones a mano.

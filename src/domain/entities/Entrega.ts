@@ -268,6 +268,10 @@ export class Entrega {
     return true;
   }
 
+  tieneConflictoDeRepoGithubId(repoGithubId?: string): boolean {
+    return Boolean(repoGithubId && this.repoGithubId && this.repoGithubId !== repoGithubId);
+  }
+
   /**
    * `true` si `githubUsername` ya tiene acceso al repo de esta entrega —
    * comparando ambos lados normalizados (`Alumno.normalizarUsername`: trim,

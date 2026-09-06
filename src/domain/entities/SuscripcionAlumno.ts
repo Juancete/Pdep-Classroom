@@ -28,7 +28,8 @@ export type EstadoDeSuscripcion = (typeof ESTADOS_DE_SUSCRIPCION)[number];
  *
  * Sin `@OneToMany` del lado de `Alumno` a propósito: tienta a operar sobre
  * una `Collection` sin cargar. El acceso siempre pasa por
- * `SuscripcionAlumnoRepository`.
+ * los repositorios, que entregan listas cargadas al dominio para consultar
+ * pendientes y actualizar datos del alumno sin cargas implícitas.
  */
 @Entity({ tableName: "suscripcion_alumno" })
 @Unique({
