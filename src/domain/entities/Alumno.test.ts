@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Alumno, validateRegistro } from "./Alumno";
 import type { Comision } from "./Comision";
+import { SuscripcionAlumno, ESTADOS_DE_SUSCRIPCION } from "./SuscripcionAlumno";
 
 function nuevoAlumno(overrides: Partial<Alumno> = {}): Alumno {
   const alumno = new Alumno();
@@ -74,7 +75,7 @@ describe("Alumno.actualizarDatos", () => {
       githubUsername: " @AnaGarcia ",
       email: " ANA@Example.COM ",
       comision,
-    });
+    }, []);
 
     expect(alumno).toMatchObject({
       legajo: "12345",
@@ -98,7 +99,7 @@ describe("Alumno.actualizarDatos", () => {
       githubUsername: "ana-garcia",
       email: "ana@example.com",
       comision: comisionActual,
-    });
+    }, []);
 
     expect(alumno.registroConfirmadoEn).toBe(comisionConfirmada);
   });
@@ -116,9 +117,61 @@ describe("Alumno.actualizarDatos", () => {
       email: "ana@example.com",
       comision: comisionActual,
       registroConfirmadoEn: comisionNueva,
-    });
+    }, []);
 
     expect(alumno.registroConfirmadoEn).toBe(comisionNueva);
+  });
+});
+
+describe("Alumno y suscripciones", () => {
+  function suscripcionDe(alumno: Alumno, estado: SuscripcionAlumno["estado"]) {
+    return Object.assign(new SuscripcionAlumno(), {
+      alumno,
+      canal: "google_groups" as const,
+      estado,
+      ultimoError: "error anterior",
+      destinatarioSincronizado: "ana@example.com",
+      destinatariosPendientesBaja: ["viejo@example.com"],
+    });
+  }
+
+  it.each(ESTADOS_DE_SUSCRIPCION)("invalida una suscripción %s al cambiar el email y preserva las bajas", (estado) => {
+    const alumno = nuevoAlumno();
+    const propia = suscripcionDe(nuevoAlumno({ id: alumno.id }), estado);
+    const ajena = suscripcionDe(nuevoAlumno(), "sincronizada");
+
+    alumno.actualizarDatos({
+      ...alumno.toRegistroInput(), comision: fakeComision("c1"), email: "nueva@example.com",
+    }, [propia, ajena]);
+
+    expect(propia).toMatchObject({
+      estado: "pendiente", ultimoError: null,
+      destinatarioSincronizado: "ana@example.com",
+      destinatariosPendientesBaja: ["viejo@example.com"],
+    });
+    expect(ajena.estado).toBe("sincronizada");
+  });
+
+  it("no invalida por diferencias de formato ni por cambios de otros datos", () => {
+    const alumno = nuevoAlumno({ email: " ANA@Example.COM " });
+    const suscripcion = suscripcionDe(alumno, "sincronizada");
+    alumno.actualizarDatos({
+      ...alumno.toRegistroInput(), comision: fakeComision("c2"),
+      email: "ana@example.com", nombre: "Ana María",
+    }, [suscripcion]);
+    expect(suscripcion.estado).toBe("sincronizada");
+    expect(alumno.nombre).toBe("Ana María");
+  });
+
+  it("selecciona las pendientes propias por ID, incluyendo fallidas y omitidas", () => {
+    const alumno = nuevoAlumno();
+    const referencia = nuevoAlumno({ id: alumno.id });
+    const propias = ESTADOS_DE_SUSCRIPCION.map((estado) => suscripcionDe(referencia, estado));
+    const ajena = suscripcionDe(nuevoAlumno(), "pendiente");
+    expect(alumno.suscripcionesPendientes([...propias, ajena])).toEqual([
+      propias[0], propias[2], propias[3],
+    ]);
+    expect(alumno.suscripcionesPendientes([])).toEqual([]);
   });
 });
 

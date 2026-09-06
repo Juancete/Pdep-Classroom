@@ -123,11 +123,7 @@ async function resolverEntrega(data: {
   const porNombre = await getEntregaByRepoName(data.repoName);
   if (!porNombre) return null;
 
-  if (
-    data.repoGithubId &&
-    porNombre.repoGithubId &&
-    porNombre.repoGithubId !== data.repoGithubId
-  ) {
+  if (porNombre.tieneConflictoDeRepoGithubId(data.repoGithubId)) {
     return null;
   }
 
