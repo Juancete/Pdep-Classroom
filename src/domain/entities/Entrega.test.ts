@@ -8,6 +8,18 @@ function nuevaEntrega(overrides: Partial<Entrega> = {}): Entrega {
   return Object.assign(entrega, overrides);
 }
 
+describe("Entrega.compararRepoGithubId", () => {
+  it.each([
+    ["123", "123", "coincide"],
+    ["123", "456", "conflicto"],
+    [undefined, "123", "desconocido"],
+    ["123", undefined, "desconocido"],
+    [undefined, undefined, "desconocido"],
+  ] as const)("ID guardado %s e ID recibido %s: %s", (guardado, recibido, resultado) => {
+    expect(nuevaEntrega({ repoGithubId: guardado }).compararRepoGithubId(recibido)).toBe(resultado);
+  });
+});
+
 describe("Entrega.tieneConflictoDeRepoGithubId", () => {
   it.each([
     ["123", "456", true],

@@ -102,6 +102,27 @@ export async function getSuscripcionesDeAlumno(
 }
 
 /**
+ * Suscripciones de varios alumnos, agrupadas por id de alumno. Única fuente
+ * de esta query — antes vivía triplicada (con variantes) en
+ * `crearSuscripcionesFaltantes`, `AlumnoRepository.upsertAlumno` y
+ * `AlumnoRepository.upsertAlumnos`. Con `alumnoIds` vacío no consulta la DB.
+ */
+export async function getSuscripcionesPorAlumno(
+  alumnoIds: string[],
+  entityManager: EntityManager
+): Promise<Map<string, SuscripcionAlumno[]>> {
+  const porAlumno = new Map<string, SuscripcionAlumno[]>();
+  if (alumnoIds.length === 0) return porAlumno;
+  const suscripciones = await entityManager.find(SuscripcionAlumno, { alumno: { $in: alumnoIds } });
+  for (const suscripcion of suscripciones) {
+    const propias = porAlumno.get(suscripcion.alumno.id) ?? [];
+    propias.push(suscripcion);
+    porAlumno.set(suscripcion.alumno.id, propias);
+  }
+  return porAlumno;
+}
+
+/**
  * Crea la fila de suscripción "pendiente" (default de la entidad) para cada
  * canal declarado, para los alumnos que todavía no la tienen. Se llama en el
  * mismo flush del alta/import: sin esto, "sin fila" no se distingue de
@@ -117,11 +138,14 @@ export async function crearSuscripcionesFaltantes(
 ): Promise<void> {
   if (alumnos.length === 0) return;
 
-  const existentes = await entityManager.find(SuscripcionAlumno, {
-    alumno: { $in: alumnos.map((alumno) => alumno.id) },
-  });
+  const suscripcionesPorAlumno = await getSuscripcionesPorAlumno(
+    alumnos.map((alumno) => alumno.id),
+    entityManager
+  );
   const clavesExistentes = new Set(
-    existentes.map((suscripcion) => `${suscripcion.alumno.id}:${suscripcion.canal}`)
+    [...suscripcionesPorAlumno.values()]
+      .flat()
+      .map((suscripcion) => `${suscripcion.alumno.id}:${suscripcion.canal}`)
   );
 
   for (const alumno of alumnos) {

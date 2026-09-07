@@ -18,7 +18,8 @@ function alumnoConSuscripcion(githubUsername = "ana", legajo = "12345") {
   const alumno = new Alumno();
   alumno.actualizarDatos({ ...datos, githubUsername, legajo }, []);
   const suscripcion = Object.assign(new SuscripcionAlumno(), {
-    alumno, canal: "google_groups" as const, estado: "sincronizada" as const,
+    alumno, canal: "google_groups" as const,
+    estado: "sincronizada" as SuscripcionAlumno["estado"],
     destinatarioSincronizado: alumno.email,
   });
   return { alumno, suscripcion };
@@ -42,25 +43,69 @@ describe("persistencia de Alumno y suscripciones", () => {
     expect(em.flush).toHaveBeenCalledTimes(1);
   });
 
-  it.each([
-    ["nueva@example.com", "pendiente"],
-    [" ANA@Example.COM ", "sincronizada"],
-  ])("el upsert con email %s persiste el estado %s", async (email, estado) => {
+  it("el upsert con un email que cambia carga suscripciones e invalida", async () => {
     const { alumno, suscripcion } = alumnoConSuscripcion();
     em.findOne.mockResolvedValue(alumno);
     em.find.mockResolvedValue([suscripcion]);
     em.flush.mockImplementation(async () => {
-      expect(suscripcion.estado).toBe(estado);
+      expect(suscripcion.estado).toBe("pendiente");
     });
 
-    expect(await upsertAlumno({ ...datos, email })).toBe(alumno);
+    expect(await upsertAlumno({ ...datos, email: "nueva@example.com" })).toBe(alumno);
     expect(em.find).toHaveBeenCalledTimes(1);
-    expect(em.find).toHaveBeenCalledWith(SuscripcionAlumno, { alumno });
+    expect(em.find).toHaveBeenCalledWith(SuscripcionAlumno, { alumno: { $in: [alumno.id] } });
     expect(suscripcion.destinatarioSincronizado).toBe("ana@example.com");
     expect(em.flush).toHaveBeenCalledTimes(1);
   });
 
-  it("carga suscripciones en lote y aplica cambios sucesivos del mismo alumno antes del flush", async () => {
+  it("el upsert con un email que sólo cambia de formato no carga suscripciones ni invalida", async () => {
+    const { alumno, suscripcion } = alumnoConSuscripcion();
+    em.findOne.mockResolvedValue(alumno);
+    em.flush.mockImplementation(async () => {
+      expect(suscripcion.estado).toBe("sincronizada");
+    });
+
+    expect(await upsertAlumno({ ...datos, email: " ANA@Example.COM " })).toBe(alumno);
+    expect(em.find).not.toHaveBeenCalled();
+    expect(suscripcion.destinatarioSincronizado).toBe("ana@example.com");
+    expect(em.flush).toHaveBeenCalledTimes(1);
+  });
+
+  // Fix de bug: antes se invalidaba por cada fila del batch cuyo email
+  // difería del que tenía la instancia EN ESE MOMENTO, no del que tenía al
+  // empezar. Un batch con un typo y su corrección para el mismo alumno
+  // (email final == email original) terminaba igual marcando la suscripción
+  // pendiente y perdiendo el ultimoError guardado.
+  it("no invalida ni pierde ultimoError si dos filas del mismo alumno en el batch terminan en el email original", async () => {
+    const ana = alumnoConSuscripcion();
+    ana.suscripcion.estado = "fallida";
+    ana.suscripcion.ultimoError = "SMTP caído";
+    const otra = alumnoConSuscripcion("bea", "54321");
+    em.find
+      .mockResolvedValueOnce([ana.alumno, otra.alumno])
+      .mockResolvedValueOnce([ana.alumno, otra.alumno])
+      .mockResolvedValueOnce([ana.suscripcion]);
+
+    expect(await upsertAlumnos([
+      { ...datos, email: "typo@example.com" },
+      datos,
+      { ...datos, githubUsername: "bea", legajo: "54321" },
+    ])).toBe(3);
+
+    expect(ana.alumno.email).toBe(datos.email);
+    expect(ana.suscripcion.estado).toBe("fallida");
+    expect(ana.suscripcion.ultimoError).toBe("SMTP caído");
+    expect(otra.suscripcion.estado).toBe("sincronizada");
+    // "bea" nunca cambia de email en el batch: no debe consultarse su
+    // suscripción (short-circuit de performance).
+    expect(em.find.mock.calls.filter(([entidad]) => entidad === SuscripcionAlumno)).toEqual([
+      [SuscripcionAlumno, { alumno: { $in: [ana.alumno.id] } }],
+    ]);
+    expect(em.persist).not.toHaveBeenCalled();
+    expect(em.flush).toHaveBeenCalledTimes(1);
+  });
+
+  it("aplica la última fila del batch para el mismo alumno e invalida una sola vez cuando el email neto cambió", async () => {
     const ana = alumnoConSuscripcion();
     const otra = alumnoConSuscripcion("bea", "54321");
     em.find
@@ -70,17 +115,17 @@ describe("persistencia de Alumno y suscripciones", () => {
     em.flush.mockImplementation(async () => {
       expect(ana.suscripcion.estado).toBe("pendiente");
       expect(otra.suscripcion.estado).toBe("sincronizada");
-      expect(ana.alumno.email).toBe(datos.email);
+      expect(ana.alumno.email).toBe("final@example.com");
     });
 
     expect(await upsertAlumnos([
-      { ...datos, email: "nuevo@example.com" },
-      datos,
+      { ...datos, email: "intermedio@example.com" },
+      { ...datos, email: "final@example.com" },
       { ...datos, githubUsername: "bea", legajo: "54321" },
     ])).toBe(3);
 
     expect(em.find.mock.calls.filter(([entidad]) => entidad === SuscripcionAlumno)).toEqual([
-      [SuscripcionAlumno, { alumno: { $in: [ana.alumno.id, otra.alumno.id] } }],
+      [SuscripcionAlumno, { alumno: { $in: [ana.alumno.id] } }],
     ]);
     expect(em.persist).not.toHaveBeenCalled();
     expect(em.flush).toHaveBeenCalledTimes(1);
@@ -105,7 +150,8 @@ describe("persistencia de Alumno y suscripciones", () => {
     em.find
       .mockResolvedValueOnce([ana.alumno, bea.alumno])
       .mockResolvedValueOnce([ana.alumno, bea.alumno])
-      .mockResolvedValueOnce([ana.suscripcion, bea.suscripcion])
+      // "bea" nunca cambia de email en el batch: no se consulta su suscripción.
+      .mockResolvedValueOnce([ana.suscripcion])
       .mockResolvedValueOnce([]);
 
     expect(await upsertAlumnos([
@@ -126,7 +172,7 @@ describe("persistencia de Alumno y suscripciones", () => {
     expect(suscripciones.map((suscripcion) => suscripcion.canal)).toEqual([...NOMBRES_DE_CANAL]);
     expect(suscripciones.every((suscripcion) => suscripcion.alumno === altas[0] && suscripcion.estaPendiente())).toBe(true);
     expect(em.find.mock.calls.filter(([entidad]) => entidad === SuscripcionAlumno)).toEqual([
-      [SuscripcionAlumno, { alumno: { $in: [ana.alumno.id, bea.alumno.id] } }],
+      [SuscripcionAlumno, { alumno: { $in: [ana.alumno.id] } }],
       [SuscripcionAlumno, { alumno: { $in: [altas[0].id] } }],
     ]);
     expect(em.flush).toHaveBeenCalledTimes(1);

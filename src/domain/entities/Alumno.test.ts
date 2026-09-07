@@ -123,6 +123,44 @@ describe("Alumno.actualizarDatos", () => {
   });
 });
 
+describe("Alumno.crear", () => {
+  it("aplica los campos sin pedir suscripciones", () => {
+    const comision = fakeComision("c1");
+
+    const alumno = Alumno.crear({
+      legajo: " 12345 ",
+      nombre: " Ana ",
+      apellido: " García ",
+      githubUsername: " @AnaGarcia ",
+      email: " ANA@Example.COM ",
+      comision,
+    });
+
+    expect(alumno).toBeInstanceOf(Alumno);
+    expect(alumno).toMatchObject({
+      legajo: "12345",
+      nombre: "Ana",
+      apellido: "García",
+      githubUsername: "anagarcia",
+      email: "ana@example.com",
+      comision,
+    });
+  });
+
+  it("aplica registroConfirmadoEn cuando viene definido", () => {
+    const comision = fakeComision("c1");
+    const confirmada = fakeComision("confirmada");
+
+    const alumno = Alumno.crear({
+      legajo: "12345", nombre: "Ana", apellido: "García",
+      githubUsername: "ana-garcia", email: "ana@example.com",
+      comision, registroConfirmadoEn: confirmada,
+    });
+
+    expect(alumno.registroConfirmadoEn).toBe(confirmada);
+  });
+});
+
 describe("Alumno y suscripciones", () => {
   function suscripcionDe(alumno: Alumno, estado: SuscripcionAlumno["estado"]) {
     return Object.assign(new SuscripcionAlumno(), {
@@ -172,6 +210,54 @@ describe("Alumno y suscripciones", () => {
       propias[0], propias[2], propias[3],
     ]);
     expect(alumno.suscripcionesPendientes([])).toEqual([]);
+  });
+
+  describe("cambiariaEmail", () => {
+    it("es true cuando el email nuevo difiere del actual", () => {
+      const alumno = nuevoAlumno({ email: "ana@example.com" });
+      expect(alumno.cambiariaEmail({ ...alumno.toRegistroInput(), comision: fakeComision("c1"), email: "otra@example.com" })).toBe(true);
+    });
+
+    it("es false cuando el email nuevo sólo difiere en formato", () => {
+      const alumno = nuevoAlumno({ email: "ana@example.com" });
+      expect(alumno.cambiariaEmail({
+        ...alumno.toRegistroInput(), comision: fakeComision("c1"), email: " ANA@Example.COM ",
+      })).toBe(false);
+    });
+  });
+
+  describe("aplicarDatosPersistidos + invalidarSuscripcionesSiEmailCambio", () => {
+    it("no invalida si el email termina igual al que tenía al empezar, aunque haya pasado por un valor intermedio distinto", () => {
+      const alumno = nuevoAlumno();
+      const propia = suscripcionDe(nuevoAlumno({ id: alumno.id }), "sincronizada");
+      const emailAlEmpezar = alumno.email;
+
+      alumno.aplicarDatosPersistidos({
+        ...alumno.toRegistroInput(), comision: fakeComision("c1"), email: "intermedio@example.com",
+      });
+      alumno.aplicarDatosPersistidos({
+        ...alumno.toRegistroInput(), comision: fakeComision("c1"), email: emailAlEmpezar,
+      });
+      alumno.invalidarSuscripcionesSiEmailCambio(emailAlEmpezar, [propia]);
+
+      expect(propia.estado).toBe("sincronizada");
+      expect(propia.ultimoError).toBe("error anterior");
+    });
+
+    it("invalida sólo las propias cuando el email neto sí cambió", () => {
+      const alumno = nuevoAlumno();
+      const propia = suscripcionDe(nuevoAlumno({ id: alumno.id }), "sincronizada");
+      const ajena = suscripcionDe(nuevoAlumno(), "sincronizada");
+      const emailAlEmpezar = alumno.email;
+
+      alumno.aplicarDatosPersistidos({
+        ...alumno.toRegistroInput(), comision: fakeComision("c1"), email: "nueva@example.com",
+      });
+      alumno.invalidarSuscripcionesSiEmailCambio(emailAlEmpezar, [propia, ajena]);
+
+      expect(propia.estado).toBe("pendiente");
+      expect(ajena.estado).toBe("sincronizada");
+    });
   });
 });
 

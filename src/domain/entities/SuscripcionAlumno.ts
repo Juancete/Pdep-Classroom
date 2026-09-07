@@ -77,6 +77,11 @@ export class SuscripcionAlumno {
     return this.estado !== "sincronizada";
   }
 
+  /** `true` si esta suscripción es de `alumno` — única fuente de la comparación por id. */
+  perteneceA(alumno: Alumno): boolean {
+    return this.alumno.id === alumno.id;
+  }
+
   marcarPendiente(): void {
     this.estado = "pendiente";
     this.ultimoError = null;

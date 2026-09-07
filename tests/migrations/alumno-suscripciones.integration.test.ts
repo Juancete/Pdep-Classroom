@@ -3,24 +3,40 @@ import { MikroORM } from "@mikro-orm/postgresql";
 import ormConfig from "../../mikro-orm.config";
 import { Alumno, Comision, SuscripcionAlumno, NOMBRES_DE_CANAL } from "../../src/domain/entities";
 
-const holder = vi.hoisted(() => ({ orm: undefined as MikroORM | undefined }));
+const ormHolder = vi.hoisted(() => ({ orm: undefined as MikroORM | undefined }));
 vi.mock("@/infrastructure/db", () => ({
   getEM: async () => {
-    if (!holder.orm) throw new Error("ORM de prueba no inicializado");
-    return holder.orm.em.fork();
+    if (!ormHolder.orm) throw new Error("ORM de integración no inicializado");
+    return ormHolder.orm.em.fork();
   },
 }));
 
 import { createAlumno, upsertAlumno, upsertAlumnos } from "../../src/infrastructure/repositories/AlumnoRepository";
 
-function testDatabaseUrl(): string {
+function getSafeTestDatabaseUrl(): string {
   const value = process.env.MIGRATION_TEST_DATABASE_URL;
-  if (!value) throw new Error("MIGRATION_TEST_DATABASE_URL es obligatoria");
+  if (!value) {
+    throw new Error(
+      "MIGRATION_TEST_DATABASE_URL es obligatoria para ejecutar pruebas de migraciones"
+    );
+  }
   const url = new URL(value);
-  if (!["postgres:", "postgresql:"].includes(url.protocol) || !url.pathname.slice(1).endsWith("_test")) {
-    throw new Error("La base de prueba debe ser PostgreSQL y terminar en _test");
+  const databaseName = url.pathname.slice(1);
+  if (!["postgres:", "postgresql:"].includes(url.protocol)) {
+    throw new Error("La base de migraciones debe usar PostgreSQL");
+  }
+  if (!databaseName.endsWith("_test")) {
+    throw new Error(
+      `La base de migraciones debe terminar en _test; se recibió ${databaseName || "una base sin nombre"}`
+    );
   }
   return value;
+}
+
+async function resetPublicSchema(orm: MikroORM): Promise<void> {
+  const connection = orm.em.getConnection();
+  await connection.execute('drop schema if exists "public" cascade');
+  await connection.execute('create schema "public"');
 }
 
 describe("persistencia de Alumno y suscripciones con PostgreSQL", () => {
@@ -29,23 +45,21 @@ describe("persistencia de Alumno y suscripciones con PostgreSQL", () => {
 
   beforeAll(async () => {
     orm = await MikroORM.init({
-      ...ormConfig, clientUrl: testDatabaseUrl(), debug: false,
+      ...ormConfig, clientUrl: getSafeTestDatabaseUrl(), debug: false,
       migrations: { ...ormConfig.migrations, snapshot: false },
     });
-    await orm.em.getConnection().execute('drop schema if exists "public" cascade');
-    await orm.em.getConnection().execute('create schema "public"');
+    await resetPublicSchema(orm);
     await orm.getMigrator().up();
-    holder.orm = orm;
+    ormHolder.orm = orm;
     comision = new Comision(2026, "sheet-suscripciones-test");
     await orm.em.fork().persistAndFlush(comision);
   });
 
   afterAll(async () => {
-    holder.orm = undefined;
+    ormHolder.orm = undefined;
     if (!orm) return;
     try {
-      await orm.em.getConnection().execute('drop schema if exists "public" cascade');
-      await orm.em.getConnection().execute('create schema "public"');
+      await resetPublicSchema(orm);
     } finally {
       await orm.close(true);
     }

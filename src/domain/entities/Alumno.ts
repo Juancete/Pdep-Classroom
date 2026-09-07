@@ -70,6 +70,16 @@ export class Alumno {
   static normalizarEmail(raw: unknown): string {
     return String(raw ?? "").trim().toLowerCase();
   }
+
+  // Factory para el alta: a diferencia de actualizarDatos, no pide
+  // suscripciones — un alumno recién creado nunca tiene ninguna que
+  // invalidar.
+  static crear(data: AlumnoData): Alumno {
+    const alumno = new Alumno();
+    alumno.aplicarDatosPersistidos(data);
+    return alumno;
+  }
+
   @PrimaryKey({ type: "uuid" })
   id: string = randomUUID();
 
@@ -130,25 +140,51 @@ export class Alumno {
     this.email = Alumno.normalizarEmail(input.email);
   }
 
-  // Requiere todas las suscripciones del alumno ya cargadas, incluidos canales
-  // inactivos. Para un alumno nuevo, pasar []. No realiza cargas implícitas.
-  actualizarDatos(data: AlumnoData, suscripciones: readonly SuscripcionAlumno[]): void {
-    const emailAnterior = Alumno.normalizarEmail(this.email);
+  // Aplica sólo los campos, sin tocar suscripciones — usado cuando el batch
+  // puede traer varias filas para el mismo alumno; la invalidación se
+  // resuelve una sola vez al final comparando contra el email que tenía al
+  // empezar (ver invalidarSuscripcionesSiEmailCambio).
+  aplicarDatosPersistidos(data: AlumnoData): void {
     this.aplicarRegistro(data);
     this.comision = data.comision;
     if (data.registroConfirmadoEn !== undefined) {
       this.registroConfirmadoEn = data.registroConfirmadoEn;
     }
-    if (emailAnterior !== this.email) {
-      for (const suscripcion of suscripciones) {
-        if (suscripcion.alumno.id === this.id) suscripcion.marcarPendiente();
-      }
+  }
+
+  // `true` si `data.email` normalizado difiere del email actual normalizado
+  // — permite a los callers decidir si vale la pena cargar suscripciones
+  // antes de aplicar los datos.
+  cambiariaEmail(data: AlumnoData): boolean {
+    return Alumno.normalizarEmail(this.email) !== Alumno.normalizarEmail(data.email);
+  }
+
+  // Marca pendiente cada suscripción propia sólo si el email cambió
+  // efectivamente respecto a `emailAnterior` — no por haberse llamado, así
+  // que un batch que procesa varias filas del mismo alumno (typo y
+  // corrección) y termina con el email original no invalida nada.
+  invalidarSuscripcionesSiEmailCambio(
+    emailAnterior: string,
+    suscripciones: readonly SuscripcionAlumno[]
+  ): void {
+    if (Alumno.normalizarEmail(emailAnterior) === Alumno.normalizarEmail(this.email)) return;
+    for (const suscripcion of suscripciones) {
+      if (suscripcion.perteneceA(this)) suscripcion.marcarPendiente();
     }
+  }
+
+  // Requiere todas las suscripciones del alumno ya cargadas, incluidos canales
+  // inactivos. Para un alumno nuevo, usar Alumno.crear. No realiza cargas
+  // implícitas.
+  actualizarDatos(data: AlumnoData, suscripciones: readonly SuscripcionAlumno[]): void {
+    const emailAnterior = this.email;
+    this.aplicarDatosPersistidos(data);
+    this.invalidarSuscripcionesSiEmailCambio(emailAnterior, suscripciones);
   }
 
   suscripcionesPendientes(suscripciones: readonly SuscripcionAlumno[]): SuscripcionAlumno[] {
     return suscripciones.filter(
-      (suscripcion) => suscripcion.alumno.id === this.id && suscripcion.estaPendiente()
+      (suscripcion) => suscripcion.perteneceA(this) && suscripcion.estaPendiente()
     );
   }
 
