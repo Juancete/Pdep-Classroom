@@ -30,7 +30,7 @@ function makeCanalFalso(nombre: string, asunto: string) {
 }
 
 function makeSuscripcion(canal: string, estado: SuscripcionAlumno["estado"]): SuscripcionAlumno {
-  return Object.assign(new SuscripcionAlumno(), { canal, estado });
+  return Object.assign(new SuscripcionAlumno(), { alumno: makeAlumno(), canal, estado });
 }
 
 describe("resolverEstadoDeSincronizacion", () => {
@@ -59,6 +59,16 @@ describe("resolverEstadoDeSincronizacion", () => {
     expect(estado.hayPendientes).toBe(true);
     expect(estado.mensaje).toBe("No pudimos suscribirte al grupo de Google del curso.");
     expect(estado.canalesPendientes).toEqual([canal]);
+  });
+
+  it("ignora una suscripción de un canal que ya no está activo", async () => {
+    const canalActivo = makeCanalFalso("google_groups", "suscribirte al grupo de Google del curso");
+    mockCanalesActivos.mockReturnValue([canalActivo]);
+    mockGetSuscripcionesDeAlumno.mockResolvedValue([
+      makeSuscripcion("discord", "pendiente"),
+    ]);
+    const estado = await resolverEstadoDeSincronizacion(makeAlumno());
+    expect(estado).toEqual({ hayPendientes: false, mensaje: "", canalesPendientes: [] });
   });
 
   it("no cuenta un canal activo cuya suscripción ya está sincronizada", async () => {

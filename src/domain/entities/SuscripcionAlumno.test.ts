@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { Alumno } from "./Alumno";
 import { SuscripcionAlumno } from "./SuscripcionAlumno";
 
 function nuevaSuscripcion(
@@ -7,6 +8,26 @@ function nuevaSuscripcion(
   const suscripcion = new SuscripcionAlumno();
   return Object.assign(suscripcion, overrides);
 }
+
+function nuevoAlumno(overrides: Partial<Alumno> = {}): Alumno {
+  return Object.assign(new Alumno(), overrides);
+}
+
+describe("SuscripcionAlumno.perteneceA", () => {
+  it("es true cuando el id del alumno de la suscripción coincide", () => {
+    const alumno = nuevoAlumno({ id: "alumno-1" });
+    const suscripcion = nuevaSuscripcion({ alumno });
+
+    expect(suscripcion.perteneceA(alumno)).toBe(true);
+    expect(suscripcion.perteneceA(nuevoAlumno({ id: "alumno-1" }))).toBe(true);
+  });
+
+  it("es false cuando el id del alumno de la suscripción no coincide", () => {
+    const suscripcion = nuevaSuscripcion({ alumno: nuevoAlumno({ id: "alumno-1" }) });
+
+    expect(suscripcion.perteneceA(nuevoAlumno({ id: "alumno-2" }))).toBe(false);
+  });
+});
 
 describe("SuscripcionAlumno.estaPendiente", () => {
   it("es true en cualquier estado que no sea sincronizada", () => {

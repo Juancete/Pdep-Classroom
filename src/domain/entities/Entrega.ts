@@ -269,6 +269,23 @@ export class Entrega {
   }
 
   /**
+   * Compara `repoGithubId` (el que trae un evento o una consulta a GitHub)
+   * contra el guardado en esta entrega. Única fuente de esta comparación —
+   * antes estaba escrita tres veces: acá como desigualdad cruda, en
+   * `reconoceComoPropio` y como guard en `procesarEventoGithub.resolverEntrega`.
+   * "desconocido" cuando no hay id de alguno de los dos lados para comparar
+   * (no es ni coincidencia ni conflicto).
+   */
+  compararRepoGithubId(repoGithubId?: string): "coincide" | "conflicto" | "desconocido" {
+    if (!repoGithubId || !this.repoGithubId) return "desconocido";
+    return this.repoGithubId === repoGithubId ? "coincide" : "conflicto";
+  }
+
+  tieneConflictoDeRepoGithubId(repoGithubId?: string): boolean {
+    return this.compararRepoGithubId(repoGithubId) === "conflicto";
+  }
+
+  /**
    * `true` si `githubUsername` ya tiene acceso al repo de esta entrega —
    * comparando ambos lados normalizados (`Alumno.normalizarUsername`: trim,
    * sin `@` inicial, case-insensitive). Antes el matching se hacía a mano
@@ -330,7 +347,7 @@ export class Entrega {
     const inicio = this.provisionCreacionIniciadaEn;
     if (!inicio || !repo.createdAt) return false;
     return (
-      ((this.repoGithubId !== undefined && this.repoGithubId === repo.repoGithubId) ||
+      (this.compararRepoGithubId(repo.repoGithubId) === "coincide" ||
         repo.description?.includes(this.marcadorDeRepo()) === true) &&
       repo.createdAt.getTime() >= inicio.getTime() - 5_000
     );

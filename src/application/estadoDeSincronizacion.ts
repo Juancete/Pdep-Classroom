@@ -25,7 +25,7 @@ export async function resolverEstadoDeSincronizacion(
     activos.map((canal) => canal.nombre)
   );
   const canalesConSuscripcionPendiente = new Set(
-    suscripciones.filter((suscripcion) => suscripcion.estaPendiente()).map((suscripcion) => suscripcion.canal)
+    alumno.suscripcionesPendientes(suscripciones).map((suscripcion) => suscripcion.canal)
   );
   const canalesPendientes = activos.filter((canal) =>
     canalesConSuscripcionPendiente.has(canal.nombre)
