@@ -127,7 +127,7 @@ async function resolverEntrega(data: {
     return null;
   }
 
-  if (data.repoGithubId && !porNombre.repoGithubId) {
+  if (data.repoGithubId && porNombre.compararRepoGithubId(data.repoGithubId) === "desconocido") {
     await asegurarRepoGithubId(porNombre.id, data.repoGithubId);
   }
   return porNombre;

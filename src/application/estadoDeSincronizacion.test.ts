@@ -61,12 +61,14 @@ describe("resolverEstadoDeSincronizacion", () => {
     expect(estado.canalesPendientes).toEqual([canal]);
   });
 
-  it("no muestra una suscripción pendiente de un canal inactivo", async () => {
-    mockCanalesActivos.mockReturnValue([]);
-    mockGetSuscripcionesDeAlumno.mockResolvedValue([makeSuscripcion("google_groups", "pendiente")]);
-    expect(await resolverEstadoDeSincronizacion(makeAlumno())).toEqual({
-      hayPendientes: false, mensaje: "", canalesPendientes: [],
-    });
+  it("ignora una suscripción de un canal que ya no está activo", async () => {
+    const canalActivo = makeCanalFalso("google_groups", "suscribirte al grupo de Google del curso");
+    mockCanalesActivos.mockReturnValue([canalActivo]);
+    mockGetSuscripcionesDeAlumno.mockResolvedValue([
+      makeSuscripcion("discord", "pendiente"),
+    ]);
+    const estado = await resolverEstadoDeSincronizacion(makeAlumno());
+    expect(estado).toEqual({ hayPendientes: false, mensaje: "", canalesPendientes: [] });
   });
 
   it("no cuenta un canal activo cuya suscripción ya está sincronizada", async () => {

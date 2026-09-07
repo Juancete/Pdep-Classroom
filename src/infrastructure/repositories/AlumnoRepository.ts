@@ -1,8 +1,8 @@
 import { getEM } from "@/infrastructure/db";
 import type { EntityManager } from "@mikro-orm/postgresql";
-import { Alumno, SuscripcionAlumno, LegajoConflictError, type AlumnoData } from "@/domain/entities";
+import { Alumno, LegajoConflictError, type AlumnoData } from "@/domain/entities";
 import type { Comision } from "@/domain/entities";
-import { crearSuscripcionesFaltantes } from "./SuscripcionAlumnoRepository";
+import { crearSuscripcionesFaltantes, getSuscripcionesPorAlumno } from "./SuscripcionAlumnoRepository";
 
 export type { AlumnoData } from "@/domain/entities";
 // `LegajoConflictError` es un error de dominio (vive en `Alumno.ts` — Fase 4
@@ -63,8 +63,7 @@ export async function getAlumnoByLegajo(
 export async function createAlumno(data: AlumnoData): Promise<Alumno> {
   await assertLegajoLibreOPropio(data.legajo, data.githubUsername);
   const entityManager = await getEM();
-  const alumno = new Alumno();
-  alumno.actualizarDatos(data, []);
+  const alumno = Alumno.crear(data);
   entityManager.persist(alumno);
   await crearSuscripcionesFaltantes([alumno], entityManager);
   await entityManager.flush();
@@ -80,7 +79,12 @@ export async function upsertAlumno(data: AlumnoData): Promise<Alumno> {
   });
 
   if (existing) {
-    const suscripciones = await entityManager.find(SuscripcionAlumno, { alumno: existing });
+    // Sólo carga suscripciones si el email realmente cambiaría — evita el
+    // roundtrip cuando no hace falta (regresión de performance vs. la
+    // función `marcarSuscripcionesPendientes` que este código reemplazó).
+    const suscripciones = existing.cambiariaEmail(data)
+      ? (await getSuscripcionesPorAlumno([existing.id], entityManager)).get(existing.id) ?? []
+      : [];
     existing.actualizarDatos(data, suscripciones);
     await entityManager.flush();
     return existing;
@@ -201,15 +205,30 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
   const githubUsernames = [...githubPorLegajo.values()];
   const existentes = await entityManager.find(Alumno, { githubUsername: { $in: githubUsernames } });
   const existentesPorGithub = new Map(existentes.map((alumno) => [alumno.githubUsername, alumno]));
-  const suscripciones = existentes.length === 0 ? [] : await entityManager.find(SuscripcionAlumno, {
-    alumno: { $in: existentes.map((alumno) => alumno.id) },
-  });
-  const suscripcionesPorAlumno = new Map<string, SuscripcionAlumno[]>();
-  for (const suscripcion of suscripciones) {
-    const propias = suscripcionesPorAlumno.get(suscripcion.alumno.id) ?? [];
-    propias.push(suscripcion);
-    suscripcionesPorAlumno.set(suscripcion.alumno.id, propias);
+  // Email de cada alumno existente antes de aplicar ninguna fila del batch —
+  // la invalidación al final compara contra este valor, no contra el que
+  // haya quedado tras una fila intermedia.
+  const emailOriginalPorAlumno = new Map(existentes.map((alumno) => [alumno.id, alumno.email]));
+
+  // Sólo carga suscripciones para los alumnos cuyo email realmente
+  // cambiaría con alguna fila del batch — evita el roundtrip para el resto
+  // (regresión de performance vs. la función `marcarSuscripcionesPendientes`
+  // que este código reemplazó). Un alumno cuyo email termina igual al
+  // original tras varias filas (typo y corrección) no invalida nada de
+  // todos modos, así que este es sólo un chequeo conservador de "¿podría
+  // llegar a cambiar?".
+  const alumnoIdsConPosibleCambioDeEmail = new Set<string>();
+  for (const data of dataList) {
+    const key = Alumno.normalizarUsername(data.githubUsername);
+    const existing = existentesPorGithub.get(key);
+    if (existing && existing.cambiariaEmail(data)) {
+      alumnoIdsConPosibleCambioDeEmail.add(existing.id);
+    }
   }
+  const suscripcionesPorAlumno = await getSuscripcionesPorAlumno(
+    [...alumnoIdsConPosibleCambioDeEmail],
+    entityManager
+  );
 
   const alumnosNuevos: Alumno[] = [];
 
@@ -217,10 +236,9 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
     const key = Alumno.normalizarUsername(data.githubUsername);
     const existing = existentesPorGithub.get(key);
     if (existing) {
-      existing.actualizarDatos(data, suscripcionesPorAlumno.get(existing.id) ?? []);
+      existing.aplicarDatosPersistidos(data);
     } else {
-      const alumno = new Alumno();
-      alumno.actualizarDatos(data, []);
+      const alumno = Alumno.crear(data);
       entityManager.persist(alumno);
       alumnosNuevos.push(alumno);
       // Si el batch trae otra fila con el mismo github (typo o fila duplicada
@@ -228,6 +246,17 @@ export async function upsertAlumnos(dataList: AlumnoData[]): Promise<number> {
       // de githubUsername explota en el flush con un error genérico.
       existentesPorGithub.set(key, alumno);
     }
+  }
+
+  // Invalida las suscripciones una sola vez por alumno existente, comparando
+  // el email final contra el que tenía al empezar el batch — así dos filas
+  // del mismo alumno (típo y corrección) que terminan en el email original
+  // no dejan la suscripción pendiente ni pierden el ultimoError.
+  for (const existing of existentes) {
+    existing.invalidarSuscripcionesSiEmailCambio(
+      emailOriginalPorAlumno.get(existing.id)!,
+      suscripcionesPorAlumno.get(existing.id) ?? []
+    );
   }
 
   await crearSuscripcionesFaltantes(alumnosNuevos, entityManager);
