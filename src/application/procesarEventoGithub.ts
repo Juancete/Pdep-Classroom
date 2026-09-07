@@ -123,15 +123,11 @@ async function resolverEntrega(data: {
   const porNombre = await getEntregaByRepoName(data.repoName);
   if (!porNombre) return null;
 
-  if (
-    data.repoGithubId &&
-    porNombre.repoGithubId &&
-    porNombre.repoGithubId !== data.repoGithubId
-  ) {
+  if (porNombre.tieneConflictoDeRepoGithubId(data.repoGithubId)) {
     return null;
   }
 
-  if (data.repoGithubId && !porNombre.repoGithubId) {
+  if (data.repoGithubId && porNombre.compararRepoGithubId(data.repoGithubId) === "desconocido") {
     await asegurarRepoGithubId(porNombre.id, data.repoGithubId);
   }
   return porNombre;
