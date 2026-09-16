@@ -181,6 +181,8 @@ export async function getDatosPrecargaByGithub(
 }
 
 // ── Encontrar el número de fila de un alumno (1-based, incluyendo header) ──
+// Lee sólo la columna de github (no el rango ancho A→maxCol): más barato y
+// no depende de dónde caiga el legajo ni ninguna otra columna mapeada.
 
 async function findAlumnoRowIndex(
   githubUsername: string,
@@ -188,15 +190,15 @@ async function findAlumnoRowIndex(
   config: ColumnConfig
 ): Promise<number | null> {
   const sheets = getSheetsClient();
+  const startRow = config.headerRows + 1;
+  const columnaGithub = colLetter(config.githubUsername);
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: buildReadRange(config),
+    range: rangoDeHoja(config.sheetName, `${columnaGithub}${startRow}:${columnaGithub}500`),
   });
   const rows = data.values ?? [];
   const rowIndex = rows.findIndex(
-    (row) =>
-      Alumno.normalizarUsername(row[config.githubUsername]) ===
-      Alumno.normalizarUsername(githubUsername)
+    (row) => Alumno.normalizarUsername(row[0]) === Alumno.normalizarUsername(githubUsername)
   );
   if (rowIndex === -1) return null;
   return config.headerRows + 1 + rowIndex;
@@ -204,12 +206,33 @@ async function findAlumnoRowIndex(
 
 // ── Upsert de alumno en la planilla ─────────────────────────
 // Unifica registro (insert) y actualización (update): busca la fila por
-// githubUsername; si existe, la actualiza respetando columnas desconocidas,
-// y si no, la agrega al final.
+// githubUsername; si existe, actualiza sólo las celdas de datos personales
+// mapeadas (batchUpdate, una celda por dato); si no, agrega una fila al
+// final. Nunca lee ni reescribe la fila entera: una cursada en marcha tiene
+// fórmulas y notas en columnas intermedias que no hay que tocar.
 
 export type UpsertAlumnoResult =
   | { ok: true }
   | { ok: false; error: string };
+
+type CeldaAEscribir = { columna: number; valor: string };
+
+function celdasDeDatosPersonales(
+  input: RegistroInput,
+  githubNormalizado: string,
+  columnConfig: ColumnConfig
+): CeldaAEscribir[] {
+  const celdasDeNombre = mapeoDeNombreDe(columnConfig).celdasParaEscribir({
+    apellido: input.apellido.trim(),
+    nombre: input.nombre.trim(),
+  });
+  return [
+    { columna: columnConfig.legajo, valor: input.legajo.trim() },
+    { columna: columnConfig.githubUsername, valor: githubNormalizado },
+    { columna: columnConfig.email, valor: Alumno.normalizarEmail(input.email) },
+    ...celdasDeNombre,
+  ];
+}
 
 // La coherencia legajo↔github la garantiza la DB (upsertAlumno →
 // LegajoConflictError). Este upsert solo refleja en Sheets lo que ya
@@ -226,50 +249,34 @@ export async function upsertarAlumnoEnSheets(
   const id = resolveSpreadsheetId(spreadsheetId);
   const columnConfig = resolveConfig(config);
   const githubNormalizado = Alumno.normalizarUsername(input.githubUsername);
+  const celdas = celdasDeDatosPersonales(input, githubNormalizado, columnConfig);
 
   const rowNumber = await findAlumnoRowIndex(githubNormalizado, id, columnConfig);
   const sheets = getSheetsClient(false);
-  const maxCol = Math.max(
-    columnConfig.legajo, columnConfig.apellido, columnConfig.nombre,
-    columnConfig.githubUsername, columnConfig.email
-  );
 
   if (rowNumber === null) {
+    const maxCol = Math.max(...celdas.map((celda) => celda.columna));
     const row = new Array(maxCol + 1).fill("");
-    row[columnConfig.legajo] = input.legajo.trim();
-    row[columnConfig.apellido] = input.apellido.trim();
-    row[columnConfig.nombre] = input.nombre.trim();
-    row[columnConfig.githubUsername] = githubNormalizado;
-    row[columnConfig.email] = Alumno.normalizarEmail(input.email);
+    for (const celda of celdas) row[celda.columna] = celda.valor;
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: id,
       range: rangoDeHoja(columnConfig.sheetName, `A:${colLetter(maxCol)}`),
-      valueInputOption: "USER_ENTERED",
+      valueInputOption: "RAW",
       requestBody: { values: [row] },
     });
     return { ok: true };
   }
 
-  const range = rangoDeHoja(columnConfig.sheetName, `A${rowNumber}:${colLetter(maxCol)}${rowNumber}`);
-  const { data: existing } = await sheets.spreadsheets.values.get({
+  await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId: id,
-    range,
-  });
-  const existingRow: unknown[] = existing.values?.[0] ?? [];
-  while (existingRow.length <= maxCol) existingRow.push("");
-
-  existingRow[columnConfig.legajo] = input.legajo.trim();
-  existingRow[columnConfig.apellido] = input.apellido.trim();
-  existingRow[columnConfig.nombre] = input.nombre.trim();
-  existingRow[columnConfig.githubUsername] = githubNormalizado;
-  existingRow[columnConfig.email] = Alumno.normalizarEmail(input.email);
-
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: id,
-    range,
-    valueInputOption: "USER_ENTERED",
-    requestBody: { values: [existingRow] },
+    requestBody: {
+      valueInputOption: "RAW",
+      data: celdas.map((celda) => ({
+        range: rangoDeHoja(columnConfig.sheetName, `${colLetter(celda.columna)}${rowNumber}`),
+        values: [[celda.valor]],
+      })),
+    },
   });
   return { ok: true };
 }
