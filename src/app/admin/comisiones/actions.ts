@@ -24,7 +24,7 @@ import {
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { DEFAULT_COLUMN_CONFIG, type GruposColumnConfig } from "@/types";
+import { DEFAULT_COLUMN_CONFIG, type ColumnConfig, type GruposColumnConfig } from "@/types";
 import { canalesActivos, canalPorNombre } from "@/infrastructure/canales";
 
 export type ComisionFormState =
@@ -43,11 +43,14 @@ export async function fetchSheetNames(
   }
 }
 
+// Tope en 701 (columna ZZ, 0-indexed): la Fase 1 del issue #82 agrega el
+// legajo al final de una planilla de cursada en marcha, después de los
+// bloques de notas de Funcional, Lógico y Objetos — eso cae bien pasada la Z.
 const ColumnIndexSchema = z.coerce
   .number({ invalid_type_error: "Debe ser un número de columna" })
   .int()
   .min(0, "Columna inválida")
-  .max(25, "Columna inválida");
+  .max(701, "Columna inválida");
 
 // "" → undefined para columnas opcionales de grupos: la UI envía string vacío
 // cuando el admin elige "(sin columna)".
@@ -56,7 +59,9 @@ const OptionalColumnIndexSchema = z.preprocess(
   ColumnIndexSchema.optional()
 );
 
-const ComisionSchema = z.object({
+const ModoNombreSchema = z.enum(["separado", "completo"]);
+
+const ComisionSchemaBase = z.object({
   anio: z.coerce
     .number({ invalid_type_error: "El año es obligatorio" })
     .int()
@@ -71,6 +76,9 @@ const ComisionSchema = z.object({
   col_nombre: ColumnIndexSchema,
   col_githubUsername: ColumnIndexSchema,
   col_email: ColumnIndexSchema,
+  modoNombre: ModoNombreSchema.default("separado"),
+  col_nombreCompleto: OptionalColumnIndexSchema,
+  permitir_precarga_sin_legajo: z.coerce.boolean().optional().transform((value) => value ?? false),
   grupos_enabled: z.coerce.boolean().optional().transform((value) => value ?? false),
   grupos_sheetName: z.string().optional(),
   grupos_headerRows: z.coerce.number().int().min(0).max(10).optional(),
@@ -78,6 +86,65 @@ const ComisionSchema = z.object({
   grupos_col_funcional: OptionalColumnIndexSchema,
   grupos_col_logico: OptionalColumnIndexSchema,
   grupos_col_objetos: OptionalColumnIndexSchema,
+});
+
+// Un dato personal mapeado a la misma columna que otro pisaría esa celda al
+// escribir. En modo completo, apellido/nombre separados no se escriben —
+// no cuentan como activos, sólo nombreCompleto.
+function datosPersonalesActivos(
+  data: Pick<
+    z.infer<typeof ComisionSchemaBase>,
+    | "col_legajo"
+    | "col_apellido"
+    | "col_nombre"
+    | "col_githubUsername"
+    | "col_email"
+    | "modoNombre"
+    | "col_nombreCompleto"
+  >
+): Array<{ campo: string; columna: number }> {
+  const comunes = [
+    { campo: "col_legajo", columna: data.col_legajo },
+    { campo: "col_githubUsername", columna: data.col_githubUsername },
+    { campo: "col_email", columna: data.col_email },
+  ];
+  if (data.modoNombre === "completo") {
+    return data.col_nombreCompleto === undefined
+      ? comunes
+      : [...comunes, { campo: "col_nombreCompleto", columna: data.col_nombreCompleto }];
+  }
+  return [
+    ...comunes,
+    { campo: "col_apellido", columna: data.col_apellido },
+    { campo: "col_nombre", columna: data.col_nombre },
+  ];
+}
+
+const ComisionSchema = ComisionSchemaBase.superRefine((data, ctx) => {
+  if (data.modoNombre === "completo" && data.col_nombreCompleto === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "La columna de nombre completo es obligatoria en modo 'completo'",
+      path: ["col_nombreCompleto"],
+    });
+  }
+
+  const camposPorColumna = new Map<number, string[]>();
+  for (const { campo, columna } of datosPersonalesActivos(data)) {
+    const camposConEstaColumna = camposPorColumna.get(columna) ?? [];
+    camposConEstaColumna.push(campo);
+    camposPorColumna.set(columna, camposConEstaColumna);
+  }
+  for (const campos of camposPorColumna.values()) {
+    if (campos.length < 2) continue;
+    for (const campo of campos) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Esta columna ya está usada por otro dato personal",
+        path: [campo],
+      });
+    }
+  }
 });
 
 function parseFormData(formData: FormData) {
@@ -92,6 +159,9 @@ function parseFormData(formData: FormData) {
     col_nombre: formData.get("col_nombre") ?? DEFAULT_COLUMN_CONFIG.nombre,
     col_githubUsername: formData.get("col_githubUsername") ?? DEFAULT_COLUMN_CONFIG.githubUsername,
     col_email: formData.get("col_email") ?? DEFAULT_COLUMN_CONFIG.email,
+    modoNombre: (formData.get("modoNombre") as string) || undefined,
+    col_nombreCompleto: formData.get("col_nombreCompleto") ?? undefined,
+    permitir_precarga_sin_legajo: formData.get("permitir_precarga_sin_legajo") === "on",
     grupos_enabled: formData.get("grupos_enabled") === "on",
     grupos_sheetName: (formData.get("grupos_sheetName") as string) ?? undefined,
     grupos_headerRows: formData.get("grupos_headerRows") ?? undefined,
@@ -103,7 +173,7 @@ function parseFormData(formData: FormData) {
 }
 
 function toColumnConfig(data: z.infer<typeof ComisionSchema>) {
-  const base = {
+  const base: ColumnConfig = {
     sheetName: data.sheetName,
     headerRows: data.headerRows,
     legajo: data.col_legajo,
@@ -111,6 +181,11 @@ function toColumnConfig(data: z.infer<typeof ComisionSchema>) {
     nombre: data.col_nombre,
     githubUsername: data.col_githubUsername,
     email: data.col_email,
+    modoNombre: data.modoNombre,
+    permitirPrecargaSinLegajo: data.permitir_precarga_sin_legajo,
+    ...(data.modoNombre === "completo" && data.col_nombreCompleto !== undefined
+      ? { nombreCompleto: data.col_nombreCompleto }
+      : {}),
   };
 
   if (!data.grupos_enabled) return base;
