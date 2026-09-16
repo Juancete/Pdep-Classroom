@@ -27,6 +27,11 @@ export interface GruposColumnConfig {
   nombreGrupoPorParadigma: Partial<Record<Paradigma, number>>;
 }
 
+// "separado": apellido y nombre en columnas propias (default, cursada nueva).
+// "completo": ya vienen consolidados en una sola columna "Apellido, Nombre"
+// (cursada en marcha con planilla preexistente).
+export type ModoNombre = "separado" | "completo";
+
 export interface ColumnConfig {
   sheetName: string;   // nombre de la hoja, ej: "Alumnos"
   headerRows: number;  // filas de encabezado a saltear (default 1)
@@ -36,6 +41,9 @@ export interface ColumnConfig {
   githubUsername: number;   // default 3 (D)
   email: number;            // default 4 (E)
   grupos?: GruposColumnConfig;  // opcional: hoja de grupos
+  modoNombre?: ModoNombre;             // ausente ⇒ "separado"
+  nombreCompleto?: number;             // sólo se usa en modo "completo"
+  permitirPrecargaSinLegajo?: boolean; // ausente ⇒ false
 }
 
 export const DEFAULT_COLUMN_CONFIG: ColumnConfig = {

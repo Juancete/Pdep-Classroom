@@ -33,8 +33,9 @@ import {
   isValidEmail,
   upsertarAlumnoEnSheets,
   getSheetNames,
+  getDatosPrecargaByGithub,
 } from "./sheets";
-import type { GruposColumnConfig } from "@/types";
+import type { ColumnConfig, GruposColumnConfig } from "@/types";
 
 // ── parseAlumnosRows ────────────────────────────────────────
 
@@ -106,6 +107,35 @@ describe("parseAlumnosRows", () => {
   it("maneja valores numéricos (legajo como number)", () => {
     const rows = [[12345, "A", "B", "user", "a@b.com", "c"]];
     expect(parseAlumnosRows(rows)[0].legajo).toBe("12345");
+  });
+});
+
+// ── parseAlumnosRows – modo completo ─────────────────────────
+
+describe("parseAlumnosRows – modoNombre 'completo'", () => {
+  const configCompleto: ColumnConfig = {
+    sheetName: "Alumnos",
+    headerRows: 1,
+    legajo: 0,
+    apellido: 1,
+    nombre: 2,
+    githubUsername: 3,
+    email: 4,
+    modoNombre: "completo",
+    nombreCompleto: 5,
+  };
+
+  it("separa apellido y nombre de la columna consolidada", () => {
+    const rows = [["12345", "", "", "juangarcia", "j@m.com", "García, Juan"]];
+    const result = parseAlumnosRows(rows, configCompleto);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ apellido: "García", nombre: "Juan" });
+  });
+
+  it("sin coma en el nombre completo, guarda apellido y nombre vacíos", () => {
+    const rows = [["12345", "", "", "juangarcia", "j@m.com", "Juan García"]];
+    const result = parseAlumnosRows(rows, configCompleto);
+    expect(result[0]).toMatchObject({ apellido: "", nombre: "" });
   });
 });
 
@@ -437,6 +467,130 @@ describe("upsertarAlumnoEnSheets – actualiza una fila existente", () => {
       })
     );
     expect(mockValuesAppend).not.toHaveBeenCalled();
+  });
+});
+
+// ── getDatosPrecargaByGithub ─────────────────────────────────
+
+describe("getDatosPrecargaByGithub", () => {
+  const SA_KEY = Buffer.from(
+    JSON.stringify({
+      client_email: "sa@proyecto.iam.gserviceaccount.com",
+      private_key: "FAKE_PRIVATE_KEY",
+    })
+  ).toString("base64");
+  const ENV_BACKUP = { ...process.env };
+
+  const configSeparado: ColumnConfig = {
+    sheetName: "Alumnos",
+    headerRows: 1,
+    legajo: 0,
+    apellido: 1,
+    nombre: 2,
+    githubUsername: 3,
+    email: 4,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.GOOGLE_SERVICE_ACCOUNT_KEY = SA_KEY;
+  });
+
+  afterEach(() => {
+    process.env = { ...ENV_BACKUP };
+  });
+
+  it("devuelve los datos parciales de la fila encontrada por github normalizado", async () => {
+    mockValuesGet.mockResolvedValue({
+      data: { values: [["12345", "García", "Juan", "JuanGarcia", "juan@mail.com"]] },
+    });
+
+    const resultado = await getDatosPrecargaByGithub("@JuanGarcia", "sheet-1", configSeparado);
+
+    expect(resultado).toEqual({
+      legajo: "12345",
+      apellido: "García",
+      nombre: "Juan",
+      email: "juan@mail.com",
+      nombreCrudo: undefined,
+    });
+  });
+
+  it("no persiste nada: nunca llama a update ni a append", async () => {
+    mockValuesGet.mockResolvedValue({
+      data: { values: [["12345", "García", "Juan", "juangarcia", "juan@mail.com"]] },
+    });
+
+    await getDatosPrecargaByGithub("juangarcia", "sheet-1", configSeparado);
+
+    expect(mockValuesUpdate).not.toHaveBeenCalled();
+    expect(mockValuesAppend).not.toHaveBeenCalled();
+  });
+
+  it("devuelve undefined si no encuentra el github en ninguna fila", async () => {
+    mockValuesGet.mockResolvedValue({
+      data: { values: [["12345", "García", "Juan", "otrousuario", "juan@mail.com"]] },
+    });
+
+    const resultado = await getDatosPrecargaByGithub("juangarcia", "sheet-1", configSeparado);
+
+    expect(resultado).toBeUndefined();
+  });
+
+  it("sin legajo y sin permitirPrecargaSinLegajo, devuelve undefined", async () => {
+    mockValuesGet.mockResolvedValue({
+      data: { values: [["", "García", "Juan", "juangarcia", "juan@mail.com"]] },
+    });
+
+    const resultado = await getDatosPrecargaByGithub("juangarcia", "sheet-1", configSeparado);
+
+    expect(resultado).toBeUndefined();
+  });
+
+  it("sin legajo pero con permitirPrecargaSinLegajo, devuelve los datos disponibles sin inventar el legajo", async () => {
+    mockValuesGet.mockResolvedValue({
+      data: { values: [["", "García", "Juan", "juangarcia", "juan@mail.com"]] },
+    });
+
+    const resultado = await getDatosPrecargaByGithub("juangarcia", "sheet-1", {
+      ...configSeparado,
+      permitirPrecargaSinLegajo: true,
+    });
+
+    expect(resultado).toEqual({
+      legajo: undefined,
+      apellido: "García",
+      nombre: "Juan",
+      email: "juan@mail.com",
+      nombreCrudo: undefined,
+    });
+  });
+
+  it("modo completo con nombre sin coma: devuelve nombreCrudo y apellido/nombre indefinidos", async () => {
+    const configCompleto: ColumnConfig = {
+      ...configSeparado,
+      modoNombre: "completo",
+      nombreCompleto: 5,
+    };
+    mockValuesGet.mockResolvedValue({
+      data: { values: [["12345", "", "", "juangarcia", "juan@mail.com", "Juan García"]] },
+    });
+
+    const resultado = await getDatosPrecargaByGithub("juangarcia", "sheet-1", configCompleto);
+
+    expect(resultado).toEqual({
+      legajo: "12345",
+      apellido: undefined,
+      nombre: undefined,
+      email: "juan@mail.com",
+      nombreCrudo: "Juan García",
+    });
+  });
+
+  it("lanza error si no hay spreadsheetId configurado", async () => {
+    await expect(getDatosPrecargaByGithub("juangarcia", undefined)).rejects.toThrow(
+      "No hay una comisión activa"
+    );
   });
 });
 
