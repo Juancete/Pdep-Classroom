@@ -70,9 +70,9 @@ export async function hayAdministradorActivo(githubUsername: string): Promise<bo
   return count > 0;
 }
 
-export async function crearAdministrador(data: AltaAdministradorInput): Promise<Administrador> {
+export async function crearAdministrador({githubUsername, nombre, porUsuario}: AltaAdministradorInput): Promise<Administrador> {
   const entityManager = await getEM();
-  const administrador = Administrador.crear(data);
+  const administrador = entityManager.create(Administrador,{ githubUsername: githubUsername, nombre: nombre, activo: true, creadoEn: new Date(), creadoPor: porUsuario, modificadoEn: new Date(), modificadoPor: porUsuario });
   asegurarQueNoEsResponsableDeEntorno(administrador.githubUsername);
   entityManager.persist(administrador);
   try {
