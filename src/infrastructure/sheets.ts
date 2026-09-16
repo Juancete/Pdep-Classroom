@@ -12,8 +12,9 @@ import {
   type Paradigma,
   PARADIGMAS,
 } from "@/types";
+import { colLetter, rangoDeHoja } from "@/lib/sheets-columns";
 
-export { isValidEmail, validateRegistro };
+export { isValidEmail, validateRegistro, colLetter };
 export type { RegistroInput };
 
 // ── Auth con service account ────────────────────────────────
@@ -54,18 +55,7 @@ function buildReadRange(config: ColumnConfig): string {
   );
   const startRow = config.headerRows + 1;
   const endCol = colLetter(maxCol);
-  return `${config.sheetName}!A${startRow}:${endCol}500`;
-}
-
-// Convierte índice 0-based a letra de columna (0→A, 25→Z, 26→AA…)
-export function colLetter(index: number): string {
-  let result = "";
-  let remaining = index;
-  do {
-    result = String.fromCharCode(65 + (remaining % 26)) + result;
-    remaining = Math.floor(remaining / 26) - 1;
-  } while (remaining >= 0);
-  return result;
+  return rangoDeHoja(config.sheetName, `A${startRow}:${endCol}500`);
 }
 
 // ── Parsear filas → Alumno[] (pura, testeable) ──────────────
@@ -194,14 +184,14 @@ export async function upsertarAlumnoEnSheets(
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: id,
-      range: `${columnConfig.sheetName}!A:${colLetter(maxCol)}`,
+      range: rangoDeHoja(columnConfig.sheetName, `A:${colLetter(maxCol)}`),
       valueInputOption: "USER_ENTERED",
       requestBody: { values: [row] },
     });
     return { ok: true };
   }
 
-  const range = `${columnConfig.sheetName}!A${rowNumber}:${colLetter(maxCol)}${rowNumber}`;
+  const range = rangoDeHoja(columnConfig.sheetName, `A${rowNumber}:${colLetter(maxCol)}${rowNumber}`);
   const { data: existing } = await sheets.spreadsheets.values.get({
     spreadsheetId: id,
     range,
@@ -240,7 +230,7 @@ function buildGruposReadRange(config: GruposColumnConfig): string {
     .filter((value): value is number => typeof value === "number");
   const maxCol = Math.max(config.githubUsername, ...gruposCols);
   const startRow = config.headerRows + 1;
-  return `${config.sheetName}!A${startRow}:${colLetter(maxCol)}500`;
+  return rangoDeHoja(config.sheetName, `A${startRow}:${colLetter(maxCol)}500`);
 }
 
 export function parseAsignacionesGrupos(
