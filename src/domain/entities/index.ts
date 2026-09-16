@@ -14,6 +14,15 @@ export {
   type EstadoDeSuscripcion,
 } from "./SuscripcionAlumno";
 export {
+  MapeoDeNombreSeparado,
+  MapeoDeNombreCompleto,
+  ModoNombreCompletoSinColumnaError,
+  mapeoDeNombreDe,
+  type MapeoDeNombre,
+  type DatosDeNombre,
+  type CeldaDeNombre,
+} from "./MapeoDeNombre";
+export {
   Comision,
   VENTANA_IMPORTACION_GRUPOS_MS,
   INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS,

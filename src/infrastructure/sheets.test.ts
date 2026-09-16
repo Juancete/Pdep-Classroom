@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const mockValuesGet = vi.fn();
 const mockValuesUpdate = vi.fn();
 const mockValuesAppend = vi.fn();
+const mockValuesBatchUpdate = vi.fn();
 
 vi.mock("googleapis", () => ({
   google: {
@@ -19,6 +20,7 @@ vi.mock("googleapis", () => ({
           get: (...args: unknown[]) => mockValuesGet(...args),
           update: (...args: unknown[]) => mockValuesUpdate(...args),
           append: (...args: unknown[]) => mockValuesAppend(...args),
+          batchUpdate: (...args: unknown[]) => mockValuesBatchUpdate(...args),
         },
       },
     }),
@@ -33,8 +35,9 @@ import {
   isValidEmail,
   upsertarAlumnoEnSheets,
   getSheetNames,
+  getDatosPrecargaByGithub,
 } from "./sheets";
-import type { GruposColumnConfig } from "@/types";
+import type { ColumnConfig, GruposColumnConfig } from "@/types";
 
 // ── parseAlumnosRows ────────────────────────────────────────
 
@@ -106,6 +109,35 @@ describe("parseAlumnosRows", () => {
   it("maneja valores numéricos (legajo como number)", () => {
     const rows = [[12345, "A", "B", "user", "a@b.com", "c"]];
     expect(parseAlumnosRows(rows)[0].legajo).toBe("12345");
+  });
+});
+
+// ── parseAlumnosRows – modo completo ─────────────────────────
+
+describe("parseAlumnosRows – modoNombre 'completo'", () => {
+  const configCompleto: ColumnConfig = {
+    sheetName: "Alumnos",
+    headerRows: 1,
+    legajo: 0,
+    apellido: 1,
+    nombre: 2,
+    githubUsername: 3,
+    email: 4,
+    modoNombre: "completo",
+    nombreCompleto: 5,
+  };
+
+  it("separa apellido y nombre de la columna consolidada", () => {
+    const rows = [["12345", "", "", "juangarcia", "j@m.com", "García, Juan"]];
+    const result = parseAlumnosRows(rows, configCompleto);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ apellido: "García", nombre: "Juan" });
+  });
+
+  it("sin coma en el nombre completo, guarda apellido y nombre vacíos", () => {
+    const rows = [["12345", "", "", "juangarcia", "j@m.com", "Juan García"]];
+    const result = parseAlumnosRows(rows, configCompleto);
+    expect(result[0]).toMatchObject({ apellido: "", nombre: "" });
   });
 });
 
@@ -387,10 +419,10 @@ describe("upsertarAlumnoEnSheets – validaciones", () => {
   });
 });
 
-// Fase 4 de la auditoría de dominio: el camino de update no escribía la
-// columna `githubUsername` normalizada — sólo lo hacía el camino de
-// append (alta nueva). Un alumno cuya fila ya existía con el username en
-// otro formato (mayúsculas, con `@`) nunca se corregía en la planilla.
+// Fase 3 del issue #82: el update de fila completa (values.get + values.update)
+// se reemplaza por un batchUpdate de una celda por dato personal mapeado.
+// Ya no se lee la fila entera, así que no hace falta preservar columnas
+// ajenas explícitamente: nunca se las toca.
 describe("upsertarAlumnoEnSheets – actualiza una fila existente", () => {
   const SA_KEY = Buffer.from(
     JSON.stringify({
@@ -417,26 +449,267 @@ describe("upsertarAlumnoEnSheets – actualiza una fila existente", () => {
     process.env = { ...ENV_BACKUP };
   });
 
+  // Fase 4 de la auditoría de dominio (pre-batchUpdate): el camino de update
+  // no escribía la columna `githubUsername` normalizada — sólo lo hacía el
+  // camino de append (alta nueva). Sigue cubierto acá con el batchUpdate.
   it("normaliza y escribe githubUsername en la fila existente, igual que el alta", async () => {
-    // Fila existente con el username sin normalizar (mayúsculas) — la
-    // búsqueda igual la encuentra porque compara normalizado.
-    const filaExistente = ["12345", "García", "Juan", "JuanGarcia", "viejo@mail.com"];
-    mockValuesGet
-      .mockResolvedValueOnce({ data: { values: [filaExistente] } }) // findAlumnoRowIndex
-      .mockResolvedValueOnce({ data: { values: [filaExistente] } }); // fila puntual a actualizar
-    mockValuesUpdate.mockResolvedValue({ data: {} });
+    // findAlumnoRowIndex ahora sólo lee la columna D (github); el username
+    // sin normalizar (mayúsculas) igual matchea porque compara normalizado.
+    mockValuesGet.mockResolvedValueOnce({ data: { values: [["JuanGarcia"]] } });
+    mockValuesBatchUpdate.mockResolvedValue({ data: {} });
 
     const result = await upsertarAlumnoEnSheets(valid, "sheet-1");
 
     expect(result).toEqual({ ok: true });
-    expect(mockValuesUpdate).toHaveBeenCalledWith(
+    expect(mockValuesGet).toHaveBeenCalledWith(
+      expect.objectContaining({ range: "'Alumnos'!D2:D500" })
+    );
+    expect(mockValuesBatchUpdate).toHaveBeenCalledWith({
+      spreadsheetId: "sheet-1",
+      requestBody: {
+        valueInputOption: "RAW",
+        data: [
+          { range: "'Alumnos'!A2", values: [["12345"]] },
+          { range: "'Alumnos'!D2", values: [["juangarcia"]] },
+          { range: "'Alumnos'!E2", values: [["juan@gmail.com"]] },
+          { range: "'Alumnos'!B2", values: [["García"]] },
+          { range: "'Alumnos'!C2", values: [["Juan"]] },
+        ],
+      },
+    });
+    expect(mockValuesUpdate).not.toHaveBeenCalled();
+    expect(mockValuesAppend).not.toHaveBeenCalled();
+  });
+
+  it("no lee ni escribe columnas intermedias no mapeadas (fórmulas de notas)", async () => {
+    // Cursada en marcha: apellido/nombre/github/email al principio, notas
+    // de los tres bloques en las columnas D..J, legajo al final (K).
+    const configConLegajoAlFinal: ColumnConfig = {
+      sheetName: "Alumnos",
+      headerRows: 1,
+      apellido: 0,
+      nombre: 1,
+      githubUsername: 2,
+      email: 3,
+      legajo: 10,
+    };
+    mockValuesGet.mockResolvedValueOnce({ data: { values: [["juangarcia"]] } });
+    mockValuesBatchUpdate.mockResolvedValue({ data: {} });
+
+    await upsertarAlumnoEnSheets(valid, "sheet-1", configConLegajoAlFinal);
+
+    // La búsqueda de fila sólo pide la columna de github, nunca A:K.
+    expect(mockValuesGet).toHaveBeenCalledTimes(1);
+    expect(mockValuesGet).toHaveBeenCalledWith(
+      expect.objectContaining({ range: "'Alumnos'!C2:C500" })
+    );
+
+    const [{ requestBody }] = mockValuesBatchUpdate.mock.calls[0];
+    const rangosEscritos: string[] = requestBody.data.map(
+      (celda: { range: string }) => celda.range
+    );
+    expect(rangosEscritos.sort()).toEqual(
+      ["'Alumnos'!A2", "'Alumnos'!B2", "'Alumnos'!C2", "'Alumnos'!D2", "'Alumnos'!K2"].sort()
+    );
+    // Ninguna columna de notas (E..J) aparece en el batchUpdate.
+    for (const columnaDeNotas of ["E", "F", "G", "H", "I", "J"]) {
+      expect(rangosEscritos).not.toContain(`'Alumnos'!${columnaDeNotas}2`);
+    }
+  });
+
+  it("conserva el legajo con ceros iniciales como texto (RAW) al actualizar", async () => {
+    mockValuesGet.mockResolvedValueOnce({ data: { values: [["juangarcia"]] } });
+    mockValuesBatchUpdate.mockResolvedValue({ data: {} });
+
+    await upsertarAlumnoEnSheets({ ...valid, legajo: "0123" }, "sheet-1");
+
+    const [{ requestBody }] = mockValuesBatchUpdate.mock.calls[0];
+    expect(requestBody.valueInputOption).toBe("RAW");
+    expect(requestBody.data).toContainEqual({
+      range: "'Alumnos'!A2",
+      values: [["0123"]],
+    });
+  });
+});
+
+describe("upsertarAlumnoEnSheets – alta nueva", () => {
+  const SA_KEY = Buffer.from(
+    JSON.stringify({
+      client_email: "sa@proyecto.iam.gserviceaccount.com",
+      private_key: "FAKE_PRIVATE_KEY",
+    })
+  ).toString("base64");
+  const ENV_BACKUP = { ...process.env };
+
+  const valid = {
+    legajo: "12345",
+    apellido: "García",
+    nombre: "Juan",
+    githubUsername: "juangarcia",
+    email: "juan@gmail.com",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.GOOGLE_SERVICE_ACCOUNT_KEY = SA_KEY;
+  });
+
+  afterEach(() => {
+    process.env = { ...ENV_BACKUP };
+  });
+
+  it("agrega una fila nueva con RAW cuando no encuentra el github", async () => {
+    mockValuesGet.mockResolvedValueOnce({ data: { values: [] } });
+    mockValuesAppend.mockResolvedValue({ data: {} });
+
+    const result = await upsertarAlumnoEnSheets(valid, "sheet-1");
+
+    expect(result).toEqual({ ok: true });
+    expect(mockValuesAppend).toHaveBeenCalledWith(
       expect.objectContaining({
+        valueInputOption: "RAW",
         requestBody: {
           values: [["12345", "García", "Juan", "juangarcia", "juan@gmail.com"]],
         },
       })
     );
+    expect(mockValuesBatchUpdate).not.toHaveBeenCalled();
+    expect(mockValuesUpdate).not.toHaveBeenCalled();
+  });
+
+  it("conserva el legajo con ceros iniciales como texto (RAW) en el alta", async () => {
+    mockValuesGet.mockResolvedValueOnce({ data: { values: [] } });
+    mockValuesAppend.mockResolvedValue({ data: {} });
+
+    await upsertarAlumnoEnSheets({ ...valid, legajo: "0123" }, "sheet-1");
+
+    const [{ valueInputOption, requestBody }] = mockValuesAppend.mock.calls[0];
+    expect(valueInputOption).toBe("RAW");
+    expect(requestBody.values[0][0]).toBe("0123");
+  });
+});
+
+// ── getDatosPrecargaByGithub ─────────────────────────────────
+
+describe("getDatosPrecargaByGithub", () => {
+  const SA_KEY = Buffer.from(
+    JSON.stringify({
+      client_email: "sa@proyecto.iam.gserviceaccount.com",
+      private_key: "FAKE_PRIVATE_KEY",
+    })
+  ).toString("base64");
+  const ENV_BACKUP = { ...process.env };
+
+  const configSeparado: ColumnConfig = {
+    sheetName: "Alumnos",
+    headerRows: 1,
+    legajo: 0,
+    apellido: 1,
+    nombre: 2,
+    githubUsername: 3,
+    email: 4,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.GOOGLE_SERVICE_ACCOUNT_KEY = SA_KEY;
+  });
+
+  afterEach(() => {
+    process.env = { ...ENV_BACKUP };
+  });
+
+  it("devuelve los datos parciales de la fila encontrada por github normalizado", async () => {
+    mockValuesGet.mockResolvedValue({
+      data: { values: [["12345", "García", "Juan", "JuanGarcia", "juan@mail.com"]] },
+    });
+
+    const resultado = await getDatosPrecargaByGithub("@JuanGarcia", "sheet-1", configSeparado);
+
+    expect(resultado).toEqual({
+      legajo: "12345",
+      apellido: "García",
+      nombre: "Juan",
+      email: "juan@mail.com",
+      nombreCrudo: undefined,
+    });
+  });
+
+  it("no persiste nada: nunca llama a update ni a append", async () => {
+    mockValuesGet.mockResolvedValue({
+      data: { values: [["12345", "García", "Juan", "juangarcia", "juan@mail.com"]] },
+    });
+
+    await getDatosPrecargaByGithub("juangarcia", "sheet-1", configSeparado);
+
+    expect(mockValuesUpdate).not.toHaveBeenCalled();
     expect(mockValuesAppend).not.toHaveBeenCalled();
+  });
+
+  it("devuelve undefined si no encuentra el github en ninguna fila", async () => {
+    mockValuesGet.mockResolvedValue({
+      data: { values: [["12345", "García", "Juan", "otrousuario", "juan@mail.com"]] },
+    });
+
+    const resultado = await getDatosPrecargaByGithub("juangarcia", "sheet-1", configSeparado);
+
+    expect(resultado).toBeUndefined();
+  });
+
+  it("sin legajo y sin permitirPrecargaSinLegajo, devuelve undefined", async () => {
+    mockValuesGet.mockResolvedValue({
+      data: { values: [["", "García", "Juan", "juangarcia", "juan@mail.com"]] },
+    });
+
+    const resultado = await getDatosPrecargaByGithub("juangarcia", "sheet-1", configSeparado);
+
+    expect(resultado).toBeUndefined();
+  });
+
+  it("sin legajo pero con permitirPrecargaSinLegajo, devuelve los datos disponibles sin inventar el legajo", async () => {
+    mockValuesGet.mockResolvedValue({
+      data: { values: [["", "García", "Juan", "juangarcia", "juan@mail.com"]] },
+    });
+
+    const resultado = await getDatosPrecargaByGithub("juangarcia", "sheet-1", {
+      ...configSeparado,
+      permitirPrecargaSinLegajo: true,
+    });
+
+    expect(resultado).toEqual({
+      legajo: undefined,
+      apellido: "García",
+      nombre: "Juan",
+      email: "juan@mail.com",
+      nombreCrudo: undefined,
+    });
+  });
+
+  it("modo completo con nombre sin coma: devuelve nombreCrudo y apellido/nombre indefinidos", async () => {
+    const configCompleto: ColumnConfig = {
+      ...configSeparado,
+      modoNombre: "completo",
+      nombreCompleto: 5,
+    };
+    mockValuesGet.mockResolvedValue({
+      data: { values: [["12345", "", "", "juangarcia", "juan@mail.com", "Juan García"]] },
+    });
+
+    const resultado = await getDatosPrecargaByGithub("juangarcia", "sheet-1", configCompleto);
+
+    expect(resultado).toEqual({
+      legajo: "12345",
+      apellido: undefined,
+      nombre: undefined,
+      email: "juan@mail.com",
+      nombreCrudo: "Juan García",
+    });
+  });
+
+  it("lanza error si no hay spreadsheetId configurado", async () => {
+    await expect(getDatosPrecargaByGithub("juangarcia", undefined)).rejects.toThrow(
+      "No hay una comisión activa"
+    );
   });
 });
 

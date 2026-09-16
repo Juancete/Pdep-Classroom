@@ -30,6 +30,13 @@ type Props = {
   onSuccessRedirect?: string;
   submitLabel: string;
   successMessage: string;
+  /**
+   * Texto tal cual figura en la planilla para este alumno en una sola
+   * columna de nombre completo que no se pudo separar automáticamente
+   * (cursada en marcha). Si viene, se muestra sobre apellido/nombre para
+   * que el alumno los complete a partir de ahí.
+   */
+  referenciaNombre?: string;
 };
 
 export function AlumnoForm({
@@ -40,6 +47,7 @@ export function AlumnoForm({
   onSuccessRedirect,
   submitLabel,
   successMessage,
+  referenciaNombre,
 }: Props) {
   const router = useRouter();
   const { loading, error, call } = useApiCall();
@@ -158,6 +166,13 @@ export function AlumnoForm({
           </p>
         )}
       </div>
+
+      {referenciaNombre && (
+        <p className="text-xs text-gray-500 -mb-1">
+          En la planilla figurás como «{referenciaNombre}». Completá tu apellido y
+          nombre por separado abajo.
+        </p>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
