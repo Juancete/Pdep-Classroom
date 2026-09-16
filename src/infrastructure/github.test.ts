@@ -390,7 +390,7 @@ describe("listarTemplates", () => {
     vi.clearAllMocks();
   });
 
-  it("delega el filtrado de templates a la búsqueda de GitHub, incluyendo forks", async () => {
+  it("delega el filtrado de templates a la búsqueda de GitHub, sin incluir forks", async () => {
     mockPaginate.mockResolvedValue([
       { name: "template-logico", full_name: "pdep-mn-utn/template-logico", description: null },
       { name: "template-objetos", full_name: "pdep-mn-utn/template-objetos", description: "TP objetos" },
@@ -403,7 +403,7 @@ describe("listarTemplates", () => {
     expect(mockPaginate).toHaveBeenCalledWith(
       mockSearchRepos,
       expect.objectContaining({
-        q: expect.stringMatching(/^org:\S+ template:true fork:true$/),
+        q: expect.stringMatching(/^org:\S+ template:true$/),
         per_page: 100,
       })
     );
