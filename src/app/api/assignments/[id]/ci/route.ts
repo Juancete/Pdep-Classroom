@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/infrastructure/auth/session";
 import { getEntregasConRepoActivo, getEntregaDeUsuario } from "@/infrastructure/repositories";
 import { sincronizarCIDeEntregas } from "@/application/sincronizarCI";
-import { internalServerError } from "@/lib/api-errors";
+import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
 
 // `forzar` ignora el control de frescura del caché — lo usa el botón
 // "Actualizar" explícito. Sin body (o `forzar: false`), respeta la ventana
@@ -41,8 +41,11 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     });
     return NextResponse.json(resultado);
   } catch (error) {
-    return internalServerError("POST /api/assignments/[id]/ci", error, {
-      assignmentId: params.id,
-    });
+    return (
+      respuestaDeErrorDeDominio(error) ??
+      internalServerError("POST /api/assignments/[id]/ci", error, {
+        assignmentId: params.id,
+      })
+    );
   }
 }

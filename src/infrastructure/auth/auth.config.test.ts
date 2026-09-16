@@ -105,39 +105,32 @@ describe("authConfig", () => {
       return (authConfig.callbacks!.session as any)(args);
     }
 
-    it("guarda rolNombre como string, no la instancia de RolDeUsuario", async () => {
-      // Regresión: Auth.js clona el objeto de sesión internamente antes de
-      // devolverlo desde auth(), y ese clon no preserva el prototype de una
-      // instancia de clase — DOCENTE/ESTUDIANTE quedarían como `{}` sin
-      // métodos del otro lado. Por eso acá sólo puede viajar un string.
-      vi.stubEnv("ADMIN_GITHUB_USERNAMES", "");
+    // A partir de #83 esta callback NO resuelve el rol: un administrador
+    // dado de alta en la app puede desactivarse entre una request y la
+    // siguiente, y resolverlo acá (una sola vez, al loguearse) lo dejaría
+    // obsoleto en el JWT. El rol se recalcula por request en
+    // `getCurrentUser()` (ver `session.test.ts`).
+    it("no incluye ningún dato de rol en la sesión", async () => {
       const authConfig = await importAuthConfig();
       const session = await callSession(authConfig, {
         session: { user: {} },
         token: { githubUsername: "ana" },
       });
-      expect(session.pdepUser.rolNombre).toBe("alumno");
       expect(session.pdepUser).not.toHaveProperty("rol");
+      expect(session.pdepUser).not.toHaveProperty("rolNombre");
     });
 
-    it("resuelve rolNombre='docente' para un username en ADMIN_GITHUB_USERNAMES", async () => {
-      vi.stubEnv("ADMIN_GITHUB_USERNAMES", "juancete");
+    it("propaga githubUsername, name e image", async () => {
       const authConfig = await importAuthConfig();
       const session = await callSession(authConfig, {
-        session: { user: {} },
-        token: { githubUsername: "juancete" },
-      });
-      expect(session.pdepUser.rolNombre).toBe("docente");
-    });
-
-    it("resuelve rolNombre='alumno' para un username fuera de ADMIN_GITHUB_USERNAMES", async () => {
-      vi.stubEnv("ADMIN_GITHUB_USERNAMES", "juancete");
-      const authConfig = await importAuthConfig();
-      const session = await callSession(authConfig, {
-        session: { user: {} },
+        session: { user: { name: "Ana García", image: "https://x" } },
         token: { githubUsername: "ana" },
       });
-      expect(session.pdepUser.rolNombre).toBe("alumno");
+      expect(session.pdepUser).toMatchObject({
+        githubUsername: "ana",
+        name: "Ana García",
+        image: "https://x",
+      });
     });
   });
 });

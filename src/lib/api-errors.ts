@@ -16,6 +16,7 @@ import {
   GrupoConEntregaError,
 } from "@/domain/entities";
 import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
+import { PermisosNoVerificablesError } from "@/infrastructure/auth/PermisosNoVerificablesError";
 
 /**
  * Parsea el body de un request JSON y verifica que sea un objeto plano.
@@ -77,6 +78,7 @@ function getRespuestasPorError(): Map<ConstructorDeError, RespuestaDeError> {
       [NombreGrupoDuplicadoError, { status: 409 }],
       [GrupoConEntregaError, { status: 409 }],
       [AlumnoNoEsMiembroDelGrupoError, { status: 409 }],
+      [PermisosNoVerificablesError, { status: 503 }],
     ]);
   }
   return respuestasPorError;

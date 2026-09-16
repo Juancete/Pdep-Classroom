@@ -48,3 +48,7 @@ export function AlumnosLoading() {
 export function GruposLoading() {
   return <ListSkeleton title="Grupos" rows={4} />;
 }
+
+export function AdministradoresLoading() {
+  return <ListSkeleton title="Docentes" rows={4} />;
+}

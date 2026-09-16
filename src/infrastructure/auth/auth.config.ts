@@ -2,12 +2,6 @@ import GitHub from "next-auth/providers/github";
 import Credentials from "next-auth/providers/credentials";
 import type { NextAuthConfig } from "next-auth";
 import type { SessionPdepUser } from "@/types";
-import { resolverRol, DOCENTE } from "@/domain/entities/RolDeUsuario";
-
-const adminUsernames = (process.env.ADMIN_GITHUB_USERNAMES ?? "")
-  .split(",")
-  .map((username) => username.trim().toLowerCase())
-  .filter(Boolean);
 
 // Sólo en desarrollo Y con opt-in explícito: entrar tipeando cualquier
 // githubUsername, sin pasar por el OAuth real de GitHub. Dos condiciones
@@ -55,16 +49,16 @@ export const authConfig: NextAuthConfig = {
 
     async session({ session, token }) {
       const ghUser = (token.githubUsername as string) ?? "";
-      // rolNombre, no la instancia de RolDeUsuario: Auth.js clona este
-      // objeto internamente antes de devolverlo desde auth(), y el clon no
-      // preserva el prototype de una clase (ver el comentario de
-      // NombreRolDeUsuario). Los consumidores reconstruyen el rol real con
-      // rolDesdeNombre(...) — getCurrentUser() y getProxyRedirectPath().
+      // A partir de #83 la sesión NO guarda el rol: un administrador dado de
+      // alta en la app puede desactivarse entre una request y la siguiente,
+      // y resolver el rol acá (una sola vez, al loguearse) lo dejaría
+      // obsoleto hasta que el JWT expire. `getCurrentUser()` lo recalcula en
+      // cada request contra `ADMIN_GITHUB_USERNAMES` + la tabla
+      // `Administrador` — ver `src/infrastructure/auth/session.ts`.
       const pdepUser: SessionPdepUser = {
         githubUsername: ghUser,
         name: session.user?.name ?? ghUser,
         image: session.user?.image ?? "",
-        rolNombre: resolverRol(ghUser, adminUsernames) === DOCENTE ? "docente" : "alumno",
       };
       (session as unknown as { pdepUser: SessionPdepUser }).pdepUser = pdepUser;
       return session;

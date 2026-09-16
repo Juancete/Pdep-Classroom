@@ -8,6 +8,7 @@ import {
   AssignmentNoGrupalError,
   NombreGrupoInvalidoError,
 } from "@/domain/entities";
+import { PermisosNoVerificablesError } from "@/infrastructure/auth/PermisosNoVerificablesError";
 
 function makeRequest(body: unknown, contentType = "application/json"): Request {
   return new Request("http://test.local/api/test", {
@@ -131,5 +132,17 @@ describe("respuestaDeErrorDeDominio", () => {
       new NombreGrupoInvalidoError("+++")
     );
     expect(response!.status).toBe(400);
+  });
+
+  it("mapea PermisosNoVerificablesError a 503 con el mensaje amigable", async () => {
+    const response = respuestaDeErrorDeDominio(
+      new PermisosNoVerificablesError(new Error("DB caída"))
+    );
+    expect(response).not.toBeNull();
+    expect(response!.status).toBe(503);
+    const json = await response!.json();
+    expect(json.error).toBe(
+      "No se pudieron verificar tus permisos. Reintentá en unos segundos."
+    );
   });
 });

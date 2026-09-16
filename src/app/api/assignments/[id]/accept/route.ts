@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/infrastructure/auth/session";
 import { GrupoNoAsignadoError } from "@/domain/entities";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { internalServerError } from "@/lib/api-errors";
+import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
 import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 import {
   aceptarAssignment,
@@ -52,10 +52,13 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
     ) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
-    return internalServerError(
-      "POST /api/assignments/[id]/accept",
-      error,
-      { assignmentId: params.id }
+    return (
+      respuestaDeErrorDeDominio(error) ??
+      internalServerError(
+        "POST /api/assignments/[id]/accept",
+        error,
+        { assignmentId: params.id }
+      )
     );
   }
 }

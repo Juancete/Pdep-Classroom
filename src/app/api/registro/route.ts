@@ -3,7 +3,7 @@ import { requireUser } from "@/infrastructure/auth/session";
 import { type RegistroInput } from "@/infrastructure/sheets";
 import { Alumno } from "@/domain/entities";
 import { usernameCanonicoDe } from "@/types";
-import { internalServerError, parseJsonObjectBody } from "@/lib/api-errors";
+import { internalServerError, parseJsonObjectBody, respuestaDeErrorDeDominio } from "@/lib/api-errors";
 import { confirmarYProcesarAlumno } from "@/application/alumnoRegistro";
 
 export async function POST(req: Request) {
@@ -51,6 +51,6 @@ export async function POST(req: Request) {
       ...(resultado.hooks.gruposSync === "error" && { gruposSync: "error" }),
     });
   } catch (error) {
-    return internalServerError("POST /api/registro", error);
+    return respuestaDeErrorDeDominio(error) ?? internalServerError("POST /api/registro", error);
   }
 }

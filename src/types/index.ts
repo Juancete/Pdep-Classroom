@@ -5,7 +5,7 @@ import {
   TIPOS_ASSIGNMENT,
   type TipoAssignment,
 } from "@/domain/entities/domain-constants";
-import type { RolDeUsuario, NombreRolDeUsuario } from "@/domain/entities/RolDeUsuario";
+import type { RolDeUsuario } from "@/domain/entities/RolDeUsuario";
 export { normalizarGithubUsername };
 
 // ── Paradigmas ──────────────────────────────────────────────
@@ -69,16 +69,15 @@ export interface PdepUser {
   rol: RolDeUsuario;
 }
 
-// Forma en la que el rol viaja DENTRO del objeto de sesión de NextAuth: un
-// nombre primitivo, no la instancia de `RolDeUsuario` (ver el comentario de
-// `NombreRolDeUsuario`). Todo lo que lee `session.pdepUser` directamente
-// (en vez de pasar por `getCurrentUser()`) tiene que reconstruir el rol real
-// con `rolDesdeNombre(...)` antes de llamar cualquier método sobre él.
+// Forma en la que viaja la identidad DENTRO del objeto de sesión de NextAuth.
+// A partir de #83 no incluye el rol: `RolDeUsuario` se resuelve por request
+// en `getCurrentUser()` (ver el comentario en `auth.config.ts`), nunca desde
+// un valor guardado en el JWT — un administrador puede darse de baja entre
+// una request y la siguiente, y el JWT no se invalida en ese momento.
 export interface SessionPdepUser {
   githubUsername: string;
   name: string;
   image: string;
-  rolNombre: NombreRolDeUsuario;
 }
 
 export function usernameCanonicoDe(user: PdepUser): string {

@@ -6,7 +6,7 @@ import {
   getEntregasConRepoActivo,
 } from "@/infrastructure/repositories";
 import { borrarRepositoriosDeAssignment } from "@/application/borrarRepositoriosDeAssignment";
-import { internalServerError } from "@/lib/api-errors";
+import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
 
 export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -28,9 +28,12 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
       repos: entregas.map((entrega) => entrega.repoName).filter(Boolean),
     });
   } catch (error) {
-    return internalServerError("GET /api/assignments/[id]/repos", error, {
-      assignmentId: params.id,
-    });
+    return (
+      respuestaDeErrorDeDominio(error) ??
+      internalServerError("GET /api/assignments/[id]/repos", error, {
+        assignmentId: params.id,
+      })
+    );
   }
 }
 
@@ -77,8 +80,11 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
 
     return NextResponse.json(result);
   } catch (error) {
-    return internalServerError("DELETE /api/assignments/[id]/repos", error, {
-      assignmentId: params.id,
-    });
+    return (
+      respuestaDeErrorDeDominio(error) ??
+      internalServerError("DELETE /api/assignments/[id]/repos", error, {
+        assignmentId: params.id,
+      })
+    );
   }
 }

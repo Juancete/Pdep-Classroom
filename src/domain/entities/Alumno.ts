@@ -2,7 +2,12 @@ import { Entity, ManyToOne, PrimaryKey, Property } from "@mikro-orm/core";
 import { randomUUID } from "crypto";
 import { Comision } from "./Comision";
 import type { SuscripcionAlumno } from "./SuscripcionAlumno";
-import { ALUMNO_LEGAJO_PATTERN, ALUMNO_EMAIL_PATTERN, normalizarGithubUsername } from "./domain-constants";
+import {
+  ALUMNO_LEGAJO_PATTERN,
+  ALUMNO_EMAIL_PATTERN,
+  normalizarGithubUsername,
+  esGithubUsernameValido,
+} from "./domain-constants";
 
 export interface RegistroInput {
   legajo: string;
@@ -52,7 +57,7 @@ export function validateRegistro(input: RegistroInput): string | null {
   if (typeof githubUsername !== "string")
     return "El usuario de GitHub debe ser un texto";
   if (!githubUsername.trim()) return "El usuario de GitHub es obligatorio";
-  if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(githubUsername.trim()))
+  if (!esGithubUsernameValido(githubUsername))
     return "El usuario de GitHub no tiene un formato válido";
   if (typeof email !== "string" || !isValidEmail(email)) return "El email no es válido";
   return null;

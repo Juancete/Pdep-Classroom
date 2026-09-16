@@ -34,6 +34,13 @@ export interface ContextoDeMembresia {
  * navegación mostrar) se delega al objeto concreto. Mismo criterio que
  * `EstadoAssignment` para el ciclo de vida de un assignment.
  *
+ * Tres implementaciones: `Estudiante` (alumno registrado), `Docente`
+ * (alcance administrativo global — docente dado de alta en `Administrador`
+ * o, antes de #83, cualquiera en `ADMIN_GITHUB_USERNAMES`) y `Responsable`
+ * (subtipo de `Docente` por herencia — especializa el comportamiento
+ * sobrescribiendo dos métodos: los responsables configurados por entorno,
+ * únicos que además pueden gestionar el ABM de administradores).
+ *
  * Instancias singleton — el rol no tiene datos propios, solo comportamiento.
  */
 export abstract class RolDeUsuario {
@@ -59,6 +66,14 @@ export abstract class RolDeUsuario {
    * decidir qué datos traer, no una regla de negocio nueva por sitio.
    */
   abstract puedeAdministrar(): boolean;
+
+  /**
+   * `true` si este rol puede dar de alta, editar y desactivar administradores
+   * (issue #83). Sólo lo tienen los responsables configurados por entorno —
+   * ni un docente dado de alta en la app ni un alumno pueden gestionar
+   * accesos, aunque el primero sí `puedeAdministrar()`.
+   */
+  abstract puedeGestionarAdministradores(): boolean;
 
   /** Secciones de `/admin/*` que este rol ve en la navegación. */
   abstract itemsDeNavegacion(): ItemDeNavegacion[];
@@ -118,6 +133,10 @@ class Docente extends RolDeUsuario {
     return true;
   }
 
+  puedeGestionarAdministradores(): boolean {
+    return false;
+  }
+
   itemsDeNavegacion(): ItemDeNavegacion[] {
     return [
       { href: "/admin/assignments", label: "Assignments" },
@@ -142,6 +161,22 @@ class Docente extends RolDeUsuario {
   }
 }
 
+// Responsable: todo lo que puede hacer un Docente (herencia simple: hereda
+// todo el comportamiento de Docente y sobrescribe sólo lo que cambia —
+// issue #83 pide explícitamente "conservar todos los permisos docentes")
+// más la gestión del ABM de administradores. Sólo lo tienen los
+// usernames configurados en `ADMIN_GITHUB_USERNAMES`: no hay alta de
+// responsables desde la aplicación (fuera de alcance del issue).
+class Responsable extends Docente {
+  override puedeGestionarAdministradores(): boolean {
+    return true;
+  }
+
+  override itemsDeNavegacion(): ItemDeNavegacion[] {
+    return [...super.itemsDeNavegacion(), { href: "/admin/administradores", label: "Docentes" }];
+  }
+}
+
 class Estudiante extends RolDeUsuario {
   autorizarAccesoAssignment(alumno: Alumno | null, assignment: Assignment): void {
     if (
@@ -161,6 +196,10 @@ class Estudiante extends RolDeUsuario {
   }
 
   puedeAdministrar(): boolean {
+    return false;
+  }
+
+  puedeGestionarAdministradores(): boolean {
     return false;
   }
 
@@ -188,33 +227,31 @@ class Estudiante extends RolDeUsuario {
 
 export const DOCENTE: RolDeUsuario = new Docente();
 export const ESTUDIANTE: RolDeUsuario = new Estudiante();
+export const RESPONSABLE: RolDeUsuario = new Responsable();
 
 /**
- * Nombre serializable de un rol — lo único de `RolDeUsuario` que puede viajar
- * dentro del objeto de sesión de NextAuth. Auth.js clona ese objeto
- * internamente antes de devolverlo desde `auth()`, y el clon no preserva el
- * prototype de una instancia de clase: como `DOCENTE`/`ESTUDIANTE` no tienen
- * datos propios (todo su comportamiento vive en el prototype), lo que
- * sobrevive al clon es un objeto vacío sin métodos. Por eso la sesión guarda
- * este string, no la instancia — y `rolDesdeNombre` la reconstruye del lado
- * del consumidor, después del clon.
+ * Único punto de decisión de todo el sistema entre responsable, docente y
+ * alumno — la frontera real (¿quién es este usuario?) que construye el
+ * objeto de rol. Análogo a `EstadoAssignment.desdeNombre`, pero acá no hay
+ * columna que leer: la respuesta se arma a partir de dos hechos ya
+ * resueltos por el caller (¿está en `ADMIN_GITHUB_USERNAMES`? ¿tiene un
+ * registro activo en `Administrador`?), no de un `if` de tipo disperso por
+ * el resto del sistema.
+ *
+ * No recibe la sesión ni el username: a partir de #83, un administrador
+ * puede darse de baja entre una request y la siguiente, así que esto no se
+ * puede resolver una sola vez en la callback `session()` de NextAuth (el rol
+ * quedaría obsoleto en el JWT) — se llama en cada request, desde
+ * `getCurrentUser()`.
  */
-export type NombreRolDeUsuario = "docente" | "alumno";
-
-export function rolDesdeNombre(nombre: NombreRolDeUsuario): RolDeUsuario {
-  return nombre === "docente" ? DOCENTE : ESTUDIANTE;
-}
-
-/**
- * Único punto de decisión de todo el sistema entre docente y alumno — la
- * frontera real (username → rol). Análogo a `EstadoAssignment.desdeNombre`,
- * pero acá no hay columna que leer: el rol se computa desde la lista de
- * admins, así que el lookup es este chequeo, no un `Record`. Se llama una
- * sola vez, en la callback `session()` de NextAuth.
- */
-export function resolverRol(githubUsername: string, adminUsernames: string[]): RolDeUsuario {
-  const usernameNormalizado = githubUsername.toLowerCase();
-  return adminUsernames.some((admin) => admin.toLowerCase() === usernameNormalizado)
-    ? DOCENTE
-    : ESTUDIANTE;
+export function resolverRol({
+  esResponsableDeEntorno,
+  esAdministradorActivo,
+}: {
+  esResponsableDeEntorno: boolean;
+  esAdministradorActivo: boolean;
+}): RolDeUsuario {
+  if (esResponsableDeEntorno) return RESPONSABLE;
+  if (esAdministradorActivo) return DOCENTE;
+  return ESTUDIANTE;
 }

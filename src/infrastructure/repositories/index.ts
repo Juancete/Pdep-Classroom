@@ -138,6 +138,17 @@ export {
 } from "./CambioDeMembresiaRepository";
 
 export {
+  getAdministradores,
+  hayAdministradorActivo,
+  crearAdministrador,
+  renombrarAdministrador,
+  cambiarEstadoAdministrador,
+  AdministradorDuplicadoError,
+  AdministradorNoEncontradoError,
+  AdministradorProtegidoError,
+} from "./AdministradorRepository";
+
+export {
   registrarDelivery,
   reclamarDeliveryPorId,
   reclamarDeliveryPorDeliveryId,

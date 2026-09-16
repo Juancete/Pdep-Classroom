@@ -386,11 +386,24 @@ pnpm test:migrations       # Correr las migraciones + invariantes contra Postgre
 
 ### 6. Configurar admins
 
-En `ADMIN_GITHUB_USERNAMES` poné los usernames de GitHub de los docentes, separados por coma:
+En `ADMIN_GITHUB_USERNAMES` poné los usernames de GitHub de los **responsables**, separados por
+coma:
 
 ```
 ADMIN_GITHUB_USERNAMES=juancontardo,fdodino,nsicolo,dsquivel
 ```
+
+Un responsable tiene los mismos permisos que cualquier docente, más uno extra: es el único que
+puede gestionar docentes desde `/admin/administradores`. Esta lista no se copia a la base de
+datos — sigue siendo la única fuente de responsables, y darla de baja implica editar la variable
+de entorno y redesplegar, igual que hoy.
+
+Para sumar **docentes** sin tocar variables de entorno ni desplegar, un responsable los da de alta
+desde `/admin/administradores`: sólo pide el usuario de GitHub y, opcionalmente, un nombre de
+referencia. El docente entra con esa cuenta de GitHub sin necesitar registrarse como alumno.
+Desactivarlo le revoca los permisos desde la siguiente solicitud, incluso con una sesión ya
+abierta; reactivarlo se los devuelve sin que tenga que volver a loguearse. El login de desarrollo
+(sección 8.1) entra como responsable con los usernames de esta lista.
 
 ### 7. Generar secret de NextAuth
 
@@ -422,7 +435,7 @@ ENABLE_DEV_LOGIN=true
 
 La otra condición (`NODE_ENV=development`) ya la pone `next dev` solo. Con
 ambas, `/login` muestra un panel extra: un botón directo por cada username
-en `ADMIN_GITHUB_USERNAMES` (entra como docente) y un campo de texto libre
+en `ADMIN_GITHUB_USERNAMES` (entra como responsable) y un campo de texto libre
 para entrar como cualquier alumno.
 
 ### 9. Deploy a Vercel
@@ -458,7 +471,8 @@ vercel env add GITHUB_CLIENT_SECRET
 # NextAuth
 vercel env add NEXTAUTH_SECRET               # npx auth secret
 
-# Admins — sin esto, nadie entra como docente
+# Admins — sin esto, nadie entra como responsable (y por lo tanto nadie puede
+# dar de alta administradores desde /admin/administradores)
 vercel env add ADMIN_GITHUB_USERNAMES        # usernames separados por coma
 ```
 
