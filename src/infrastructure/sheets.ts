@@ -3,6 +3,7 @@ import {
   Alumno,
   isValidEmail,
   validateRegistro,
+  mapeoDeNombreDe,
   type RegistroInput,
 } from "@/domain/entities";
 import {
@@ -47,11 +48,12 @@ function resolveSpreadsheetId(spreadsheetId?: string): string {
 }
 
 // Calcula el rango para leer todas las filas de datos.
-// La columna más alta usada determina el ancho del rango.
+// La columna más alta usada determina el ancho del rango; las columnas de
+// nombre dependen del modo (separado: apellido+nombre; completo: una sola).
 function buildReadRange(config: ColumnConfig): string {
   const maxCol = Math.max(
-    config.legajo, config.apellido, config.nombre,
-    config.githubUsername, config.email
+    config.legajo, config.githubUsername, config.email,
+    ...mapeoDeNombreDe(config).columnasUsadas()
   );
   const startRow = config.headerRows + 1;
   const endCol = colLetter(maxCol);
@@ -64,14 +66,16 @@ export function parseAlumnosRows(
   rows: unknown[][],
   config: ColumnConfig = DEFAULT_COLUMN_CONFIG
 ): Alumno[] {
+  const mapeoDeNombre = mapeoDeNombreDe(config);
   return rows
     .filter((row) => row[config.legajo] && row[config.githubUsername])
     .map((row) => {
       const alumno = new Alumno();
+      const { apellido, nombre } = mapeoDeNombre.leerDeFila(row);
       alumno.aplicarRegistro({
         legajo: norm(row[config.legajo]),
-        apellido: norm(row[config.apellido]),
-        nombre: norm(row[config.nombre]),
+        apellido,
+        nombre,
         githubUsername: norm(row[config.githubUsername]),
         email: norm(row[config.email]),
       });
@@ -118,6 +122,62 @@ export async function getAlumnoByLegajo(
 ): Promise<Alumno | undefined> {
   const all = await getAlumnos(spreadsheetId, config);
   return all.find((alumno) => alumno.legajo === legajo.trim());
+}
+
+// ── Precarga para registro (cursada en marcha) ──────────────
+// A diferencia de getAlumnos/getAlumnoByGithub, no descarta filas sin
+// legajo cuando la comisión permite precarga sin legajo (alumno que ya
+// está en la planilla vigente pero nunca tuvo legajo asignado). Devuelve
+// un tipo parcial, no un Alumno: no persiste nada ni inventa legajos.
+
+export type DatosPrecargaAlumno = {
+  legajo?: string;
+  apellido?: string;
+  nombre?: string;
+  email?: string;
+  nombreCrudo?: string;
+};
+
+export async function getDatosPrecargaByGithub(
+  githubUsername: string,
+  spreadsheetId?: string,
+  config?: Partial<ColumnConfig>
+): Promise<DatosPrecargaAlumno | undefined> {
+  const id = resolveSpreadsheetId(spreadsheetId);
+  const columnConfig = resolveConfig(config);
+  const githubNormalizado = Alumno.normalizarUsername(githubUsername);
+
+  let rows: unknown[][];
+  try {
+    const sheets = getSheetsClient();
+    const { data } = await sheets.spreadsheets.values.get({
+      spreadsheetId: id,
+      range: buildReadRange(columnConfig),
+    });
+    rows = data.values ?? [];
+  } catch (error) {
+    throw new Error(`No se pudo leer la planilla de alumnos: ${(error as Error).message}`);
+  }
+
+  const fila = rows.find(
+    (row) =>
+      Alumno.normalizarUsername(row[columnConfig.githubUsername]) === githubNormalizado
+  );
+  if (!fila) return undefined;
+
+  const legajo = norm(fila[columnConfig.legajo]);
+  if (!legajo && !columnConfig.permitirPrecargaSinLegajo) return undefined;
+
+  const { apellido, nombre, crudo } = mapeoDeNombreDe(columnConfig).leerDeFila(fila);
+  const email = norm(fila[columnConfig.email]);
+
+  return {
+    legajo: legajo || undefined,
+    apellido: apellido || undefined,
+    nombre: nombre || undefined,
+    email: email || undefined,
+    nombreCrudo: crudo,
+  };
 }
 
 // ── Encontrar el número de fila de un alumno (1-based, incluyendo header) ──
