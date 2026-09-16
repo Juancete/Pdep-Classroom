@@ -21,7 +21,7 @@ export function AdministradorForm() {
 
   return (
     <form action={formAction} className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
-      <h2 className="text-sm font-semibold text-gray-700 mb-3">Nuevo administrador</h2>
+      <h2 className="text-sm font-semibold text-gray-700 mb-3">Nuevo docente</h2>
       <div className="flex flex-col sm:flex-row gap-3 sm:items-start">
         <div className="flex-1">
           <label htmlFor="administrador-githubUsername" className="block text-xs font-medium text-gray-600 mb-1">Usuario de GitHub *</label>
@@ -29,7 +29,7 @@ export function AdministradorForm() {
             id="administrador-githubUsername"
             name="githubUsername"
             type="text"
-            placeholder="ej: ayudante1"
+            placeholder="ej: docente1"
             required
             defaultValue={valores.githubUsername ?? ""}
             className={errors.githubUsername ? INPUT_ERROR_CLASS : INPUT_CLASS}

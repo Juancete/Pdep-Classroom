@@ -13,8 +13,8 @@ export class AdministradorDuplicadoError extends Error {
   ) {
     super(
       existenteInactivo
-        ? `Ya existe un administrador con el usuario @${githubUsername}, pero está desactivado. Reactivalo en vez de crear uno nuevo.`
-        : `Ya existe un administrador con el usuario @${githubUsername}.`
+        ? `Ya existe un docente con el usuario @${githubUsername}, pero está desactivado. Reactivalo en vez de crear uno nuevo.`
+        : `Ya existe un docente con el usuario @${githubUsername}.`
     );
     this.name = "AdministradorDuplicadoError";
   }
@@ -22,7 +22,7 @@ export class AdministradorDuplicadoError extends Error {
 
 export class AdministradorNoEncontradoError extends Error {
   constructor(public readonly id: string) {
-    super("El administrador no existe.");
+    super("El docente no existe.");
     this.name = "AdministradorNoEncontradoError";
   }
 }

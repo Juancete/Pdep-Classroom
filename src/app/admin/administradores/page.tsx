@@ -13,6 +13,22 @@ import {
   DataEmpty,
 } from "@/components/DataTable";
 
+// Las dos píldoras de estado ("Activo"/"Inactivo") se repetían idénticas en
+// la fila de entorno (siempre activa) y en la de aplicación — server
+// component, no necesita estado propio.
+function EstadoBadge({ activo }: { activo: boolean }) {
+  return activo ? (
+    <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+      <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+      Activo
+    </span>
+  ) : (
+    <span className="text-xs font-medium bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+      Inactivo
+    </span>
+  );
+}
+
 export default async function AdminAdministradoresPage() {
   await requireResponsable();
   const administradores = await getAdministradores();
@@ -31,10 +47,10 @@ export default async function AdminAdministradoresPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Administradores</h1>
+        <h1 className="text-2xl font-bold">Docentes</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Los ayudantes dados de alta acá reciben los mismos permisos docentes que un responsable,
-          pero no pueden gestionar este panel. Los responsables configurados por entorno no pueden
+          Los docentes dados de alta acá tienen los mismos permisos que un responsable, pero no
+          pueden gestionar este panel. Los responsables configurados por entorno no pueden
           editarse ni desactivarse desde acá.
         </p>
       </div>
@@ -62,10 +78,7 @@ export default async function AdminAdministradoresPage() {
                 <span className="text-gray-400">—</span>
               </DataCell>
               <DataCell label="Estado">
-                <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                  <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                  Activo
-                </span>
+                <EstadoBadge activo={true} />
               </DataCell>
               <DataCell label="Origen">
                 <span
@@ -90,16 +103,7 @@ export default async function AdminAdministradoresPage() {
                 <NombreEditable id={administrador.id} nombre={administrador.nombre} />
               </DataCell>
               <DataCell label="Estado">
-                {administrador.activo ? (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                    <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                    Activo
-                  </span>
-                ) : (
-                  <span className="text-xs font-medium bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
-                    Inactivo
-                  </span>
-                )}
+                <EstadoBadge activo={administrador.activo} />
               </DataCell>
               <DataCell label="Origen">
                 <span className="text-xs font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">

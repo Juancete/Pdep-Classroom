@@ -393,14 +393,14 @@ coma:
 ADMIN_GITHUB_USERNAMES=juancontardo,fdodino,nsicolo,dsquivel
 ```
 
-Un responsable tiene los mismos permisos docentes que cualquier administrador, más uno extra: es el
-único que puede gestionar administradores desde `/admin/administradores`. Esta lista no se copia a
-la base de datos — sigue siendo la única fuente de responsables, y darla de baja implica editar
-la variable de entorno y redesplegar, igual que hoy.
+Un responsable tiene los mismos permisos que cualquier docente, más uno extra: es el único que
+puede gestionar docentes desde `/admin/administradores`. Esta lista no se copia a la base de
+datos — sigue siendo la única fuente de responsables, y darla de baja implica editar la variable
+de entorno y redesplegar, igual que hoy.
 
-Para sumar **ayudantes** sin tocar variables de entorno ni desplegar, un responsable los da de alta
+Para sumar **docentes** sin tocar variables de entorno ni desplegar, un responsable los da de alta
 desde `/admin/administradores`: sólo pide el usuario de GitHub y, opcionalmente, un nombre de
-referencia. El ayudante entra con esa cuenta de GitHub sin necesitar registrarse como alumno.
+referencia. El docente entra con esa cuenta de GitHub sin necesitar registrarse como alumno.
 Desactivarlo le revoca los permisos desde la siguiente solicitud, incluso con una sesión ya
 abierta; reactivarlo se los devuelve sin que tenga que volver a loguearse. El login de desarrollo
 (sección 8.1) entra como responsable con los usernames de esta lista.

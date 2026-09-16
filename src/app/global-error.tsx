@@ -1,7 +1,7 @@
 "use client";
 
 import "./globals.css";
-import ErrorPage from "./error";
+import { ErrorPage } from "@/components/ErrorPage";
 
 // Cubre errores del propio root layout: `layout.tsx` renderiza `<Nav />` y
 // `<SyncPendingBanner />`, que llaman a `getCurrentUser()`, y esa consulta
@@ -11,29 +11,30 @@ import ErrorPage from "./error";
 // `error.tsx` no lo cubre; sin este archivo, Next muestra su pantalla
 // genérica. Next exige que un `global-error.tsx` incluya `<html>/<body>`
 // porque reemplaza al layout entero mientras está activo.
+//
+// La política de qué mensaje mostrar (y cuándo) vive en `ErrorPage`, la
+// misma que usa `error.tsx` — acá sólo queda el markup propio del boundary
+// de root (`<html>/<body>`) y el botón de reintento.
 export default function GlobalError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
-  // Next registra los errores de render del servidor antes de entregar este
-  // boundary. No reenviamos detalles desde el cliente ni mostramos mensajes
-  // arbitrarios fuera de desarrollo; el digest permite correlacionar los logs.
-  const displayError = process.env.NODE_ENV === "development"
-    ? error
-    : Object.assign(new Error("El servidor encontró un error. Revisá los logs para más detalles."), {
-        digest: error.digest,
-      });
   return (
     <html lang="es">
       <body className="font-sans">
-        <ErrorPage error={displayError} />
+        <ErrorPage error={error} />
         <div className="text-center mt-4">
+          {/* `retry` (no `reset`) porque además de limpiar el estado del
+              boundary vuelve a pedir los datos del router (`router.refresh()`
+              vía `startTransition`) — con sólo `reset` una falla temporal
+              (ej. de permisos) seguía mostrando el mismo error aunque la
+              causa ya se hubiera resuelto. */}
           <button
             type="button"
-            onClick={reset}
+            onClick={retry}
             className="bg-pdep-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-pdep-700"
           >
             Reintentar

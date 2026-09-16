@@ -21,14 +21,17 @@ export type AdministradorFormState =
   | { ok: true }
   | null;
 
+// Sin `.max()` acá: la longitud es una regla de dominio, no de forma — vive
+// en `Administrador.validarNombre`/`validarAlta` (ver el pre-chequeo en cada
+// action más abajo). Zod sólo garantiza que el campo sea el tipo esperado.
 const AltaSchema = z.object({
   githubUsername: z.string(),
-  nombre: z.string().max(255, "El nombre no puede superar los 255 caracteres").optional(),
+  nombre: z.string().optional(),
 });
 
 const RenombrarSchema = z.object({
-  id: z.string().min(1),
-  nombre: z.string().max(255, "El nombre no puede superar los 255 caracteres").optional(),
+  id: z.string().uuid(),
+  nombre: z.string().optional(),
 });
 
 const CambiarEstadoSchema = z.object({
@@ -36,15 +39,23 @@ const CambiarEstadoSchema = z.object({
   activo: z.boolean(),
 });
 
-// Errores de dominio que, al fallar el alta, se muestran como error de
-// campo en `githubUsername` en vez de propagarse: duplicado, protegido por
-// configuración de entorno, o inválido según la propia entidad (defensa
-// extra detrás del pre-chequeo de `validarAlta` de más arriba).
-const ERRORES_DE_ALTA_COMO_CAMPO = [
+// Errores de dominio conocidos del ABM completo (alta, renombrado, cambio de
+// estado): duplicado, protegido por configuración de entorno, inválido
+// según la propia entidad (defensa extra detrás de los pre-chequeos de
+// `validarAlta`/`validarNombre`), o el docente no existe más. Cada action
+// decide cómo mostrarlos (error de campo o `{ ok: false }`); lo que
+// comparten es que no son bugs — un error fuera de esta lista sí lo es y se
+// propaga.
+const ERRORES_CONOCIDOS_DEL_ABM = [
   AdministradorDuplicadoError,
   AdministradorProtegidoError,
   AdministradorInvalidoError,
+  AdministradorNoEncontradoError,
 ];
+
+function esErrorConocidoDelAbm(error: unknown): error is Error {
+  return error instanceof Error && ERRORES_CONOCIDOS_DEL_ABM.some((tipoDeError) => error instanceof tipoDeError);
+}
 
 // Lo que el usuario tipeó en el alta, tal cual llegó en el FormData — se
 // devuelve junto con los errores para que el form lo reponga como
@@ -53,6 +64,14 @@ const ERRORES_DE_ALTA_COMO_CAMPO = [
 function valoresDelAlta(formData: FormData): Record<string, string> {
   return {
     githubUsername: (formData.get("githubUsername") as string) ?? "",
+    nombre: (formData.get("nombre") as string) ?? "",
+  };
+}
+
+// Mismo idioma que `valoresDelAlta`, para el form de renombrado (ver
+// `NombreEditable` en `administrador-acciones.tsx`).
+function valoresDelRenombrado(formData: FormData): Record<string, string> {
+  return {
     nombre: (formData.get("nombre") as string) ?? "",
   };
 }
@@ -73,11 +92,26 @@ export async function crearAdministradorAction(
 
   const { githubUsername, nombre } = parsed.data;
 
-  const errorDeFormato = Administrador.validarAlta({ githubUsername, nombre });
-  if (errorDeFormato) {
+  // Se pre-chequea el username y el nombre por separado (en vez de un solo
+  // `validarAlta({ githubUsername, nombre })`) para poder devolver el error
+  // en el campo que corresponde: `validarAlta` con `nombre` omitido sólo
+  // puede fallar por el username, así que cualquier error acá es de
+  // `githubUsername`. El nombre se valida aparte, mismo idioma que el
+  // pre-chequeo de `renombrarAdministradorAction`.
+  const errorDeUsername = Administrador.validarAlta({ githubUsername });
+  if (errorDeUsername) {
     return {
       ok: false,
-      errors: { githubUsername: [errorDeFormato] },
+      errors: { githubUsername: [errorDeUsername] },
+      valores: valoresDelAlta(formData),
+    };
+  }
+
+  const errorDeNombre = Administrador.validarNombre(nombre);
+  if (errorDeNombre) {
+    return {
+      ok: false,
+      errors: { nombre: [errorDeNombre] },
       valores: valoresDelAlta(formData),
     };
   }
@@ -85,10 +119,7 @@ export async function crearAdministradorAction(
   try {
     await crearAdministrador({ githubUsername, nombre, porUsuario: responsable.githubUsername });
   } catch (error) {
-    if (
-      error instanceof Error &&
-      ERRORES_DE_ALTA_COMO_CAMPO.some((tipoDeError) => error instanceof tipoDeError)
-    ) {
+    if (esErrorConocidoDelAbm(error)) {
       return {
         ok: false,
         errors: { githubUsername: [error.message] },
@@ -116,18 +147,30 @@ export async function renombrarAdministradorAction(
     return {
       ok: false,
       errors: parsed.error.flatten().fieldErrors,
-      valores: { nombre: (formData.get("nombre") as string) ?? "" },
+      valores: valoresDelRenombrado(formData),
+    };
+  }
+
+  // Mismo pre-chequeo que el alta, antes de tocar el repositorio: la regla
+  // de longitud vive en el dominio (`Administrador.validarNombre`), acá sólo
+  // se llama.
+  const errorDeFormato = Administrador.validarNombre(parsed.data.nombre);
+  if (errorDeFormato) {
+    return {
+      ok: false,
+      errors: { nombre: [errorDeFormato] },
+      valores: valoresDelRenombrado(formData),
     };
   }
 
   try {
     await renombrarAdministrador(parsed.data.id, parsed.data.nombre, responsable.githubUsername);
   } catch (error) {
-    if (error instanceof AdministradorProtegidoError) {
+    if (esErrorConocidoDelAbm(error)) {
       return {
         ok: false,
         errors: { nombre: [error.message] },
-        valores: { nombre: (formData.get("nombre") as string) ?? "" },
+        valores: valoresDelRenombrado(formData),
       };
     }
     throw error;
@@ -158,11 +201,17 @@ export async function cambiarEstadoAdministradorAction(
   try {
     await cambiarEstadoAdministrador(parsed.data.id, parsed.data.activo, responsable.githubUsername);
   } catch (error) {
-    if (error instanceof AdministradorProtegidoError || error instanceof AdministradorNoEncontradoError) {
+    // A diferencia de las otras dos actions, acá no hay `throw` para un
+    // error desconocido: esto se invoca directo desde el cliente (no hay un
+    // `<form>` ni un error boundary de por medio — ver el comentario de más
+    // arriba), así que un throw llegaría al cliente como el mensaje
+    // sanitizado genérico de Next, sin loguear el detalle real en el
+    // servidor.
+    if (esErrorConocidoDelAbm(error)) {
       return { ok: false, error: error.message };
     }
-    logger.error({ err: error, administradorId: parsed.data.id }, "Error al cambiar el estado del administrador");
-    return { ok: false, error: "No se pudo cambiar el estado del administrador. Reintentá en unos segundos." };
+    logger.error({ err: error, administradorId: parsed.data.id }, "Error al cambiar el estado del docente");
+    return { ok: false, error: "No se pudo cambiar el estado del docente. Reintentá en unos segundos." };
   }
   revalidatePath(ADMINISTRADORES_PATH);
   return { ok: true };

@@ -20,7 +20,7 @@ vi.mock("@/infrastructure/auth/session", () => ({
 const { FakeAdministradorDuplicadoError, FakeAdministradorProtegidoError, FakeAdministradorNoEncontradoError } = vi.hoisted(() => {
   class FakeAdministradorNoEncontradoError extends Error {
     constructor() {
-      super("El administrador no existe.");
+      super("El docente no existe.");
     }
   }
   class FakeAdministradorDuplicadoError extends Error {
@@ -30,8 +30,8 @@ const { FakeAdministradorDuplicadoError, FakeAdministradorProtegidoError, FakeAd
     ) {
       super(
         existenteInactivo
-          ? `Ya existe un administrador con el usuario @${githubUsername}, pero está desactivado. Reactivalo en vez de crear uno nuevo.`
-          : `Ya existe un administrador con el usuario @${githubUsername}.`
+          ? `Ya existe un docente con el usuario @${githubUsername}, pero está desactivado. Reactivalo en vez de crear uno nuevo.`
+          : `Ya existe un docente con el usuario @${githubUsername}.`
       );
       this.name = "AdministradorDuplicadoError";
     }
@@ -65,6 +65,10 @@ import {
   renombrarAdministradorAction,
   cambiarEstadoAdministradorAction,
 } from "./actions";
+// No se mockea `@/domain/entities`: `AdministradorInvalidoError` es la
+// clase real, la misma que usa `actions.ts` para reconocer errores
+// conocidos del ABM (ver `esErrorConocidoDelAbm`).
+import { AdministradorInvalidoError } from "@/domain/entities";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -142,7 +146,7 @@ describe("crearAdministradorAction", () => {
     const result = await crearAdministradorAction(null, makeFormData({ githubUsername: "ayudante1" }));
     expect(result).toEqual({
       ok: false,
-      errors: { githubUsername: ["Ya existe un administrador con el usuario @ayudante1."] },
+      errors: { githubUsername: ["Ya existe un docente con el usuario @ayudante1."] },
       valores: { githubUsername: "ayudante1", nombre: "" },
     });
   });
@@ -170,27 +174,35 @@ describe("crearAdministradorAction", () => {
 });
 
 describe("renombrarAdministradorAction", () => {
+  const idValido = "33333333-3333-3333-3333-333333333333";
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireResponsable.mockResolvedValue({ githubUsername: "juancete" });
-    mockRenombrarAdministrador.mockResolvedValue({ id: "a1" });
+    mockRenombrarAdministrador.mockResolvedValue({ id: idValido });
   });
 
   it("siempre llama a requireResponsable", async () => {
-    await renombrarAdministradorAction(null, makeFormData({ id: "a1", nombre: "Nuevo" }));
+    await renombrarAdministradorAction(null, makeFormData({ id: idValido, nombre: "Nuevo" }));
     expect(mockRequireResponsable).toHaveBeenCalledOnce();
   });
 
   it("delega en el repositorio con quién hizo el cambio", async () => {
-    await renombrarAdministradorAction(null, makeFormData({ id: "a1", nombre: "Nuevo" }));
-    expect(mockRenombrarAdministrador).toHaveBeenCalledWith("a1", "Nuevo", "juancete");
+    await renombrarAdministradorAction(null, makeFormData({ id: idValido, nombre: "Nuevo" }));
+    expect(mockRenombrarAdministrador).toHaveBeenCalledWith(idValido, "Nuevo", "juancete");
     expect(mockRevalidatePath).toHaveBeenCalledWith("/admin/administradores");
   });
 
-  it("rechaza un nombre de 256 caracteres sin llegar al repositorio", async () => {
+  it("devuelve un error de campo sin llegar al repositorio cuando el id no es un uuid", async () => {
+    const result = await renombrarAdministradorAction(null, makeFormData({ id: "a1", nombre: "Nuevo" }));
+    expect(result).toMatchObject({ ok: false });
+    expect(mockRenombrarAdministrador).not.toHaveBeenCalled();
+  });
+
+  it("rechaza un nombre de 256 caracteres sin llegar al repositorio (pre-chequeo de dominio)", async () => {
     const result = await renombrarAdministradorAction(
       null,
-      makeFormData({ id: "a1", nombre: "a".repeat(256) })
+      makeFormData({ id: idValido, nombre: "a".repeat(256) })
     );
     expect(result).toEqual({
       ok: false,
@@ -202,7 +214,7 @@ describe("renombrarAdministradorAction", () => {
 
   it("traduce AdministradorProtegidoError a un error de campo en nombre", async () => {
     mockRenombrarAdministrador.mockRejectedValue(new FakeAdministradorProtegidoError("juancete"));
-    const result = await renombrarAdministradorAction(null, makeFormData({ id: "a1", nombre: "Nuevo" }));
+    const result = await renombrarAdministradorAction(null, makeFormData({ id: idValido, nombre: "Nuevo" }));
     expect(result).toEqual({
       ok: false,
       errors: {
@@ -214,10 +226,34 @@ describe("renombrarAdministradorAction", () => {
     });
   });
 
+  // Regresión: antes sólo se capturaba `AdministradorProtegidoError`, así
+  // que un docente borrado entre el render y el submit (o cualquier otra
+  // ruta que dispare `AdministradorNoEncontradoError`) reventaba la página
+  // en vez de mostrar un error de campo.
+  it("traduce AdministradorNoEncontradoError a un error de campo en nombre, sin reventar", async () => {
+    mockRenombrarAdministrador.mockRejectedValue(new FakeAdministradorNoEncontradoError());
+    const result = await renombrarAdministradorAction(null, makeFormData({ id: idValido, nombre: "Nuevo" }));
+    expect(result).toEqual({
+      ok: false,
+      errors: { nombre: ["El docente no existe."] },
+      valores: { nombre: "Nuevo" },
+    });
+  });
+
+  it("traduce AdministradorInvalidoError a un error de campo en nombre, sin reventar", async () => {
+    mockRenombrarAdministrador.mockRejectedValue(new AdministradorInvalidoError("motivo inválido"));
+    const result = await renombrarAdministradorAction(null, makeFormData({ id: idValido, nombre: "Nuevo" }));
+    expect(result).toEqual({
+      ok: false,
+      errors: { nombre: ["motivo inválido"] },
+      valores: { nombre: "Nuevo" },
+    });
+  });
+
   it("propaga un error inesperado del repositorio", async () => {
     mockRenombrarAdministrador.mockRejectedValue(new Error("DB caída"));
     await expect(
-      renombrarAdministradorAction(null, makeFormData({ id: "a1", nombre: "Nuevo" }))
+      renombrarAdministradorAction(null, makeFormData({ id: idValido, nombre: "Nuevo" }))
     ).rejects.toThrow("DB caída");
   });
 });
@@ -248,7 +284,7 @@ describe("cambiarEstadoAdministradorAction", () => {
     const error = new Error("SQL connection failed: private-db.internal");
     mockCambiarEstadoAdministrador.mockRejectedValue(error);
     const result = await cambiarEstadoAdministradorAction(idValido, true);
-    expect(result).toEqual({ ok: false, error: "No se pudo cambiar el estado del administrador. Reintentá en unos segundos." });
+    expect(result).toEqual({ ok: false, error: "No se pudo cambiar el estado del docente. Reintentá en unos segundos." });
     expect(mockLoggerError).toHaveBeenCalledWith(
       { err: error, administradorId: idValido },
       expect.any(String)
@@ -256,10 +292,10 @@ describe("cambiarEstadoAdministradorAction", () => {
     expect(mockRevalidatePath).not.toHaveBeenCalled();
   });
 
-  it("conserva el mensaje del error conocido de administrador inexistente", async () => {
+  it("conserva el mensaje del error conocido de docente inexistente", async () => {
     mockCambiarEstadoAdministrador.mockRejectedValue(new FakeAdministradorNoEncontradoError());
     expect(await cambiarEstadoAdministradorAction(idValido, true)).toEqual({
-      ok: false, error: "El administrador no existe.",
+      ok: false, error: "El docente no existe.",
     });
     expect(mockLoggerError).not.toHaveBeenCalled();
   });
@@ -272,6 +308,28 @@ describe("cambiarEstadoAdministradorAction", () => {
       error:
         "@juancete es responsable por configuración del entorno (ADMIN_GITHUB_USERNAMES) y no se puede gestionar desde la aplicación.",
     });
+  });
+
+  // Regresión: la lista de errores conocidos del ABM es una sola
+  // (`ERRORES_CONOCIDOS_DEL_ABM`) compartida por las tres actions — acá se
+  // verifica que Duplicado e Inválido, no sólo Protegido/NoEncontrado, se
+  // devuelven como `{ ok: false, error }` en vez de loguearse como
+  // inesperados.
+  it("devuelve un error controlado (sin loguear) cuando el repositorio rechaza por duplicado", async () => {
+    mockCambiarEstadoAdministrador.mockRejectedValue(new FakeAdministradorDuplicadoError("ayudante1", false));
+    const result = await cambiarEstadoAdministradorAction(idValido, true);
+    expect(result).toEqual({
+      ok: false,
+      error: "Ya existe un docente con el usuario @ayudante1.",
+    });
+    expect(mockLoggerError).not.toHaveBeenCalled();
+  });
+
+  it("devuelve un error controlado (sin loguear) cuando el repositorio rechaza por inválido", async () => {
+    mockCambiarEstadoAdministrador.mockRejectedValue(new AdministradorInvalidoError("motivo inválido"));
+    const result = await cambiarEstadoAdministradorAction(idValido, true);
+    expect(result).toEqual({ ok: false, error: "motivo inválido" });
+    expect(mockLoggerError).not.toHaveBeenCalled();
   });
 
   it("devuelve 'Datos inválidos' sin llamar al repositorio cuando el id no es un uuid", async () => {

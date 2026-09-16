@@ -28,6 +28,26 @@ describe("Administrador.validarAlta", () => {
     expect(Administrador.validarAlta({ githubUsername: "ayudante1", nombre: "Ana" })).toBeNull();
   });
 
+  it("acepta un username con '@' inicial, validando sobre el valor normalizado", () => {
+    expect(Administrador.validarAlta({ githubUsername: "@Ayudante1" })).toBeNull();
+  });
+
+  it("rechaza un '@' solo: queda vacío tras normalizar, es obligatorio y no formato inválido", () => {
+    expect(Administrador.validarAlta({ githubUsername: "@" })).toBe(
+      "El usuario de GitHub es obligatorio"
+    );
+  });
+
+  it("rechaza un username de 40 caracteres con el mensaje de tope", () => {
+    expect(
+      Administrador.validarAlta({ githubUsername: "a".repeat(40) })
+    ).toBe("El usuario de GitHub no puede superar los 39 caracteres");
+  });
+
+  it("acepta un username de 39 caracteres (el tope real de GitHub)", () => {
+    expect(Administrador.validarAlta({ githubUsername: "a".repeat(39) })).toBeNull();
+  });
+
   it("rechaza un nombre de 256 caracteres", () => {
     const nombreDemasiadoLargo = "a".repeat(256);
     expect(
@@ -44,14 +64,21 @@ describe("Administrador.validarAlta", () => {
 });
 
 describe("Administrador.crear", () => {
-  // El "@" ya no llega hasta acá: `crear()` corre `validarAlta` primero (ver
-  // "Administrador.crear lanza AdministradorInvalidoError..." más abajo), y
-  // `esGithubUsernameValido` rechaza un "@" como primer carácter. El
-  // stripping de "@" de `normalizarGithubUsername` queda cubierto por el
-  // test del constructor, más abajo.
+  // `crear()` corre `validarAlta` primero, que ya normaliza el username
+  // antes de validar el formato (ver el describe de `validarAlta` más
+  // arriba) — así que un "@ayudante1" con espacios pasa la validación igual
+  // que "ayudante1", y el constructor aplica la misma normalización final.
   it("normaliza el username (trim, minúsculas)", () => {
     const administrador = Administrador.crear({
       githubUsername: " Ayudante1 ",
+      porUsuario: "juancete",
+    });
+    expect(administrador.githubUsername).toBe("ayudante1");
+  });
+
+  it("normaliza el username con '@' inicial y espacios", () => {
+    const administrador = Administrador.crear({
+      githubUsername: " @Ayudante1 ",
       porUsuario: "juancete",
     });
     expect(administrador.githubUsername).toBe("ayudante1");
@@ -89,6 +116,12 @@ describe("Administrador.crear", () => {
   it("lanza AdministradorInvalidoError con un username inválido", () => {
     expect(() =>
       Administrador.crear({ githubUsername: "-invalido", porUsuario: "juancete" })
+    ).toThrow(AdministradorInvalidoError);
+  });
+
+  it("lanza AdministradorInvalidoError con un username de 256 caracteres", () => {
+    expect(() =>
+      Administrador.crear({ githubUsername: "a".repeat(256), porUsuario: "juancete" })
     ).toThrow(AdministradorInvalidoError);
   });
 

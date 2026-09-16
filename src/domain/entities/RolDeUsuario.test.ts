@@ -165,7 +165,7 @@ describe("navegación por rol", () => {
     expect(ESTUDIANTE.itemsDeNavegacion()).toEqual([]);
   });
 
-  it("Responsable ve las mismas secciones que Docente más Administradores", () => {
+  it("Responsable ve las mismas secciones que Docente más Docentes (gestión de administradores)", () => {
     const items = RESPONSABLE.itemsDeNavegacion();
     expect(items.map((item) => item.href)).toEqual([
       "/admin/assignments",
@@ -175,6 +175,7 @@ describe("navegación por rol", () => {
       "/admin/operaciones",
       "/admin/administradores",
     ]);
+    expect(items.find((item) => item.href === "/admin/administradores")?.label).toBe("Docentes");
   });
 
   it("solo el Estudiante ve el banner de sincronización", () => {

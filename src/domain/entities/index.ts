@@ -133,5 +133,6 @@ export {
 export {
   Administrador,
   AdministradorInvalidoError,
+  ADMINISTRADOR_NOMBRE_MAX_LENGTH,
   type AltaAdministradorInput,
 } from "./Administrador";

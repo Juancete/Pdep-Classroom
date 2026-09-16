@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { normalizarGithubUsername, PARADIGMAS, TIPOS_ASSIGNMENT } from "./domain-constants";
+import {
+  normalizarGithubUsername,
+  esGithubUsernameValido,
+  PARADIGMAS,
+  TIPOS_ASSIGNMENT,
+} from "./domain-constants";
 import { PARADIGMAS as PARADIGMAS_DESDE_TYPES, TIPOS_ASSIGNMENT as TIPOS_ASSIGNMENT_DESDE_TYPES } from "@/types";
 
 describe("normalizarGithubUsername", () => {
@@ -29,6 +34,17 @@ describe("normalizarGithubUsername", () => {
 
   it("devuelve string vacío para undefined", () => {
     expect(normalizarGithubUsername(undefined)).toBe("");
+  });
+});
+
+// Tope de 39 caracteres: el límite real de un username de GitHub.
+describe("esGithubUsernameValido — tope de longitud", () => {
+  it("acepta un username de 39 caracteres", () => {
+    expect(esGithubUsernameValido("a".repeat(39))).toBe(true);
+  });
+
+  it("rechaza un username de 40 caracteres", () => {
+    expect(esGithubUsernameValido("a".repeat(40))).toBe(false);
   });
 });
 

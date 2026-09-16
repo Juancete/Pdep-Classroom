@@ -4,7 +4,6 @@ import { useState } from "react";
 import { renombrarAdministradorAction, cambiarEstadoAdministradorAction } from "./actions";
 import { INPUT_CLASS, FieldError, SubmitButton } from "../ui";
 import { PencilIcon, SpinnerIcon } from "@/components/icons";
-import { useApiCall } from "@/hooks/useApiCall";
 
 export function NombreEditable({ id, nombre }: { id: string; nombre: string | null }) {
   const [editando, setEditando] = useState(false);
@@ -79,22 +78,32 @@ export function NombreEditable({ id, nombre }: { id: string; nombre: string | nu
 }
 
 export function EstadoToggle({ id, activo }: { id: string; activo: boolean }) {
-  const { loading, error, call } = useApiCall();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  // Llamada directa a la server action, sin `useApiCall`: esa versión
+  // convertía el `{ ok: false, error }` de la action en un `throw` sólo para
+  // que `useApiCall` lo volviera a capturar como string — acá se maneja
+  // directo, sin la vuelta.
   async function handleClick() {
     if (activo) {
       const confirmado = confirm(
-        "¿Desactivar este administrador? Sólo se revocan sus permisos administrativos desde la " +
+        "¿Desactivar este docente? Sólo se revocan sus permisos administrativos desde la " +
           "próxima solicitud — no se borra su cuenta, sus datos académicos ni sus accesos a " +
           "repositorios de GitHub. Podés reactivarlo cuando quieras."
       );
       if (!confirmado) return;
     }
-    await call(async () => {
+    setLoading(true);
+    setError(null);
+    try {
       const resultado = await cambiarEstadoAdministradorAction(id, !activo);
-      if (!resultado.ok) throw new Error(resultado.error);
-      return resultado;
-    });
+      if (!resultado.ok) setError(resultado.error);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Error desconocido");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

@@ -50,5 +50,5 @@ export function GruposLoading() {
 }
 
 export function AdministradoresLoading() {
-  return <ListSkeleton title="Administradores" rows={4} />;
+  return <ListSkeleton title="Docentes" rows={4} />;
 }

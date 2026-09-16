@@ -35,7 +35,7 @@ export interface ContextoDeMembresia {
  * `EstadoAssignment` para el ciclo de vida de un assignment.
  *
  * Tres implementaciones: `Estudiante` (alumno registrado), `Docente`
- * (alcance administrativo global — ayudante dado de alta en `Administrador`
+ * (alcance administrativo global — docente dado de alta en `Administrador`
  * o, antes de #83, cualquiera en `ADMIN_GITHUB_USERNAMES`) y `Responsable`
  * (subtipo de `Docente` por herencia — especializa el comportamiento
  * sobrescribiendo dos métodos: los responsables configurados por entorno,
@@ -173,7 +173,7 @@ class Responsable extends Docente {
   }
 
   override itemsDeNavegacion(): ItemDeNavegacion[] {
-    return [...super.itemsDeNavegacion(), { href: "/admin/administradores", label: "Administradores" }];
+    return [...super.itemsDeNavegacion(), { href: "/admin/administradores", label: "Docentes" }];
   }
 }
 

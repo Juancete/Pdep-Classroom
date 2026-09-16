@@ -1,6 +1,10 @@
 import { Entity, PrimaryKey, Property, Unique } from "@mikro-orm/core";
 import { randomUUID } from "node:crypto";
-import { normalizarGithubUsername, esGithubUsernameValido } from "./domain-constants";
+import {
+  normalizarGithubUsername,
+  esGithubUsernameValido,
+  GITHUB_USERNAME_MAX_LENGTH,
+} from "./domain-constants";
 
 export interface AltaAdministradorInput {
   githubUsername: string;
@@ -20,14 +24,18 @@ export class AdministradorInvalidoError extends Error {
   }
 }
 
-const NOMBRE_MAX_LENGTH = 255;
+export const ADMINISTRADOR_NOMBRE_MAX_LENGTH = 255;
 
 /**
- * Administrador gestionado desde la aplicación (issue #83): un ayudante con
+ * Administrador gestionado desde la aplicación (issue #83): un docente con
  * permisos docentes globales, sin necesitar registro académico. Distinto de
  * los responsables de `ADMIN_GITHUB_USERNAMES` (esos no tienen fila acá — ver
  * `resolverRol` en `RolDeUsuario.ts`): sólo ellos pueden dar de alta filas de
  * esta tabla, y esas filas nunca alcanzan `puedeGestionarAdministradores()`.
+ *
+ * `Administrador` es el nombre técnico de esta entidad (tabla, clase, ruta
+ * `/admin/administradores` — issue #83); en la UI y en la documentación
+ * visible al usuario estas filas se llaman "docentes".
  *
  * El username es la identidad y es inmutable — `readonly`, fijado una sola
  * vez en el constructor (mismo patrón que `Comision`). Para corregir una
@@ -73,7 +81,19 @@ export class Administrador {
     if (typeof input.githubUsername !== "string" || !input.githubUsername.trim()) {
       return "El usuario de GitHub es obligatorio";
     }
-    if (!esGithubUsernameValido(input.githubUsername)) {
+    // El formato (y el tope de longitud) se validan sobre el valor ya
+    // normalizado: `normalizarGithubUsername` saca el "@" y espacios, así
+    // que "@ayudante1" tiene que aprobar el mismo chequeo que "ayudante1".
+    // Un valor que queda vacío tras normalizar (ej. "@" a secas) es,
+    // igual que el crudo vacío, "obligatorio" — no un formato inválido.
+    const normalizado = normalizarGithubUsername(input.githubUsername);
+    if (!normalizado) {
+      return "El usuario de GitHub es obligatorio";
+    }
+    if (normalizado.length > GITHUB_USERNAME_MAX_LENGTH) {
+      return `El usuario de GitHub no puede superar los ${GITHUB_USERNAME_MAX_LENGTH} caracteres`;
+    }
+    if (!esGithubUsernameValido(normalizado)) {
       return "El usuario de GitHub no tiene un formato válido";
     }
     return Administrador.validarNombre(input.nombre);
@@ -83,8 +103,8 @@ export class Administrador {
   // bien. La columna es `varchar(255)` — un texto más largo revienta el
   // flush en vez de devolver un mensaje de campo útil.
   static validarNombre(nombre: string | null | undefined): string | null {
-    if (nombre != null && nombre.trim().length > NOMBRE_MAX_LENGTH) {
-      return "El nombre no puede superar los 255 caracteres";
+    if (nombre != null && nombre.trim().length > ADMINISTRADOR_NOMBRE_MAX_LENGTH) {
+      return `El nombre no puede superar los ${ADMINISTRADOR_NOMBRE_MAX_LENGTH} caracteres`;
     }
     return null;
   }

@@ -59,6 +59,15 @@ describe("Admin Administradores page", () => {
     expect(html).toContain("No hay nadie configurado todavía.");
   });
 
+  // Terminología: "Administrador" es sólo el nombre técnico de la entidad/
+  // tabla/ruta — todo lo visible en la UI dice "docente".
+  it("usa 'Docentes' como título visible, no 'Administradores'", async () => {
+    mockGetAdministradores.mockResolvedValue([]);
+    const html = renderToStaticMarkup(await AdminAdministradoresPage());
+    expect(html).toContain("Docentes");
+    expect(html).not.toContain(">Administradores<");
+  });
+
   it("muestra a los responsables de entorno con badge 'Entorno' y sin acciones", async () => {
     mockGetAdministradores.mockResolvedValue([]);
     mockResponsablesDeEntorno.mockReturnValue(["juancete"]);
