@@ -12,10 +12,11 @@ import { normalizarGithubUsername } from "@/domain/entities/domain-constants";
 // al responsable a alumno. Acá se normaliza con la misma función que usa
 // todo el resto del dominio para usernames de GitHub.
 export function responsablesDeEntorno(): string[] {
-  return (process.env.ADMIN_GITHUB_USERNAMES ?? "")
+  const usernames = (process.env.ADMIN_GITHUB_USERNAMES ?? "")
     .split(",")
     .map((username) => normalizarGithubUsername(username))
     .filter(Boolean);
+  return [...new Set(usernames)];
 }
 
 export function esResponsableDeEntorno(githubUsername: string): boolean {

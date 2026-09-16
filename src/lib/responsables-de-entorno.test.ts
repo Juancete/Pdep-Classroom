@@ -30,6 +30,11 @@ describe("responsablesDeEntorno", () => {
     vi.stubEnv("ADMIN_GITHUB_USERNAMES", "juancete,,fdodino,");
     expect(responsablesDeEntorno()).toEqual(["juancete", "fdodino"]);
   });
+
+  it("deduplica después de normalizar y conserva el orden y el filtrado de vacíos", () => {
+    vi.stubEnv("ADMIN_GITHUB_USERNAMES", "juancete, @JuanCete, ,fdodino,@, FDODINO,");
+    expect(responsablesDeEntorno()).toEqual(["juancete", "fdodino"]);
+  });
 });
 
 describe("esResponsableDeEntorno", () => {

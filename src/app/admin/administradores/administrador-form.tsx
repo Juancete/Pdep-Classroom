@@ -24,8 +24,9 @@ export function AdministradorForm() {
       <h2 className="text-sm font-semibold text-gray-700 mb-3">Nuevo administrador</h2>
       <div className="flex flex-col sm:flex-row gap-3 sm:items-start">
         <div className="flex-1">
-          <label className="block text-xs font-medium text-gray-600 mb-1">Usuario de GitHub *</label>
+          <label htmlFor="administrador-githubUsername" className="block text-xs font-medium text-gray-600 mb-1">Usuario de GitHub *</label>
           <input
+            id="administrador-githubUsername"
             name="githubUsername"
             type="text"
             placeholder="ej: ayudante1"
@@ -36,8 +37,9 @@ export function AdministradorForm() {
           <FieldError message={errors.githubUsername?.[0]} />
         </div>
         <div className="flex-1">
-          <label className="block text-xs font-medium text-gray-600 mb-1">Nombre de referencia</label>
+          <label htmlFor="administrador-nombre" className="block text-xs font-medium text-gray-600 mb-1">Nombre de referencia</label>
           <input
+            id="administrador-nombre"
             name="nombre"
             type="text"
             placeholder="opcional"

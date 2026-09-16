@@ -54,6 +54,7 @@ export function NombreEditable({ id, nombre }: { id: string; nombre: string | nu
       <input type="hidden" name="id" value={id} />
       <input
         name="nombre"
+        aria-label="Nombre de referencia"
         type="text"
         defaultValue={nombreEnviado ?? nombre ?? ""}
         placeholder="opcional"

@@ -7,12 +7,22 @@ const mockCrearAdministrador = vi.fn();
 const mockRenombrarAdministrador = vi.fn();
 const mockCambiarEstadoAdministrador = vi.fn();
 const mockRevalidatePath = vi.fn();
+const mockLoggerError = vi.fn();
+
+vi.mock("@/lib/logger", () => ({
+  logger: { error: (...args: unknown[]) => mockLoggerError(...args) },
+}));
 
 vi.mock("@/infrastructure/auth/session", () => ({
   requireResponsable: () => mockRequireResponsable(),
 }));
 
-const { FakeAdministradorDuplicadoError, FakeAdministradorProtegidoError } = vi.hoisted(() => {
+const { FakeAdministradorDuplicadoError, FakeAdministradorProtegidoError, FakeAdministradorNoEncontradoError } = vi.hoisted(() => {
+  class FakeAdministradorNoEncontradoError extends Error {
+    constructor() {
+      super("El administrador no existe.");
+    }
+  }
   class FakeAdministradorDuplicadoError extends Error {
     constructor(
       public readonly githubUsername: string,
@@ -34,7 +44,7 @@ const { FakeAdministradorDuplicadoError, FakeAdministradorProtegidoError } = vi.
       this.name = "AdministradorProtegidoError";
     }
   }
-  return { FakeAdministradorDuplicadoError, FakeAdministradorProtegidoError };
+  return { FakeAdministradorDuplicadoError, FakeAdministradorProtegidoError, FakeAdministradorNoEncontradoError };
 });
 
 vi.mock("@/infrastructure/repositories", () => ({
@@ -43,6 +53,7 @@ vi.mock("@/infrastructure/repositories", () => ({
   cambiarEstadoAdministrador: (...args: unknown[]) => mockCambiarEstadoAdministrador(...args),
   AdministradorDuplicadoError: FakeAdministradorDuplicadoError,
   AdministradorProtegidoError: FakeAdministradorProtegidoError,
+  AdministradorNoEncontradoError: FakeAdministradorNoEncontradoError,
 }));
 
 vi.mock("next/cache", () => ({
@@ -233,10 +244,24 @@ describe("cambiarEstadoAdministradorAction", () => {
     expect(result).toEqual({ ok: true });
   });
 
-  it("devuelve un error controlado si el repositorio falla", async () => {
-    mockCambiarEstadoAdministrador.mockRejectedValue(new Error("no encontrado"));
+  it("oculta errores inesperados y registra el detalle sólo en el servidor", async () => {
+    const error = new Error("SQL connection failed: private-db.internal");
+    mockCambiarEstadoAdministrador.mockRejectedValue(error);
     const result = await cambiarEstadoAdministradorAction(idValido, true);
-    expect(result).toEqual({ ok: false, error: "no encontrado" });
+    expect(result).toEqual({ ok: false, error: "No se pudo cambiar el estado del administrador. Reintentá en unos segundos." });
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      { err: error, administradorId: idValido },
+      expect.any(String)
+    );
+    expect(mockRevalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("conserva el mensaje del error conocido de administrador inexistente", async () => {
+    mockCambiarEstadoAdministrador.mockRejectedValue(new FakeAdministradorNoEncontradoError());
+    expect(await cambiarEstadoAdministradorAction(idValido, true)).toEqual({
+      ok: false, error: "El administrador no existe.",
+    });
+    expect(mockLoggerError).not.toHaveBeenCalled();
   });
 
   it("devuelve un error controlado (no una excepción) cuando el repositorio rechaza por ser protegido", async () => {

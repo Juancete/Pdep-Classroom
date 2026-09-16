@@ -8,7 +8,9 @@ import {
   cambiarEstadoAdministrador,
   AdministradorDuplicadoError,
   AdministradorProtegidoError,
+  AdministradorNoEncontradoError,
 } from "@/infrastructure/repositories";
+import { logger } from "@/lib/logger";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -156,7 +158,11 @@ export async function cambiarEstadoAdministradorAction(
   try {
     await cambiarEstadoAdministrador(parsed.data.id, parsed.data.activo, responsable.githubUsername);
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Error desconocido" };
+    if (error instanceof AdministradorProtegidoError || error instanceof AdministradorNoEncontradoError) {
+      return { ok: false, error: error.message };
+    }
+    logger.error({ err: error, administradorId: parsed.data.id }, "Error al cambiar el estado del administrador");
+    return { ok: false, error: "No se pudo cambiar el estado del administrador. Reintentá en unos segundos." };
   }
   revalidatePath(ADMINISTRADORES_PATH);
   return { ok: true };

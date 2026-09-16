@@ -18,10 +18,18 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  // Next registra los errores de render del servidor antes de entregar este
+  // boundary. No reenviamos detalles desde el cliente ni mostramos mensajes
+  // arbitrarios fuera de desarrollo; el digest permite correlacionar los logs.
+  const displayError = process.env.NODE_ENV === "development"
+    ? error
+    : Object.assign(new Error("El servidor encontró un error. Revisá los logs para más detalles."), {
+        digest: error.digest,
+      });
   return (
     <html lang="es">
       <body className="font-sans">
-        <ErrorPage error={error} />
+        <ErrorPage error={displayError} />
         <div className="text-center mt-4">
           <button
             type="button"

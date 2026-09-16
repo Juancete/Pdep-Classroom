@@ -43,7 +43,10 @@ modifica la base de datos.
 8. Release que agrega la tabla `administrador` (issue #83): la migración no copia
    `ADMIN_GITHUB_USERNAMES` a la tabla, así que arranca vacía — nadie pierde ni gana acceso por sí
    sola. Verificar que un responsable ve **Administradores** en el menú y puede dar de alta un
-   ayudante de prueba desde `/admin/administradores`.
+   ayudante de prueba desde `/admin/administradores`. Al terminar, desactivar ese ayudante y,
+   con su sesión todavía abierta, confirmar que una nueva solicitud a `/admin/assignments` y
+   a una API administrativa ya no permite acceso administrativo. La baja no elimina su cuenta
+   ni revoca los accesos que pudiera tener como alumno.
 
 ## Operación habitual
 
