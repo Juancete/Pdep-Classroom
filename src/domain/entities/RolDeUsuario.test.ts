@@ -3,6 +3,7 @@ import {
   RolDeUsuario,
   DOCENTE,
   ESTUDIANTE,
+  RESPONSABLE,
   resolverRol,
   AccesoAssignmentProhibidoError,
 } from "./RolDeUsuario";
@@ -131,6 +132,18 @@ describe("puedeAdministrar", () => {
   it("Estudiante no tiene alcance administrativo", () => {
     expect(ESTUDIANTE.puedeAdministrar()).toBe(false);
   });
+
+  it("Responsable también tiene alcance administrativo (hereda de Docente)", () => {
+    expect(RESPONSABLE.puedeAdministrar()).toBe(true);
+  });
+});
+
+describe("puedeGestionarAdministradores", () => {
+  it("sólo el Responsable puede gestionar administradores", () => {
+    expect(RESPONSABLE.puedeGestionarAdministradores()).toBe(true);
+    expect(DOCENTE.puedeGestionarAdministradores()).toBe(false);
+    expect(ESTUDIANTE.puedeGestionarAdministradores()).toBe(false);
+  });
 });
 
 describe("navegación por rol", () => {
@@ -152,9 +165,22 @@ describe("navegación por rol", () => {
     expect(ESTUDIANTE.itemsDeNavegacion()).toEqual([]);
   });
 
+  it("Responsable ve las mismas secciones que Docente más Administradores", () => {
+    const items = RESPONSABLE.itemsDeNavegacion();
+    expect(items.map((item) => item.href)).toEqual([
+      "/admin/assignments",
+      "/admin/grupos",
+      "/admin/comisiones",
+      "/admin/alumnos",
+      "/admin/operaciones",
+      "/admin/administradores",
+    ]);
+  });
+
   it("solo el Estudiante ve el banner de sincronización", () => {
     expect(ESTUDIANTE.veBannerDeSincronizacion()).toBe(true);
     expect(DOCENTE.veBannerDeSincronizacion()).toBe(false);
+    expect(RESPONSABLE.veBannerDeSincronizacion()).toBe(false);
   });
 });
 
@@ -233,6 +259,28 @@ describe("origenDeAuditoria", () => {
   it("Docente se audita como 'docente'", () => {
     expect(DOCENTE.origenDeAuditoria()).toBe("docente");
   });
+
+  it("Responsable también se audita como 'docente' (hereda de Docente)", () => {
+    expect(RESPONSABLE.origenDeAuditoria()).toBe("docente");
+  });
+});
+
+describe("Responsable conserva el resto de los permisos docentes por herencia", () => {
+  it("accede a cualquier assignment como el Docente", () => {
+    expect(() =>
+      RESPONSABLE.autorizarAccesoAssignment(null, fakeAssignmentPublicado(null))
+    ).not.toThrow();
+  });
+
+  it("resuelve cambios de membresía siempre, como el Docente", () => {
+    expect(() =>
+      RESPONSABLE.autorizarCambioDeMembresia({
+        assignment: fakeGrupal({ inscripcionesCerradas: true }),
+        grupo: fakeGrupo(),
+        grupoTieneEntrega: true,
+      })
+    ).not.toThrow();
+  });
 });
 
 describe("motivoDeBloqueoDeMembresia", () => {
@@ -295,32 +343,36 @@ describe("motivoDeBloqueoDeMembresia", () => {
 });
 
 describe("resolverRol", () => {
-  it("devuelve DOCENTE si el username está en la lista de admins", () => {
-    expect(resolverRol("juancete", ["juancete"])).toBe(DOCENTE);
+  it("devuelve RESPONSABLE si es responsable de entorno, sin importar si también es administrador activo", () => {
+    expect(
+      resolverRol({ esResponsableDeEntorno: true, esAdministradorActivo: true })
+    ).toBe(RESPONSABLE);
+    expect(
+      resolverRol({ esResponsableDeEntorno: true, esAdministradorActivo: false })
+    ).toBe(RESPONSABLE);
   });
 
-  it("es case-insensitive contra la lista de admins", () => {
-    expect(resolverRol("JuanCete", ["juancete"])).toBe(DOCENTE);
+  it("devuelve DOCENTE si no es responsable pero sí administrador activo", () => {
+    expect(
+      resolverRol({ esResponsableDeEntorno: false, esAdministradorActivo: true })
+    ).toBe(DOCENTE);
   });
 
-  it("devuelve ESTUDIANTE si el username no está en la lista", () => {
-    expect(resolverRol("ana", ["juancete"])).toBe(ESTUDIANTE);
-  });
-
-  it("devuelve ESTUDIANTE con lista de admins vacía", () => {
-    expect(resolverRol("ana", [])).toBe(ESTUDIANTE);
-  });
-
-  it("normaliza mayúsculas de la propia lista de admins, sin depender del caller", () => {
-    expect(resolverRol("juancete", ["JuanCete"])).toBe(DOCENTE);
+  it("devuelve ESTUDIANTE si no es ni responsable ni administrador activo", () => {
+    expect(
+      resolverRol({ esResponsableDeEntorno: false, esAdministradorActivo: false })
+    ).toBe(ESTUDIANTE);
   });
 });
 
-describe("DOCENTE y ESTUDIANTE son instancias de RolDeUsuario", () => {
+describe("DOCENTE, ESTUDIANTE y RESPONSABLE son instancias de RolDeUsuario", () => {
   it("son singletons reutilizados", () => {
     expect(DOCENTE).toBeInstanceOf(RolDeUsuario);
     expect(ESTUDIANTE).toBeInstanceOf(RolDeUsuario);
-    expect(resolverRol("x", [])).toBe(ESTUDIANTE);
-    expect(resolverRol("x", [])).toBe(resolverRol("y", []));
+    expect(RESPONSABLE).toBeInstanceOf(RolDeUsuario);
+    const rol1 = resolverRol({ esResponsableDeEntorno: false, esAdministradorActivo: false });
+    const rol2 = resolverRol({ esResponsableDeEntorno: false, esAdministradorActivo: false });
+    expect(rol1).toBe(ESTUDIANTE);
+    expect(rol1).toBe(rol2);
   });
 });

@@ -123,11 +123,11 @@ export {
   RolDeUsuario,
   DOCENTE,
   ESTUDIANTE,
+  RESPONSABLE,
   resolverRol,
-  rolDesdeNombre,
   AccesoAssignmentProhibidoError,
   type ItemDeNavegacion,
   type ContextoDeMembresia,
   type OrigenCambioMembresia,
-  type NombreRolDeUsuario,
 } from "./RolDeUsuario";
+export { Administrador, type AltaAdministradorInput } from "./Administrador";

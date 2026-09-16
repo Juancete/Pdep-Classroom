@@ -6,10 +6,7 @@ import { NextResponse } from "next/server";
 const { auth } = NextAuth(authConfig);
 
 export default auth((req) => {
-  const redirectPath = getProxyRedirectPath({
-    session: req.auth,
-    pathname: req.nextUrl.pathname,
-  });
+  const redirectPath = getProxyRedirectPath({ session: req.auth });
 
   if (redirectPath) {
     return NextResponse.redirect(new URL(redirectPath, req.url));

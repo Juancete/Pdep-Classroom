@@ -40,6 +40,10 @@ modifica la base de datos.
      por webhook.
 7. Si la comisión ya tenía grupos en Sheets, ejecutar una sola vez **Importar grupos desde
    Sheets**. Desde ese momento Classroom es la fuente de verdad.
+8. Release que agrega la tabla `administrador` (issue #83): la migración no copia
+   `ADMIN_GITHUB_USERNAMES` a la tabla, así que arranca vacía — nadie pierde ni gana acceso por sí
+   sola. Verificar que un responsable ve **Administradores** en el menú y puede dar de alta un
+   ayudante de prueba desde `/admin/administradores`.
 
 ## Operación habitual
 

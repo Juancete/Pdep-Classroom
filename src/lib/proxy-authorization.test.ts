@@ -2,47 +2,17 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getProxyRedirectPath } from "./proxy-authorization";
 
-function session(isAdmin: boolean) {
-  return {
-    pdepUser: {
-      githubUsername: isAdmin ? "docente" : "alumno",
-      name: "Usuario",
-      image: "",
-      rolNombre: isAdmin ? "docente" : "alumno",
-    },
-  };
+function session() {
+  return { pdepUser: { githubUsername: "alumno", name: "Usuario", image: "" } };
 }
 
 describe("proxy authorization", () => {
   it("redirige una sesión ausente al login", () => {
-    expect(
-      getProxyRedirectPath({ session: null, pathname: "/dashboard" })
-    ).toBe("/login");
+    expect(getProxyRedirectPath({ session: null })).toBe("/login");
   });
 
-  it("redirige un alumno fuera de las rutas administrativas", () => {
-    expect(
-      getProxyRedirectPath({ session: session(false), pathname: "/admin/assignments" })
-    ).toBe("/dashboard");
-  });
-
-  it("permite a un administrador acceder a rutas administrativas", () => {
-    expect(
-      getProxyRedirectPath({ session: session(true), pathname: "/admin/assignments" })
-    ).toBeNull();
-  });
-
-  it("permite a un alumno acceder a una ruta protegida no administrativa", () => {
-    expect(
-      getProxyRedirectPath({ session: session(false), pathname: "/dashboard" })
-    ).toBeNull();
-  });
-
-  it("redirige a /dashboard (sin romper) si la sesión tiene pdepUser pero sin rolNombre", () => {
-    const sessionSinRol = { pdepUser: { githubUsername: "alumno", name: "Usuario", image: "" } };
-    expect(
-      getProxyRedirectPath({ session: sessionSinRol, pathname: "/admin/assignments" })
-    ).toBe("/dashboard");
+  it("permite a cualquier usuario autenticado pasar (la autorización por rol vive más adentro, no en el edge)", () => {
+    expect(getProxyRedirectPath({ session: session() })).toBeNull();
   });
 
   // El matcher de `src/proxy.ts` es una allowlist explícita — si alguien

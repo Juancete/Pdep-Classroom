@@ -1,10 +1,8 @@
 import { signIn } from "@/infrastructure/auth/auth";
+import { responsablesDeEntorno } from "@/lib/responsables-de-entorno";
 
 export default function LoginPage() {
-  const adminUsernames = (process.env.ADMIN_GITHUB_USERNAMES ?? "")
-    .split(",")
-    .map((username) => username.trim())
-    .filter(Boolean);
+  const adminUsernames = responsablesDeEntorno();
   // Mismas dos condiciones que registran el provider en auth.config.ts: si
   // acá se mostrara el panel sin que el provider exista, el login fallaría
   // silenciosamente al tocar cualquiera de los botones.
@@ -65,7 +63,7 @@ export default function LoginPage() {
                     type="submit"
                     className="w-full text-sm bg-amber-600 text-white px-3 py-2 rounded-lg font-medium hover:bg-amber-700 transition-colors"
                   >
-                    Entrar como {username} (docente)
+                    Entrar como {username} (responsable)
                   </button>
                 </form>
               ))}
