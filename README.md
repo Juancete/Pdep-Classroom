@@ -224,6 +224,27 @@ planilla distinta.
 |---|---|---|---|---|---|
 | 12345 | García | Juan | juangarcia | juan@gmail.com | miércoles noche |
 
+**Incorporar una cursada ya en marcha:** si la comisión va a apuntar a una planilla de notas
+existente (en vez de una hoja nueva y limpia), `ColumnConfig` tiene tres campos pensados para eso,
+configurables desde `/admin/comisiones`:
+
+- `modoNombre` (`"separado"` | `"completo"`, default `"separado"`): una planilla en marcha suele
+  traer el nombre en una sola columna con formato `Apellido, Nombre` en vez de dos columnas
+  separadas. En modo `"completo"` la app separa por la **primera** coma al leer y reconstruye
+  `Apellido, Nombre` al escribir; si la celda no tiene coma o alguna de las dos partes queda vacía,
+  no infiere nada — deja el campo vacío para que el alumno lo complete a mano.
+- `nombreCompleto`: la columna (0-indexed) con el nombre consolidado. Sólo se usa —y sólo es
+  obligatoria en el form— cuando `modoNombre` es `"completo"`; en modo `"separado"` se ignora.
+- `permitirPrecargaSinLegajo` (default `false`): una cursada en marcha puede tener alumnos que
+  todavía no tienen legajo asignado (nunca se les pidió). Con este flag activado, `/registro`
+  prellena los datos de un alumno aunque su fila en la planilla no tenga legajo todavía; sin él,
+  esas filas se tratan igual que si no existieran. El legajo sigue siendo obligatorio para
+  completar el registro — el flag sólo afecta la precarga, no la validación final.
+
+El resto del mapeo de columnas soporta cualquier posición, incluso más allá de la Z (hasta ZZ): una
+cursada en marcha suele tener el legajo al final, después de los bloques de notas por paradigma, y
+la app nunca lee ni reescribe esas columnas intermedias al confirmar el registro de un alumno.
+
 **Formato esperado de la hoja "Grupos":** una fila por alumno, con su `githubUsername` y una
 columna de nombre de grupo **por paradigma** (no una columna `Paradigma` separada) — se configura
 por comisión al mapear las columnas de esa hoja:
@@ -306,7 +327,7 @@ real: el snapshot quedó dos PRs sin actualizarse). Verificalo con:
 pnpm test:migrations   # corre las migraciones contra Postgres real (requiere MIGRATION_TEST_DATABASE_URL)
 ```
 
-y con las aserciones de `src/lib/migrations.test.ts`, que leen el snapshot commiteado.
+y con las aserciones de `src/infrastructure/migrations.test.ts`, que leen el snapshot commiteado.
 
 #### 5.2 Producción (Neon + Vercel)
 
@@ -365,11 +386,24 @@ pnpm test:migrations       # Correr las migraciones + invariantes contra Postgre
 
 ### 6. Configurar admins
 
-En `ADMIN_GITHUB_USERNAMES` poné los usernames de GitHub de los docentes, separados por coma:
+En `ADMIN_GITHUB_USERNAMES` poné los usernames de GitHub de los **responsables**, separados por
+coma:
 
 ```
 ADMIN_GITHUB_USERNAMES=juancontardo,fdodino,nsicolo,dsquivel
 ```
+
+Un responsable tiene los mismos permisos que cualquier docente, más uno extra: es el único que
+puede gestionar docentes desde `/admin/administradores`. Esta lista no se copia a la base de
+datos — sigue siendo la única fuente de responsables, y darla de baja implica editar la variable
+de entorno y redesplegar, igual que hoy.
+
+Para sumar **docentes** sin tocar variables de entorno ni desplegar, un responsable los da de alta
+desde `/admin/administradores`: sólo pide el usuario de GitHub y, opcionalmente, un nombre de
+referencia. El docente entra con esa cuenta de GitHub sin necesitar registrarse como alumno.
+Desactivarlo le revoca los permisos desde la siguiente solicitud, incluso con una sesión ya
+abierta; reactivarlo se los devuelve sin que tenga que volver a loguearse. El login de desarrollo
+(sección 8.1) entra como responsable con los usernames de esta lista.
 
 ### 7. Generar secret de NextAuth
 
@@ -401,7 +435,7 @@ ENABLE_DEV_LOGIN=true
 
 La otra condición (`NODE_ENV=development`) ya la pone `next dev` solo. Con
 ambas, `/login` muestra un panel extra: un botón directo por cada username
-en `ADMIN_GITHUB_USERNAMES` (entra como docente) y un campo de texto libre
+en `ADMIN_GITHUB_USERNAMES` (entra como responsable) y un campo de texto libre
 para entrar como cualquier alumno.
 
 ### 9. Deploy a Vercel
@@ -437,7 +471,8 @@ vercel env add GITHUB_CLIENT_SECRET
 # NextAuth
 vercel env add NEXTAUTH_SECRET               # npx auth secret
 
-# Admins — sin esto, nadie entra como docente
+# Admins — sin esto, nadie entra como responsable (y por lo tanto nadie puede
+# dar de alta administradores desde /admin/administradores)
 vercel env add ADMIN_GITHUB_USERNAMES        # usernames separados por coma
 ```
 
@@ -695,7 +730,7 @@ de checks combinados de GitHub):
 | resto (`success` / `neutral` / `skipped`) | Passing |
 
 Un repo sin ningún check configurado no rompe nada más de la vista — se degrada a un badge gris
-"Sin CI" (`src/lib/services/sincronizarCI.ts`, `src/domain/entities/ResultadoCI.ts`).
+"Sin CI" (`src/application/sincronizarCI.ts`, `src/domain/entities/ResultadoCI.ts`).
 
 ### Frescura y reejecución
 
@@ -922,13 +957,6 @@ src/
 │   │   ├── grupo-selector.tsx                 # Elegir o crear grupo (client)
 │   │   ├── mi-grupo.tsx                       # Ver el grupo actual y sus integrantes
 │   │   └── acciones-de-membresia.tsx          # Salir / cambiarse de grupo (client)
-│   ├── components/
-│   │   ├── AlumnoForm.tsx                     # Form reutilizable registro/edición alumno
-│   │   ├── CIBadge.tsx                        # Badge de resultado de CI (server)
-│   │   ├── ci-ui.tsx                          # Tabla de presentación (etiqueta/color/ícono) por resultado
-│   │   └── PageSkeleton.tsx                   # Skeleton de carga genérico
-│   ├── hooks/
-│   │   └── useApiCall.ts                      # Hook genérico para llamadas a la API REST
 │   ├── dashboard/
 │   │   ├── page.tsx                           # Dashboard alumno: TPs pendientes y estado
 │   │   ├── accept-button.tsx                  # Botón aceptar TP (client)
@@ -936,11 +964,19 @@ src/
 │   ├── registro/page.tsx                      # Registro de alumno (con AlumnoForm)
 │   ├── perfil/page.tsx                        # Editar perfil alumno (con AlumnoForm)
 │   ├── login/page.tsx                         # Página de login (GitHub + login de desarrollo opcional)
-│   ├── nav.tsx                                # Barra de navegación (server component)
-│   ├── logout-button.tsx                      # Botón de logout (client)
 │   ├── error.tsx                              # Boundary de error global
 │   ├── layout.tsx                             # Layout raíz con nav y sesión
 │   └── page.tsx                               # Landing
+├── components/
+│   ├── AlumnoForm.tsx                         # Form reutilizable registro/edición alumno
+│   ├── CIBadge.tsx                            # Badge de resultado de CI (server)
+│   ├── ci-ui.tsx                              # Tabla de presentación (etiqueta/color/ícono) por resultado
+│   ├── PageSkeleton.tsx                       # Skeleton de carga genérico
+│   └── layout/
+│       ├── nav.tsx                            # Barra de navegación (server component)
+│       └── logout-button.tsx                  # Botón de logout (client)
+├── hooks/
+│   └── useApiCall.ts                          # Hook genérico para llamadas a la API REST
 ├── domain/
 │   └── entities/                              # Entidades MikroORM + lógica de dominio
 │       ├── Assignment.ts                      # Base abstracta
@@ -958,18 +994,44 @@ src/
 │       ├── RepoDeletionAttempt.ts             # Auditoría de borrado de repos
 │       ├── EstadoDelivery.ts                  # Estado de un delivery de webhook, como Strategy
 │       └── GithubWebhookDelivery.ts           # Auditoría de deliveries de webhook (dedup por delivery id)
-├── lib/
-│   ├── auth.ts / auth.config.ts / auth.events.ts   # NextAuth: config, providers (GitHub + login de desarrollo), eventos
-│   ├── github.ts                              # Octokit: crear/eliminar repos, collaborators, templates
-│   ├── github-errors.ts                       # Tipado y manejo de errores de la API de GitHub
-│   ├── naming.ts                              # Funciones puras: slugify, buildRepoName, enumerar
-│   ├── sheets.ts                              # Google Sheets: leer/escribir alumnos y grupos
-│   ├── googleGroups.ts                        # Cliente de la Admin SDK Directory API (alta/baja de miembros)
+├── application/                                # Casos de uso — acá vive la lógica de negocio
+│   ├── aceptarAssignment.ts                   # Aceptar un TP: crea entrega + repo
+│   ├── assignmentAuthorization.ts             # Quién puede ver/operar sobre un assignment
+│   ├── alumnoRegistro.ts                      # Alta de alumno (DB primero, después Sheets)
+│   ├── importarAlumnosDeComision.ts           # Sheets → DB, bulk por comisión
+│   ├── grupoSync.ts                           # Sheets → DB, membresía de grupos (sólo aditivo)
+│   ├── intentarSincronizarGrupos.ts           # Wrapper con retry/flag de falla de grupoSync
+│   ├── estadoDeSincronizacion.ts              # Combina asuntos pendientes (alumno + canales) en un mensaje
+│   ├── hooksPostConfirmacion.ts               # Orquesta los sync post-registro
+│   ├── verificarConsistenciaAlumno.ts         # Chequeos de consistencia DB↔Sheets
+│   ├── borrarRepositoriosDeAssignment.ts      # Borrado auditado de repos de un assignment
+│   ├── sincronizarCI.ts                       # Consulta y cachea el estado de CI
+│   ├── recibirWebhookGithub.ts                # Dedup + estado de un delivery entrante, reproceso
+│   └── procesarEventoGithub.ts                # Router evento → efecto sobre la entrega correspondiente
+├── infrastructure/
+│   ├── db.ts                                  # Singleton MikroORM (getOrm / getEM)
+│   ├── auth/
+│   │   ├── auth.ts / auth.config.ts / auth.events.ts   # NextAuth: config, providers (GitHub + login de desarrollo), eventos
+│   │   └── session.ts                         # requireUser / requireAdmin
+│   ├── repositories/                          # Acceso a datos por entidad
+│   │   ├── AlumnoRepository.ts
+│   │   ├── SuscripcionAlumnoRepository.ts     # Estado de suscripción por (alumno, canal)
+│   │   ├── AssignmentRepository.ts
+│   │   ├── ComisionRepository.ts
+│   │   ├── EntregaRepository.ts
+│   │   ├── GrupoRepository.ts
+│   │   ├── CambioDeMembresiaRepository.ts
+│   │   ├── RepoDeletionAttemptRepository.ts
+│   │   └── GithubWebhookDeliveryRepository.ts
 │   ├── canales/                               # Canales de comunicación como Template Method — ver más abajo
 │   │   ├── CanalDeComunicacion.ts             # Clase abstracta: algoritmo de reconciliación
 │   │   ├── GoogleGroupsCanal.ts               # Único canal concreto hoy
 │   │   └── index.ts                           # Registro: CANALES_DE_COMUNICACION, canalesActivos()
-│   ├── session.ts                             # requireUser / requireAdmin
+│   ├── github.ts                              # Octokit: crear/eliminar repos, collaborators, templates
+│   ├── github-errors.ts                       # Tipado y manejo de errores de la API de GitHub
+│   ├── sheets.ts                              # Google Sheets: leer/escribir alumnos y grupos
+│   └── googleGroups.ts                        # Cliente de la Admin SDK Directory API (alta/baja de miembros)
+├── lib/                                        # Glue de Next/HTTP y utilidades puras
 │   ├── proxy-authorization.ts                 # Reglas de redirect que usa proxy.ts
 │   ├── api-auth.ts                            # Middleware de auth para API routes
 │   ├── api-errors.ts                          # Traducción de errores de dominio a respuestas HTTP
@@ -978,35 +1040,18 @@ src/
 │   ├── entrega-query.ts                       # Helpers de consulta sobre entregas
 │   ├── webhook-firma.ts                       # Verifica X-Hub-Signature-256 (con rotación de secreto)
 │   ├── logger.ts                              # Logging estructurado (pino)
-│   ├── db.ts                                  # Singleton MikroORM (getOrm / getEM)
-│   ├── services/                              # Casos de uso — acá vive la lógica de negocio
-│   │   ├── aceptarAssignment.ts               # Aceptar un TP: crea entrega + repo
-│   │   ├── assignmentAuthorization.ts         # Quién puede ver/operar sobre un assignment
-│   │   ├── alumnoRegistro.ts                  # Alta de alumno (DB primero, después Sheets)
-│   │   ├── importarAlumnosDeComision.ts       # Sheets → DB, bulk por comisión
-│   │   ├── grupoSync.ts                       # Sheets → DB, membresía de grupos (sólo aditivo)
-│   │   ├── intentarSincronizarGrupos.ts       # Wrapper con retry/flag de falla de grupoSync
-│   │   ├── estadoDeSincronizacion.ts          # Combina asuntos pendientes (alumno + canales) en un mensaje
-│   │   ├── hooksPostConfirmacion.ts           # Orquesta los sync post-registro
-│   │   ├── verificarConsistenciaAlumno.ts     # Chequeos de consistencia DB↔Sheets
-│   │   ├── borrarRepositoriosDeAssignment.ts  # Borrado auditado de repos de un assignment
-│   │   ├── sincronizarCI.ts                   # Consulta y cachea el estado de CI
-│   │   ├── recibirWebhookGithub.ts            # Dedup + estado de un delivery entrante, reproceso
-│   │   └── procesarEventoGithub.ts            # Router evento → efecto sobre la entrega correspondiente
+│   ├── naming.ts                              # Funciones puras: slugify, buildRepoName, enumerar
 │   ├── concurrencia.ts                        # mapConConcurrenciaLimitada (pool de workers genérico)
-│   ├── mensaje-operativo.ts                   # Redacta secretos de un mensaje de error antes de mostrarlo/persistirlo
-│   └── repositories/                          # Acceso a datos por entidad
-│       ├── AlumnoRepository.ts
-│       ├── SuscripcionAlumnoRepository.ts     # Estado de suscripción por (alumno, canal)
-│       ├── AssignmentRepository.ts
-│       ├── ComisionRepository.ts
-│       ├── EntregaRepository.ts
-│       ├── GrupoRepository.ts
-│       ├── CambioDeMembresiaRepository.ts
-│       ├── RepoDeletionAttemptRepository.ts
-│       └── GithubWebhookDeliveryRepository.ts
+│   └── mensaje-operativo.ts                   # Redacta secretos de un mensaje de error antes de mostrarlo/persistirlo
 └── types/index.ts                             # ColumnConfig, PdepUser, tipos del dominio
 ```
+
+### Regla de dependencias entre capas
+
+- `domain/` sólo importa de `domain/`, `types/` y utilidades puras de `lib/` (`naming`, `concurrencia`).
+- `application/` importa de `domain/`, `infrastructure/` y `lib/`.
+- `infrastructure/` importa de `domain/` y `lib/`. Excepción documentada: `infrastructure/auth/auth.events.ts` dispara un caso de uso de `application/` al reaccionar al login.
+- `lib/` importa de `domain/` y `types/`. Dos excepciones de glue HTTP: `api-auth.ts` usa `infrastructure/auth/session` y `api-errors.ts` carga perezosamente `infrastructure/repositories/ErrorLogRepository` para persistir errores.
 
 ## Tests
 
@@ -1019,15 +1064,15 @@ pnpm test:migrations   # migraciones + invariantes contra Postgres real (requier
 ```
 
 La mayoría son tests puros (dominio, servicios) o de componentes con las dependencias externas
-mockeadas — `lib/github.test.ts` y `lib/googleGroups.test.ts`, por ejemplo, sí mockean Octokit y la
+mockeadas — `infrastructure/github.test.ts` y `infrastructure/googleGroups.test.ts`, por ejemplo, sí mockean Octokit y la
 Admin SDK. Una muestra representativa:
 
 - **lib/naming.test.ts** — `buildRepoName`, `slugify`, `extractTemplateName`
-- **lib/sheets.test.ts** — `parseAlumnosRows`, `parseAsignacionesGrupos`, `validateRegistro`
-- **lib/github-errors.test.ts** — manejo y tipado de errores de GitHub
+- **infrastructure/sheets.test.ts** — `parseAlumnosRows`, `parseAsignacionesGrupos`, `validateRegistro`
+- **infrastructure/github-errors.test.ts** — manejo y tipado de errores de GitHub
 - **lib/rate-limit.test.ts** — lógica de rate limiting
 - **domain/entities/\*.test.ts** — reglas de dominio (ciclo de vida, roles, membresía de grupos)
-- **lib/services/\*.test.ts** — casos de uso (aceptar TP, registro, sync de Sheets)
+- **application/\*.test.ts** — casos de uso (aceptar TP, registro, sync de Sheets)
 - **admin/assignments/actions.test.ts** — server actions CRUD de assignments
 - **admin/comisiones/actions.test.ts** — server actions CRUD de comisiones
 - **api/assignments/[id]/\*.test.ts** — rutas de aceptación, estado, grupos e inscripciones
@@ -1062,7 +1107,7 @@ Al completarse el alta (o la edición) de un alumno, la app lo suscribe a cada *
 comunicación** que esté configurado — hoy, Google Groups. La idea es que el docente no tenga que
 agregar a nadie a mano y el alumno reciba los avisos del curso desde el primer día.
 
-La suscripción se modela como **Template Method** (`src/lib/canales/CanalDeComunicacion.ts`): el
+La suscripción se modela como **Template Method** (`src/infrastructure/canales/CanalDeComunicacion.ts`): el
 algoritmo de reconciliación — registrar el intento, dar de alta el destinatario actual, drenar
 identidades anteriores pendientes de baja, marcar sincronizado — vive una sola vez en la clase
 abstracta. Cada canal concreto sólo aporta:
@@ -1078,7 +1123,7 @@ pendientes de baja) se persiste una fila por `(alumno, canal)` en `suscripcion_a
 `src/domain/entities/SuscripcionAlumno.ts`.
 
 **Un canal sin configurar no existe para el alumno.** No hay error, no hay banner, no se acumula
-estado "fallido" — `canalesActivos()` (`src/lib/canales/index.ts`) lo filtra antes de tocarlo. El
+estado "fallido" — `canalesActivos()` (`src/infrastructure/canales/index.ts`) lo filtra antes de tocarlo. El
 docente sí lo ve: `/admin/operaciones` marca "Revisar" para cada canal apagado.
 
 Si un alumno ya era miembro del canal (se registró, lo dieron de baja y se vuelve a registrar), se
@@ -1086,10 +1131,10 @@ trata como éxito idempotente — la UI no le muestra nada especial.
 
 ### Agregar un canal nuevo
 
-1. Escribir la subclase en `src/lib/canales/` con las cinco primitivas (`nombre`, `etiqueta`,
+1. Escribir la subclase en `src/infrastructure/canales/` con las cinco primitivas (`nombre`, `etiqueta`,
    `estaConfigurado`, `asuntoPendiente`, `destinatarioDe`, `darDeAlta`, `darDeBaja`).
 2. Sumar su nombre a `NOMBRES_DE_CANAL` en `src/domain/entities/SuscripcionAlumno.ts`.
-3. Registrar la instancia en `CANALES_DE_COMUNICACION` (`src/lib/canales/index.ts`).
+3. Registrar la instancia en `CANALES_DE_COMUNICACION` (`src/infrastructure/canales/index.ts`).
 4. Migración que ensancha el `CHECK` de `suscripcion_alumno.canal` y backfillea una fila
    `pendiente` por alumno existente — molde: `Migration20260827120000_suscripcion_alumno.ts`.
 

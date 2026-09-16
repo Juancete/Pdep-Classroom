@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useApiCall } from "@/app/hooks/useApiCall";
+import { useApiCall } from "@/hooks/useApiCall";
 
 export type GrupoAdminResumen = {
   id: string;

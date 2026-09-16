@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/session";
-import { type RegistroInput } from "@/lib/sheets";
-import { internalServerError, parseJsonObjectBody } from "@/lib/api-errors";
-import { confirmarYProcesarAlumno } from "@/lib/services/alumnoRegistro";
+import { requireUser } from "@/infrastructure/auth/session";
+import { type RegistroInput } from "@/infrastructure/sheets";
+import { internalServerError, parseJsonObjectBody, respuestaDeErrorDeDominio } from "@/lib/api-errors";
+import { confirmarYProcesarAlumno } from "@/application/alumnoRegistro";
 
 type PerfilInput = Omit<RegistroInput, "githubUsername">;
 
@@ -31,6 +31,6 @@ export async function PATCH(req: Request) {
       ...(resultado.hooks.gruposSync === "error" && { gruposSync: "error" }),
     });
   } catch (error) {
-    return internalServerError("PATCH /api/perfil", error);
+    return respuestaDeErrorDeDominio(error) ?? internalServerError("PATCH /api/perfil", error);
   }
 }

@@ -14,6 +14,15 @@ export {
   type EstadoDeSuscripcion,
 } from "./SuscripcionAlumno";
 export {
+  MapeoDeNombreSeparado,
+  MapeoDeNombreCompleto,
+  ModoNombreCompletoSinColumnaError,
+  mapeoDeNombreDe,
+  type MapeoDeNombre,
+  type DatosDeNombre,
+  type CeldaDeNombre,
+} from "./MapeoDeNombre";
+export {
   Comision,
   VENTANA_IMPORTACION_GRUPOS_MS,
   INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS,
@@ -114,11 +123,16 @@ export {
   RolDeUsuario,
   DOCENTE,
   ESTUDIANTE,
+  RESPONSABLE,
   resolverRol,
-  rolDesdeNombre,
   AccesoAssignmentProhibidoError,
   type ItemDeNavegacion,
   type ContextoDeMembresia,
   type OrigenCambioMembresia,
-  type NombreRolDeUsuario,
 } from "./RolDeUsuario";
+export {
+  Administrador,
+  AdministradorInvalidoError,
+  ADMINISTRADOR_NOMBRE_MAX_LENGTH,
+  type AltaAdministradorInput,
+} from "./Administrador";

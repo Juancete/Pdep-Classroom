@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { guardAdmin } from "@/lib/api-auth";
-import { setInscripcionesCerradas } from "@/lib/repositories";
+import { setInscripcionesCerradas } from "@/infrastructure/repositories";
 import { internalServerError } from "@/lib/api-errors";
 
 const InscripcionesSchema = z.object({

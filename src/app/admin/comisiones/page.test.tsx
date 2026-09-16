@@ -6,11 +6,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 const mockRequireAdmin = vi.fn();
 const mockGetComisiones = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getComisiones: () => mockGetComisiones(),
 }));
 

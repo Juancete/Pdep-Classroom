@@ -1,8 +1,8 @@
-import { requireAdmin } from "@/lib/session";
-import { getComisionActiva, getWebhookDeliveryOverview } from "@/lib/repositories";
-import { listarTemplates } from "@/lib/github";
-import { getSheetNames } from "@/lib/sheets";
-import { CANALES_DE_COMUNICACION } from "@/lib/canales";
+import { requireAdmin } from "@/infrastructure/auth/session";
+import { getComisionActiva, getWebhookDeliveryOverview } from "@/infrastructure/repositories";
+import { listarTemplates } from "@/infrastructure/github";
+import { getSheetNames } from "@/infrastructure/sheets";
+import { CANALES_DE_COMUNICACION } from "@/infrastructure/canales";
 import { ReprocessWebhookButton } from "./reprocess-button";
 
 type Check = { nombre: string; ok: boolean; detalle: string };

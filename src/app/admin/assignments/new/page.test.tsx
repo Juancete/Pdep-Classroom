@@ -7,11 +7,11 @@ import React from "react";
 const mockRequireAdmin = vi.fn();
 const mockListarTemplates = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
-vi.mock("@/lib/github", () => ({
+vi.mock("@/infrastructure/github", () => ({
   listarTemplates: () => mockListarTemplates(),
 }));
 

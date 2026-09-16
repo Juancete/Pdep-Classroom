@@ -1,13 +1,22 @@
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import GlobalError from "./error";
 
+// `GlobalError` (este archivo, no `global-error.tsx`) es sólo el wrapper de
+// segmento: delega toda la política de qué mensaje mostrar en `ErrorPage`
+// (ver `src/components/ErrorPage.test.tsx` para esa política en detalle:
+// requiere `NODE_ENV=development` además de que Next no haya sanitizado el
+// mensaje). Estos tests stubean el env donde hace falta ver el mensaje real.
 describe("GlobalError", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
   it("muestra el título genérico de error", () => {
     render(<GlobalError error={new Error("cualquier cosa")} />);
     expect(screen.getByText("Algo salió mal")).toBeInTheDocument();
   });
 
-  it("muestra el mensaje del error recibido", () => {
+  it("muestra el mensaje del error recibido (en desarrollo)", () => {
+    vi.stubEnv("NODE_ENV", "development");
     render(<GlobalError error={new Error("Connection refused")} />);
     expect(screen.getByText("Connection refused")).toBeInTheDocument();
   });
@@ -19,7 +28,8 @@ describe("GlobalError", () => {
     ).toBeInTheDocument();
   });
 
-  it("renderiza el mensaje con estilo mono rojo", () => {
+  it("renderiza el mensaje con estilo mono rojo (en desarrollo)", () => {
+    vi.stubEnv("NODE_ENV", "development");
     render(<GlobalError error={new Error("DB timeout")} />);
     const msg = screen.getByText("DB timeout");
     expect(msg).toHaveClass("font-mono");

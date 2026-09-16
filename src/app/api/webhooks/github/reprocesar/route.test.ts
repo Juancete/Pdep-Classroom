@@ -7,7 +7,7 @@ vi.mock("@/lib/api-auth", () => ({
   guardAdmin: () => mockGuardAdmin(),
 }));
 
-vi.mock("@/lib/services/recibirWebhookGithub", () => ({
+vi.mock("@/application/recibirWebhookGithub", () => ({
   reprocesarDeliveries: (deliveryId?: string) => mockReprocesar(deliveryId),
 }));
 

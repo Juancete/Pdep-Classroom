@@ -1,5 +1,5 @@
-import { requireAdmin } from "@/lib/session";
-import { getComisiones } from "@/lib/repositories";
+import { requireAdmin } from "@/infrastructure/auth/session";
+import { getComisiones } from "@/infrastructure/repositories";
 import { DeleteComisionButton } from "./delete-button";
 import {
   DataTable,
@@ -9,7 +9,7 @@ import {
   DataRow,
   DataCell,
   DataEmpty,
-} from "@/app/components/DataTable";
+} from "@/components/DataTable";
 
 export default async function AdminComisionesPage() {
   await requireAdmin();

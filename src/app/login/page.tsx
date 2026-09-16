@@ -1,10 +1,8 @@
-import { signIn } from "@/lib/auth";
+import { signIn } from "@/infrastructure/auth/auth";
+import { responsablesDeEntorno } from "@/lib/responsables-de-entorno";
 
 export default function LoginPage() {
-  const adminUsernames = (process.env.ADMIN_GITHUB_USERNAMES ?? "")
-    .split(",")
-    .map((username) => username.trim())
-    .filter(Boolean);
+  const responsables = responsablesDeEntorno();
   // Mismas dos condiciones que registran el provider en auth.config.ts: si
   // acá se mostrara el panel sin que el provider exista, el login fallaría
   // silenciosamente al tocar cualquiera de los botones.
@@ -48,9 +46,9 @@ export default function LoginPage() {
             Entrar sin pasar por GitHub. Sólo visible en local.
           </p>
 
-          {adminUsernames.length > 0 && (
+          {responsables.length > 0 && (
             <div className="space-y-2 mb-4">
-              {adminUsernames.map((username) => (
+              {responsables.map((username) => (
                 <form
                   key={username}
                   action={async () => {
@@ -65,7 +63,7 @@ export default function LoginPage() {
                     type="submit"
                     className="w-full text-sm bg-amber-600 text-white px-3 py-2 rounded-lg font-medium hover:bg-amber-700 transition-colors"
                   >
-                    Entrar como {username} (docente)
+                    Entrar como {username} (responsable)
                   </button>
                 </form>
               ))}

@@ -20,7 +20,7 @@ const mockRenovarImportacionGrupos = vi.fn();
 const mockCompletarImportacionGrupos = vi.fn();
 const mockLiberarImportacionGrupos = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
@@ -45,7 +45,7 @@ const { FakeLegajoConflictError, FakeComisionActivaDuplicadaError } = vi.hoisted
   return { FakeLegajoConflictError, FakeComisionActivaDuplicadaError };
 });
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   createComision: (...args: unknown[]) => mockCreateComision(...args),
   updateComision: (...args: unknown[]) => mockUpdateComision(...args),
   getComision: (...args: unknown[]) => mockGetComision(...args),
@@ -66,12 +66,12 @@ vi.mock("@/lib/repositories", () => ({
   INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS: 150_000,
 }));
 
-vi.mock("@/lib/services/intentarSincronizarGrupos", () => ({
+vi.mock("@/application/intentarSincronizarGrupos", () => ({
   intentarSincronizarGrupos: (...args: unknown[]) =>
     mockIntentarSincronizarGrupos(...args),
 }));
 
-vi.mock("@/lib/canales", () => ({
+vi.mock("@/infrastructure/canales", () => ({
   canalesActivos: (...args: unknown[]) => mockCanalesActivos(...args),
   canalPorNombre: (...args: unknown[]) => mockCanalPorNombre(...args),
 }));
@@ -87,13 +87,13 @@ const { FakeLecturaPlanillaAlumnosError } = vi.hoisted(() => {
   return { FakeLecturaPlanillaAlumnosError };
 });
 
-vi.mock("@/lib/services/importarAlumnosDeComision", () => ({
+vi.mock("@/application/importarAlumnosDeComision", () => ({
   importarAlumnosDeComision: (...args: unknown[]) =>
     mockImportarAlumnosDeComision(...args),
   LecturaPlanillaAlumnosError: FakeLecturaPlanillaAlumnosError,
 }));
 
-vi.mock("@/lib/sheets", () => ({
+vi.mock("@/infrastructure/sheets", () => ({
   getAsignacionesGrupos: (...args: unknown[]) => mockGetAsignacionesGrupos(...args),
 }));
 
@@ -229,6 +229,119 @@ describe("crearComision", () => {
       await crearComision(null, makeFormData({ ...BASE, spreadsheetId: "" }));
       expect(mockRedirect).not.toHaveBeenCalled();
     });
+  });
+});
+
+// ── crearComision — configuración de columnas (Fase 4 del issue #82) ──
+
+describe("crearComision – configuración de columnas", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequireAdmin.mockResolvedValue(undefined);
+    mockCreateComision.mockResolvedValue({ id: "c1" });
+  });
+
+  it("acepta columnas más allá de Z", async () => {
+    await crearComision(null, makeFormData({ ...BASE, col_legajo: "26" }));
+    expect(mockCreateComision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        columnConfig: expect.objectContaining({ legajo: 26 }),
+      })
+    );
+  });
+
+  it("acepta ZZ (701) como tope válido", async () => {
+    await crearComision(null, makeFormData({ ...BASE, col_legajo: "701" }));
+    expect(mockCreateComision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        columnConfig: expect.objectContaining({ legajo: 701 }),
+      })
+    );
+  });
+
+  it("rechaza columnas por encima de ZZ", async () => {
+    const result = await crearComision(null, makeFormData({ ...BASE, col_legajo: "702" }));
+    expect(result).toMatchObject({ ok: false });
+    expect(result?.errors?.col_legajo).toBeDefined();
+    expect(mockCreateComision).not.toHaveBeenCalled();
+  });
+
+  it("una config sin modoNombre se interpreta como 'separado'", async () => {
+    await crearComision(null, makeFormData(BASE));
+    expect(mockCreateComision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        columnConfig: expect.objectContaining({ modoNombre: "separado" }),
+      })
+    );
+  });
+
+  it("rechaza dos datos personales activos mapeados a la misma columna", async () => {
+    const result = await crearComision(
+      null,
+      makeFormData({ ...BASE, col_apellido: "4", col_email: "4" })
+    );
+    expect(result).toMatchObject({ ok: false });
+    expect(result?.errors?.col_apellido).toBeDefined();
+    expect(result?.errors?.col_email).toBeDefined();
+    expect(mockCreateComision).not.toHaveBeenCalled();
+  });
+
+  it("modo 'completo' exige col_nombreCompleto", async () => {
+    const result = await crearComision(
+      null,
+      makeFormData({ ...BASE, modoNombre: "completo" })
+    );
+    expect(result).toMatchObject({ ok: false });
+    expect(result?.errors?.col_nombreCompleto).toBeDefined();
+    expect(mockCreateComision).not.toHaveBeenCalled();
+  });
+
+  it("modo 'completo' con columna configurada guarda nombreCompleto", async () => {
+    await crearComision(
+      null,
+      makeFormData({ ...BASE, modoNombre: "completo", col_nombreCompleto: "10" })
+    );
+    expect(mockCreateComision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        columnConfig: expect.objectContaining({ modoNombre: "completo", nombreCompleto: 10 }),
+      })
+    );
+  });
+
+  it("en modo 'completo', apellido y nombre separados no cuentan como activos: no colisionan con nombreCompleto", async () => {
+    // col_apellido queda en su default (1, DEFAULT_COLUMN_CONFIG.apellido) y
+    // col_nombreCompleto también apunta a 1 — no es colisión porque en modo
+    // completo apellido/nombre no se leen ni escriben.
+    await crearComision(
+      null,
+      makeFormData({ ...BASE, modoNombre: "completo", col_nombreCompleto: "1" })
+    );
+    expect(mockCreateComision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        columnConfig: expect.objectContaining({ modoNombre: "completo", nombreCompleto: 1 }),
+      })
+    );
+  });
+
+  it("permitir_precarga_sin_legajo ausente se guarda como false", async () => {
+    await crearComision(null, makeFormData(BASE));
+    expect(mockCreateComision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        columnConfig: expect.objectContaining({ permitirPrecargaSinLegajo: false }),
+      })
+    );
+  });
+
+  it("permitir_precarga_sin_legajo=on se guarda como true", async () => {
+    await crearComision(
+      null,
+      makeFormData({ ...BASE, permitir_precarga_sin_legajo: "on" })
+    );
+    expect(mockCreateComision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        columnConfig: expect.objectContaining({ permitirPrecargaSinLegajo: true }),
+      })
+    );
   });
 });
 

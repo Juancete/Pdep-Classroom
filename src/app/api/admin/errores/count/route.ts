@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { guardAdmin } from "@/lib/api-auth";
 import { internalErrorSinPersistencia } from "@/lib/api-errors";
-import { getUnreadErrorLogCount } from "@/lib/repositories";
+import { getUnreadErrorLogCount } from "@/infrastructure/repositories";
 
 const ROUTE = "GET /api/admin/errores/count";
 

@@ -1,5 +1,5 @@
-import { requireAdmin } from "@/lib/session";
-import { getGrupos } from "@/lib/repositories";
+import { requireAdmin } from "@/infrastructure/auth/session";
+import { getGrupos } from "@/infrastructure/repositories";
 import { PARADIGMAS } from "@/types";
 import type { Paradigma } from "@/types";
 

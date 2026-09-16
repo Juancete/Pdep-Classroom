@@ -1,5 +1,7 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ComisionFormState } from "./actions";
+import { DEFAULT_COLUMN_CONFIG } from "@/types";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -46,6 +48,15 @@ function getActivaCheckbox(container: HTMLElement) {
 }
 function getSheetNameField(container: HTMLElement) {
   return container.querySelector<HTMLElement>('[name="sheetName"]')!;
+}
+function getModoNombreSelect(container: HTMLElement) {
+  return container.querySelector<HTMLSelectElement>('[name="modoNombre"]')!;
+}
+function getColSelect(container: HTMLElement, name: string) {
+  return container.querySelector<HTMLSelectElement>(`[name="${name}"]`);
+}
+function getPrecargaSinLegajoCheckbox(container: HTMLElement) {
+  return container.querySelector<HTMLInputElement>('[name="permitir_precarga_sin_legajo"]')!;
 }
 
 // ── Tests ────────────────────────────────────────────────────
@@ -189,6 +200,95 @@ describe("ComisionForm", () => {
         />
       );
       expect(screen.getByRole("button", { name: "Recargar hojas" })).toBeInTheDocument();
+    });
+  });
+
+  describe("modo de nombre", () => {
+    it("por defecto está en modo separado", () => {
+      const { container } = render(<ComisionForm action={noop} submitLabel="Crear" />);
+      expect(getModoNombreSelect(container).value).toBe("separado");
+    });
+
+    it("en modo separado muestra apellido y nombre, y oculta nombre completo", () => {
+      const { container } = render(<ComisionForm action={noop} submitLabel="Crear" />);
+      expect(getColSelect(container, "col_apellido")).toBeInTheDocument();
+      expect(getColSelect(container, "col_nombre")).toBeInTheDocument();
+      expect(getColSelect(container, "col_nombreCompleto")).not.toBeInTheDocument();
+    });
+
+    it("al elegir modo completo, muestra nombre completo y oculta apellido/nombre", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<ComisionForm action={noop} submitLabel="Crear" />);
+
+      await user.selectOptions(getModoNombreSelect(container), "completo");
+
+      expect(getColSelect(container, "col_nombreCompleto")).toBeInTheDocument();
+      expect(getColSelect(container, "col_apellido")).not.toBeInTheDocument();
+      expect(getColSelect(container, "col_nombre")).not.toBeInTheDocument();
+    });
+
+    it("pre-carga modoNombre 'completo' y la columna de nombre completo desde defaultValues", () => {
+      const { container } = render(
+        <ComisionForm
+          action={noop}
+          submitLabel="Guardar"
+          defaultValues={{
+            columnConfig: { ...DEFAULT_COLUMN_CONFIG, modoNombre: "completo", nombreCompleto: 6 },
+          }}
+        />
+      );
+      expect(getModoNombreSelect(container).value).toBe("completo");
+      expect(getColSelect(container, "col_nombreCompleto")?.value).toBe("6");
+    });
+
+    it("muestra el error de col_nombreCompleto del servidor", () => {
+      errorState({ col_nombreCompleto: ["La columna de nombre completo es obligatoria en modo 'completo'"] });
+      render(
+        <ComisionForm
+          action={noop}
+          submitLabel="Crear"
+          defaultValues={{ columnConfig: { ...DEFAULT_COLUMN_CONFIG, modoNombre: "completo" } }}
+        />
+      );
+      expect(
+        screen.getByText("La columna de nombre completo es obligatoria en modo 'completo'")
+      ).toBeInTheDocument();
+    });
+  });
+
+  describe("checkbox de precarga sin legajo", () => {
+    it("está desmarcado por defecto", () => {
+      const { container } = render(<ComisionForm action={noop} submitLabel="Crear" />);
+      expect(getPrecargaSinLegajoCheckbox(container)).not.toBeChecked();
+    });
+
+    it("pre-carga permitirPrecargaSinLegajo=true desde defaultValues", () => {
+      const { container } = render(
+        <ComisionForm
+          action={noop}
+          submitLabel="Guardar"
+          defaultValues={{
+            columnConfig: { ...DEFAULT_COLUMN_CONFIG, permitirPrecargaSinLegajo: true },
+          }}
+        />
+      );
+      expect(getPrecargaSinLegajoCheckbox(container)).toBeChecked();
+    });
+  });
+
+  describe("columnas hasta ZZ", () => {
+    it("el select de legajo ofrece columnas más allá de Z", () => {
+      const { container } = render(<ComisionForm action={noop} submitLabel="Crear" />);
+      const select = getColSelect(container, "col_legajo")!;
+      const opciones = Array.from(select.options).map((option) => option.value);
+      expect(opciones).toContain("701");
+    });
+
+    it("la última opción es ZZ", () => {
+      const { container } = render(<ComisionForm action={noop} submitLabel="Crear" />);
+      const select = getColSelect(container, "col_legajo")!;
+      const ultimaOpcion = select.options[select.options.length - 1];
+      expect(ultimaOpcion.textContent).toContain("ZZ");
     });
   });
 });

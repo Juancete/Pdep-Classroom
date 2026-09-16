@@ -6,15 +6,15 @@ const mockGetCurrentUser = vi.fn();
 const mockGetEntregaPorId = vi.fn();
 const mockReejecutar = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getEntregaPorId: (entregaId: string) => mockGetEntregaPorId(entregaId),
 }));
 
-vi.mock("@/lib/services/sincronizarCI", () => ({
+vi.mock("@/application/sincronizarCI", () => ({
   reejecutarCIDeEntrega: (entrega: unknown) => mockReejecutar(entrega),
 }));
 

@@ -1,19 +1,18 @@
-import type { SessionPdepUser } from "@/types";
-import { rolDesdeNombre } from "@/domain/entities/RolDeUsuario";
-
-export function getProxyRedirectPath({
-  session,
-  pathname,
-}: {
-  session: unknown;
-  pathname: string;
-}): "/login" | "/dashboard" | null {
-  const pdepUser = (session as { pdepUser?: SessionPdepUser } | null)?.pdepUser;
-
-  if (!session) return "/login";
-  if (pathname.startsWith("/admin")) {
-    const puedeAdministrar = pdepUser ? rolDesdeNombre(pdepUser.rolNombre).puedeAdministrar() : false;
-    if (!puedeAdministrar) return "/dashboard";
-  }
-  return null;
+/**
+ * Sólo comprueba autenticación — no autorización. Hasta #83 esta función
+ * también rebotaba a un alumno fuera de `/admin` mirando el `rolNombre` que
+ * viajaba en el JWT. Ese rol dejó de existir en la sesión: a partir de #83 un
+ * administrador puede desactivarse entre una request y la siguiente, y este
+ * proxy corre en el Edge runtime, que no puede consultar la tabla
+ * `Administrador` (arrastraría MikroORM al bundle Edge — ver el comentario en
+ * `src/infrastructure/auth/auth.ts`).
+ *
+ * La autorización por rol sigue existiendo, sólo que más adentro, donde sí
+ * hay acceso a la DB: `requireAdmin()`/`requireResponsable()` en cada página
+ * y server action de `/admin/*`, y `guardAdmin()` en cada route handler. No
+ * queda ninguna ruta administrativa sin su propio guard — ver el listado en
+ * el plan del issue #83.
+ */
+export function getProxyRedirectPath({ session }: { session: unknown }): "/login" | null {
+  return session ? null : "/login";
 }

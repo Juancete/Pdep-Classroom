@@ -5,7 +5,7 @@ import ormConfig from "../../mikro-orm.config";
 
 const ormHolder = vi.hoisted(() => ({ orm: undefined as MikroORM | undefined }));
 
-vi.mock("@/lib/db", () => ({
+vi.mock("@/infrastructure/db", () => ({
   getEM: async () => {
     if (!ormHolder.orm) throw new Error("ORM de integración no inicializado");
     return ormHolder.orm.em.fork();
@@ -23,8 +23,8 @@ import {
   crearGrupo,
   salirDeGrupo,
   moverAlumnoDeGrupo,
-} from "../../src/lib/repositories/GrupoRepository";
-import { crearEntregaSiAssignmentDisponible } from "../../src/lib/repositories/EntregaRepository";
+} from "../../src/infrastructure/repositories/GrupoRepository";
+import { crearEntregaSiAssignmentDisponible } from "../../src/infrastructure/repositories/EntregaRepository";
 import type { PdepUser } from "../../src/types";
 
 function getSafeTestDatabaseUrl(): string {

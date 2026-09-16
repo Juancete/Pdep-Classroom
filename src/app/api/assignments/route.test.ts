@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PdepUser } from "@/types";
 import { DOCENTE, ESTUDIANTE } from "@/domain/entities";
+import { PermisosNoVerificablesError } from "@/infrastructure/auth/PermisosNoVerificablesError";
 
 const mockGetCurrentUser = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
@@ -8,11 +9,11 @@ const mockGetAssignments = vi.fn();
 const mockGetAssignmentsDeComision = vi.fn();
 const mockGetEntregasDeUsuario = vi.fn();
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
   getAssignments: () => mockGetAssignments(),
   getAssignmentsDeComision: (comisionId: string) =>
@@ -131,5 +132,19 @@ describe("GET /api/assignments", () => {
     expect(mockGetAssignments).toHaveBeenCalled();
     expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
     expect(mockGetAssignmentsDeComision).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 503 controlado cuando no se pudieron verificar los permisos", async () => {
+    mockGetCurrentUser.mockRejectedValue(
+      new PermisosNoVerificablesError(new Error("DB caída"))
+    );
+
+    const response = await GET();
+    const json = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(json.error).toBe(
+      "No se pudieron verificar tus permisos. Reintentá en unos segundos."
+    );
   });
 });

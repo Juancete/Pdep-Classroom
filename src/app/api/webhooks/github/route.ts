@@ -6,7 +6,7 @@ import {
   reclamarDeliveryEntrante,
   procesarDeliveryReclamado,
   MAX_WEBHOOK_BODY_BYTES,
-} from "@/lib/services/recibirWebhookGithub";
+} from "@/application/recibirWebhookGithub";
 
 /**
  * Lee el body como texto, cortando apenas se supera `maxBytes` en vez de

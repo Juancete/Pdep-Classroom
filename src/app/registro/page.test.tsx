@@ -6,22 +6,22 @@ import { Alumno, ESTUDIANTE } from "@/domain/entities";
 // ── Mocks ────────────────────────────────────────────────────
 
 const mockAuth = vi.fn();
-const mockGetAlumnoDeSheets = vi.fn();
+const mockGetDatosPrecarga = vi.fn();
 const mockGetAlumnoDeDB = vi.fn();
 const mockGetComisionActiva = vi.fn();
 const mockRedirect = vi.fn().mockImplementation((url: string) => {
   throw new Error(`REDIRECT:${url}`);
 });
 
-vi.mock("@/lib/auth", () => ({
+vi.mock("@/infrastructure/auth/auth", () => ({
   auth: () => mockAuth(),
 }));
 
-vi.mock("@/lib/sheets", () => ({
-  getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoDeSheets(...args),
+vi.mock("@/infrastructure/sheets", () => ({
+  getDatosPrecargaByGithub: (...args: unknown[]) => mockGetDatosPrecarga(...args),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoDeDB(...args),
   getComisionActiva: () => mockGetComisionActiva(),
 }));
@@ -30,13 +30,15 @@ vi.mock("next/navigation", () => ({
   redirect: (url: string) => mockRedirect(url),
 }));
 
-vi.mock("@/app/components/AlumnoForm", () => ({
+vi.mock("@/components/AlumnoForm", () => ({
   AlumnoForm: ({
     defaultValues,
     submitLabel,
+    referenciaNombre,
   }: {
     defaultValues: { githubUsername: string; email: string; nombre: string; apellido: string; legajo?: string };
     submitLabel: string;
+    referenciaNombre?: string;
   }) => (
     <div
       data-testid="alumno-form"
@@ -46,6 +48,7 @@ vi.mock("@/app/components/AlumnoForm", () => ({
       data-apellido={defaultValues.apellido}
       data-legajo={defaultValues.legajo ?? ""}
       data-submit-label={submitLabel}
+      data-referencia-nombre={referenciaNombre ?? ""}
     />
   ),
 }));
@@ -90,7 +93,7 @@ describe("Registro page", () => {
     });
     mockGetComisionActiva.mockResolvedValue(null);
     mockGetAlumnoDeDB.mockResolvedValue(null);
-    mockGetAlumnoDeSheets.mockResolvedValue(null);
+    mockGetDatosPrecarga.mockResolvedValue(undefined);
   });
 
   describe("redirecciones", () => {
@@ -162,11 +165,10 @@ describe("Registro page", () => {
         })
       );
       // Sheets tiene otro email y otro legajo (el admin rearmó la planilla) — debe ganar DB
-      mockGetAlumnoDeSheets.mockResolvedValue({
+      mockGetDatosPrecarga.mockResolvedValue({
         legajo: "11111",
         nombre: "Juan",
         apellido: "G",
-        githubUsername: "juan",
         email: "institucional@utn.edu.ar",
       });
 
@@ -178,16 +180,15 @@ describe("Registro page", () => {
       expect(html).toContain('data-apellido="García"');
     });
 
-    it("usa los datos de Sheets cuando no hay DB (nuevo alumno pre-cargado por admin)", async () => {
+    it("usa los datos de precarga de Sheets cuando no hay DB (nuevo alumno pre-cargado por admin)", async () => {
       const comision = { id: "c1", spreadsheetId: "s1", columnConfig: null };
       mockGetComisionActiva.mockResolvedValue(comision);
       mockAuth.mockResolvedValue(makeSession("nuevo"));
       mockGetAlumnoDeDB.mockResolvedValue(null);
-      mockGetAlumnoDeSheets.mockResolvedValue({
+      mockGetDatosPrecarga.mockResolvedValue({
         legajo: "54321",
         nombre: "María",
         apellido: "Pérez",
-        githubUsername: "nuevo",
         email: "maria@utn.edu.ar",
       });
 
@@ -199,11 +200,11 @@ describe("Registro page", () => {
       expect(html).toContain('data-apellido="Pérez"');
     });
 
-    it("cae a la sesión cuando no hay DB ni Sheets (nuevo sin pre-carga)", async () => {
+    it("cae a la sesión cuando no hay DB ni precarga (nuevo sin pre-carga)", async () => {
       mockGetComisionActiva.mockResolvedValue(null);
       mockAuth.mockResolvedValue(makeSession("nuevouser"));
       mockGetAlumnoDeDB.mockResolvedValue(null);
-      mockGetAlumnoDeSheets.mockResolvedValue(null);
+      mockGetDatosPrecarga.mockResolvedValue(undefined);
 
       const element = await RegistroPage();
       const html = renderToStaticMarkup(element);
@@ -219,12 +220,56 @@ describe("Registro page", () => {
       session.user.name = "";
       mockAuth.mockResolvedValue(session);
       mockGetAlumnoDeDB.mockResolvedValue(null);
-      mockGetAlumnoDeSheets.mockResolvedValue(null);
+      mockGetDatosPrecarga.mockResolvedValue(undefined);
 
       const element = await RegistroPage();
       const html = renderToStaticMarkup(element);
       expect(html).toContain('data-nombre=""');
       expect(html).toContain('data-apellido=""');
+    });
+  });
+
+  describe("referenciaNombre (nombre completo que no se pudo separar)", () => {
+    it("pasa nombreCrudo de la precarga como referenciaNombre al form", async () => {
+      const comision = { id: "c1", spreadsheetId: "s1", columnConfig: null };
+      mockGetComisionActiva.mockResolvedValue(comision);
+      mockAuth.mockResolvedValue(makeSession("nuevo"));
+      mockGetAlumnoDeDB.mockResolvedValue(null);
+      mockGetDatosPrecarga.mockResolvedValue({
+        legajo: "54321",
+        nombreCrudo: "María Pérez",
+      });
+
+      const element = await RegistroPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain('data-referencia-nombre="María Pérez"');
+    });
+
+    it("no pasa referenciaNombre cuando la precarga no trae nombreCrudo", async () => {
+      const comision = { id: "c1", spreadsheetId: "s1", columnConfig: null };
+      mockGetComisionActiva.mockResolvedValue(comision);
+      mockAuth.mockResolvedValue(makeSession("nuevo"));
+      mockGetAlumnoDeDB.mockResolvedValue(null);
+      mockGetDatosPrecarga.mockResolvedValue({
+        legajo: "54321",
+        nombre: "María",
+        apellido: "Pérez",
+      });
+
+      const element = await RegistroPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain('data-referencia-nombre=""');
+    });
+
+    it("no pasa referenciaNombre cuando no hay comisión activa", async () => {
+      mockGetComisionActiva.mockResolvedValue(null);
+      mockAuth.mockResolvedValue(makeSession("nuevo"));
+      mockGetAlumnoDeDB.mockResolvedValue(null);
+
+      const element = await RegistroPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain('data-referencia-nombre=""');
+      expect(mockGetDatosPrecarga).not.toHaveBeenCalled();
     });
   });
 
@@ -255,7 +300,7 @@ describe("Registro page", () => {
   });
 
   describe("consulta a Sheets", () => {
-    it("consulta Sheets con el spreadsheetId y columnConfig de la comisión activa", async () => {
+    it("consulta la precarga de Sheets con el spreadsheetId y columnConfig de la comisión activa", async () => {
       const comision = {
         id: "c1",
         spreadsheetId: "sheet-xyz",
@@ -266,7 +311,7 @@ describe("Registro page", () => {
 
       await RegistroPage();
 
-      expect(mockGetAlumnoDeSheets).toHaveBeenCalledWith(
+      expect(mockGetDatosPrecarga).toHaveBeenCalledWith(
         "nuevouser",
         "sheet-xyz",
         comision.columnConfig

@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/session";
+import { requireAdmin } from "@/infrastructure/auth/session";
 import {
   getAssignment,
   getEntregas,
@@ -6,7 +6,7 @@ import {
   getGruposDeAssignment,
   getRepoDeletionHistory,
   getHistorialDeMembresias,
-} from "@/lib/repositories";
+} from "@/infrastructure/repositories";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { EntregasTable } from "./entregas-table";
@@ -16,7 +16,7 @@ import type { GrupoAdminResumen, AlumnoSinGrupoResumen } from "./grupos-panel";
 import { Alumno, transicionesDisponibles } from "@/domain/entities";
 import { RepoDeletionHistory } from "./repo-deletion-history";
 import { HistorialDeMembresias } from "./historial-membresias";
-import { EstadoAssignmentBadge } from "@/app/components/EstadoAssignmentBadge";
+import { EstadoAssignmentBadge } from "@/components/EstadoAssignmentBadge";
 import { EstadoPanel } from "../estado-panel";
 
 function paginaDeQuery(valor: string | string[] | undefined): number {

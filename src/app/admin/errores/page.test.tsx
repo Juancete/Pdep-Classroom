@@ -6,8 +6,8 @@ const mockRequireAdmin = vi.fn();
 const mockGetPage = vi.fn();
 const mockGetUnread = vi.fn();
 
-vi.mock("@/lib/session", () => ({ requireAdmin: () => mockRequireAdmin() }));
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({ requireAdmin: () => mockRequireAdmin() }));
+vi.mock("@/infrastructure/repositories", () => ({
   getErrorLogsPage: (...args: unknown[]) => mockGetPage(...args),
   getUnreadErrorLogCount: () => mockGetUnread(),
 }));

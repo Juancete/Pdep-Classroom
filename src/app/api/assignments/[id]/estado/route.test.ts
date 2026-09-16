@@ -14,22 +14,31 @@ const {
   FakeTransicionDeEstadoInvalidaError: class TransicionDeEstadoInvalidaError extends Error {},
 }));
 
-vi.mock("@/lib/session", () => ({
+vi.mock("@/infrastructure/auth/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
 }));
 
-vi.mock("@/lib/repositories", () => ({
+vi.mock("@/infrastructure/repositories", () => ({
   cambiarEstadoAssignment: (id: string, estado: string, porUsuario: string) =>
     mockCambiarEstadoAssignment(id, estado, porUsuario),
 }));
 
-vi.mock("@/lib/services/assignmentAuthorization", () => ({
+vi.mock("@/application/assignmentAuthorization", () => ({
   AssignmentNoEncontradoError: FakeAssignmentNoEncontradoError,
 }));
 
-vi.mock("@/domain/entities", () => ({
-  TransicionDeEstadoInvalidaError: FakeTransicionDeEstadoInvalidaError,
-}));
+// Mock parcial (con `importOriginal`): `respuestaDeErrorDeDominio` (usada
+// ahora en el catch de la ruta, issue de traducir `PermisosNoVerificablesError`
+// a 503) arma su tabla con varios errores de dominio reales de este módulo —
+// un mock que sólo devolviera `TransicionDeEstadoInvalidaError` rompería esa
+// tabla, aunque ningún test de acá dependa de esos otros errores.
+vi.mock("@/domain/entities", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/domain/entities")>();
+  return {
+    ...actual,
+    TransicionDeEstadoInvalidaError: FakeTransicionDeEstadoInvalidaError,
+  };
+});
 
 import { PATCH } from "./route";
 

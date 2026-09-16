@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getCurrentUser } from "@/lib/session";
-import { salirDeGrupo, moverAlumnoDeGrupo } from "@/lib/repositories";
+import { getCurrentUser } from "@/infrastructure/auth/session";
+import { salirDeGrupo, moverAlumnoDeGrupo } from "@/infrastructure/repositories";
 import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
 import { Alumno } from "@/domain/entities";
 

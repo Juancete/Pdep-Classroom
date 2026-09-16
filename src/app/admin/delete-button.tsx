@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { TrashIcon, SpinnerIcon } from "@/app/components/icons";
+import { TrashIcon, SpinnerIcon } from "@/components/icons";
 
 export function DeleteButton({
   confirmMessage,

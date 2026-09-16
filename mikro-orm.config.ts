@@ -22,6 +22,7 @@ import {
   CambioDeMembresia,
   GithubWebhookDelivery,
   ErrorLog,
+  Administrador,
 } from "./src/domain/entities";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -50,6 +51,7 @@ export default defineConfig({
     CambioDeMembresia,
     GithubWebhookDelivery,
     ErrorLog,
+    Administrador,
   ],
 
   // Usa reflect-metadata en runtime (funciona en webpack/RSC sin necesitar

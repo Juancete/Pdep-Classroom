@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 // ── Mocks ────────────────────────────────────────────────────
 
-vi.mock("@/lib/auth", () => ({
+vi.mock("@/infrastructure/auth/auth", () => ({
   signIn: vi.fn(),
 }));
 
@@ -77,15 +77,15 @@ describe("Login page", () => {
       vi.stubEnv("ADMIN_GITHUB_USERNAMES", "juancete, fdodino");
       const element = LoginPage();
       const html = renderToStaticMarkup(element);
-      expect(html).toContain("Entrar como juancete (docente)");
-      expect(html).toContain("Entrar como fdodino (docente)");
+      expect(html).toContain("Entrar como juancete (responsable)");
+      expect(html).toContain("Entrar como fdodino (responsable)");
     });
 
     it("no ofrece botones de admin si no hay ninguno configurado", () => {
       vi.stubEnv("ADMIN_GITHUB_USERNAMES", "");
       const element = LoginPage();
       const html = renderToStaticMarkup(element);
-      expect(html).not.toContain("(docente)");
+      expect(html).not.toContain("(responsable)");
     });
 
     it("siempre ofrece un campo de texto para entrar como cualquier alumno", () => {
