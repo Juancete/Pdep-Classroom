@@ -224,6 +224,27 @@ planilla distinta.
 |---|---|---|---|---|---|
 | 12345 | García | Juan | juangarcia | juan@gmail.com | miércoles noche |
 
+**Incorporar una cursada ya en marcha:** si la comisión va a apuntar a una planilla de notas
+existente (en vez de una hoja nueva y limpia), `ColumnConfig` tiene tres campos pensados para eso,
+configurables desde `/admin/comisiones`:
+
+- `modoNombre` (`"separado"` | `"completo"`, default `"separado"`): una planilla en marcha suele
+  traer el nombre en una sola columna con formato `Apellido, Nombre` en vez de dos columnas
+  separadas. En modo `"completo"` la app separa por la **primera** coma al leer y reconstruye
+  `Apellido, Nombre` al escribir; si la celda no tiene coma o alguna de las dos partes queda vacía,
+  no infiere nada — deja el campo vacío para que el alumno lo complete a mano.
+- `nombreCompleto`: la columna (0-indexed) con el nombre consolidado. Sólo se usa —y sólo es
+  obligatoria en el form— cuando `modoNombre` es `"completo"`; en modo `"separado"` se ignora.
+- `permitirPrecargaSinLegajo` (default `false`): una cursada en marcha puede tener alumnos que
+  todavía no tienen legajo asignado (nunca se les pidió). Con este flag activado, `/registro`
+  prellena los datos de un alumno aunque su fila en la planilla no tenga legajo todavía; sin él,
+  esas filas se tratan igual que si no existieran. El legajo sigue siendo obligatorio para
+  completar el registro — el flag sólo afecta la precarga, no la validación final.
+
+El resto del mapeo de columnas soporta cualquier posición, incluso más allá de la Z (hasta ZZ): una
+cursada en marcha suele tener el legajo al final, después de los bloques de notas por paradigma, y
+la app nunca lee ni reescribe esas columnas intermedias al confirmar el registro de un alumno.
+
 **Formato esperado de la hoja "Grupos":** una fila por alumno, con su `githubUsername` y una
 columna de nombre de grupo **por paradigma** (no una columna `Paradigma` separada) — se configura
 por comisión al mapear las columnas de esa hoja:

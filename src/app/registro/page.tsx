@@ -1,5 +1,5 @@
 import { auth } from "@/infrastructure/auth/auth";
-import { getAlumnoByGithub as getAlumnoDeSheets } from "@/infrastructure/sheets";
+import { getDatosPrecargaByGithub } from "@/infrastructure/sheets";
 import {
   getAlumnoByGithub as getAlumnoDeDB,
   getComisionActiva,
@@ -27,8 +27,8 @@ export default async function RegistroPage() {
   // pre-cargó el admin en la planilla (Sheets); y como último recurso, lo que
   // viene del perfil de GitHub de la sesión.
   // Sin comisión activa no hay planilla que leer; caemos al prefill de DB/sesión.
-  const alumnoSheets = comisionActiva
-    ? await getAlumnoDeSheets(
+  const datosPrecarga = comisionActiva
+    ? await getDatosPrecargaByGithub(
         githubUsername,
         comisionActiva.spreadsheetId,
         comisionActiva.columnConfig
@@ -41,10 +41,10 @@ export default async function RegistroPage() {
 
   const defaultValues = {
     githubUsername,
-    legajo: alumnoDB?.legajo ?? alumnoSheets?.legajo ?? "",
-    apellido: alumnoDB?.apellido ?? alumnoSheets?.apellido ?? defaultApellido,
-    nombre: alumnoDB?.nombre ?? alumnoSheets?.nombre ?? defaultNombre,
-    email: alumnoDB?.email ?? alumnoSheets?.email ?? session.user?.email ?? "",
+    legajo: alumnoDB?.legajo ?? datosPrecarga?.legajo ?? "",
+    apellido: alumnoDB?.apellido ?? datosPrecarga?.apellido ?? defaultApellido,
+    nombre: alumnoDB?.nombre ?? datosPrecarga?.nombre ?? defaultNombre,
+    email: alumnoDB?.email ?? datosPrecarga?.email ?? session.user?.email ?? "",
   };
 
   // Alumno registrado en la DB pero no en la comisión... Entonces le saco los datos 
@@ -67,6 +67,7 @@ export default async function RegistroPage() {
 
       <AlumnoForm
         defaultValues={defaultValues}
+        referenciaNombre={datosPrecarga?.nombreCrudo}
         apiEndpoint="/api/registro"
         method="POST"
         extraBody={{ githubUsername }}

@@ -88,6 +88,28 @@ describe("AlumnoForm", () => {
     });
   });
 
+  describe("referenciaNombre", () => {
+    it("no muestra ningún hint cuando no viene referenciaNombre", () => {
+      renderForm();
+      expect(screen.queryByText(/en la planilla figurás como/i)).not.toBeInTheDocument();
+    });
+
+    it("muestra el hint con el texto tal cual cuando viene referenciaNombre", () => {
+      renderForm({ referenciaNombre: "García Juan" });
+      expect(screen.getByText(/en la planilla figurás como/i)).toHaveTextContent(
+        "En la planilla figurás como «García Juan». Completá tu apellido y nombre por separado abajo."
+      );
+    });
+
+    it("apellido y nombre siguen siendo obligatorios aunque venga referenciaNombre", () => {
+      renderForm({ referenciaNombre: "García Juan", defaultValues: { ...DEFAULT_VALUES, apellido: "", nombre: "" } });
+      const apellidoInput = document.querySelector<HTMLInputElement>('input[name="apellido"]')!;
+      const nombreInput = document.querySelector<HTMLInputElement>('input[name="nombre"]')!;
+      expect(apellidoInput).toBeRequired();
+      expect(nombreInput).toBeRequired();
+    });
+  });
+
   describe("submit exitoso", () => {
     beforeEach(() => {
       vi.mocked(fetch).mockResolvedValue(
