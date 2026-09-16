@@ -4,13 +4,15 @@ import { useActionState, useState, useRef } from "react";
 import type { ComisionFormState } from "./actions";
 import { fetchSheetNames } from "./actions";
 import { INPUT_CLASS, INPUT_ERROR_CLASS, FieldError, SubmitButton } from "../ui";
-import { DEFAULT_COLUMN_CONFIG, type ColumnConfig } from "@/types";
+import { DEFAULT_COLUMN_CONFIG, type ColumnConfig, type ModoNombre } from "@/types";
 import { COMISION_ANIO_MIN, COMISION_ANIO_MAX } from "@/domain/entities/domain-constants";
+import { colLetter } from "@/lib/sheets-columns";
 
-// A=0, B=1, … Z=25
-const COL_OPTIONS = Array.from({ length: 26 }, (_, colIndex) => ({
+// A=0, B=1, … ZZ=701 — el legajo de una cursada en marcha puede caer bien
+// pasada la Z, después de los bloques de notas de los tres paradigmas.
+const COL_OPTIONS = Array.from({ length: 702 }, (_, colIndex) => ({
   value: colIndex,
-  label: String.fromCharCode(65 + colIndex),
+  label: colLetter(colIndex),
 }));
 
 type DefaultValues = {
@@ -122,6 +124,7 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel, initialS
   const config = defaultValues.columnConfig ?? DEFAULT_COLUMN_CONFIG;
   const grupos = config.grupos;
   const [gruposEnabled, setGruposEnabled] = useState(Boolean(grupos));
+  const [modoNombre, setModoNombre] = useState<ModoNombre>(config.modoNombre ?? "separado");
   const [sheetNames, setSheetNames] = useState<string[] | null>(initialSheetNames ?? null);
   const [loadingSheets, setLoadingSheets] = useState(false);
   const [loadSheetsError, setLoadSheetsError] = useState<string | null>(null);
@@ -252,14 +255,58 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel, initialS
           </div>
         </div>
 
+        {/* Modo de nombre */}
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Modo de nombre</label>
+          <select
+            name="modoNombre"
+            value={modoNombre}
+            onChange={(changeEvent) => setModoNombre(changeEvent.target.value as ModoNombre)}
+            className="w-full rounded-md border px-2 py-1.5 text-sm border-gray-300 bg-white focus:ring-2 focus:ring-pdep-500 focus:border-pdep-500 outline-none"
+          >
+            <option value="separado">Apellido y nombre en columnas separadas</option>
+            <option value="completo">Nombre completo en una sola columna (&quot;Apellido, Nombre&quot;)</option>
+          </select>
+          <FieldError message={errors.modoNombre?.[0]} />
+        </div>
+
         {/* Selectores de columna */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <ColSelect name="col_legajo" label="Legajo" defaultValue={config.legajo} error={errors.col_legajo?.[0]} />
-          <ColSelect name="col_apellido" label="Apellido" defaultValue={config.apellido} error={errors.col_apellido?.[0]} />
-          <ColSelect name="col_nombre" label="Nombre" defaultValue={config.nombre} error={errors.col_nombre?.[0]} />
+          {modoNombre === "separado" ? (
+            <>
+              <ColSelect name="col_apellido" label="Apellido" defaultValue={config.apellido} error={errors.col_apellido?.[0]} />
+              <ColSelect name="col_nombre" label="Nombre" defaultValue={config.nombre} error={errors.col_nombre?.[0]} />
+            </>
+          ) : (
+            <ColSelect
+              name="col_nombreCompleto"
+              label="Nombre completo"
+              defaultValue={config.nombreCompleto}
+              error={errors.col_nombreCompleto?.[0]}
+            />
+          )}
           <ColSelect name="col_githubUsername" label="Usuario GitHub" defaultValue={config.githubUsername} error={errors.col_githubUsername?.[0]} />
           <ColSelect name="col_email" label="Email" defaultValue={config.email} error={errors.col_email?.[0]} />
         </div>
+
+        {/* Precarga sin legajo (cursada en marcha) */}
+        <div className="flex items-center gap-3">
+          <input
+            id="permitir_precarga_sin_legajo"
+            name="permitir_precarga_sin_legajo"
+            type="checkbox"
+            defaultChecked={config.permitirPrecargaSinLegajo ?? false}
+            className="h-4 w-4 rounded border-gray-300 text-pdep-600 focus:ring-pdep-500"
+          />
+          <label htmlFor="permitir_precarga_sin_legajo" className="text-sm font-medium text-gray-700">
+            Permitir precarga sin legajo
+          </label>
+        </div>
+        <p className="text-gray-400 text-xs -mt-3">
+          Activalo para incorporar una cursada en marcha: un alumno que ya figura en la
+          planilla pero todavía no tiene legajo va a poder precargar sus datos igual.
+        </p>
       </fieldset>
 
       {/* Configuración de hoja de grupos (opcional) */}
