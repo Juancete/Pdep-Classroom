@@ -1,32 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-const mockUseActionState = vi.fn();
 const mockCrearAdministradorAction = vi.fn();
-
-vi.mock("react", async () => {
-  const actual = await vi.importActual<typeof import("react")>("react");
-  return { ...actual, useActionState: (...args: unknown[]) => mockUseActionState(...args) };
-});
 
 vi.mock("./actions", () => ({
   crearAdministradorAction: (...args: unknown[]) => mockCrearAdministradorAction(...args),
 }));
 
 import { AdministradorForm } from "./administrador-form";
-
-const noop = vi.fn();
-
-function noErrorState() {
-  mockUseActionState.mockImplementation(
-    (_action: unknown, initial: unknown) => [initial, noop]
-  );
-}
-
-function errorState(errors: Record<string, string[]>) {
-  mockUseActionState.mockReturnValue([{ ok: false, errors }, noop]);
-}
 
 function getInput(container: HTMLElement, name: string) {
   return container.querySelector<HTMLInputElement>(`[name="${name}"]`)!;
@@ -37,31 +19,48 @@ describe("AdministradorForm", () => {
     vi.clearAllMocks();
   });
 
-  it("renderiza los campos de usuario y nombre", () => {
-    noErrorState();
+  it("renderiza los campos de usuario y nombre y el botón Agregar", () => {
+    mockCrearAdministradorAction.mockResolvedValue(null);
     const { container } = render(<AdministradorForm />);
     expect(getInput(container, "githubUsername")).toBeTruthy();
     expect(getInput(container, "nombre")).toBeTruthy();
-  });
-
-  it("muestra el botón Agregar", () => {
-    noErrorState();
-    render(<AdministradorForm />);
     expect(screen.getByRole("button", { name: "Agregar" })).toBeInTheDocument();
   });
 
-  it("muestra el error de campo cuando el estado trae errores", () => {
-    errorState({ githubUsername: ["El usuario de GitHub no tiene un formato válido"] });
-    render(<AdministradorForm />);
-    expect(screen.getByText("El usuario de GitHub no tiene un formato válido")).toBeInTheDocument();
-  });
-
-  it("permite tipear en el campo de usuario", async () => {
-    noErrorState();
+  it("alta rechazada: conserva lo tipeado y muestra el error de campo", async () => {
+    mockCrearAdministradorAction.mockResolvedValue({
+      ok: false,
+      errors: { githubUsername: ["El usuario de GitHub no tiene un formato válido"] },
+      valores: { githubUsername: "ayudante1", nombre: "Ana" },
+    });
     const user = userEvent.setup();
     const { container } = render(<AdministradorForm />);
-    const input = getInput(container, "githubUsername");
-    await user.type(input, "ayudante1");
-    expect(input.value).toBe("ayudante1");
+
+    await user.type(getInput(container, "githubUsername"), "ayudante1");
+    await user.type(getInput(container, "nombre"), "Ana");
+    await user.click(screen.getByRole("button", { name: "Agregar" }));
+
+    await screen.findByText("El usuario de GitHub no tiene un formato válido");
+
+    expect(getInput(container, "githubUsername").value).toBe("ayudante1");
+    expect(getInput(container, "nombre").value).toBe("Ana");
+
+    const formDataEnviado = mockCrearAdministradorAction.mock.calls[0][1] as FormData;
+    expect(formDataEnviado.get("githubUsername")).toBe("ayudante1");
+  });
+
+  it("alta exitosa: el form queda vacío tras el reset automático de React", async () => {
+    mockCrearAdministradorAction.mockResolvedValue({ ok: true });
+    const user = userEvent.setup();
+    const { container } = render(<AdministradorForm />);
+
+    await user.type(getInput(container, "githubUsername"), "ayudante1");
+    await user.type(getInput(container, "nombre"), "Ana");
+    await user.click(screen.getByRole("button", { name: "Agregar" }));
+
+    await waitFor(() => {
+      expect(getInput(container, "githubUsername").value).toBe("");
+    });
+    expect(getInput(container, "nombre").value).toBe("");
   });
 });

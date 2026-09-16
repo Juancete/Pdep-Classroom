@@ -37,8 +37,9 @@ export interface ContextoDeMembresia {
  * Tres implementaciones: `Estudiante` (alumno registrado), `Docente`
  * (alcance administrativo global — ayudante dado de alta en `Administrador`
  * o, antes de #83, cualquiera en `ADMIN_GITHUB_USERNAMES`) y `Responsable`
- * (subtipo de `Docente` — Template Method: los responsables configurados por
- * entorno, únicos que además pueden gestionar el ABM de administradores).
+ * (subtipo de `Docente` por herencia — especializa el comportamiento
+ * sobrescribiendo dos métodos: los responsables configurados por entorno,
+ * únicos que además pueden gestionar el ABM de administradores).
  *
  * Instancias singleton — el rol no tiene datos propios, solo comportamiento.
  */
@@ -160,9 +161,10 @@ class Docente extends RolDeUsuario {
   }
 }
 
-// Responsable: todo lo que puede hacer un Docente (Template Method vía
-// herencia — issue #83 pide explícitamente "conservar todos los permisos
-// docentes") más la gestión del ABM de administradores. Sólo lo tienen los
+// Responsable: todo lo que puede hacer un Docente (herencia simple: hereda
+// todo el comportamiento de Docente y sobrescribe sólo lo que cambia —
+// issue #83 pide explícitamente "conservar todos los permisos docentes")
+// más la gestión del ABM de administradores. Sólo lo tienen los
 // usernames configurados en `ADMIN_GITHUB_USERNAMES`: no hay alta de
 // responsables desde la aplicación (fuera de alcance del issue).
 class Responsable extends Docente {

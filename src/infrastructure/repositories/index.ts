@@ -145,6 +145,7 @@ export {
   cambiarEstadoAdministrador,
   AdministradorDuplicadoError,
   AdministradorNoEncontradoError,
+  AdministradorProtegidoError,
 } from "./AdministradorRepository";
 
 export {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState } from "react";
 import { crearAdministradorAction, type AdministradorFormState } from "./actions";
 import { INPUT_CLASS, INPUT_ERROR_CLASS, FieldError, SubmitButton } from "../ui";
 
@@ -9,17 +9,18 @@ const INITIAL_STATE: AdministradorFormState = null;
 export function AdministradorForm() {
   const [state, formAction] = useActionState(crearAdministradorAction, INITIAL_STATE);
   const errors = state && !state.ok ? state.errors : {};
-  const formRef = useRef<HTMLFormElement>(null);
 
-  // Alta exitosa: la fila nueva ya está en la tabla gracias a
-  // `revalidatePath`, así que el form sólo necesita limpiarse para el
-  // próximo alta — no hay a dónde redirigir (pantalla única, issue #83).
-  useEffect(() => {
-    if (state?.ok) formRef.current?.reset();
-  }, [state]);
+  // React 19 resetea automáticamente los inputs no controlados de un
+  // `<form action={...}>` cuando la action termina, con éxito o sin él (no
+  // hace falta un `useEffect` + `formRef.reset()` para eso). Como ese reset
+  // vuelve a aplicar los `defaultValue` del render nuevo, alcanza con que la
+  // action devuelva lo que el usuario tipeó: se repone ante error y queda
+  // vacío ante éxito (la fila nueva ya está en la tabla gracias a
+  // `revalidatePath`, no hay a dónde redirigir — pantalla única, issue #83).
+  const valores = state && !state.ok ? (state.valores ?? {}) : {};
 
   return (
-    <form ref={formRef} action={formAction} className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
+    <form action={formAction} className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
       <h2 className="text-sm font-semibold text-gray-700 mb-3">Nuevo administrador</h2>
       <div className="flex flex-col sm:flex-row gap-3 sm:items-start">
         <div className="flex-1">
@@ -29,6 +30,7 @@ export function AdministradorForm() {
             type="text"
             placeholder="ej: ayudante1"
             required
+            defaultValue={valores.githubUsername ?? ""}
             className={errors.githubUsername ? INPUT_ERROR_CLASS : INPUT_CLASS}
           />
           <FieldError message={errors.githubUsername?.[0]} />
@@ -39,6 +41,7 @@ export function AdministradorForm() {
             name="nombre"
             type="text"
             placeholder="opcional"
+            defaultValue={valores.nombre ?? ""}
             className={errors.nombre ? INPUT_ERROR_CLASS : INPUT_CLASS}
           />
           <FieldError message={errors.nombre?.[0]} />

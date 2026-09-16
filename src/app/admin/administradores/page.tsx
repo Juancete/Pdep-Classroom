@@ -17,7 +17,16 @@ export default async function AdminAdministradoresPage() {
   await requireResponsable();
   const administradores = await getAdministradores();
   const entorno = responsablesDeEntorno();
-  const hayFilas = administradores.length > 0 || entorno.length > 0;
+  // Un administrador de base puede agregarse después a
+  // `ADMIN_GITHUB_USERNAMES`: sin este filtro aparecería dos veces (fila
+  // "Entorno" protegida + fila "Aplicación" editable). La política de fondo
+  // (bloquear la mutación) vive en el repositorio; acá sólo se evita el
+  // duplicado visual.
+  const usernamesDeEntorno = new Set(entorno);
+  const administradoresDeAplicacion = administradores.filter(
+    (administrador) => !usernamesDeEntorno.has(administrador.githubUsername)
+  );
+  const hayFilas = administradoresDeAplicacion.length > 0 || entorno.length > 0;
 
   return (
     <div>
@@ -72,7 +81,7 @@ export default async function AdminAdministradoresPage() {
             </DataRow>
           ))}
 
-          {administradores.map((administrador) => (
+          {administradoresDeAplicacion.map((administrador) => (
             <DataRow key={administrador.id}>
               <DataCell label="Usuario" heading>
                 @{administrador.githubUsername}

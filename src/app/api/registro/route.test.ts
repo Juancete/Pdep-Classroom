@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ESTUDIANTE } from "@/domain/entities";
+import { PermisosNoVerificablesError } from "@/infrastructure/auth/PermisosNoVerificablesError";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -160,6 +161,19 @@ describe("POST /api/registro", () => {
     const json = await response.json();
     expect(json.error).toBe("Error interno del servidor");
     expect(json.error).not.toContain("boom");
+  });
+
+  it("devuelve 503 controlado (no un 500 inesperado) cuando no se pudieron verificar los permisos", async () => {
+    mockRequireUser.mockRejectedValue(
+      new PermisosNoVerificablesError(new Error("DB caída"))
+    );
+    const response = await POST(makeRequest(validBody));
+    const json = await response.json();
+    expect(response.status).toBe(503);
+    expect(json.error).toBe(
+      "No se pudieron verificar tus permisos. Reintentá en unos segundos."
+    );
+    expect(mockConfirmarYProcesarAlumno).not.toHaveBeenCalled();
   });
 
   describe("suscripción a canales de comunicación", () => {

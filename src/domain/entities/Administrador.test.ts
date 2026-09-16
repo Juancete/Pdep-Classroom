@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Administrador } from "./Administrador";
+import { Administrador, AdministradorInvalidoError } from "./Administrador";
 
 describe("Administrador.validarAlta", () => {
   it("rechaza username vacío", () => {
@@ -27,12 +27,31 @@ describe("Administrador.validarAlta", () => {
   it("acepta un username válido con nombre", () => {
     expect(Administrador.validarAlta({ githubUsername: "ayudante1", nombre: "Ana" })).toBeNull();
   });
+
+  it("rechaza un nombre de 256 caracteres", () => {
+    const nombreDemasiadoLargo = "a".repeat(256);
+    expect(
+      Administrador.validarAlta({ githubUsername: "ayudante1", nombre: nombreDemasiadoLargo })
+    ).toBe("El nombre no puede superar los 255 caracteres");
+  });
+
+  it("acepta un nombre de 255 caracteres", () => {
+    const nombreAlLimite = "a".repeat(255);
+    expect(
+      Administrador.validarAlta({ githubUsername: "ayudante1", nombre: nombreAlLimite })
+    ).toBeNull();
+  });
 });
 
 describe("Administrador.crear", () => {
-  it("normaliza el username (trim, @, minúsculas)", () => {
+  // El "@" ya no llega hasta acá: `crear()` corre `validarAlta` primero (ver
+  // "Administrador.crear lanza AdministradorInvalidoError..." más abajo), y
+  // `esGithubUsernameValido` rechaza un "@" como primer carácter. El
+  // stripping de "@" de `normalizarGithubUsername` queda cubierto por el
+  // test del constructor, más abajo.
+  it("normaliza el username (trim, minúsculas)", () => {
     const administrador = Administrador.crear({
-      githubUsername: " @Ayudante1 ",
+      githubUsername: " Ayudante1 ",
       porUsuario: "juancete",
     });
     expect(administrador.githubUsername).toBe("ayudante1");
@@ -66,6 +85,29 @@ describe("Administrador.crear", () => {
     });
     expect(administrador.nombre).toBe("Ana García");
   });
+
+  it("lanza AdministradorInvalidoError con un username inválido", () => {
+    expect(() =>
+      Administrador.crear({ githubUsername: "-invalido", porUsuario: "juancete" })
+    ).toThrow(AdministradorInvalidoError);
+  });
+
+  it("lanza AdministradorInvalidoError con un nombre de 256 caracteres", () => {
+    expect(() =>
+      Administrador.crear({
+        githubUsername: "ayudante1",
+        nombre: "a".repeat(256),
+        porUsuario: "juancete",
+      })
+    ).toThrow(AdministradorInvalidoError);
+  });
+});
+
+describe("Administrador constructor", () => {
+  it("normaliza el username (trim, @, minúsculas)", () => {
+    const administrador = new Administrador(" @Ayudante1 ");
+    expect(administrador.githubUsername).toBe("ayudante1");
+  });
 });
 
 describe("Administrador.renombrar", () => {
@@ -90,6 +132,34 @@ describe("Administrador.renombrar", () => {
     });
     administrador.renombrar("", "juancete");
     expect(administrador.nombre).toBeNull();
+  });
+
+  it("lanza AdministradorInvalidoError con un nombre de 256 caracteres, sin tocar el nombre anterior", () => {
+    const administrador = Administrador.crear({
+      githubUsername: "ayudante1",
+      nombre: "Nombre original",
+      porUsuario: "juancete",
+    });
+
+    expect(() => administrador.renombrar("a".repeat(256), "otro-responsable")).toThrow(
+      AdministradorInvalidoError
+    );
+    expect(administrador.nombre).toBe("Nombre original");
+  });
+});
+
+describe("Administrador — identidad inmutable", () => {
+  it("githubUsername no cambia tras renombrar, desactivar ni reactivar", () => {
+    const administrador = Administrador.crear({ githubUsername: "ayudante1", porUsuario: "juancete" });
+
+    administrador.renombrar("Nuevo Nombre", "otro-responsable");
+    expect(administrador.githubUsername).toBe("ayudante1");
+
+    administrador.desactivar("otro-responsable");
+    expect(administrador.githubUsername).toBe("ayudante1");
+
+    administrador.reactivar("otro-responsable");
+    expect(administrador.githubUsername).toBe("ayudante1");
   });
 });
 

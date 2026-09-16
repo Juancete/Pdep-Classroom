@@ -76,6 +76,16 @@ describe("Admin Administradores page", () => {
     expect(html).toContain("Desactivar");
   });
 
+  it("un username presente en ambos (entorno y base) se renderiza una sola vez, como 'Entorno'", async () => {
+    mockGetAdministradores.mockResolvedValue([makeAdministrador({ githubUsername: "juancete" })]);
+    mockResponsablesDeEntorno.mockReturnValue(["juancete"]);
+    const html = renderToStaticMarkup(await AdminAdministradoresPage());
+
+    expect(html.match(/@juancete/g)).toHaveLength(1);
+    expect(html).toContain("Entorno");
+    expect(html).not.toContain("Desactivar");
+  });
+
   it("muestra badge 'Inactivo' para un administrador desactivado", async () => {
     mockGetAdministradores.mockResolvedValue([
       makeAdministrador({ githubUsername: "ex-ayudante", activo: false }),

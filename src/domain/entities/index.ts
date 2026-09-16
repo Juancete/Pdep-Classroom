@@ -130,4 +130,8 @@ export {
   type ContextoDeMembresia,
   type OrigenCambioMembresia,
 } from "./RolDeUsuario";
-export { Administrador, type AltaAdministradorInput } from "./Administrador";
+export {
+  Administrador,
+  AdministradorInvalidoError,
+  type AltaAdministradorInput,
+} from "./Administrador";

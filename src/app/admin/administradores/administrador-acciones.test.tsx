@@ -66,6 +66,22 @@ describe("NombreEditable", () => {
     expect(await screen.findByText("algo salió mal")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Guardar" })).toBeInTheDocument();
   });
+
+  it("guardar rechazado conserva lo tipeado en vez de volver al nombre viejo", async () => {
+    mockRenombrarAdministradorAction.mockResolvedValue({
+      ok: false,
+      errors: { nombre: ["algo salió mal"] },
+    });
+    const user = userEvent.setup();
+    render(<NombreEditable id="a1" nombre="Ana" />);
+    await user.click(screen.getByRole("button", { name: "Editar nombre" }));
+    const input = screen.getByDisplayValue("Ana");
+    await user.clear(input);
+    await user.type(input, "Nombre nuevo");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await screen.findByText("algo salió mal");
+    expect(screen.getByDisplayValue("Nombre nuevo")).toBeInTheDocument();
+  });
 });
 
 describe("EstadoToggle", () => {
@@ -111,5 +127,14 @@ describe("EstadoToggle", () => {
     render(<EstadoToggle id="a1" activo={false} />);
     await user.click(screen.getByRole("button", { name: "Reactivar" }));
     expect(await screen.findByText("no se pudo")).toBeInTheDocument();
+  });
+
+  it("si la action rechaza (falla de red), muestra el error y vuelve a habilitar el botón", async () => {
+    mockCambiarEstadoAdministradorAction.mockRejectedValue(new Error("Failed to fetch"));
+    const user = userEvent.setup();
+    render(<EstadoToggle id="a1" activo={false} />);
+    await user.click(screen.getByRole("button", { name: "Reactivar" }));
+    expect(await screen.findByText("Failed to fetch")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reactivar" })).not.toBeDisabled();
   });
 });

@@ -8,8 +8,16 @@ const mockEm = {
   flush: vi.fn(),
 };
 
+const mockEsResponsableDeEntorno = vi.fn();
+
 vi.mock("@/infrastructure/db", () => ({
   getEM: vi.fn(async () => mockEm),
+}));
+
+// Por default nadie es responsable de entorno — cada test que necesite el
+// caso protegido lo pisa con mockReturnValue(true).
+vi.mock("@/lib/responsables-de-entorno", () => ({
+  esResponsableDeEntorno: (githubUsername: string) => mockEsResponsableDeEntorno(githubUsername),
 }));
 
 import {
@@ -20,6 +28,7 @@ import {
   cambiarEstadoAdministrador,
   AdministradorDuplicadoError,
   AdministradorNoEncontradoError,
+  AdministradorProtegidoError,
 } from "./AdministradorRepository";
 import { Administrador } from "@/domain/entities";
 
@@ -35,6 +44,7 @@ function usernameUniqueViolation(): Error {
 describe("AdministradorRepository", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockEsResponsableDeEntorno.mockReturnValue(false);
   });
 
   describe("getAdministradores", () => {
@@ -83,7 +93,7 @@ describe("AdministradorRepository", () => {
 
     it("traduce la violación única a AdministradorDuplicadoError (existente activo)", async () => {
       mockEm.flush.mockRejectedValueOnce(usernameUniqueViolation());
-      mockEm.findOne.mockResolvedValue(Object.assign(new Administrador(), { activo: true }));
+      mockEm.findOne.mockResolvedValue(Object.assign(new Administrador("ayudante1"), { activo: true }));
 
       const error = await crearAdministrador({
         githubUsername: "ayudante1",
@@ -96,7 +106,7 @@ describe("AdministradorRepository", () => {
 
     it("señala en el error si el existente está inactivo (para que la UI ofrezca reactivar)", async () => {
       mockEm.flush.mockRejectedValueOnce(usernameUniqueViolation());
-      mockEm.findOne.mockResolvedValue(Object.assign(new Administrador(), { activo: false }));
+      mockEm.findOne.mockResolvedValue(Object.assign(new Administrador("ayudante1"), { activo: false }));
 
       const error = await crearAdministrador({
         githubUsername: "ayudante1",
@@ -112,6 +122,16 @@ describe("AdministradorRepository", () => {
       await expect(
         crearAdministrador({ githubUsername: "ayudante1", porUsuario: "juancete" })
       ).rejects.toThrow("otra falla");
+    });
+
+    it("lanza AdministradorProtegidoError si el username ya es responsable de entorno, sin persistir ni flushear", async () => {
+      mockEsResponsableDeEntorno.mockReturnValue(true);
+
+      await expect(
+        crearAdministrador({ githubUsername: "juancete", porUsuario: "otro-responsable" })
+      ).rejects.toBeInstanceOf(AdministradorProtegidoError);
+      expect(mockEm.persist).not.toHaveBeenCalled();
+      expect(mockEm.flush).not.toHaveBeenCalled();
     });
   });
 
@@ -132,6 +152,17 @@ describe("AdministradorRepository", () => {
       expect(administrador.nombre).toBe("Nuevo Nombre");
       expect(administrador.modificadoPor).toBe("otro-responsable");
       expect(mockEm.flush).toHaveBeenCalled();
+    });
+
+    it("lanza AdministradorProtegidoError si el administrador ahora es responsable de entorno, sin flushear", async () => {
+      const administrador = Administrador.crear({ githubUsername: "juancete", porUsuario: "juancete" });
+      mockEm.findOne.mockResolvedValue(administrador);
+      mockEsResponsableDeEntorno.mockReturnValue(true);
+
+      await expect(
+        renombrarAdministrador(administrador.id, "Nuevo Nombre", "otro-responsable")
+      ).rejects.toBeInstanceOf(AdministradorProtegidoError);
+      expect(mockEm.flush).not.toHaveBeenCalled();
     });
   });
 
@@ -162,6 +193,17 @@ describe("AdministradorRepository", () => {
 
       expect(administrador.activo).toBe(true);
       expect(mockEm.flush).toHaveBeenCalled();
+    });
+
+    it("lanza AdministradorProtegidoError si el administrador ahora es responsable de entorno, sin flushear", async () => {
+      const administrador = Administrador.crear({ githubUsername: "juancete", porUsuario: "juancete" });
+      mockEm.findOne.mockResolvedValue(administrador);
+      mockEsResponsableDeEntorno.mockReturnValue(true);
+
+      await expect(
+        cambiarEstadoAdministrador(administrador.id, false, "otro-responsable")
+      ).rejects.toBeInstanceOf(AdministradorProtegidoError);
+      expect(mockEm.flush).not.toHaveBeenCalled();
     });
   });
 });

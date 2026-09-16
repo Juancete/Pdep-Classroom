@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/infrastructure/auth/session";
 import { cambiarEstadoAssignment } from "@/infrastructure/repositories";
 import { AssignmentNoEncontradoError } from "@/application/assignmentAuthorization";
 import { TransicionDeEstadoInvalidaError } from "@/domain/entities";
-import { internalServerError } from "@/lib/api-errors";
+import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
 
 const EstadoSchema = z.object({
   estado: z.enum(["borrador", "publicado", "archivado"]),
@@ -52,8 +52,11 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
     if (error instanceof TransicionDeEstadoInvalidaError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }
-    return internalServerError("PATCH /api/assignments/[id]/estado", error, {
-      assignmentId: params.id,
-    });
+    return (
+      respuestaDeErrorDeDominio(error) ??
+      internalServerError("PATCH /api/assignments/[id]/estado", error, {
+        assignmentId: params.id,
+      })
+    );
   }
 }

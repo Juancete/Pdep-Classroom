@@ -5,20 +5,13 @@ import type { PdepUser, SessionPdepUser } from "@/types";
 import { resolverRol } from "@/domain/entities/RolDeUsuario";
 import { esResponsableDeEntorno } from "@/lib/responsables-de-entorno";
 import { hayAdministradorActivo } from "@/infrastructure/repositories";
+import { PermisosNoVerificablesError } from "./PermisosNoVerificablesError";
 
-// Se lanza cuando no se pudo verificar el rol del usuario (típicamente, la
-// consulta a `Administrador` falló). A propósito no se atrapa acá ni en
-// `getCurrentUser()`: el issue #83 pide rechazar la operación con un error
-// controlado en vez de reutilizar un rol anterior, así que cada consumidor
-// decide cómo mostrarlo (ver `guardAdmin`/`guardUser` en `api-auth.ts` para
-// el canal HTTP; las páginas dejan que llegue al error boundary de Next).
-export class PermisosNoVerificablesError extends Error {
-  constructor(cause: unknown) {
-    super("No se pudieron verificar tus permisos. Reintentá en unos segundos.");
-    this.name = "PermisosNoVerificablesError";
-    this.cause = cause;
-  }
-}
+// La clase vive en su propio módulo sin imports (ver el docblock ahí) para
+// que `api-errors.ts` la pueda sumar a su tabla sin importar `session.ts`.
+// Se re-exporta acá para que `api-auth.ts` y su test sigan importándola
+// desde `@/infrastructure/auth/session` sin cambios.
+export { PermisosNoVerificablesError } from "./PermisosNoVerificablesError";
 
 // `cache()` memoiza esto dentro de una misma request (React server
 // components) — el nav, el banner de sincronización y la página que se está
