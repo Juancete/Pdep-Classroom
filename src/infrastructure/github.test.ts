@@ -9,6 +9,7 @@ const mockPaginate = vi.fn();
 const mockListForRef = vi.fn();
 const mockRerequestSuite = vi.fn();
 const mockCheckCollaborator = vi.fn();
+const mockSearchRepos = vi.fn();
 
 vi.mock("@octokit/rest", () => ({
   Octokit: class {
@@ -24,6 +25,9 @@ vi.mock("@octokit/rest", () => ({
       listForRef: mockListForRef,
       rerequestSuite: mockRerequestSuite,
     };
+    search = {
+      repos: mockSearchRepos,
+    };
     paginate = mockPaginate;
   },
 }));
@@ -38,6 +42,7 @@ import {
   esColaborador,
   getRepoInfo,
   getRepoInfoPorId,
+  listarTemplates,
 } from "./github";
 import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
@@ -377,5 +382,37 @@ describe("getRepoInfoPorId", () => {
     mockPaginate.mockRejectedValue(requestError(403, "Forbidden"));
 
     await expect(getRepoInfoPorId("555666")).rejects.toThrow();
+  });
+});
+
+describe("listarTemplates", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("delega el filtrado de templates a la búsqueda de GitHub, sin incluir forks", async () => {
+    mockPaginate.mockResolvedValue([
+      { name: "template-logico", full_name: "pdep-mn-utn/template-logico", description: null },
+      { name: "template-objetos", full_name: "pdep-mn-utn/template-objetos", description: "TP objetos" },
+    ]);
+
+    await expect(listarTemplates()).resolves.toEqual([
+      { name: "template-logico", fullName: "pdep-mn-utn/template-logico", description: "" },
+      { name: "template-objetos", fullName: "pdep-mn-utn/template-objetos", description: "TP objetos" },
+    ]);
+    expect(mockPaginate).toHaveBeenCalledWith(
+      mockSearchRepos,
+      expect.objectContaining({
+        q: expect.stringMatching(/^org:\S+ template:true$/),
+        per_page: 100,
+      })
+    );
+    expect(mockListForOrg).not.toHaveBeenCalled();
+  });
+
+  it("propaga (traducido) los errores de GitHub", async () => {
+    mockPaginate.mockRejectedValue(requestError(403, "Forbidden"));
+
+    await expect(listarTemplates()).rejects.toThrow();
   });
 });
