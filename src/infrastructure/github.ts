@@ -252,6 +252,13 @@ export async function getRepoInfoPorId(
 }
 
 // ── Listar templates disponibles en la org ──────────────────
+// `repos.listForOrg` no tiene filtro por template: obligaba a traer los
+// cientos de repos de la org (paginando) y filtrar en memoria. La API de
+// búsqueda sí lo soporta (`template:true`), así que GitHub filtra del lado
+// del servidor. `fork:true` es necesario porque la búsqueda excluye forks
+// por defecto y hay templates que son forks (por ejemplo, academiaPerruna).
+// Trade-off: la búsqueda se sirve desde un índice que puede tardar unos
+// segundos en reflejar un repo recién marcado como template.
 
 export async function listarTemplates(): Promise<
   { name: string; fullName: string; description: string }[]
@@ -259,19 +266,17 @@ export async function listarTemplates(): Promise<
   const octokit = getOctokit();
 
   try {
-    const { data } = await octokit.repos.listForOrg({
-      org: ORG,
-      type: "all",
+    // `paginate` normaliza la respuesta de búsqueda a la lista de `items`.
+    const templates = await octokit.paginate(octokit.search.repos, {
+      q: `org:${ORG} template:true fork:true`,
       per_page: 100,
     });
 
-    return data
-      .filter((repo) => repo.is_template)
-      .map((repo) => ({
-        name: repo.name,
-        fullName: repo.full_name,
-        description: repo.description ?? "",
-      }));
+    return templates.map((repo) => ({
+      name: repo.name,
+      fullName: repo.full_name,
+      description: repo.description ?? "",
+    }));
   } catch (error) {
     handleOctokitError(error);
   }
