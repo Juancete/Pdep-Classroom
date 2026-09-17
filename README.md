@@ -622,18 +622,21 @@ No importar grupos reales antes de que el canary termine correctamente.
 
 ### Para docentes
 
-1. Crear o seleccionar la comisión activa y sincronizar el padrón inicial.
-2. Crear un assignment en borrador: elegir template, paradigma y tipo individual o grupal. El tipo
+1. Entrar con GitHub → aterriza en Assignments. Mis TPs sigue en el menú; para aceptar TPs desde
+   ahí como alumno hay que registrarse en `/registro` (los datos se cargan en la planilla de la
+   comisión activa).
+2. Crear o seleccionar la comisión activa y sincronizar el padrón inicial.
+3. Crear un assignment en borrador: elegir template, paradigma y tipo individual o grupal. El tipo
    es el discriminador persistido y no se puede convertir después de crear el assignment.
-3. Revisar su configuración y publicarlo para habilitar acciones de alumnos.
-4. Compartir el link de la app; los alumnos registrados se suscriben a los canales de comunicación
+4. Revisar su configuración y publicarlo para habilitar acciones de alumnos.
+5. Compartir el link de la app; los alumnos registrados se suscriben a los canales de comunicación
    que estén configurados (ej. Google Groups).
-5. Al finalizar, archivarlo para impedir nuevas aceptaciones y conservar sus entregas como
+6. Al finalizar, archivarlo para impedir nuevas aceptaciones y conservar sus entregas como
    histórico.
 
 ### Para alumnos
 
-1. Entrar con GitHub → ver dashboard con TPs pendientes
+1. Entrar con GitHub → ver Mis TPs (`/dashboard`) con TPs pendientes
 2. Para TPs grupales: crear un grupo o unirse a uno existente en `/assignments/[id]/grupo`. Se
    puede salir o cambiarse de grupo mientras las inscripciones sigan abiertas y el grupo no tenga
    entrega todavía; el docente puede administrar integrantes manualmente en cualquier momento desde
@@ -1007,7 +1010,7 @@ src/
 │       ├── GrupalAssignment.ts
 │       ├── EstadoAssignment.ts                # Ciclo de vida (borrador/publicado/archivado) como Strategy
 │       ├── ResultadoCI.ts                     # Estado combinado de CI del último commit, como Strategy
-│       ├── RolDeUsuario.ts                    # Docente/alumno como Strategy (reemplaza un booleano isAdmin)
+│       ├── RolDeUsuario.ts                    # Docente/alumno como Strategy (reemplaza un booleano isAdmin); home por rol, navegación y alcance de Mis TPs
 │       ├── Comision.ts                        # Incluye columnConfig para la planilla
 │       ├── Entrega.ts
 │       ├── Alumno.ts

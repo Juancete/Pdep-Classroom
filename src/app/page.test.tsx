@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { DOCENTE, ESTUDIANTE } from "@/domain/entities";
+import { DOCENTE, ESTUDIANTE, RESPONSABLE } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ describe("Home page", () => {
   });
 
   describe("cuando el usuario está autenticado", () => {
-    it("redirige a /dashboard", async () => {
+    it("redirige a /dashboard a un alumno", async () => {
       mockGetCurrentUser.mockResolvedValue({
         githubUsername: "testuser",
         rol: ESTUDIANTE,
@@ -49,14 +49,24 @@ describe("Home page", () => {
       expect(mockRedirect).toHaveBeenCalledWith("/dashboard");
     });
 
-    it("redirige también si es admin", async () => {
+    it("redirige a /admin/assignments a un docente", async () => {
       mockGetCurrentUser.mockResolvedValue({
         githubUsername: "adminuser",
         rol: DOCENTE,
       });
 
-      await expect(Home()).rejects.toThrow("REDIRECT:/dashboard");
-      expect(mockRedirect).toHaveBeenCalledWith("/dashboard");
+      await expect(Home()).rejects.toThrow("REDIRECT:/admin/assignments");
+      expect(mockRedirect).toHaveBeenCalledWith("/admin/assignments");
+    });
+
+    it("redirige a /admin/assignments a un responsable", async () => {
+      mockGetCurrentUser.mockResolvedValue({
+        githubUsername: "responsable1",
+        rol: RESPONSABLE,
+      });
+
+      await expect(Home()).rejects.toThrow("REDIRECT:/admin/assignments");
+      expect(mockRedirect).toHaveBeenCalledWith("/admin/assignments");
     });
   });
 

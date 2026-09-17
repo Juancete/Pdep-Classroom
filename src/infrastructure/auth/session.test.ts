@@ -186,12 +186,12 @@ describe("requireResponsable", () => {
     await expect(requireResponsable()).rejects.toThrow("redirect:/login");
   });
 
-  it("redirige a /dashboard a un docente de base (no puede gestionar docentes)", async () => {
+  it("redirige a /admin/assignments (su home) a un docente de base", async () => {
     mockAuth.mockResolvedValue(sessionCon("ayudante1"));
     mockEsResponsableDeEntorno.mockReturnValue(false);
     mockHayDocenteActivo.mockResolvedValue(true);
 
-    await expect(requireResponsable()).rejects.toThrow("redirect:/dashboard");
+    await expect(requireResponsable()).rejects.toThrow("redirect:/admin/assignments");
   });
 
   it("redirige a /dashboard a un alumno", async () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   RolDeUsuario,
   DOCENTE,
@@ -147,7 +147,7 @@ describe("puedeGestionarDocentes", () => {
 });
 
 describe("navegación por rol", () => {
-  it("Docente ve las secciones de admin", () => {
+  it("Docente ve las secciones de admin y termina en Mis TPs", () => {
     const items = DOCENTE.itemsDeNavegacion();
     expect(items.map((item) => item.href)).toEqual([
       "/admin/assignments",
@@ -155,17 +155,19 @@ describe("navegación por rol", () => {
       "/admin/comisiones",
       "/admin/alumnos",
       "/admin/operaciones",
+      "/dashboard",
     ]);
     expect(items.find((item) => item.href === "/admin/operaciones")?.label).toBe(
       "Diagnóstico"
     );
+    expect(items.at(-1)?.label).toBe("Mis TPs");
   });
 
-  it("Estudiante no ve ninguna sección de admin", () => {
-    expect(ESTUDIANTE.itemsDeNavegacion()).toEqual([]);
+  it("Estudiante sólo ve Mis TPs", () => {
+    expect(ESTUDIANTE.itemsDeNavegacion()).toEqual([{ href: "/dashboard", label: "Mis TPs" }]);
   });
 
-  it("Responsable ve las mismas secciones que Docente más Docentes (gestión de docentes)", () => {
+  it("Responsable ve las mismas secciones que Docente más Docentes, y termina en Mis TPs", () => {
     const items = RESPONSABLE.itemsDeNavegacion();
     expect(items.map((item) => item.href)).toEqual([
       "/admin/assignments",
@@ -174,6 +176,7 @@ describe("navegación por rol", () => {
       "/admin/alumnos",
       "/admin/operaciones",
       "/admin/docentes",
+      "/dashboard",
     ]);
     expect(items.find((item) => item.href === "/admin/docentes")?.label).toBe("Docentes");
   });
@@ -182,6 +185,106 @@ describe("navegación por rol", () => {
     expect(ESTUDIANTE.veBannerDeSincronizacion()).toBe(true);
     expect(DOCENTE.veBannerDeSincronizacion()).toBe(false);
     expect(RESPONSABLE.veBannerDeSincronizacion()).toBe(false);
+  });
+});
+
+describe("rutaDeInicio", () => {
+  it("Estudiante aterriza en /dashboard", () => {
+    expect(ESTUDIANTE.rutaDeInicio()).toBe("/dashboard");
+  });
+
+  it("Docente aterriza en /admin/assignments", () => {
+    expect(DOCENTE.rutaDeInicio()).toBe("/admin/assignments");
+  });
+
+  it("Responsable hereda la ruta de inicio del Docente", () => {
+    expect(RESPONSABLE.rutaDeInicio()).toBe("/admin/assignments");
+  });
+
+  it("la ruta de inicio de cada rol es el primer ítem de su navegación", () => {
+    for (const rol of [DOCENTE, ESTUDIANTE, RESPONSABLE]) {
+      expect(rol.itemsDeNavegacion()[0]?.href).toBe(rol.rutaDeInicio());
+    }
+  });
+});
+
+describe("exigeRegistroDeAlumno", () => {
+  it("sólo el Estudiante exige registro confirmado para Mis TPs", () => {
+    expect(ESTUDIANTE.exigeRegistroDeAlumno()).toBe(true);
+    expect(DOCENTE.exigeRegistroDeAlumno()).toBe(false);
+    expect(RESPONSABLE.exigeRegistroDeAlumno()).toBe(false);
+  });
+});
+
+describe("assignmentsParaMisTps", () => {
+  it("Docente pide todos los assignments sin mirar la comisión activa", async () => {
+    const todos = vi.fn().mockResolvedValue([fakeAssignmentPublicado()]);
+    const deComision = vi.fn();
+
+    const assignments = await DOCENTE.assignmentsParaMisTps({ todos, deComision }, "c1");
+
+    expect(assignments).toHaveLength(1);
+    expect(deComision).not.toHaveBeenCalled();
+  });
+
+  it("Estudiante pide los assignments de la comisión activa", async () => {
+    const todos = vi.fn();
+    const deComision = vi.fn().mockResolvedValue([fakeAssignmentPublicado("c1")]);
+
+    const assignments = await ESTUDIANTE.assignmentsParaMisTps({ todos, deComision }, "c1");
+
+    expect(deComision).toHaveBeenCalledWith("c1");
+    expect(assignments).toHaveLength(1);
+    expect(todos).not.toHaveBeenCalled();
+  });
+
+  it("Estudiante sin comisión activa no consulta ninguna fuente", async () => {
+    const todos = vi.fn();
+    const deComision = vi.fn();
+
+    const assignments = await ESTUDIANTE.assignmentsParaMisTps({ todos, deComision }, null);
+
+    expect(assignments).toEqual([]);
+    expect(todos).not.toHaveBeenCalled();
+    expect(deComision).not.toHaveBeenCalled();
+  });
+});
+
+describe("veAssignmentEnMisTps", () => {
+  it("Docente ve un assignment en borrador", () => {
+    expect(DOCENTE.veAssignmentEnMisTps(fakeAssignmentBorrador(), false)).toBe(true);
+  });
+
+  it("Docente ve un assignment archivado sin entrega", () => {
+    const assignment = fakeAssignmentPublicado();
+    assignment.transicionarA("archivado", { tieneEntregas: false }, "docente1");
+
+    expect(DOCENTE.veAssignmentEnMisTps(assignment, false)).toBe(true);
+  });
+
+  it("Estudiante delega en esVisibleParaAlumno del assignment", () => {
+    expect(ESTUDIANTE.veAssignmentEnMisTps(fakeAssignmentPublicado(), false)).toBe(true);
+    expect(ESTUDIANTE.veAssignmentEnMisTps(fakeAssignmentBorrador(), false)).toBe(false);
+
+    const archivado = fakeAssignmentPublicado();
+    archivado.transicionarA("archivado", { tieneEntregas: false }, "docente1");
+    expect(ESTUDIANTE.veAssignmentEnMisTps(archivado, false)).toBe(false);
+    expect(ESTUDIANTE.veAssignmentEnMisTps(archivado, true)).toBe(true);
+  });
+});
+
+describe("habilitaAccionesSobre", () => {
+  it("Docente puede actuar sobre un assignment en borrador", () => {
+    expect(DOCENTE.habilitaAccionesSobre(fakeAssignmentBorrador())).toBe(true);
+  });
+
+  it("Estudiante sólo puede actuar sobre un assignment publicado", () => {
+    expect(ESTUDIANTE.habilitaAccionesSobre(fakeAssignmentPublicado())).toBe(true);
+    expect(ESTUDIANTE.habilitaAccionesSobre(fakeAssignmentBorrador())).toBe(false);
+  });
+
+  it("Responsable hereda el comportamiento del Docente", () => {
+    expect(RESPONSABLE.habilitaAccionesSobre(fakeAssignmentBorrador())).toBe(true);
   });
 });
 

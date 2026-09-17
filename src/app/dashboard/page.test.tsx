@@ -71,6 +71,10 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
   };
 }
 
+function alumnoConfirmadoEn(comisionId = "c1"): Alumno {
+  return makeAlumno({ registroConfirmadoEn: { id: comisionId } as any });
+}
+
 function makeAssignment(overrides?: Partial<IndividualAssignment>): IndividualAssignment {
   const assignment = new IndividualAssignment();
   assignment.id = "a1";
@@ -193,15 +197,18 @@ describe("Dashboard page", () => {
       expect(mockGetAssignmentsDeComision).not.toHaveBeenCalled();
     });
 
-    it("no redirige a /registro aunque no esté registrado si es admin", async () => {
+    it("no redirige a /registro a un docente sin registro: muestra el aviso", async () => {
       mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
+      mockGetAlumnoByGithub.mockResolvedValue(null);
 
       const element = await DashboardPage();
-      expect(element).toBeDefined();
+      const html = renderToStaticMarkup(element);
       expect(mockRedirect).not.toHaveBeenCalled();
-      expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
+      expect(mockGetAlumnoByGithub).toHaveBeenCalled();
       expect(mockGetAssignments).toHaveBeenCalled();
       expect(mockGetAssignmentsDeComision).not.toHaveBeenCalled();
+      expect(html).toContain('data-testid="aviso-registro-pendiente"');
+      expect(html).toContain('href="/registro"');
     });
   });
 
@@ -221,6 +228,7 @@ describe("Dashboard page", () => {
   describe("con assignments", () => {
     beforeEach(() => {
       mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
+      mockGetAlumnoByGithub.mockResolvedValue(alumnoConfirmadoEn());
     });
 
     it("muestra el título del assignment", async () => {
@@ -305,6 +313,7 @@ describe("Dashboard page", () => {
   describe("render condicional según entrega", () => {
     beforeEach(() => {
       mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
+      mockGetAlumnoByGithub.mockResolvedValue(alumnoConfirmadoEn());
       mockGetAssignments.mockResolvedValue([makeAssignment()]);
     });
 
@@ -423,13 +432,13 @@ describe("Dashboard page", () => {
       expect(html).not.toContain("Elegir grupo");
     });
 
-    it("no llama a getGruposDeAlumno si el usuario es admin", async () => {
+    it("carga los grupos del docente igual que los de un alumno", async () => {
       mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
       mockGetAssignments.mockResolvedValue([makeGrupalAssignment()]);
       mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       await DashboardPage();
-      expect(mockGetGruposDeAlumno).not.toHaveBeenCalled();
+      expect(mockGetGruposDeAlumno).toHaveBeenCalledWith("testuser");
     });
   });
 
@@ -522,6 +531,7 @@ describe("Dashboard page", () => {
       mockRequireUser.mockResolvedValue(
         makeUser({ githubUsername: "miusuario", rol: DOCENTE })
       );
+      mockGetAlumnoByGithub.mockResolvedValue(alumnoConfirmadoEn());
       mockGetAssignments.mockResolvedValue([]);
     });
 
@@ -535,6 +545,92 @@ describe("Dashboard page", () => {
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
       expect(html).toContain("Mis Trabajos Prácticos");
+    });
+  });
+
+  describe("docente en Mis TPs", () => {
+    beforeEach(() => {
+      mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
+    });
+
+    it("registrado en la comisión activa: sin aviso y con Aceptar", async () => {
+      mockGetAlumnoByGithub.mockResolvedValue(alumnoConfirmadoEn());
+      mockGetAssignments.mockResolvedValue([makeAssignment()]);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).not.toContain('data-testid="aviso-registro-pendiente"');
+      expect(html).toContain('data-testid="accept-button"');
+    });
+
+    it("sin registro: sin Aceptar ni Elegir grupo, pero con 'Ir al repo' si ya tiene entrega", async () => {
+      mockGetAlumnoByGithub.mockResolvedValue(null);
+      const conEntrega = makeAssignment({ id: "a-con-entrega" });
+      const sinEntrega = makeGrupalAssignment({ id: "a-sin-entrega" });
+      mockGetAssignments.mockResolvedValue([conEntrega, sinEntrega]);
+      const entrega = makeEntrega({ repoUrl: "https://github.com/pdep/a-con-entrega" });
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map([["a-con-entrega", entrega]]));
+      mockGetGruposDeAlumno.mockResolvedValue(new Map());
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain('data-testid="aviso-registro-pendiente"');
+      expect(html).not.toContain('data-testid="accept-button"');
+      expect(html).not.toContain("Elegir grupo");
+      expect(html).toContain("Ir al repo");
+    });
+
+    it("registrado en otra comisión (no la activa): ve el aviso", async () => {
+      mockGetComisionActiva.mockResolvedValue({ id: "c1" });
+      mockGetAlumnoByGithub.mockResolvedValue(alumnoConfirmadoEn("c2"));
+      mockGetAssignments.mockResolvedValue([]);
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain('data-testid="aviso-registro-pendiente"');
+    });
+
+    it("sin comisión activa: sin aviso, getAssignments igual se llama", async () => {
+      mockGetComisionActiva.mockResolvedValue(null);
+      mockGetAlumnoByGithub.mockResolvedValue(null);
+      mockGetAssignments.mockResolvedValue([]);
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).not.toContain('data-testid="aviso-registro-pendiente"');
+      expect(mockGetAssignments).toHaveBeenCalled();
+    });
+
+    it("registrado sin grupo ve 'Elegir grupo' en un grupal; con grupo ve Aceptar", async () => {
+      mockGetAlumnoByGithub.mockResolvedValue(alumnoConfirmadoEn());
+      const grupal = makeGrupalAssignment({ id: "tp-g1" });
+      mockGetAssignments.mockResolvedValue([grupal]);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
+      mockGetGruposDeAlumno.mockResolvedValue(new Map());
+
+      const sinGrupo = await DashboardPage();
+      const htmlSinGrupo = renderToStaticMarkup(sinGrupo);
+      expect(htmlSinGrupo).toContain("Elegir grupo");
+
+      mockGetGruposDeAlumno.mockResolvedValue(new Map([["tp-g1", { nombre: "Los Lambdas" }]]));
+      const conGrupo = await DashboardPage();
+      const htmlConGrupo = renderToStaticMarkup(conGrupo);
+      expect(htmlConGrupo).toContain('data-testid="accept-button"');
+      expect(htmlConGrupo).not.toContain("Elegir grupo");
+    });
+
+    it("ve un archivado sin entrega y puede aceptarlo", async () => {
+      mockGetAlumnoByGithub.mockResolvedValue(alumnoConfirmadoEn());
+      const archivado = makeAssignment({ id: "a-archivado", titulo: "TP Archivado" });
+      archivado.transicionarA("archivado", { tieneEntregas: false }, "docente1");
+      mockGetAssignments.mockResolvedValue([archivado]);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("TP Archivado");
+      expect(html).toContain('data-testid="accept-button"');
     });
   });
 });

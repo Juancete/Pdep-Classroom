@@ -6,6 +6,8 @@ export default function LoginPage() {
   // Mismas dos condiciones que registran el provider en auth.config.ts: si
   // acá se mostrara el panel sin que el provider exista, el login fallaría
   // silenciosamente al tocar cualquiera de los botones.
+  // Todos los `redirectTo` de esta página van a "/": el rol se resuelve por
+  // request en getCurrentUser(), así que Home despacha al home de cada uno.
   const devLoginHabilitado =
     process.env.NODE_ENV === "development" && process.env.ENABLE_DEV_LOGIN === "true";
 
@@ -16,7 +18,7 @@ export default function LoginPage() {
         <form
           action={async () => {
             "use server";
-            await signIn("github", { redirectTo: "/dashboard" });
+            await signIn("github", { redirectTo: "/" });
           }}
         >
           <button
@@ -55,7 +57,7 @@ export default function LoginPage() {
                     "use server";
                     await signIn("dev-login", {
                       githubUsername: username,
-                      redirectTo: "/dashboard",
+                      redirectTo: "/",
                     });
                   }}
                 >
@@ -75,7 +77,7 @@ export default function LoginPage() {
               "use server";
               const githubUsername = String(formData.get("githubUsername") ?? "").trim();
               if (!githubUsername) return;
-              await signIn("dev-login", { githubUsername, redirectTo: "/dashboard" });
+              await signIn("dev-login", { githubUsername, redirectTo: "/" });
             }}
             className="flex gap-2"
           >

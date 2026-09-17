@@ -1,7 +1,6 @@
 import { Collection, Entity, ManyToMany } from "@mikro-orm/core";
 import { Alumno } from "./Alumno";
 import type { Grupo } from "./Grupo";
-import type { RolDeUsuario } from "./RolDeUsuario";
 import {
   Assignment,
   type ParticipantesResueltos,
@@ -50,7 +49,7 @@ export class IndividualAssignment extends Assignment {
     return buildRepoName({ slug: this.slug, githubUsername: participantes.usernames[0]! });
   }
 
-  requiereSeleccionDeGrupo(_user: { rol: RolDeUsuario }, _grupo: Grupo | null): boolean {
+  requiereSeleccionDeGrupo(_grupo: Grupo | null): boolean {
     return false;
   }
 

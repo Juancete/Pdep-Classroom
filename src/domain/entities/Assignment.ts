@@ -18,7 +18,6 @@ import {
   type ContextoTransicionEstado,
   type NombreEstadoAssignment,
 } from "./EstadoAssignment";
-import type { RolDeUsuario } from "./RolDeUsuario";
 import { slugify } from "@/lib/naming";
 
 // Dependencias de lectura que las subclases pueden usar desde sus métodos
@@ -388,10 +387,13 @@ export abstract class Assignment {
   abstract nombreDeRepoPara(participantes: ParticipantesResueltos): string;
 
   /**
-   * `true` cuando el alumno debe elegir un grupo antes de poder aceptar el TP.
-   * Individual: siempre `false`. Grupal: `true` cuando no es admin y no tiene grupo.
+   * `true` cuando el usuario debe elegir un grupo antes de poder aceptar el TP.
+   * Individual: siempre `false`. Grupal: `true` cuando no tiene grupo — sin
+   * distinguir por rol: un docente que entra a Mis TPs sin grupo pasa por
+   * "Elegir grupo" igual que un alumno (el bypass de estado/comisión del
+   * docente vive en `RolDeUsuario`, no acá).
    */
-  abstract requiereSeleccionDeGrupo(user: { rol: RolDeUsuario }, grupo: Grupo | null): boolean;
+  abstract requiereSeleccionDeGrupo(grupo: Grupo | null): boolean;
 
   /**
    * Alumnos del curso que todavía no están en ningún grupo de este assignment.

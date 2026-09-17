@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 export default async function Home() {
   const user = await getCurrentUser();
-  if (user) redirect("/dashboard");
+  if (user) redirect(user.rol.rutaDeInicio());
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">

@@ -27,12 +27,26 @@ export interface ContextoDeMembresia {
   grupoTieneEntrega: boolean;
 }
 
+// Dependencias de lectura que `assignmentsParaMisTps` puede usar según el rol
+// — mismo criterio que `FuentesDeConteo` en `Assignment.ts`: se inyectan para
+// que el dominio no importe `@/infrastructure/repositories` directamente.
+export interface FuentesDeAssignments {
+  todos: () => Promise<Assignment[]>;
+  deComision: (comisionId: string) => Promise<Assignment[]>;
+}
+
+// Ítem de navegación compartido por docente y estudiante: "Mis TPs" siempre
+// apunta a `/dashboard`, sólo cambia su posición (home del estudiante vs.
+// último ítem del docente, después de sus secciones de admin).
+const MIS_TPS: ItemDeNavegacion = { href: "/dashboard", label: "Mis TPs" };
+
 /**
  * Rol de un usuario dentro del sistema, modelado como Strategy en vez de un
  * booleano (`isAdmin`) chequeado en 40+ lugares: cada decisión que dependía
  * de "es admin o no" (autorización de acceso, alcance de las queries, qué
- * navegación mostrar) se delega al objeto concreto. Mismo criterio que
- * `EstadoAssignment` para el ciclo de vida de un assignment.
+ * navegación mostrar, a qué home aterriza y qué ve/puede hacer en Mis TPs)
+ * se delega al objeto concreto. Mismo criterio que `EstadoAssignment` para
+ * el ciclo de vida de un assignment.
  *
  * Tres implementaciones: `RolEstudiante` (alumno registrado), `RolDocente`
  * (alcance administrativo global — docente dado de alta en `Docente`
@@ -75,8 +89,26 @@ export abstract class RolDeUsuario {
    */
   abstract puedeGestionarDocentes(): boolean;
 
-  /** Secciones de `/admin/*` que este rol ve en la navegación. */
+  /** Ruta a la que aterriza este rol al loguearse o entrar a `/`. */
+  abstract rutaDeInicio(): string;
+
+  /** Navegación principal en orden; el primer ítem es `rutaDeInicio()`. */
   abstract itemsDeNavegacion(): ItemDeNavegacion[];
+
+  /** `true` si Mis TPs exige registro confirmado en la comisión activa (si no, redirige a /registro). */
+  abstract exigeRegistroDeAlumno(): boolean;
+
+  /** Assignments que este rol lista en Mis TPs. */
+  abstract assignmentsParaMisTps(
+    fuentes: FuentesDeAssignments,
+    comisionActivaId: string | null
+  ): Promise<Assignment[]>;
+
+  /** Filtro fino por estado en Mis TPs. */
+  abstract veAssignmentEnMisTps(assignment: Assignment, tieneEntrega: boolean): boolean;
+
+  /** Probe no-lanzante: ¿el estado del assignment permite que este rol actúe (aceptar, reintentar)? */
+  abstract habilitaAccionesSobre(assignment: Assignment): boolean;
 
   /** `true` si este rol debe ver el banner de sincronización pendiente. */
   abstract veBannerDeSincronizacion(): boolean;
@@ -137,7 +169,16 @@ class RolDocente extends RolDeUsuario {
     return false;
   }
 
-  itemsDeNavegacion(): ItemDeNavegacion[] {
+  rutaDeInicio(): string {
+    return "/admin/assignments";
+  }
+
+  /**
+   * Secciones de `/admin/*` propias de este rol — Template Method que
+   * `RolResponsable` extiende sumando "Docentes" sin tocar el resto de
+   * `itemsDeNavegacion()` (Mis TPs siempre va al final).
+   */
+  protected seccionesDeAdmin(): ItemDeNavegacion[] {
     return [
       { href: "/admin/assignments", label: "Assignments" },
       { href: "/admin/grupos", label: "Grupos" },
@@ -145,6 +186,28 @@ class RolDocente extends RolDeUsuario {
       { href: "/admin/alumnos", label: "Alumnos" },
       { href: "/admin/operaciones", label: "Diagnóstico" },
     ];
+  }
+
+  itemsDeNavegacion(): ItemDeNavegacion[] {
+    // Mis TPs al final: el primer ítem de la navegación es `rutaDeInicio()`.
+    return [...this.seccionesDeAdmin(), MIS_TPS];
+  }
+
+  exigeRegistroDeAlumno(): boolean {
+    return false;
+  }
+
+  assignmentsParaMisTps(fuentes: FuentesDeAssignments): Promise<Assignment[]> {
+    // Alcance global, igual que el resto del rol: no filtra por comisión.
+    return fuentes.todos();
+  }
+
+  veAssignmentEnMisTps(): boolean {
+    return true;
+  }
+
+  habilitaAccionesSobre(): boolean {
+    return true;
   }
 
   veBannerDeSincronizacion(): boolean {
@@ -172,8 +235,8 @@ class RolResponsable extends RolDocente {
     return true;
   }
 
-  override itemsDeNavegacion(): ItemDeNavegacion[] {
-    return [...super.itemsDeNavegacion(), { href: "/admin/docentes", label: "Docentes" }];
+  protected override seccionesDeAdmin(): ItemDeNavegacion[] {
+    return [...super.seccionesDeAdmin(), { href: "/admin/docentes", label: "Docentes" }];
   }
 }
 
@@ -190,7 +253,12 @@ class RolEstudiante extends RolDeUsuario {
 
   autorizarAccionSobreAssignment(alumno: Alumno | null, assignment: Assignment): void {
     this.autorizarAccesoAssignment(alumno, assignment);
-    if (!assignment.permiteAccionesDeAlumno()) {
+    // La mitad "estado habilita" se delega en `habilitaAccionesSobre` (mismo
+    // predicado que usa Mis TPs para mostrar u ocultar el botón de Aceptar)
+    // sin cambio semántico: acá además se exige comisión vía
+    // `autorizarAccesoAssignment`, así que no conviene reusar este método
+    // como probe no-lanzante.
+    if (!this.habilitaAccionesSobre(assignment)) {
       throw new AssignmentNoDisponibleError(assignment.id);
     }
   }
@@ -203,8 +271,31 @@ class RolEstudiante extends RolDeUsuario {
     return false;
   }
 
+  rutaDeInicio(): string {
+    return "/dashboard";
+  }
+
   itemsDeNavegacion(): ItemDeNavegacion[] {
-    return [];
+    return [MIS_TPS];
+  }
+
+  exigeRegistroDeAlumno(): boolean {
+    return true;
+  }
+
+  assignmentsParaMisTps(
+    fuentes: FuentesDeAssignments,
+    comisionActivaId: string | null
+  ): Promise<Assignment[]> {
+    return comisionActivaId ? fuentes.deComision(comisionActivaId) : Promise.resolve([]);
+  }
+
+  veAssignmentEnMisTps(assignment: Assignment, tieneEntrega: boolean): boolean {
+    return assignment.esVisibleParaAlumno(tieneEntrega);
+  }
+
+  habilitaAccionesSobre(assignment: Assignment): boolean {
+    return assignment.permiteAccionesDeAlumno();
   }
 
   veBannerDeSincronizacion(): boolean {

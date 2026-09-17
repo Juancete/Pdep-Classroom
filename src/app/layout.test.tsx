@@ -103,6 +103,16 @@ describe("Nav", () => {
     expect(html).toContain('href="/admin/alumnos"');
   });
 
+  it("el docente ve Mis TPs después de las secciones de admin", async () => {
+    mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
+    const html = renderToStaticMarkup(await Nav());
+    const indiceAssignments = html.indexOf('href="/admin/assignments"');
+    const indiceMisTps = html.indexOf('href="/dashboard"');
+    expect(indiceAssignments).toBeGreaterThanOrEqual(0);
+    expect(indiceMisTps).toBeGreaterThanOrEqual(0);
+    expect(indiceAssignments).toBeLessThan(indiceMisTps);
+  });
+
   it("no muestra links de admin para usuario no admin", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser({ rol: ESTUDIANTE }));
     const html = renderToStaticMarkup(await Nav());

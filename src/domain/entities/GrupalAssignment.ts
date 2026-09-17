@@ -8,7 +8,6 @@ import {
 } from "./Assignment";
 import type { Alumno } from "./Alumno";
 import { Grupo, NombreGrupoInvalidoError } from "./Grupo";
-import type { RolDeUsuario } from "./RolDeUsuario";
 import { GRUPAL_MIN_MAX_INTEGRANTES } from "./domain-constants";
 import { buildRepoName, slugify } from "@/lib/naming";
 
@@ -121,8 +120,8 @@ export class GrupalAssignment extends Assignment {
     return grupo;
   }
 
-  requiereSeleccionDeGrupo(user: { rol: RolDeUsuario }, grupo: Grupo | null): boolean {
-    return !user.rol.puedeAdministrar() && !grupo;
+  requiereSeleccionDeGrupo(grupo: Grupo | null): boolean {
+    return !grupo;
   }
 
   alumnosSinGrupo(alumnos: Alumno[], grupos: Grupo[]): Alumno[] {

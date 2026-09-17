@@ -9,7 +9,6 @@ import type { Assignment } from "./Assignment";
 import { Alumno } from "./Alumno";
 import type { Grupo } from "./Grupo";
 import { TransicionDeEstadoInvalidaError } from "./EstadoAssignment";
-import { DOCENTE, ESTUDIANTE } from "./RolDeUsuario";
 import {
   AssignmentEstructuraInmutableError,
   AssignmentTipoInmutableError,
@@ -87,9 +86,8 @@ describe("IndividualAssignment", () => {
 
   it("requiereSeleccionDeGrupo siempre devuelve false", () => {
     const individual = new IndividualAssignment();
-    expect(individual.requiereSeleccionDeGrupo({ rol: ESTUDIANTE }, null)).toBe(false);
-    expect(individual.requiereSeleccionDeGrupo({ rol: ESTUDIANTE }, fakeGrupo("g1", []))).toBe(false);
-    expect(individual.requiereSeleccionDeGrupo({ rol: DOCENTE }, null)).toBe(false);
+    expect(individual.requiereSeleccionDeGrupo(null)).toBe(false);
+    expect(individual.requiereSeleccionDeGrupo(fakeGrupo("g1", []))).toBe(false);
   });
 
   it("alumnosSinGrupo siempre devuelve arreglo vacío", () => {
@@ -172,16 +170,12 @@ describe("GrupalAssignment", () => {
     }
   });
 
-  it("requiereSeleccionDeGrupo devuelve true cuando no es admin y no tiene grupo", () => {
-    expect(nuevoGrupal().requiereSeleccionDeGrupo({ rol: ESTUDIANTE }, null)).toBe(true);
+  it("requiereSeleccionDeGrupo devuelve true cuando no tiene grupo", () => {
+    expect(nuevoGrupal().requiereSeleccionDeGrupo(null)).toBe(true);
   });
 
   it("requiereSeleccionDeGrupo devuelve false cuando ya tiene grupo", () => {
-    expect(nuevoGrupal().requiereSeleccionDeGrupo({ rol: ESTUDIANTE }, fakeGrupo("g1", []))).toBe(false);
-  });
-
-  it("requiereSeleccionDeGrupo devuelve false cuando es admin", () => {
-    expect(nuevoGrupal().requiereSeleccionDeGrupo({ rol: DOCENTE }, null)).toBe(false);
+    expect(nuevoGrupal().requiereSeleccionDeGrupo(fakeGrupo("g1", []))).toBe(false);
   });
 
   it("alumnosSinGrupo devuelve los alumnos no asignados a ningún grupo", () => {
