@@ -14,13 +14,17 @@ function leerWorkflowDeRelease(): string {
 }
 
 describe("release a producción", () => {
-  it("el deploy sólo corre después de migrar, y migrar después de verificar", () => {
+  it("el build, la migración y la promoción corren en ese orden", () => {
     const workflow = leerWorkflowDeRelease();
 
     expect(workflow).toContain("needs: verificar");
-    expect(workflow).toContain("needs: migrate");
+    expect(workflow).toContain("needs: build");
+    expect(workflow).toContain("needs: [build, migrate]");
     expect(workflow.indexOf("needs: verificar")).toBeLessThan(
-      workflow.indexOf("needs: migrate")
+      workflow.indexOf("needs: build")
+    );
+    expect(workflow.indexOf("needs: build")).toBeLessThan(
+      workflow.indexOf("needs: [build, migrate]")
     );
   });
 
@@ -28,19 +32,27 @@ describe("release a producción", () => {
     expect(leerWorkflowDeRelease()).toContain("pnpm release:migrate");
   });
 
-  it("el deploy usa el build prebuilt de producción", () => {
-    expect(leerWorkflowDeRelease()).toContain("--prebuilt --prod");
+  it("el build es un deployment de producción staged, sin dominio", () => {
+    expect(leerWorkflowDeRelease()).toContain("vercel deploy --prod --skip-domain");
+  });
+
+  it("la promoción no reconstruye: usa vercel promote", () => {
+    expect(leerWorkflowDeRelease()).toContain("vercel promote");
   });
 
   it("el workflow se dispara con push a master", () => {
     expect(leerWorkflowDeRelease()).toContain("branches: [master]");
   });
 
-  it("la integración Git de Vercel no buildea", () => {
+  it("no se puede desplegar otra rama por workflow_dispatch", () => {
+    expect(leerWorkflowDeRelease()).toContain("github.ref != 'refs/heads/master'");
+  });
+
+  it("la integración Git de Vercel no despliega", () => {
     const vercelConfig = JSON.parse(
       readFileSync(join(process.cwd(), "vercel.json"), "utf8")
-    ) as { ignoreCommand?: string };
+    ) as { git?: { deploymentEnabled?: boolean } };
 
-    expect(vercelConfig.ignoreCommand).toBe("exit 0");
+    expect(vercelConfig.git?.deploymentEnabled).toBe(false);
   });
 });

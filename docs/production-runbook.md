@@ -8,7 +8,10 @@ production** al hacer push o mergear a `master`.
 
 1. Confirmar CI verde y revisar las migraciones nuevas. Confirmar también que los secrets del
    environment `production` existen (`DATABASE_URL`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`,
-   `VERCEL_PROJECT_ID`), cargados con `gh secret set <NOMBRE> --env production`.
+   `VERCEL_PROJECT_ID`), cargados con `gh secret set <NOMBRE> --env production`. Restringir el
+   environment `production` de GitHub a la rama `master` (Settings → Environments → production →
+   Deployment branches → Selected branches → `master`), para que ni siquiera un run manual pueda
+   desplegar otra rama.
 2. Crear un restore point o snapshot en Neon y verificar que el equipo sabe restaurarlo.
 3. Verificar en Vercel las variables de producción. El arranque exige base, GitHub OAuth, secreto
    de NextAuth, admins, GitHub App, secreto de webhook y Google Sheets. Los canales de comunicación
@@ -20,15 +23,21 @@ production** al hacer push o mergear a `master`.
 ## Release
 
 1. Mergear el PR `development → master` (o pushear a `master`). Eso dispara **Deploy
-   production**: `verificar` → `migrate` → `deploy`. Seguirlo en Actions; si `migrate` falla, no se
-   despliega nada y producción queda con el código anterior sobre el schema anterior (o
-   parcialmente migrado, revisar el log).
+   production**: `verificar` → `build` (deployment de producción staged en Vercel, sin dominio) →
+   `migrate` → `promote`. Seguirlo en Actions.
+   - Si `build` falla, la base no se toca.
+   - Si `migrate` falla, no se promueve y producción sigue con el código anterior sobre el schema
+     anterior (o parcialmente migrado: revisar el log).
+   - Si `promote` falla con la migración ya aplicada, promover a mano desde el dashboard de Vercel
+     (Deployments → el deployment staged → Promote) o hacer rollback de la migración según el paso
+     de "Incidente y rollback".
 2. Consultar `GET /api/health`; debe responder `200` con `{"ok":true,"database":"ok",...}` y
    `version` igual al SHA corto del commit de `master`.
 3. Para aplicar migraciones sin desplegar (por ejemplo, para adelantar una migración aditiva),
    correr **Deploy production** desde Actions → Run workflow con `solo_migrar` marcado. Si falla en
    el step "Verificar secret DATABASE_URL", recargar el secret con `gh secret set DATABASE_URL
-   --env production` (el valor no está en Vercel: ahí la variable es sensitive).
+   --env production` (el valor no está en Vercel: ahí la variable es sensitive). El deployment
+   staged que generó el job `build` de ese run queda sin promover.
 4. Entrar como docente a `/admin/operaciones`. GitHub y Sheets deben estar en verde; cada canal de
    comunicación configurado también — uno apagado a propósito aparece como "Revisar" y no bloquea.
    No debe haber deliveries fallidos sin explicar.
@@ -55,9 +64,10 @@ production** al hacer push o mergear a `master`.
    siguen funcionando sobre las filas migradas). Este fue el caso que motivó que la migración
    corra en el mismo workflow y antes del deploy.
 
-Nota: entre `migrate` y `deploy` hay una ventana de segundos en la que el código anterior sigue
-corriendo contra el schema ya migrado. Es inocuo para migraciones aditivas; en renames o drops
-puede dar errores breves hasta que termina el deploy.
+Regla: las migraciones tienen que ser compatibles con el deploy anterior (expand/contract), porque
+entre `migrate` y `promote` el código anterior corre contra el schema nuevo y, si `promote` falla,
+esa situación dura hasta la intervención manual. Un rename o drop de columna/tabla se hace en dos
+releases: primero el código que tolera ambos, después la migración destructiva.
 
 ## Operación habitual
 
@@ -78,8 +88,8 @@ puede dar errores breves hasta que termina el deploy.
 
 1. Si falla el smoke test, detener nuevas aceptaciones archivando el assignment afectado o
    revirtiendo el deploy de Vercel. Revertir desde el dashboard de Vercel (Instant Rollback) sigue
-   funcionando: los deploys hechos por el CLI del job `deploy` aparecen ahí igual que los que hacía
-   la integración Git.
+   funcionando: los deployments que crea el job `build` y promueve `promote` aparecen ahí igual que
+   los que hacía la integración Git.
 2. No ejecutar `migration:down` a ciegas. Primero revisar si el código anterior es compatible con
    las columnas nuevas; las migraciones aditivas de este release sí permiten volver al deploy
    anterior conservando columnas.

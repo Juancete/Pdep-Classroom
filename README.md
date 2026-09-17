@@ -358,10 +358,12 @@ O desde el dashboard de Vercel: **Settings → Environment Variables → Add**.
 
 **Migraciones en producción:**
 
-Las migraciones siguen separadas del build: `vercel-build` sólo compila. Ahora corren en el
-workflow **Deploy production** de GitHub Actions, antes del deploy y en el mismo run — se disparan
-con cada push o merge a `master`. La integración Git de Vercel no buildea (`ignoreCommand` en
-`vercel.json`); el deploy lo hace el CLI de Vercel desde el job `deploy` de ese mismo workflow.
+Las migraciones siguen separadas del build: `vercel-build` sólo compila. El workflow **Deploy
+production** de GitHub Actions primero construye un deployment de producción staged en Vercel (con
+las variables de producción, incluidas las sensibles, sin asignar el dominio), después migra y por
+último promueve ese mismo deployment — se disparan con cada push o merge a `master`. El deploy
+automático por Git está apagado con `git.deploymentEnabled: false` en `vercel.json`; el build y el
+deploy los hacen los jobs `build` y `promote` de ese mismo workflow.
 
 El workflow necesita estos secrets en el environment protegido `production`:
 

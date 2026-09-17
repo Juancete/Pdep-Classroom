@@ -21,6 +21,15 @@ jobs:
   verificar:
     runs-on: ubuntu-latest
     steps:
+      # branches: [master] filtra sólo los pushes; workflow_dispatch permite
+      # elegir cualquier rama, y sin este guard se podría desplegar otra
+      # rama a producción.
+      - name: Sólo master
+        if: github.ref != 'refs/heads/master'
+        run: |
+          echo "::error::Deploy production sólo corre sobre master (ref actual: ${{ github.ref }})."
+          exit 1
+
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -42,12 +51,55 @@ jobs:
       - name: Tests
         run: pnpm test:run
 
-  # La migración corre antes del deploy: en un incidente previo, el
-  # auto-deploy de Vercel llegó a producción antes que la migración que
-  # renombraba la tabla "administrador" a "docente", y el código nuevo
-  # rompió contra el esquema viejo. Migrar primero evita ese desfasaje.
-  migrate:
+  build:
     needs: verificar
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    outputs:
+      deployment_url: ${{ steps.staged.outputs.url }}
+    steps:
+      # persist-credentials: false y el checkout igual son necesarios: el
+      # CLI de Vercel lee ".git" para adjuntar el commit al deployment.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Sin pnpm: acá no se instalan dependencias del proyecto, el build
+      # corre en la infraestructura de Vercel.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verificar secrets de Vercel
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "::error::Faltan secrets VERCEL_TOKEN, VERCEL_ORG_ID o VERCEL_PROJECT_ID en el environment 'production'. Cargarlos con: gh secret set <NOMBRE> --env production"
+            exit 1
+          fi
+
+      - name: Instalar Vercel CLI
+        run: npm install --global vercel@51
+
+      # El build corre en Vercel con las variables de producción (incluidas
+      # las sensibles, que "vercel pull" no puede traer), antes de tocar la
+      # base. El deployment queda staged sin dominio hasta que "promote" lo
+      # asigne.
+      - name: Vercel deploy (staged, sin dominio)
+        id: staged
+        run: |
+          deployment_url="$(vercel deploy --prod --skip-domain --yes --token="$VERCEL_TOKEN")"
+          echo "Deployment: $deployment_url"
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+  # La migración corre después de que el build ya está verificado y antes de
+  # promover: así una migración fallida no deja código nuevo sin schema, y un
+  # build fallido no toca la base.
+  migrate:
+    needs: build
     runs-on: ubuntu-latest
     environment: production
     env:
@@ -72,8 +124,8 @@ jobs:
       - name: Apply pending migrations
         run: pnpm release:migrate
 
-  deploy:
-    needs: migrate
+  promote:
+    needs: [build, migrate]
     if: ${{ !inputs.solo_migrar }}
     runs-on: ubuntu-latest
     environment: production
@@ -82,37 +134,15 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.2
-
-      # Node 24 acá porque el proyecto en Vercel corre Node 24.x y
-      # "vercel build" compila el proyecto en este runner, no en la
-      # infraestructura de Vercel.
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
-          cache: pnpm
+          node-version: 22
 
-      - name: Verificar secrets de Vercel
-        run: |
-          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
-            echo "::error::Faltan secrets VERCEL_TOKEN, VERCEL_ORG_ID o VERCEL_PROJECT_ID en el environment 'production'. Cargarlos con: gh secret set <NOMBRE> --env production"
-            exit 1
-          fi
+      - name: Instalar Vercel CLI
+        run: npm install --global vercel@51
 
-      # VERCEL_ORG_ID y VERCEL_PROJECT_ID en el entorno reemplazan al
-      # archivo .vercel/project.json que "vercel pull" generaría al
-      # vincular el proyecto de forma interactiva.
-      - name: Vercel pull
-        run: pnpm dlx vercel@51 pull --yes --environment=production --token="$VERCEL_TOKEN"
-
-      - name: Vercel build
-        run: pnpm dlx vercel@51 build --prod --token="$VERCEL_TOKEN"
-
-      - name: Vercel deploy
-        run: pnpm dlx vercel@51 deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+      # Promover sólo asigna el dominio al deployment ya construido, sin
+      # rebuild. Con solo_migrar el deployment queda staged sin promover (se
+      # puede promover a mano desde el dashboard o descartar).
+      - name: Vercel promote
+        run: vercel promote "${{ needs.build.outputs.deployment_url }}" --yes --token="$VERCEL_TOKEN"
