@@ -971,7 +971,7 @@ describe("salirDeGrupo", () => {
     expect(resultado.grupo).toBe(grupoParaDocente);
   });
 
-  it("rechaza al alumno si el grupo ya entregó, y no lo borra aunque quede vacío para el docente", async () => {
+  it("rechaza al alumno si el grupo ya aceptó el TP, y no lo borra aunque quede vacío para el docente", async () => {
     const assignment = fakeGrupal();
     const ana = fakeAlumno("alumno-ana", "ana");
     const entregaFake = Object.assign(new Entrega(), { id: "e1" });

@@ -219,7 +219,7 @@ describe("Estudiante.autorizarCambioDeMembresia", () => {
     ).toThrow(InscripcionesCerradasError);
   });
 
-  it("rechaza con GrupoConEntregaError cuando el grupo ya entregó", () => {
+  it("rechaza con GrupoConEntregaError cuando el grupo ya aceptó el TP", () => {
     expect(() =>
       ESTUDIANTE.autorizarCambioDeMembresia({
         assignment: fakeGrupal(),
