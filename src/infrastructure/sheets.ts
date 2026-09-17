@@ -396,12 +396,18 @@ function esErrorDeGoogleApi(error: unknown): error is ErrorDeGoogleApi {
 // ella (issue #95): Drive `files.get` con `capabilities.canEdit`. La lectura
 // con `spreadsheets.readonly` anda con rol Viewer, así que el check de lectura
 // de `/admin/operaciones` no detecta el 403 que después sufre el registro.
+// Sin `supportsAllDrives` Drive responde 404 para planillas en unidades
+// compartidas, y eso se leería como "no compartida".
 export async function getPermisoDePlanilla(spreadsheetId: string): Promise<PermisoDePlanilla> {
   const id = resolveSpreadsheetId(spreadsheetId);
   const credentials = leerCredencialesDeServiceAccount();
   const drive = getDriveClient(credentials);
   try {
-    const { data } = await drive.files.get({ fileId: id, fields: "capabilities/canEdit" });
+    const { data } = await drive.files.get({
+      fileId: id,
+      fields: "capabilities/canEdit",
+      supportsAllDrives: true,
+    });
     return { puedeEditar: data.capabilities?.canEdit === true, clientEmail: credentials.client_email };
   } catch (error) {
     throw traducirErrorDeDrive(error, credentials);

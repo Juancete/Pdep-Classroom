@@ -859,13 +859,17 @@ describe("getPermisoDePlanilla", () => {
     expect(mockDriveFilesGet).not.toHaveBeenCalled();
   });
 
-  it("consulta capabilities.canEdit con el scope de metadata de Drive", async () => {
+  it("consulta capabilities.canEdit con el scope de metadata de Drive y soporte de unidades compartidas", async () => {
     mockDriveFilesGet.mockResolvedValueOnce({ data: { capabilities: { canEdit: true } } });
 
     const permiso = await getPermisoDePlanilla("sheet-123");
 
     expect(permiso).toEqual({ puedeEditar: true, clientEmail: CLIENT_EMAIL });
-    expect(mockDriveFilesGet).toHaveBeenCalledWith({ fileId: "sheet-123", fields: "capabilities/canEdit" });
+    expect(mockDriveFilesGet).toHaveBeenCalledWith({
+      fileId: "sheet-123",
+      fields: "capabilities/canEdit",
+      supportsAllDrives: true,
+    });
     expect(mockGoogleAuth).toHaveBeenCalledWith(
       expect.objectContaining({ scopes: ["https://www.googleapis.com/auth/drive.metadata.readonly"] })
     );
