@@ -812,6 +812,13 @@ en el payload de un único evento:
   segundos, y un rename seguido de un delete del mismo repo dentro del mismo segundo comparten
   timestamp; con un guard no estricto, el delete "empatado" se rechazaría por viejo y el repo
   quedaría marcado como activo pese a haberse borrado.
+- Las consultas a GitHub que devuelven listas siguen dos reglas (issue #88): **lo que se filtra, lo
+  filtra GitHub** (por eso `repository` resuelve el repo por id con `GET /repositories/{id}` en una
+  sola llamada, en vez de recorrer la org y buscar acá), y **si una lista alimenta una vista
+  paginada, se pagina con el modelo de la app** (`page`/`pageSize` de 25, como `/admin/errores`)
+  mapeado a `page`/`per_page`. `octokit.paginate` (traer todo) queda para agregados internos, como
+  los check runs de un commit, o listas chicas como los templates. Un test en `github.test.ts`
+  ("listas de GitHub") falla ante un `per_page` suelto o un `.filter`/`.find` sobre lo paginado.
 
 ### Endpoint público a propósito
 

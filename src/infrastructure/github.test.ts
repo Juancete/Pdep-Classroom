@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 const mockDelete = vi.fn();
 const mockCreateUsingTemplate = vi.fn();
@@ -164,29 +166,24 @@ describe("getEstadoCI", () => {
   });
 
   it("consulta los checks del branch por defecto y arma el detalle", async () => {
-    mockListForRef.mockResolvedValue({
-      data: {
-        total_count: 2,
-        check_runs: [
-          {
-            status: "completed",
-            conclusion: "success",
-            head_sha: "abc123",
-            completed_at: "2026-08-19T10:05:00Z",
-            started_at: "2026-08-19T10:00:00Z",
-            check_suite: { id: 111 },
-          },
-          {
-            status: "completed",
-            conclusion: "success",
-            head_sha: "abc123",
-            completed_at: "2026-08-19T10:03:00Z",
-            started_at: "2026-08-19T10:00:00Z",
-            check_suite: { id: 111 },
-          },
-        ],
+    mockPaginate.mockResolvedValue([
+      {
+        status: "completed",
+        conclusion: "success",
+        head_sha: "abc123",
+        completed_at: "2026-08-19T10:05:00Z",
+        started_at: "2026-08-19T10:00:00Z",
+        check_suite: { id: 111 },
       },
-    });
+      {
+        status: "completed",
+        conclusion: "success",
+        head_sha: "abc123",
+        completed_at: "2026-08-19T10:03:00Z",
+        started_at: "2026-08-19T10:00:00Z",
+        check_suite: { id: 111 },
+      },
+    ]);
 
     await expect(getEstadoCI("tp-ana")).resolves.toEqual({
       tipo: "checks",
@@ -202,35 +199,31 @@ describe("getEstadoCI", () => {
     expect(mockReposGet).toHaveBeenCalledWith(
       expect.objectContaining({ repo: "tp-ana" })
     );
-    expect(mockListForRef).toHaveBeenCalledWith(
+    expect(mockPaginate).toHaveBeenCalledWith(
+      mockListForRef,
       expect.objectContaining({ repo: "tp-ana", ref: "main" })
     );
   });
 
   it("junta ids de check suite únicos cuando hay varios workflows", async () => {
-    mockListForRef.mockResolvedValue({
-      data: {
-        total_count: 2,
-        check_runs: [
-          {
-            status: "completed",
-            conclusion: "success",
-            head_sha: "abc123",
-            completed_at: "2026-08-19T10:00:00Z",
-            started_at: null,
-            check_suite: { id: 111 },
-          },
-          {
-            status: "completed",
-            conclusion: "success",
-            head_sha: "abc123",
-            completed_at: "2026-08-19T10:00:00Z",
-            started_at: null,
-            check_suite: { id: 222 },
-          },
-        ],
+    mockPaginate.mockResolvedValue([
+      {
+        status: "completed",
+        conclusion: "success",
+        head_sha: "abc123",
+        completed_at: "2026-08-19T10:00:00Z",
+        started_at: null,
+        check_suite: { id: 111 },
       },
-    });
+      {
+        status: "completed",
+        conclusion: "success",
+        head_sha: "abc123",
+        completed_at: "2026-08-19T10:00:00Z",
+        started_at: null,
+        check_suite: { id: 222 },
+      },
+    ]);
 
     const resultado = await getEstadoCI("tp-multi");
     expect(resultado.tipo).toBe("checks");
@@ -240,9 +233,7 @@ describe("getEstadoCI", () => {
   });
 
   it("devuelve sin_ci cuando no hay ningún check run", async () => {
-    mockListForRef.mockResolvedValue({
-      data: { total_count: 0, check_runs: [] },
-    });
+    mockPaginate.mockResolvedValue([]);
 
     await expect(getEstadoCI("tp-sin-ci")).resolves.toEqual({ tipo: "sin_ci" });
   });
@@ -251,11 +242,11 @@ describe("getEstadoCI", () => {
     mockReposGet.mockRejectedValue(requestError(403, "Forbidden"));
 
     await expect(getEstadoCI("tp-prohibido")).rejects.toThrow("permisos suficientes");
-    expect(mockListForRef).not.toHaveBeenCalled();
+    expect(mockPaginate).not.toHaveBeenCalled();
   });
 
   it("propaga errores traducidos de checks.listForRef", async () => {
-    mockListForRef.mockRejectedValue(requestError(403, "Forbidden"));
+    mockPaginate.mockRejectedValue(requestError(403, "Forbidden"));
 
     await expect(getEstadoCI("tp-prohibido")).rejects.toThrow("permisos suficientes");
   });
@@ -355,36 +346,66 @@ describe("getRepoInfoPorId", () => {
     vi.clearAllMocks();
   });
 
-  it("busca el id en el listado paginado y devuelve nombre y URL actuales", async () => {
-    mockPaginate.mockResolvedValue([
-      { id: 111, name: "otro", html_url: "https://github.com/pdep-mn-utn/otro" },
-      { id: 555666, name: "tp-ana-nuevo", html_url: "https://github.com/pdep-mn-utn/tp-ana-nuevo" },
-    ]);
+  it("resuelve el repo por id con una sola llamada y devuelve nombre y URL actuales", async () => {
+    mockRequest.mockResolvedValue({
+      data: {
+        id: 555666,
+        name: "tp-ana-nuevo",
+        html_url: "https://github.com/pdep-mn-utn/tp-ana-nuevo",
+        owner: { login: "pdep-mn-utn" },
+      },
+    });
 
     await expect(getRepoInfoPorId("555666")).resolves.toEqual({
       repoName: "tp-ana-nuevo",
       repoUrl: "https://github.com/pdep-mn-utn/tp-ana-nuevo",
     });
-    expect(mockPaginate).toHaveBeenCalledWith(
-      mockListForOrg,
-      expect.objectContaining({ type: "all", per_page: 100 })
+    expect(mockRequest).toHaveBeenCalledWith(
+      "GET /repositories/{repository_id}",
+      expect.objectContaining({ repository_id: 555666 })
     );
+    // Sin listar la org ni filtrar acá (issue #88).
+    expect(mockPaginate).not.toHaveBeenCalled();
+    expect(mockListForOrg).not.toHaveBeenCalled();
   });
 
-  it("devuelve null cuando el id no pertenece a ningún repo de la organización", async () => {
-    mockPaginate.mockResolvedValue([]);
+  it("acepta el repo aunque el login de la org difiera en mayúsculas", async () => {
+    mockRequest.mockResolvedValue({
+      data: {
+        id: 555666,
+        name: "tp-ana",
+        html_url: "https://github.com/PdeP-MN-UTN/tp-ana",
+        owner: { login: "PdeP-MN-UTN" },
+      },
+    });
+
+    await expect(getRepoInfoPorId("555666")).resolves.toEqual({
+      repoName: "tp-ana",
+      repoUrl: "https://github.com/PdeP-MN-UTN/tp-ana",
+    });
+  });
+
+  it("devuelve null cuando el id pertenece a un repo de otra organización", async () => {
+    mockRequest.mockResolvedValue({
+      data: {
+        id: 555666,
+        name: "ajeno",
+        html_url: "https://github.com/otra-org/ajeno",
+        owner: { login: "otra-org" },
+      },
+    });
 
     await expect(getRepoInfoPorId("555666")).resolves.toBeNull();
   });
 
   it("devuelve null cuando GitHub responde 404", async () => {
-    mockPaginate.mockRejectedValue(requestError(404, "Not Found"));
+    mockRequest.mockRejectedValue(requestError(404, "Not Found"));
 
     await expect(getRepoInfoPorId("555666")).resolves.toBeNull();
   });
 
   it("propaga (traducido) cualquier otro error que no sea 404", async () => {
-    mockPaginate.mockRejectedValue(requestError(403, "Forbidden"));
+    mockRequest.mockRejectedValue(requestError(403, "Forbidden"));
 
     await expect(getRepoInfoPorId("555666")).rejects.toThrow();
   });
@@ -556,5 +577,44 @@ describe("getConfiguracionDeApp", () => {
     );
     expect(mockAuth).not.toHaveBeenCalled();
     expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
+// Guard sobre las listas de GitHub (issue #88): toda llamada paginable va
+// dentro de `octokit.paginate(...)` (agregados internos, listas chicas) o
+// pagina explícitamente con `page:` hacia una vista, con el modelo de la app;
+// y lo que se filtra, lo filtra GitHub — nunca `.filter`/`.find` sobre la
+// colección paginada. Lee el fuente porque es la única forma barata de
+// atrapar una llamada nueva que no tenga test propio.
+describe("listas de GitHub", () => {
+  const lineas = readFileSync(join(process.cwd(), "src", "infrastructure", "github.ts"), "utf8")
+    .split("\n");
+
+  function contexto(indice: number, desde: number, hasta: number): string {
+    return lineas.slice(Math.max(0, indice + desde), indice + hasta + 1).join("\n");
+  }
+
+  it("cada per_page va dentro de octokit.paginate o pagina explícitamente con page:", () => {
+    lineas.forEach((linea, indice) => {
+      if (!/\bper_page:/.test(linea)) return;
+      const bloque = contexto(indice, -6, 0);
+      const paginaTodo = /\.paginate\(/.test(bloque);
+      const paginaHaciaVista = /\bpage:/.test(contexto(indice, -6, 3));
+      expect(
+        paginaTodo || paginaHaciaVista,
+        `github.ts:${indice + 1} usa per_page sin octokit.paginate ni page:`
+      ).toBe(true);
+    });
+  });
+
+  it("no filtra en memoria el resultado de octokit.paginate", () => {
+    lineas.forEach((linea, indice) => {
+      if (!/\.paginate\(/.test(linea)) return;
+      const bloqueSiguiente = contexto(indice, 1, 8);
+      expect(
+        /\.(filter|find)\(\s*\(/.test(bloqueSiguiente),
+        `github.ts:${indice + 1}: el resultado de paginate se filtra acá; delegá el filtro a GitHub`
+      ).toBe(false);
+    });
   });
 });

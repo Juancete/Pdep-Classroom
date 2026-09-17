@@ -144,5 +144,8 @@ jobs:
       # Promover sólo asigna el dominio al deployment ya construido, sin
       # rebuild. Con solo_migrar el deployment queda staged sin promover (se
       # puede promover a mano desde el dashboard o descartar).
+      # "promote" no linkea el proyecto, así que ignora VERCEL_ORG_ID y sin
+      # --scope resuelve el deployment fuera del team ("Deployment belongs
+      # to a different team").
       - name: Vercel promote
-        run: vercel promote "${{ needs.build.outputs.deployment_url }}" --yes --token="$VERCEL_TOKEN"
+        run: vercel promote "${{ needs.build.outputs.deployment_url }}" --scope="$VERCEL_ORG_ID" --yes --token="$VERCEL_TOKEN"
