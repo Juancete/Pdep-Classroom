@@ -1,5 +1,27 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextResponse } from "next/server";
+
+// ── Mocks para la persistencia diferida de errores registrados ──────────
+// Mismo patrón que `src/lib/internal-server-error.test.ts`: `after` sólo
+// captura la tarea (se ejecuta manualmente en el test), y se mockean el
+// logger y el import perezoso de ErrorLogRepository para no tocar Pino ni
+// MikroORM en estos tests.
+
+const mockAfter = vi.fn();
+const mockRegistrarErrorInesperado = vi.fn();
+const mockLoggerError = vi.fn();
+
+vi.mock("next/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/server")>();
+  return { ...actual, after: (task: () => unknown) => mockAfter(task) };
+});
+vi.mock("@/infrastructure/repositories/ErrorLogRepository", () => ({
+  registrarErrorInesperado: (...args: unknown[]) => mockRegistrarErrorInesperado(...args),
+}));
+vi.mock("./logger", () => ({
+  logger: { error: (...args: unknown[]) => mockLoggerError(...args) },
+}));
+
 import { parseJsonObjectBody, respuestaDeErrorDeDominio } from "./api-errors";
 import {
   AssignmentNoEncontradoError,
@@ -9,6 +31,11 @@ import {
   NombreGrupoInvalidoError,
 } from "@/domain/entities";
 import { PermisosNoVerificablesError } from "@/infrastructure/auth/PermisosNoVerificablesError";
+import { PlanillaNoDisponibleError } from "@/infrastructure/PlanillaNoDisponibleError";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 function makeRequest(body: unknown, contentType = "application/json"): Request {
   return new Request("http://test.local/api/test", {
@@ -144,5 +171,63 @@ describe("respuestaDeErrorDeDominio", () => {
     expect(json.error).toBe(
       "No se pudieron verificar tus permisos. Reintentá en unos segundos."
     );
+  });
+
+  // Issue #92: 403 de la API de Sheets (service account sin rol Editor).
+  describe("PlanillaNoDisponibleError", () => {
+    const errorDePlanilla = () =>
+      new PlanillaNoDisponibleError(new Error("The caller does not have permission"));
+
+    it("mapea a 503 con el mensaje amigable, sin filtrar el mensaje del SDK", async () => {
+      const response = respuestaDeErrorDeDominio(errorDePlanilla());
+      expect(response).not.toBeNull();
+      expect(response!.status).toBe(503);
+      const json = await response!.json();
+      expect(json.error).toBe(
+        "Tus datos quedaron guardados, pero no pudimos actualizar la planilla de la cátedra. Reintentá en unos minutos y, si persiste, avisale a un docente."
+      );
+      expect(json.error).not.toContain("The caller does not have permission");
+    });
+
+    it("con { route, context } loguea con logger.error y programa la persistencia en error_log", async () => {
+      const context = { githubUsername: "juangarcia", legajo: "123456" };
+
+      const response = respuestaDeErrorDeDominio(errorDePlanilla(), {
+        route: "POST /api/registro",
+        context,
+      });
+
+      expect(response!.status).toBe(503);
+      expect(mockLoggerError).toHaveBeenCalledWith(
+        expect.objectContaining({ ...context, route: "POST /api/registro" }),
+        "handler error"
+      );
+      expect(mockAfter).toHaveBeenCalledWith(expect.any(Function));
+
+      await mockAfter.mock.calls[0]![0]();
+
+      expect(mockRegistrarErrorInesperado).toHaveBeenCalledWith(
+        expect.objectContaining({
+          route: "POST /api/registro",
+          message: expect.stringContaining("No se pudo escribir en la planilla"),
+          context: expect.objectContaining({ githubUsername: "juangarcia" }),
+        })
+      );
+    });
+
+    it("sin segundo parámetro no loguea ni persiste", () => {
+      respuestaDeErrorDeDominio(errorDePlanilla());
+      expect(mockLoggerError).not.toHaveBeenCalled();
+      expect(mockAfter).not.toHaveBeenCalled();
+    });
+  });
+
+  it("un error de dominio sin `registrar` (PermisosNoVerificablesError) con { route, context } no loguea ni persiste", () => {
+    respuestaDeErrorDeDominio(new PermisosNoVerificablesError(new Error("DB caída")), {
+      route: "POST /api/registro",
+      context: { githubUsername: "juangarcia" },
+    });
+    expect(mockLoggerError).not.toHaveBeenCalled();
+    expect(mockAfter).not.toHaveBeenCalled();
   });
 });

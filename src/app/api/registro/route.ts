@@ -6,11 +6,20 @@ import { usernameCanonicoDe } from "@/types";
 import { internalServerError, parseJsonObjectBody, respuestaDeErrorDeDominio } from "@/lib/api-errors";
 import { confirmarYProcesarAlumno } from "@/application/alumnoRegistro";
 
+const ROUTE = "POST /api/registro";
+
 export async function POST(req: Request) {
+  // Visibles en el `catch` para que un error inesperado (incluido
+  // `PlanillaNoDisponibleError`) se registre con contexto útil para el
+  // admin, sin depender de en qué línea del try haya fallado.
+  let githubUsername: string | undefined;
+  let legajo: string | undefined;
   try {
     const user = await requireUser();
+    githubUsername = user.githubUsername;
     const body = await parseJsonObjectBody(req);
     if (body instanceof NextResponse) return body;
+    if (typeof body.legajo === "string") legajo = body.legajo;
 
     // Si el form envió un githubUsername distinto al de la sesión, devolvemos
     // error con `field` para que el form lo pinte inline y pueda ofrecer el
@@ -51,6 +60,10 @@ export async function POST(req: Request) {
       ...(resultado.hooks.gruposSync === "error" && { gruposSync: "error" }),
     });
   } catch (error) {
-    return respuestaDeErrorDeDominio(error) ?? internalServerError("POST /api/registro", error);
+    const context = { githubUsername, legajo };
+    return (
+      respuestaDeErrorDeDominio(error, { route: ROUTE, context }) ??
+      internalServerError(ROUTE, error, context)
+    );
   }
 }

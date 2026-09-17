@@ -38,6 +38,7 @@ import {
   getDatosPrecargaByGithub,
 } from "./sheets";
 import type { ColumnConfig, GruposColumnConfig } from "@/types";
+import { PlanillaNoDisponibleError } from "@/infrastructure/PlanillaNoDisponibleError";
 
 // ── parseAlumnosRows ────────────────────────────────────────
 
@@ -417,6 +418,16 @@ describe("upsertarAlumnoEnSheets – validaciones", () => {
       "No hay una comisión activa"
     );
   });
+
+  // La validación es un dato inválido del alumno, no una falla operativa de
+  // la planilla: no debe envolverse en PlanillaNoDisponibleError (issue #92).
+  it("un input inválido sigue devolviendo { ok:false, error } sin envolverlo en PlanillaNoDisponibleError", async () => {
+    const resultado = await upsertarAlumnoEnSheets({ ...valid, apellido: "" }, "sheet-1");
+    expect(resultado).toEqual({ ok: false, error: "El apellido es obligatorio" });
+    expect(mockValuesGet).not.toHaveBeenCalled();
+    expect(mockValuesAppend).not.toHaveBeenCalled();
+    expect(mockValuesBatchUpdate).not.toHaveBeenCalled();
+  });
 });
 
 // Fase 3 del issue #82: el update de fila completa (values.get + values.update)
@@ -586,6 +597,90 @@ describe("upsertarAlumnoEnSheets – alta nueva", () => {
     const [{ valueInputOption, requestBody }] = mockValuesAppend.mock.calls[0];
     expect(valueInputOption).toBe("RAW");
     expect(requestBody.values[0][0]).toBe("0123");
+  });
+});
+
+// Issue #92: un 403 de la API de Sheets (service account con rol Viewer en
+// vez de Editor) llegaba crudo al handler. Ahora, cualquier falla de la API
+// al buscar o escribir la fila sale como PlanillaNoDisponibleError, con el
+// error original del SDK como `cause` — el caller (DB) ya persistió, así que
+// esto es una falla operativa de la planilla, no un 400 de validación.
+describe("upsertarAlumnoEnSheets – error de la API de Sheets (PlanillaNoDisponibleError)", () => {
+  const SA_KEY = Buffer.from(
+    JSON.stringify({
+      client_email: "sa@proyecto.iam.gserviceaccount.com",
+      private_key: "FAKE_PRIVATE_KEY",
+    })
+  ).toString("base64");
+  const ENV_BACKUP = { ...process.env };
+
+  const valid = {
+    legajo: "12345",
+    apellido: "García",
+    nombre: "Juan",
+    githubUsername: "juangarcia",
+    email: "juan@gmail.com",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.GOOGLE_SERVICE_ACCOUNT_KEY = SA_KEY;
+  });
+
+  afterEach(() => {
+    process.env = { ...ENV_BACKUP };
+  });
+
+  it("si values.append rechaza con un error de permisos, rechaza con PlanillaNoDisponibleError", async () => {
+    const errorDelSdk = new Error("The caller does not have permission");
+    mockValuesGet.mockResolvedValueOnce({ data: { values: [] } });
+    mockValuesAppend.mockRejectedValueOnce(errorDelSdk);
+
+    expect.assertions(4);
+    try {
+      await upsertarAlumnoEnSheets(valid, "sheet-1");
+    } catch (error) {
+      expect(error).toBeInstanceOf(PlanillaNoDisponibleError);
+      const errorEnvuelto = error as PlanillaNoDisponibleError;
+      expect(errorEnvuelto.message).toContain("The caller does not have permission");
+      expect(errorEnvuelto.message).toContain("Editor");
+      expect(errorEnvuelto.cause).toBe(errorDelSdk);
+    }
+  });
+
+  it("si values.batchUpdate rechaza con un error de permisos (fila existente), rechaza con PlanillaNoDisponibleError", async () => {
+    const errorDelSdk = new Error("The caller does not have permission");
+    mockValuesGet.mockResolvedValueOnce({ data: { values: [["juangarcia"]] } });
+    mockValuesBatchUpdate.mockRejectedValueOnce(errorDelSdk);
+
+    expect.assertions(4);
+    try {
+      await upsertarAlumnoEnSheets(valid, "sheet-1");
+    } catch (error) {
+      expect(error).toBeInstanceOf(PlanillaNoDisponibleError);
+      const errorEnvuelto = error as PlanillaNoDisponibleError;
+      expect(errorEnvuelto.message).toContain("The caller does not have permission");
+      expect(errorEnvuelto.message).toContain("Editor");
+      expect(errorEnvuelto.cause).toBe(errorDelSdk);
+    }
+  });
+
+  it("si la lectura previa (values.get de findAlumnoRowIndex) rechaza con un error de permisos, rechaza con PlanillaNoDisponibleError", async () => {
+    const errorDelSdk = new Error("The caller does not have permission");
+    mockValuesGet.mockRejectedValueOnce(errorDelSdk);
+
+    expect.assertions(6);
+    try {
+      await upsertarAlumnoEnSheets(valid, "sheet-1");
+    } catch (error) {
+      expect(error).toBeInstanceOf(PlanillaNoDisponibleError);
+      const errorEnvuelto = error as PlanillaNoDisponibleError;
+      expect(errorEnvuelto.message).toContain("The caller does not have permission");
+      expect(errorEnvuelto.message).toContain("Editor");
+      expect(errorEnvuelto.cause).toBe(errorDelSdk);
+    }
+    expect(mockValuesAppend).not.toHaveBeenCalled();
+    expect(mockValuesBatchUpdate).not.toHaveBeenCalled();
   });
 });
 
