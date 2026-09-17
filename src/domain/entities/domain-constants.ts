@@ -1,7 +1,7 @@
 export const ALUMNO_LEGAJO_PATTERN = "\\d{4,8}";
 export const ALUMNO_EMAIL_PATTERN = "[^\\s@]+@[^\\s@]+\\.[^\\s@]+";
 // Tope de 39 caracteres (límite real de GitHub para un username) codificado
-// directo en el literal en vez de interpolado: la columna de `Administrador`
+// directo en el literal en vez de interpolado: la columna de `Docente`
 // es varchar(255) y sin este tope el alta reventaba en el flush de la DB en
 // vez de devolver un error de campo.
 export const GITHUB_USERNAME_PATTERN = "[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?";
@@ -14,7 +14,7 @@ const GITHUB_USERNAME_REGEX = new RegExp(`^${GITHUB_USERNAME_PATTERN}$`);
 
 // Usuario de GitHub: sólo el chequeo de formato (regex). No normaliza — para
 // eso está `normalizarGithubUsername` más abajo; se combinan en el caller
-// cuando hace falta (ej. `Alumno.validateRegistro`, `Administrador.validarAlta`).
+// cuando hace falta (ej. `Alumno.validateRegistro`, `Docente.validarAlta`).
 export function esGithubUsernameValido(githubUsername: string): boolean {
   return GITHUB_USERNAME_REGEX.test(githubUsername.trim());
 }

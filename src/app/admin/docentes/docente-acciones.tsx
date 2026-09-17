@@ -1,17 +1,36 @@
 "use client";
 
 import { useState } from "react";
-import { renombrarAdministradorAction, cambiarEstadoAdministradorAction } from "./actions";
+import type { DocenteFormState } from "./actions";
 import { INPUT_CLASS, FieldError, SubmitButton } from "../ui";
 import { PencilIcon, SpinnerIcon } from "@/components/icons";
 
-export function NombreEditable({ id, nombre }: { id: string; nombre: string | null }) {
+type RenombrarAction = (
+  prevState: DocenteFormState,
+  formData: FormData
+) => Promise<DocenteFormState>;
+
+type CambiarEstadoAction = (
+  id: string,
+  activo: boolean
+) => Promise<{ ok: true } | { ok: false; error: string }>;
+
+type NombreEditableProps = {
+  id: string;
+  nombre: string | null;
+  // Recibida por prop desde el server component (`page.tsx`): ver el
+  // comentario ahí sobre por qué este client component no importa la
+  // action directamente (issue #90).
+  action: RenombrarAction;
+};
+
+export function NombreEditable({ id, nombre, action }: NombreEditableProps) {
   const [editando, setEditando] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[] | undefined>>({});
   // Lo que el usuario tipeó en un intento rechazado — React resetea el
   // input no controlado al terminar el submit, así que se repone como
   // `defaultValue` en el próximo render (mismo patrón que
-  // `administrador-form.tsx`); se limpia en éxito y al cancelar.
+  // `docente-form.tsx`); se limpia en éxito y al cancelar.
   const [nombreEnviado, setNombreEnviado] = useState<string | null>(null);
 
   // Llamada directa a la server action (no `useActionState`): así el cierre
@@ -20,7 +39,7 @@ export function NombreEditable({ id, nombre }: { id: string; nombre: string | nu
   // un render en cascada. Sólo se cierra en éxito: si la validación falla,
   // se queda abierto mostrando el error en vez de perderlo.
   async function handleSubmit(formData: FormData) {
-    const resultado = await renombrarAdministradorAction(null, formData);
+    const resultado = await action(null, formData);
     if (resultado?.ok) {
       setEditando(false);
       setErrors({});
@@ -77,7 +96,15 @@ export function NombreEditable({ id, nombre }: { id: string; nombre: string | nu
   );
 }
 
-export function EstadoToggle({ id, activo }: { id: string; activo: boolean }) {
+type EstadoToggleProps = {
+  id: string;
+  activo: boolean;
+  // Recibida por prop desde el server component (`page.tsx`): mismo motivo
+  // que en `NombreEditable` (issue #90).
+  action: CambiarEstadoAction;
+};
+
+export function EstadoToggle({ id, activo, action }: EstadoToggleProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,7 +124,7 @@ export function EstadoToggle({ id, activo }: { id: string; activo: boolean }) {
     setLoading(true);
     setError(null);
     try {
-      const resultado = await cambiarEstadoAdministradorAction(id, !activo);
+      const resultado = await action(id, !activo);
       if (!resultado.ok) setError(resultado.error);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Error desconocido");

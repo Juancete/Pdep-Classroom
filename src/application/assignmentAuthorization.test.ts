@@ -71,7 +71,7 @@ describe("autorizarAccesoAssignment", () => {
     ).toThrow(AccesoAssignmentProhibidoError);
   });
 
-  it("permite acceso global a administradores", () => {
+  it("permite acceso global a docentes", () => {
     expect(() =>
       autorizarAccesoAssignment(
         { rol: DOCENTE },
@@ -123,7 +123,7 @@ describe("autorizarAccionSobreAssignment", () => {
     ).toThrow(AccesoAssignmentProhibidoError);
   });
 
-  it("permite a los administradores actuar sobre un assignment en cualquier estado", () => {
+  it("permite a los docentes actuar sobre un assignment en cualquier estado", () => {
     const borrador = new IndividualAssignment();
     borrador.id = "a1";
     expect(() =>

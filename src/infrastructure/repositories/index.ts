@@ -138,15 +138,15 @@ export {
 } from "./CambioDeMembresiaRepository";
 
 export {
-  getAdministradores,
-  hayAdministradorActivo,
-  crearAdministrador,
-  renombrarAdministrador,
-  cambiarEstadoAdministrador,
-  AdministradorDuplicadoError,
-  AdministradorNoEncontradoError,
-  AdministradorProtegidoError,
-} from "./AdministradorRepository";
+  getDocentes,
+  hayDocenteActivo,
+  crearDocente,
+  renombrarDocente,
+  cambiarEstadoDocente,
+  DocenteDuplicadoError,
+  DocenteNoEncontradoError,
+  DocenteProtegidoError,
+} from "./DocenteRepository";
 
 export {
   registrarDelivery,

@@ -43,10 +43,16 @@ modifica la base de datos.
 8. Release que agrega la tabla `administrador` (issue #83): la migración no copia
    `ADMIN_GITHUB_USERNAMES` a la tabla, así que arranca vacía — nadie pierde ni gana acceso por sí
    sola. Verificar que un responsable ve **Docentes** en el menú y puede dar de alta un
-   docente de prueba desde `/admin/administradores`. Al terminar, desactivar ese docente y,
+   docente de prueba desde `/admin/docentes`. Al terminar, desactivar ese docente y,
    con su sesión todavía abierta, confirmar que una nueva solicitud a `/admin/assignments` y
    a una API administrativa ya no permite acceso administrativo. La baja no elimina su cuenta
    ni revoca los accesos que pudiera tener como alumno.
+9. Release que renombra la tabla `administrador` a `docente` (issue #90): correr la migración
+   (`release:migrate`) **antes** de desplegar el código, porque la entidad nueva (`Docente`)
+   apunta a la tabla `docente` — si el código nuevo arranca contra la tabla vieja, cualquier
+   consulta a docentes revienta. Después del deploy, verificar que los docentes ya cargados
+   siguen apareciendo en `/admin/docentes` (alta, edición de nombre y cambio de estado
+   siguen funcionando sobre las filas migradas).
 
 ## Operación habitual
 

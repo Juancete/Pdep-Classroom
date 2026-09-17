@@ -105,7 +105,7 @@ describe("authConfig", () => {
       return (authConfig.callbacks!.session as any)(args);
     }
 
-    // A partir de #83 esta callback NO resuelve el rol: un administrador
+    // A partir de #83 esta callback NO resuelve el rol: un docente
     // dado de alta en la app puede desactivarse entre una request y la
     // siguiente, y resolverlo acá (una sola vez, al loguearse) lo dejaría
     // obsoleto en el JWT. El rol se recalcula por request en

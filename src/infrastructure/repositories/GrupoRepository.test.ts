@@ -370,7 +370,7 @@ describe("crearGrupo", () => {
     expect(mockTx.persist).not.toHaveBeenCalled();
   });
 
-  it("permite crear entre comisiones cuando el contexto es administrador", async () => {
+  it("permite crear entre comisiones cuando el contexto es docente", async () => {
     const assignment = fakeGrupal();
     const ana = fakeAlumno("alumno-ana", "ana");
     ana.comision = fakeComision("c2");
@@ -625,7 +625,7 @@ describe("unirseAGrupo", () => {
     expect(mockTx.flush).not.toHaveBeenCalled();
   });
 
-  it("permite unirse entre comisiones cuando el contexto es administrador", async () => {
+  it("permite unirse entre comisiones cuando el contexto es docente", async () => {
     const assignment = fakeGrupal();
     const ana = fakeAlumno("alumno-ana", "ana");
     ana.comision = fakeComision("c2");

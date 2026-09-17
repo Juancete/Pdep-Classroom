@@ -17,6 +17,9 @@ import {
 } from "@/domain/entities";
 import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 import { PermisosNoVerificablesError } from "@/infrastructure/auth/PermisosNoVerificablesError";
+// Import directo (no desde `sheets.ts`) para no arrastrar `googleapis` a
+// cada route handler que sólo necesita mapear el error a una respuesta HTTP.
+import { PlanillaNoDisponibleError } from "@/infrastructure/PlanillaNoDisponibleError";
 
 /**
  * Parsea el body de un request JSON y verifica que sea un objeto plano.
@@ -46,6 +49,10 @@ type RespuestaDeError = {
   // Si se omite, se usa `error.message` — la mayoría de los errores de
   // dominio ya tienen un mensaje amigable pensado para mostrarse tal cual.
   mensaje?: string;
+  // El error también se persiste en `error_log` para el admin, además de
+  // responder con el mensaje amigable. Sólo tiene efecto si el caller de
+  // `respuestaDeErrorDeDominio` pasa el segundo parámetro `registro`.
+  registrar?: true;
 };
 
 type ConstructorDeError = new (...args: never[]) => Error;
@@ -79,6 +86,15 @@ function getRespuestasPorError(): Map<ConstructorDeError, RespuestaDeError> {
       [GrupoConEntregaError, { status: 409 }],
       [AlumnoNoEsMiembroDelGrupoError, { status: 409 }],
       [PermisosNoVerificablesError, { status: 503 }],
+      [
+        PlanillaNoDisponibleError,
+        {
+          status: 503,
+          registrar: true,
+          mensaje:
+            "Tus datos quedaron guardados, pero no pudimos actualizar la planilla de la cátedra. Reintentá en unos minutos y, si persiste, avisale a un docente.",
+        },
+      ],
     ]);
   }
   return respuestasPorError;
@@ -92,31 +108,41 @@ function getRespuestasPorError(): Map<ConstructorDeError, RespuestaDeError> {
  *   } catch (error) {
  *     return respuestaDeErrorDeDominio(error) ?? internalServerError(route, error, {...});
  *   }
+ *
+ * El segundo parámetro `registro` es opcional: sólo se usa cuando la entrada
+ * de la tabla tiene `registrar: true` (errores de dominio que igual conviene
+ * que el admin vea en `/admin/errores`, ej. `PlanillaNoDisponibleError`). Sin
+ * `registro`, ese error no se persiste — mantiene el comportamiento actual
+ * para todos los callers que no lo pasan.
  */
-export function respuestaDeErrorDeDominio(error: unknown): NextResponse | null {
+export function respuestaDeErrorDeDominio(
+  error: unknown,
+  registro?: { route: string; context?: Record<string, unknown> }
+): NextResponse | null {
   if (!(error instanceof Error)) return null;
   const respuesta = getRespuestasPorError().get(
     error.constructor as ConstructorDeError
   );
   if (!respuesta) return null;
+  if (respuesta.registrar && registro) {
+    registrarErrorDeHandler(registro.route, error, registro.context);
+  }
   return NextResponse.json(
     { error: respuesta.mensaje ?? error.message },
     { status: respuesta.status }
   );
 }
 
-// Loggea el error completo server-side y devuelve siempre un 500 con mensaje
-// genérico — evita filtrar detalles internos (stack traces, esquemas de DB,
-// mensajes de librerías de terceros) al cliente.
-//
-// El `context` es opcional: sirve para adjuntar IDs útiles para debugging
-// (githubUsername, assignmentId, etc.). El error original queda sólo en
-// Pino; una versión sanitizada y sin stack se persiste para la pantalla admin.
-export function internalServerError(
+// Loggea el error completo server-side (Pino) y programa su persistencia
+// sanitizada en `error_log` para la pantalla admin. Compartido por
+// `internalServerError` (500 genérico) y `respuestaDeErrorDeDominio` (errores
+// de dominio con `registrar: true`, que responden con su propio status y
+// mensaje amigable pero igual conviene que el admin vea).
+function registrarErrorDeHandler(
   route: string,
   error: unknown,
   context?: Record<string, unknown>
-): NextResponse {
+): void {
   logger.error({ ...context, err: error, route }, "handler error");
   try {
     const errorLog = prepararErrorLog(route, error, context);
@@ -141,6 +167,21 @@ export function internalServerError(
       "no se pudo programar la persistencia del error del handler"
     );
   }
+}
+
+// Devuelve siempre un 500 con mensaje genérico — evita filtrar detalles
+// internos (stack traces, esquemas de DB, mensajes de librerías de terceros)
+// al cliente.
+//
+// El `context` es opcional: sirve para adjuntar IDs útiles para debugging
+// (githubUsername, assignmentId, etc.). El error original queda sólo en
+// Pino; una versión sanitizada y sin stack se persiste para la pantalla admin.
+export function internalServerError(
+  route: string,
+  error: unknown,
+  context?: Record<string, unknown>
+): NextResponse {
+  registrarErrorDeHandler(route, error, context);
   return NextResponse.json(
     { error: "Error interno del servidor" },
     { status: 500 }

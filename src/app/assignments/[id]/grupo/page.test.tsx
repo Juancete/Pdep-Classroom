@@ -150,7 +150,7 @@ describe("GrupoPage", () => {
     expect(mockGetGruposDeAssignment).not.toHaveBeenCalled();
   });
 
-  it("permite acceso global al administrador", async () => {
+  it("permite acceso global al docente", async () => {
     mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
 
     const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });

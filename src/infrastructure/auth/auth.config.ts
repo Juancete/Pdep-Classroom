@@ -49,12 +49,12 @@ export const authConfig: NextAuthConfig = {
 
     async session({ session, token }) {
       const ghUser = (token.githubUsername as string) ?? "";
-      // A partir de #83 la sesión NO guarda el rol: un administrador dado de
+      // A partir de #83 la sesión NO guarda el rol: un docente dado de
       // alta en la app puede desactivarse entre una request y la siguiente,
       // y resolver el rol acá (una sola vez, al loguearse) lo dejaría
       // obsoleto hasta que el JWT expire. `getCurrentUser()` lo recalcula en
       // cada request contra `ADMIN_GITHUB_USERNAMES` + la tabla
-      // `Administrador` — ver `src/infrastructure/auth/session.ts`.
+      // `Docente` — ver `src/infrastructure/auth/session.ts`.
       const pdepUser: SessionPdepUser = {
         githubUsername: ghUser,
         name: session.user?.name ?? ghUser,

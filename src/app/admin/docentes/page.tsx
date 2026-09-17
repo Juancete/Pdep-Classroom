@@ -1,8 +1,13 @@
 import { requireResponsable } from "@/infrastructure/auth/session";
-import { getAdministradores } from "@/infrastructure/repositories";
+import { getDocentes } from "@/infrastructure/repositories";
 import { responsablesDeEntorno } from "@/lib/responsables-de-entorno";
-import { AdministradorForm } from "./administrador-form";
-import { NombreEditable, EstadoToggle } from "./administrador-acciones";
+import { DocenteForm } from "./docente-form";
+import { NombreEditable, EstadoToggle } from "./docente-acciones";
+import {
+  crearDocenteAction,
+  renombrarDocenteAction,
+  cambiarEstadoDocenteAction,
+} from "./actions";
 import {
   DataTable,
   DataHeader,
@@ -29,20 +34,20 @@ function EstadoBadge({ activo }: { activo: boolean }) {
   );
 }
 
-export default async function AdminAdministradoresPage() {
+export default async function AdminDocentesPage() {
   await requireResponsable();
-  const administradores = await getAdministradores();
+  const docentes = await getDocentes();
   const entorno = responsablesDeEntorno();
-  // Un administrador de base puede agregarse después a
+  // Un docente de base puede agregarse después a
   // `ADMIN_GITHUB_USERNAMES`: sin este filtro aparecería dos veces (fila
   // "Entorno" protegida + fila "Aplicación" editable). La política de fondo
   // (bloquear la mutación) vive en el repositorio; acá sólo se evita el
   // duplicado visual.
   const usernamesDeEntorno = new Set(entorno);
-  const administradoresDeAplicacion = administradores.filter(
-    (administrador) => !usernamesDeEntorno.has(administrador.githubUsername)
+  const docentesDeAplicacion = docentes.filter(
+    (docente) => !usernamesDeEntorno.has(docente.githubUsername)
   );
-  const hayFilas = administradoresDeAplicacion.length > 0 || entorno.length > 0;
+  const hayFilas = docentesDeAplicacion.length > 0 || entorno.length > 0;
 
   return (
     <div>
@@ -55,7 +60,17 @@ export default async function AdminAdministradoresPage() {
         </p>
       </div>
 
-      <AdministradorForm />
+      {/* Las tres actions se importan acá (server component) y se pasan por
+          props, igual que `ComisionForm` en comisiones — no las importa
+          directamente ningún client component. Si `docente-form.tsx`
+          o `docente-acciones.tsx` volvieran a importar valores de
+          `./actions`, Next compilaría ese módulo `"use server"` en la layer
+          `action-browser` (porque sólo lo importaría un client component) en
+          vez de `rsc`, con lo que `src/infrastructure/db.ts` y las entidades
+          se duplican en el bundle y el ORM cacheado en `globalThis` queda
+          con los prototipos de una copia mientras la otra hace `persist()`
+          → "not discovered entity" (issue #90). */}
+      <DocenteForm action={crearDocenteAction} />
 
       {!hayFilas ? (
         <DataEmpty>No hay nadie configurado todavía.</DataEmpty>
@@ -94,16 +109,20 @@ export default async function AdminAdministradoresPage() {
             </DataRow>
           ))}
 
-          {administradoresDeAplicacion.map((administrador) => (
-            <DataRow key={administrador.id}>
+          {docentesDeAplicacion.map((docente) => (
+            <DataRow key={docente.id}>
               <DataCell label="Usuario" heading>
-                @{administrador.githubUsername}
+                @{docente.githubUsername}
               </DataCell>
               <DataCell label="Nombre">
-                <NombreEditable id={administrador.id} nombre={administrador.nombre} />
+                <NombreEditable
+                  id={docente.id}
+                  nombre={docente.nombre}
+                  action={renombrarDocenteAction}
+                />
               </DataCell>
               <DataCell label="Estado">
-                <EstadoBadge activo={administrador.activo} />
+                <EstadoBadge activo={docente.activo} />
               </DataCell>
               <DataCell label="Origen">
                 <span className="text-xs font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
@@ -111,7 +130,11 @@ export default async function AdminAdministradoresPage() {
                 </span>
               </DataCell>
               <DataCell label="Acciones">
-                <EstadoToggle id={administrador.id} activo={administrador.activo} />
+                <EstadoToggle
+                  id={docente.id}
+                  activo={docente.activo}
+                  action={cambiarEstadoDocenteAction}
+                />
               </DataCell>
             </DataRow>
           ))}

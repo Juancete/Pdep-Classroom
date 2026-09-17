@@ -1,28 +1,28 @@
 "use server";
 
 import { requireResponsable } from "@/infrastructure/auth/session";
-import { Administrador, AdministradorInvalidoError } from "@/domain/entities";
+import { Docente, DocenteInvalidoError } from "@/domain/entities";
 import {
-  crearAdministrador,
-  renombrarAdministrador,
-  cambiarEstadoAdministrador,
-  AdministradorDuplicadoError,
-  AdministradorProtegidoError,
-  AdministradorNoEncontradoError,
+  crearDocente,
+  renombrarDocente,
+  cambiarEstadoDocente,
+  DocenteDuplicadoError,
+  DocenteProtegidoError,
+  DocenteNoEncontradoError,
 } from "@/infrastructure/repositories";
 import { logger } from "@/lib/logger";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-const ADMINISTRADORES_PATH = "/admin/administradores";
+const DOCENTES_PATH = "/admin/docentes";
 
-export type AdministradorFormState =
+export type DocenteFormState =
   | { ok: false; errors: Record<string, string[] | undefined>; valores?: Record<string, string> }
   | { ok: true }
   | null;
 
 // Sin `.max()` acá: la longitud es una regla de dominio, no de forma — vive
-// en `Administrador.validarNombre`/`validarAlta` (ver el pre-chequeo en cada
+// en `Docente.validarNombre`/`validarAlta` (ver el pre-chequeo en cada
 // action más abajo). Zod sólo garantiza que el campo sea el tipo esperado.
 const AltaSchema = z.object({
   githubUsername: z.string(),
@@ -47,10 +47,10 @@ const CambiarEstadoSchema = z.object({
 // comparten es que no son bugs — un error fuera de esta lista sí lo es y se
 // propaga.
 const ERRORES_CONOCIDOS_DEL_ABM = [
-  AdministradorDuplicadoError,
-  AdministradorProtegidoError,
-  AdministradorInvalidoError,
-  AdministradorNoEncontradoError,
+  DocenteDuplicadoError,
+  DocenteProtegidoError,
+  DocenteInvalidoError,
+  DocenteNoEncontradoError,
 ];
 
 function esErrorConocidoDelAbm(error: unknown): error is Error {
@@ -60,7 +60,7 @@ function esErrorConocidoDelAbm(error: unknown): error is Error {
 // Lo que el usuario tipeó en el alta, tal cual llegó en el FormData — se
 // devuelve junto con los errores para que el form lo reponga como
 // `defaultValue` tras un reset automático de React 19 (ver
-// `administrador-form.tsx`).
+// `docente-form.tsx`).
 function valoresDelAlta(formData: FormData): Record<string, string> {
   return {
     githubUsername: (formData.get("githubUsername") as string) ?? "",
@@ -69,17 +69,17 @@ function valoresDelAlta(formData: FormData): Record<string, string> {
 }
 
 // Mismo idioma que `valoresDelAlta`, para el form de renombrado (ver
-// `NombreEditable` en `administrador-acciones.tsx`).
+// `NombreEditable` en `docente-acciones.tsx`).
 function valoresDelRenombrado(formData: FormData): Record<string, string> {
   return {
     nombre: (formData.get("nombre") as string) ?? "",
   };
 }
 
-export async function crearAdministradorAction(
-  _prevState: AdministradorFormState,
+export async function crearDocenteAction(
+  _prevState: DocenteFormState,
   formData: FormData
-): Promise<AdministradorFormState> {
+): Promise<DocenteFormState> {
   const responsable = await requireResponsable();
 
   const parsed = AltaSchema.safeParse({
@@ -97,8 +97,8 @@ export async function crearAdministradorAction(
   // en el campo que corresponde: `validarAlta` con `nombre` omitido sólo
   // puede fallar por el username, así que cualquier error acá es de
   // `githubUsername`. El nombre se valida aparte, mismo idioma que el
-  // pre-chequeo de `renombrarAdministradorAction`.
-  const errorDeUsername = Administrador.validarAlta({ githubUsername });
+  // pre-chequeo de `renombrarDocenteAction`.
+  const errorDeUsername = Docente.validarAlta({ githubUsername });
   if (errorDeUsername) {
     return {
       ok: false,
@@ -107,7 +107,7 @@ export async function crearAdministradorAction(
     };
   }
 
-  const errorDeNombre = Administrador.validarNombre(nombre);
+  const errorDeNombre = Docente.validarNombre(nombre);
   if (errorDeNombre) {
     return {
       ok: false,
@@ -117,7 +117,7 @@ export async function crearAdministradorAction(
   }
 
   try {
-    await crearAdministrador({ githubUsername, nombre, porUsuario: responsable.githubUsername });
+    await crearDocente({ githubUsername, nombre, porUsuario: responsable.githubUsername });
   } catch (error) {
     if (esErrorConocidoDelAbm(error)) {
       return {
@@ -129,14 +129,14 @@ export async function crearAdministradorAction(
     throw error;
   }
 
-  revalidatePath(ADMINISTRADORES_PATH);
+  revalidatePath(DOCENTES_PATH);
   return { ok: true };
 }
 
-export async function renombrarAdministradorAction(
-  _prevState: AdministradorFormState,
+export async function renombrarDocenteAction(
+  _prevState: DocenteFormState,
   formData: FormData
-): Promise<AdministradorFormState> {
+): Promise<DocenteFormState> {
   const responsable = await requireResponsable();
 
   const parsed = RenombrarSchema.safeParse({
@@ -152,9 +152,9 @@ export async function renombrarAdministradorAction(
   }
 
   // Mismo pre-chequeo que el alta, antes de tocar el repositorio: la regla
-  // de longitud vive en el dominio (`Administrador.validarNombre`), acá sólo
+  // de longitud vive en el dominio (`Docente.validarNombre`), acá sólo
   // se llama.
-  const errorDeFormato = Administrador.validarNombre(parsed.data.nombre);
+  const errorDeFormato = Docente.validarNombre(parsed.data.nombre);
   if (errorDeFormato) {
     return {
       ok: false,
@@ -164,7 +164,7 @@ export async function renombrarAdministradorAction(
   }
 
   try {
-    await renombrarAdministrador(parsed.data.id, parsed.data.nombre, responsable.githubUsername);
+    await renombrarDocente(parsed.data.id, parsed.data.nombre, responsable.githubUsername);
   } catch (error) {
     if (esErrorConocidoDelAbm(error)) {
       return {
@@ -176,7 +176,7 @@ export async function renombrarAdministradorAction(
     throw error;
   }
 
-  revalidatePath(ADMINISTRADORES_PATH);
+  revalidatePath(DOCENTES_PATH);
   return { ok: true };
 }
 
@@ -187,7 +187,7 @@ export async function renombrarAdministradorAction(
 // Es una server action invocable con argumentos arbitrarios desde el
 // cliente: no hay que confiar en los tipos TS (ej. un `"false"` llegaría acá
 // como truthy) — se valida con Zod antes de tocar el repositorio.
-export async function cambiarEstadoAdministradorAction(
+export async function cambiarEstadoDocenteAction(
   id: string,
   activo: boolean
 ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -199,7 +199,7 @@ export async function cambiarEstadoAdministradorAction(
   }
 
   try {
-    await cambiarEstadoAdministrador(parsed.data.id, parsed.data.activo, responsable.githubUsername);
+    await cambiarEstadoDocente(parsed.data.id, parsed.data.activo, responsable.githubUsername);
   } catch (error) {
     // A diferencia de las otras dos actions, acá no hay `throw` para un
     // error desconocido: esto se invoca directo desde el cliente (no hay un
@@ -210,9 +210,9 @@ export async function cambiarEstadoAdministradorAction(
     if (esErrorConocidoDelAbm(error)) {
       return { ok: false, error: error.message };
     }
-    logger.error({ err: error, administradorId: parsed.data.id }, "Error al cambiar el estado del docente");
+    logger.error({ err: error, docenteId: parsed.data.id }, "Error al cambiar el estado del docente");
     return { ok: false, error: "No se pudo cambiar el estado del docente. Reintentá en unos segundos." };
   }
-  revalidatePath(ADMINISTRADORES_PATH);
+  revalidatePath(DOCENTES_PATH);
   return { ok: true };
 }

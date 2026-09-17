@@ -202,7 +202,7 @@ Pegar el resultado en `GOOGLE_SERVICE_ACCOUNT_KEY` en el `.env.local`.
 1. Abrir la planilla de Google Sheets con los alumnos
 2. Botón **Compartir** (arriba a la derecha)
 3. En el campo de email, pegar el email de la service account — tiene la forma `pdep-classroom@<project-id>.iam.gserviceaccount.com` (se ve en la pantalla de Credentials o en el JSON descargado, campo `client_email`)
-4. Rol: **Viewer** (si solo se va a leer) o **Editor** (si la app también escribe el registro de alumnos)
+4. Rol: **Editor**. El registro de alumnos (`POST /api/registro`) y la actualización de perfil (`PATCH /api/perfil`) siempre escriben en la planilla, no sólo leen — con rol Viewer la lectura funciona (la precarga de datos anda bien) pero la escritura falla con un 403 de la API de Sheets ("The caller does not have permission"), visible como error persistido en `/admin/errores`
 5. Desmarcar "Notify people" → **Share**
 
 #### 4.7 Configurar el ID de la planilla
@@ -394,12 +394,12 @@ ADMIN_GITHUB_USERNAMES=juancontardo,fdodino,nsicolo,dsquivel
 ```
 
 Un responsable tiene los mismos permisos que cualquier docente, más uno extra: es el único que
-puede gestionar docentes desde `/admin/administradores`. Esta lista no se copia a la base de
+puede gestionar docentes desde `/admin/docentes`. Esta lista no se copia a la base de
 datos — sigue siendo la única fuente de responsables, y darla de baja implica editar la variable
 de entorno y redesplegar, igual que hoy.
 
 Para sumar **docentes** sin tocar variables de entorno ni desplegar, un responsable los da de alta
-desde `/admin/administradores`: sólo pide el usuario de GitHub y, opcionalmente, un nombre de
+desde `/admin/docentes`: sólo pide el usuario de GitHub y, opcionalmente, un nombre de
 referencia. El docente entra con esa cuenta de GitHub sin necesitar registrarse como alumno.
 Desactivarlo le revoca los permisos desde la siguiente solicitud, incluso con una sesión ya
 abierta; reactivarlo se los devuelve sin que tenga que volver a loguearse. El login de desarrollo
@@ -472,7 +472,7 @@ vercel env add GITHUB_CLIENT_SECRET
 vercel env add NEXTAUTH_SECRET               # npx auth secret
 
 # Admins — sin esto, nadie entra como responsable (y por lo tanto nadie puede
-# dar de alta administradores desde /admin/administradores)
+# dar de alta docentes desde /admin/docentes)
 vercel env add ADMIN_GITHUB_USERNAMES        # usernames separados por coma
 ```
 

@@ -133,7 +133,7 @@ describe("GET /api/assignments/[id]/grupos", () => {
     expect(mockGetGruposDeAssignment).not.toHaveBeenCalled();
   });
 
-  it("permite acceso global al administrador", async () => {
+  it("permite acceso global al docente", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
 
     const response = await GET(makeRequest(undefined, "GET"), { params: Promise.resolve({ id: "a1" }) });

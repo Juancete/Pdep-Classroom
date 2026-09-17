@@ -14,6 +14,7 @@ import {
   PARADIGMAS,
 } from "@/types";
 import { colLetter, rangoDeHoja } from "@/lib/sheets-columns";
+import { PlanillaNoDisponibleError } from "@/infrastructure/PlanillaNoDisponibleError";
 
 export { isValidEmail, validateRegistro, colLetter };
 export type { RegistroInput };
@@ -238,6 +239,12 @@ function celdasDeDatosPersonales(
 // LegajoConflictError). Este upsert solo refleja en Sheets lo que ya
 // validó y persistió la DB; el caller debe invocarlo después del upsert
 // en DB para evitar escribir Sheets si hay conflicto.
+//
+// Un error de la API de Sheets al buscar la fila o escribirla (típicamente
+// un 403 porque la service account no tiene rol Editor sobre la planilla,
+// issue #92) sale como `PlanillaNoDisponibleError`, no crudo del SDK: el
+// caller ya validó y persistió en DB, así que esto es una falla operativa
+// de la planilla, no un dato inválido del alumno.
 export async function upsertarAlumnoEnSheets(
   input: RegistroInput,
   spreadsheetId?: string,
@@ -251,34 +258,38 @@ export async function upsertarAlumnoEnSheets(
   const githubNormalizado = Alumno.normalizarUsername(input.githubUsername);
   const celdas = celdasDeDatosPersonales(input, githubNormalizado, columnConfig);
 
-  const rowNumber = await findAlumnoRowIndex(githubNormalizado, id, columnConfig);
-  const sheets = getSheetsClient(false);
+  try {
+    const rowNumber = await findAlumnoRowIndex(githubNormalizado, id, columnConfig);
+    const sheets = getSheetsClient(false);
 
-  if (rowNumber === null) {
-    const maxCol = Math.max(...celdas.map((celda) => celda.columna));
-    const row = new Array(maxCol + 1).fill("");
-    for (const celda of celdas) row[celda.columna] = celda.valor;
+    if (rowNumber === null) {
+      const maxCol = Math.max(...celdas.map((celda) => celda.columna));
+      const row = new Array(maxCol + 1).fill("");
+      for (const celda of celdas) row[celda.columna] = celda.valor;
 
-    await sheets.spreadsheets.values.append({
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: id,
+        range: rangoDeHoja(columnConfig.sheetName, `A:${colLetter(maxCol)}`),
+        valueInputOption: "RAW",
+        requestBody: { values: [row] },
+      });
+      return { ok: true };
+    }
+
+    await sheets.spreadsheets.values.batchUpdate({
       spreadsheetId: id,
-      range: rangoDeHoja(columnConfig.sheetName, `A:${colLetter(maxCol)}`),
-      valueInputOption: "RAW",
-      requestBody: { values: [row] },
+      requestBody: {
+        valueInputOption: "RAW",
+        data: celdas.map((celda) => ({
+          range: rangoDeHoja(columnConfig.sheetName, `${colLetter(celda.columna)}${rowNumber}`),
+          values: [[celda.valor]],
+        })),
+      },
     });
     return { ok: true };
+  } catch (error) {
+    throw new PlanillaNoDisponibleError(error);
   }
-
-  await sheets.spreadsheets.values.batchUpdate({
-    spreadsheetId: id,
-    requestBody: {
-      valueInputOption: "RAW",
-      data: celdas.map((celda) => ({
-        range: rangoDeHoja(columnConfig.sheetName, `${colLetter(celda.columna)}${rowNumber}`),
-        values: [[celda.valor]],
-      })),
-    },
-  });
-  return { ok: true };
 }
 
 // ── Hoja de grupos ──────────────────────────────────────────
