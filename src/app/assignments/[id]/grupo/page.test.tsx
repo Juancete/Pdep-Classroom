@@ -250,17 +250,17 @@ describe("GrupoPage", () => {
     expect(html).toContain('data-motivo=""');
   });
 
-  it("bloquea al alumno con el mensaje del error de dominio cuando el grupo ya entregó", async () => {
+  it("bloquea al alumno con el mensaje del error de dominio cuando el grupo ya aceptó el TP", async () => {
     mockGetGruposDeAssignment.mockResolvedValue([
       makeGrupo("g1", ["ana"], 3, "Los Lambdas"),
     ]);
     mockGetEntregaLogica.mockResolvedValue({ id: "e1", repoUrl: "https://github.com/x" });
     const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element);
-    expect(html).toContain("El grupo ya entregó");
+    expect(html).toContain("El grupo ya aceptó el TP");
   });
 
-  it("nunca bloquea al docente aunque el grupo ya entregó", async () => {
+  it("nunca bloquea al docente aunque el grupo ya aceptó el TP", async () => {
     mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
     mockGetGruposDeAssignment.mockResolvedValue([
       makeGrupo("g1", ["ana"], 3, "Los Lambdas"),

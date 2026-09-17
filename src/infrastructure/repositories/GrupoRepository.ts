@@ -284,7 +284,7 @@ export async function unirseAGrupo(params: {
         // Mismo criterio que `crearGrupo`: delega en el rol en vez de
         // chequear `aceptaNuevasInscripciones()` directo (B3). `grupoTieneEntrega`
         // en `false` porque acá se está sumando un integrante, no removiendo
-        // uno de un grupo que ya entregó — ese caso es el de `salirDeGrupo`/
+        // uno de un grupo que ya aceptó el TP — ese caso es el de `salirDeGrupo`/
         // `moverAlumnoDeGrupo`.
         rol.autorizarCambioDeMembresia({
           assignment,
@@ -347,7 +347,7 @@ async function lockearMembresia(
   ]);
 }
 
-// Saca al alumno de su grupo. Atómico: el chequeo de si el grupo ya entregó
+// Saca al alumno de su grupo. Atómico: el chequeo de si el grupo ya aceptó el TP
 // se hace DESPUÉS de tomar el lock del grupo, para cerrar la carrera contra
 // `crearEntregaSiAssignmentDisponible` (que bloquea el `assignment`, no el
 // `grupo`): si la salida llega primero, el insert de la entrega queda

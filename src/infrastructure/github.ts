@@ -409,3 +409,105 @@ export async function esColaborador(repoName: string, username: string): Promise
     handleOctokitError(error);
   }
 }
+
+// ── Diagnóstico de la GitHub App (issue #98) ────────────────
+// La App de producción puede tener permisos, eventos suscriptos o webhook
+// incompletos sin que ningún deploy lo detecte — el síntoma aparece recién
+// cuando alguien aprieta "Actualizar CI" y GitHub responde 403. Esta consulta
+// alimenta el check de `/admin/operaciones` que lista qué le falta a la App
+// contra lo que Classroom necesita (ver `evaluarConfiguracionDeApp`).
+//
+// "GET /app" devuelve lo *configurado en la App* — no necesariamente lo que
+// el token de instalación (el que usa `getEstadoCI`) puede hacer hoy: cuando
+// se agregan permisos a la App, la instalación en la org los conserva
+// viejos hasta que alguien los aprueba explícitamente. Por eso los permisos
+// y eventos efectivos salen de "GET /app/installations/{installation_id}"
+// (la instalación), y se marca `aprobacionPendiente` cuando la App pide algo
+// que la instalación todavía no tiene.
+
+export type ConfiguracionDeApp = {
+  permisos: Record<string, string>; // los de la instalación (lo que el token realmente tiene)
+  eventos: string[]; // ídem
+  webhook: { url: string } | null;
+  aprobacionPendiente: boolean; // la App configura algo que la instalación todavía no aprobó
+};
+
+// Sin ifs por tipo: recorre los permisos y eventos declarados por la App y
+// verifica que la instalación los tenga con el mismo valor.
+function hayCambiosSinAprobar(
+  app: { permissions: Record<string, string>; events: string[] },
+  instalacion: { permissions: Record<string, string>; events: string[] }
+): boolean {
+  const permisoSinAprobar = Object.entries(app.permissions).some(
+    ([nombrePermiso, valorPermiso]) => instalacion.permissions[nombrePermiso] !== valorPermiso
+  );
+  const eventoSinAprobar = app.events.some((evento) => !instalacion.events.includes(evento));
+  return permisoSinAprobar || eventoSinAprobar;
+}
+
+export async function getConfiguracionDeApp(): Promise<ConfiguracionDeApp> {
+  // `getOctokit()` cae a un PAT clásico si falta cualquiera de estas tres env
+  // vars (ver más arriba) — un PAT no tiene identidad de App para autenticar
+  // como tal, así que ni vale la pena llamar a `octokit.auth`.
+  if (
+    !process.env.GITHUB_APP_ID ||
+    !process.env.GITHUB_APP_PRIVATE_KEY ||
+    !process.env.GITHUB_APP_INSTALLATION_ID
+  ) {
+    throw new Error(
+      "La consulta de configuración requiere autenticación como GitHub App (GITHUB_APP_ID/PRIVATE_KEY)"
+    );
+  }
+
+  const octokit = getOctokit();
+
+  try {
+    const auth = (await octokit.auth({ type: "app" })) as { token: string };
+    const headers = { authorization: `bearer ${auth.token}` };
+
+    // Los tipos generados de Octokit para "GET /app" no alcanzan acá: tipan
+    // `permissions` con claves fijas (en vez de `Record<string, string>` —
+    // cualquier permiso nuevo de GitHub rompería el chequeo) y filtran
+    // `data` como potencialmente `null` aunque un 200 siempre trae body. Se
+    // castea al shape mínimo que efectivamente se consume.
+    const { data: app } = (await octokit.request("GET /app", { headers })) as {
+      data: { permissions?: Record<string, string>; events?: string[] };
+    };
+    const permisosDeLaApp = app.permissions ?? {};
+    const eventosDeLaApp = app.events ?? [];
+
+    // Mismo motivo de cast que "GET /app": los tipos generados no alcanzan
+    // para el shape mínimo que se consume acá.
+    const { data: instalacion } = (await octokit.request(
+      "GET /app/installations/{installation_id}",
+      { installation_id: Number(process.env.GITHUB_APP_INSTALLATION_ID), headers }
+    )) as {
+      data: { permissions?: Record<string, string>; events?: string[] };
+    };
+    const permisos = instalacion.permissions ?? {};
+    const eventos = instalacion.events ?? [];
+
+    const aprobacionPendiente = hayCambiosSinAprobar(
+      { permissions: permisosDeLaApp, events: eventosDeLaApp },
+      { permissions: permisos, events: eventos }
+    );
+
+    let webhook: { url: string } | null;
+    try {
+      // "GET /app/hook/config" sólo expone url/content_type/secret/insecure_ssl
+      // — no hay un flag de "activo": el webhook existe (200) o no (404).
+      const { data: hookConfig } = await octokit.request("GET /app/hook/config", { headers });
+      webhook = { url: hookConfig.url ?? "" };
+    } catch (error) {
+      if (isRequestError(error) && error.status === 404) {
+        webhook = null;
+      } else {
+        throw error;
+      }
+    }
+
+    return { permisos, eventos, webhook, aprobacionPendiente };
+  } catch (error) {
+    handleOctokitError(error);
+  }
+}

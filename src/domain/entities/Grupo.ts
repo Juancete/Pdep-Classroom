@@ -95,7 +95,7 @@ export class AlumnoNoEsMiembroDelGrupoError extends Error {
 export class GrupoConEntregaError extends Error {
   constructor(public readonly grupoId: string) {
     super(
-      "El grupo ya entregó: el repositorio está creado y los cambios de integrantes los tiene que resolver el docente."
+      "El grupo ya aceptó el TP: el repositorio está creado y los cambios de integrantes los tiene que resolver el docente."
     );
     this.name = "GrupoConEntregaError";
   }

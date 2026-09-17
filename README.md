@@ -358,21 +358,31 @@ O desde el dashboard de Vercel: **Settings → Environment Variables → Add**.
 
 **Migraciones en producción:**
 
-Las migraciones están separadas del build: `vercel-build` sólo compila. Esto evita que dos builds
-de Vercel intenten modificar el schema en paralelo. Antes de promover una versión que requiere un
-schema nuevo hay que ejecutar manualmente el workflow **Migrate production database** de GitHub
-Actions, configurado con el secret `DATABASE_URL` en el environment protegido `Production`. Ese
-secret es independiente de la variable homónima de Vercel: hay que configurar ambos.
+Las migraciones siguen separadas del build: `vercel-build` sólo compila. El workflow **Deploy
+production** de GitHub Actions primero construye un deployment de producción staged en Vercel (con
+las variables de producción, incluidas las sensibles, sin asignar el dominio), después migra y por
+último promueve ese mismo deployment — se disparan con cada push o merge a `master`. El deploy
+automático por Git está apagado con `git.deploymentEnabled: false` en `vercel.json`; el build y el
+deploy los hacen los jobs `build` y `promote` de ese mismo workflow.
+
+El workflow necesita estos secrets en el environment protegido `production`:
+
+- `DATABASE_URL`: la connection string de Neon. Es independiente de la variable homónima de
+  Vercel — hay que configurar ambas.
+- `VERCEL_TOKEN`: desde Vercel → Account Settings → Tokens.
+- `VERCEL_ORG_ID` y `VERCEL_PROJECT_ID`: salen de `.vercel/project.json` después de correr
+  `vercel link`.
+
+Se cargan con `gh secret set <NOMBRE> --env production`.
 
 ```bash
 # Alternativa equivalente desde una terminal autorizada
 DATABASE_URL="postgresql://..." pnpm release:migrate
 ```
 
-La secuencia de release es: preparar el PR `development → master`, pausar el auto-deploy, crear un
-restore point, mergear, migrar el commit resultante, promover exactamente ese commit y hacer el
-smoke test. El detalle y el procedimiento de recuperación están en
-[`docs/production-runbook.md`](docs/production-runbook.md).
+La secuencia de release es: crear un restore point en Neon, mergear el PR `development → master`,
+seguir el run de **Deploy production** en Actions y hacer el smoke test. El detalle y el
+procedimiento de recuperación están en [`docs/production-runbook.md`](docs/production-runbook.md).
 
 #### Scripts de DB disponibles
 
@@ -742,6 +752,10 @@ Un repo sin ningún check configurado no rompe nada más de la vista — se degr
   check suite conocido del commit (`POST /check-suites/{check_suite_id}/rerequest`) — si hay varios
   workflows, se reejecutan todos. Si nunca corrió ningún check, el botón queda deshabilitado — no
   hay nada que reejecutar.
+- **"Actualizar CI" no cambia nada o muestra "La GitHub App no tiene permisos suficientes (403)"**
+  → la App no tiene el permiso `Checks`, o la instalación en la org todavía no aprobó los permisos
+  nuevos (GitHub pide aprobarlos en Settings → GitHub Apps). `/admin/operaciones` lo lista en
+  "GitHub App: permisos y eventos", junto con los eventos y el webhook que falten.
 
 ### Resultado automático, no calificación
 

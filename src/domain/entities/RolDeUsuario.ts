@@ -153,7 +153,7 @@ class RolDocente extends RolDeUsuario {
 
   autorizarCambioDeMembresia(): void {
     // El docente resuelve siempre; la UI advierte con confirm() sobre el
-    // repo y los colaboradores desincronizados cuando el grupo ya entregó.
+    // repo y los colaboradores desincronizados cuando el grupo ya aceptó el TP.
   }
 
   origenDeAuditoria(): OrigenCambioMembresia {

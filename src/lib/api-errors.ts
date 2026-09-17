@@ -125,7 +125,7 @@ export function respuestaDeErrorDeDominio(
   );
   if (!respuesta) return null;
   if (respuesta.registrar && registro) {
-    registrarErrorDeHandler(registro.route, error, registro.context);
+    registrarErrorOperativo(registro.route, error, registro.context);
   }
   return NextResponse.json(
     { error: respuesta.mensaje ?? error.message },
@@ -135,10 +135,13 @@ export function respuestaDeErrorDeDominio(
 
 // Loggea el error completo server-side (Pino) y programa su persistencia
 // sanitizada en `error_log` para la pantalla admin. Compartido por
-// `internalServerError` (500 genérico) y `respuestaDeErrorDeDominio` (errores
+// `internalServerError` (500 genérico), `respuestaDeErrorDeDominio` (errores
 // de dominio con `registrar: true`, que responden con su propio status y
-// mensaje amigable pero igual conviene que el admin vea).
-function registrarErrorDeHandler(
+// mensaje amigable pero igual conviene que el admin vea) y por handlers que
+// responden 200 pero quieren dejar rastro de un fallo parcial (ej.
+// `POST /api/assignments/[id]/ci` cuando `sincronizarCIDeEntregas` devuelve
+// `fallidas`).
+export function registrarErrorOperativo(
   route: string,
   error: unknown,
   context?: Record<string, unknown>
@@ -181,7 +184,7 @@ export function internalServerError(
   error: unknown,
   context?: Record<string, unknown>
 ): NextResponse {
-  registrarErrorDeHandler(route, error, context);
+  registrarErrorOperativo(route, error, context);
   return NextResponse.json(
     { error: "Error interno del servidor" },
     { status: 500 }

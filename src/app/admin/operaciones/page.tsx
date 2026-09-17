@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/infrastructure/auth/session";
 import { getComisionActiva, getWebhookDeliveryOverview } from "@/infrastructure/repositories";
-import { listarTemplates } from "@/infrastructure/github";
+import { getConfiguracionDeApp, listarTemplates } from "@/infrastructure/github";
+import { evaluarConfiguracionDeApp } from "@/application/diagnosticoGithubApp";
 import { getSheetNames } from "@/infrastructure/sheets";
 import { CANALES_DE_COMUNICACION } from "@/infrastructure/canales";
 import { ReprocessWebhookButton } from "./reprocess-button";
@@ -11,8 +12,9 @@ export default async function OperacionesPage() {
   await requireAdmin();
   const overview = await getWebhookDeliveryOverview();
   const comision = await getComisionActiva();
-  const [github, sheets] = await Promise.all([
+  const [github, appConfig, sheets] = await Promise.all([
     listarTemplates().then((items) => ({ ok: true, detalle: `${items.length} templates accesibles` })).catch((error) => ({ ok: false, detalle: (error as Error).message })),
+    getConfiguracionDeApp().then(evaluarConfiguracionDeApp).catch((error) => ({ ok: false, detalle: (error as Error).message })),
     comision
       ? getSheetNames(comision.spreadsheetId).then((items) => ({ ok: true, detalle: `${items.length} hojas accesibles` })).catch((error) => ({ ok: false, detalle: (error as Error).message }))
       : Promise.resolve({ ok: false, detalle: "No hay comisión activa" }),
@@ -20,6 +22,7 @@ export default async function OperacionesPage() {
   const checks: Check[] = [
     { nombre: "Base de datos", ok: true, detalle: "Consulta administrativa correcta" },
     { nombre: "GitHub App", ...github },
+    { nombre: "GitHub App: permisos y eventos", ...appConfig },
     { nombre: "Google Sheets", ...sheets },
     ...CANALES_DE_COMUNICACION.map((canal) => {
       const configurado = canal.estaConfigurado();

@@ -3,7 +3,8 @@ import { z } from "zod";
 import { getCurrentUser } from "@/infrastructure/auth/session";
 import { getEntregasConRepoActivo, getEntregaDeUsuario } from "@/infrastructure/repositories";
 import { sincronizarCIDeEntregas } from "@/application/sincronizarCI";
-import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
+import { internalServerError, respuestaDeErrorDeDominio, registrarErrorOperativo } from "@/lib/api-errors";
+import { mensajeDeFallosDeCI } from "@/lib/ci-sync-mensajes";
 
 // `forzar` ignora el control de frescura del caché — lo usa el botón
 // "Actualizar" explícito. Sin body (o `forzar: false`), respeta la ventana
@@ -39,6 +40,13 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     const resultado = await sincronizarCIDeEntregas(entregas, {
       forzar: parsed.data.forzar,
     });
+    if (resultado.fallidas.length > 0) {
+      registrarErrorOperativo(
+        "POST /api/assignments/[id]/ci",
+        new Error(mensajeDeFallosDeCI(resultado)!),
+        { assignmentId: params.id, fallidas: resultado.fallidas.length }
+      );
+    }
     return NextResponse.json(resultado);
   } catch (error) {
     return (

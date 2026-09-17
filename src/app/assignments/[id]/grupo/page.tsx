@@ -45,7 +45,7 @@ export default async function GrupoPage(
 
   // getEntregaLogica busca por grupoId, no por el snapshot de usernames de
   // la entrega: un alumno agregado al grupo después de aceptar el TP también
-  // cuenta como "el grupo ya entregó" (getEntregaDeUsuario no lo vería).
+  // cuenta como "el grupo ya aceptó el TP" (getEntregaDeUsuario no lo vería).
   const entrega = miGrupo
     ? await getEntregaLogica({ assignmentId: assignment.id, grupoId: miGrupo.id })
     : null;
