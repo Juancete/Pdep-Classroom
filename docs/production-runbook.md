@@ -38,8 +38,8 @@ production** al hacer push o mergear a `master`.
    el step "Verificar secret DATABASE_URL", recargar el secret con `gh secret set DATABASE_URL
    --env production` (el valor no está en Vercel: ahí la variable es sensitive). El deployment
    staged que generó el job `build` de ese run queda sin promover.
-4. Entrar como docente a `/admin/operaciones`. GitHub y Sheets deben estar en verde; cada canal de
-   comunicación configurado también — uno apagado a propósito aparece como "Revisar" y no bloquea.
+4. Entrar como docente a `/admin/operaciones`. GitHub y Sheets (lectura y escritura) deben estar en
+   verde; cada canal de comunicación configurado también — uno apagado a propósito aparece como "Revisar" y no bloquea.
    No debe haber deliveries fallidos sin explicar.
 5. Hacer el canary con un assignment descartable:
    - un docente lo crea y publica;

@@ -21,13 +21,23 @@ export type { RegistroInput };
 
 // ── Auth con service account ────────────────────────────────
 
-function getSheetsClient(readonly = true) {
+type CredencialesDeServiceAccount = {
+  client_email: string;
+  project_id: string;
+  private_key: string;
+};
+
+function leerCredencialesDeServiceAccount(): CredencialesDeServiceAccount {
   const keyJson = Buffer.from(
     process.env.GOOGLE_SERVICE_ACCOUNT_KEY ?? "",
     "base64"
   ).toString("utf-8");
 
-  const credentials = JSON.parse(keyJson);
+  return JSON.parse(keyJson);
+}
+
+function getSheetsClient(readonly = true) {
+  const credentials = leerCredencialesDeServiceAccount();
 
   const scopes = readonly
     ? ["https://www.googleapis.com/auth/spreadsheets.readonly"]
@@ -35,6 +45,17 @@ function getSheetsClient(readonly = true) {
 
   const auth = new google.auth.GoogleAuth({ credentials, scopes });
   return google.sheets({ version: "v4", auth });
+}
+
+// Cliente de Drive con el scope mínimo para leer metadata (incluye
+// `capabilities`). `drive.file` no serviría: sólo ve archivos creados por la
+// app, y la planilla la crea el docente.
+function getDriveClient(credentials: CredencialesDeServiceAccount) {
+  const auth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ["https://www.googleapis.com/auth/drive.metadata.readonly"],
+  });
+  return google.drive({ version: "v3", auth });
 }
 
 // ── Helpers de configuración ─────────────────────────────────
@@ -359,6 +380,50 @@ export async function getSheetNames(spreadsheetId: string): Promise<string[]> {
   return (data.sheets ?? [])
     .map((sheet) => sheet.properties?.title ?? "")
     .filter(Boolean);
+}
+
+// ── Permiso de escritura sobre la planilla ──────────────────
+
+export type PermisoDePlanilla = { puedeEditar: boolean; clientEmail: string };
+
+type ErrorDeGoogleApi = Error & { code: number; errors?: { reason?: string }[] };
+
+function esErrorDeGoogleApi(error: unknown): error is ErrorDeGoogleApi {
+  return error instanceof Error && "code" in error && typeof error.code === "number";
+}
+
+// Consulta si la service account puede editar la planilla sin escribir en
+// ella (issue #95): Drive `files.get` con `capabilities.canEdit`. La lectura
+// con `spreadsheets.readonly` anda con rol Viewer, así que el check de lectura
+// de `/admin/operaciones` no detecta el 403 que después sufre el registro.
+export async function getPermisoDePlanilla(spreadsheetId: string): Promise<PermisoDePlanilla> {
+  const id = resolveSpreadsheetId(spreadsheetId);
+  const credentials = leerCredencialesDeServiceAccount();
+  const drive = getDriveClient(credentials);
+  try {
+    const { data } = await drive.files.get({ fileId: id, fields: "capabilities/canEdit" });
+    return { puedeEditar: data.capabilities?.canEdit === true, clientEmail: credentials.client_email };
+  } catch (error) {
+    throw traducirErrorDeDrive(error, credentials);
+  }
+}
+
+function traducirErrorDeDrive(error: unknown, credentials: CredencialesDeServiceAccount): Error {
+  if (esErrorDeGoogleApi(error)) {
+    if (error.code === 403 && error.errors?.[0]?.reason === "accessNotConfigured") {
+      return new Error(
+        `La Drive API no está habilitada en el proyecto ${credentials.project_id} de la service account: habilitarla en APIs & Services → Library (ver README 4.2)`
+      );
+    }
+    if (error.code === 404) {
+      return new Error(
+        `La service account ${credentials.client_email} no tiene acceso a la planilla: compartirla como Editor`
+      );
+    }
+  }
+  return new Error(
+    `No se pudo consultar el permiso sobre la planilla: ${(error as Error).message}`
+  );
 }
 
 // ── Helpers ─────────────────────────────────────────────────
