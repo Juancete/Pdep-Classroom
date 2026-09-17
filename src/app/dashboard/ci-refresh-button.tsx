@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApiCall } from "@/hooks/useApiCall";
 import { RefreshIcon, SpinnerIcon } from "@/components/icons";
+import { mensajeDeFallosDeCI } from "@/lib/ci-sync-mensajes";
 import type { SincronizarCIResult } from "@/application/sincronizarCI";
 
 // Botón chico del dashboard del alumno: sincroniza sólo su propia entrega.
@@ -11,8 +13,10 @@ import type { SincronizarCIResult } from "@/application/sincronizarCI";
 export function CIRefreshButton({ assignmentId }: { assignmentId: string }) {
   const router = useRouter();
   const { loading, error, call } = useApiCall();
+  const [advertencia, setAdvertencia] = useState<string | null>(null);
 
   async function handleRefresh() {
+    setAdvertencia(null);
     const resultado = await call(async () => {
       const response = await fetch(`/api/assignments/${assignmentId}/ci`, {
         method: "POST",
@@ -25,7 +29,10 @@ export function CIRefreshButton({ assignmentId }: { assignmentId: string }) {
       }
       return (await response.json()) as SincronizarCIResult;
     });
-    if (resultado) router.refresh();
+    if (resultado) {
+      setAdvertencia(mensajeDeFallosDeCI(resultado));
+      router.refresh();
+    }
   }
 
   return (
@@ -39,7 +46,9 @@ export function CIRefreshButton({ assignmentId }: { assignmentId: string }) {
       >
         {loading ? <SpinnerIcon className="w-3.5 h-3.5" /> : <RefreshIcon className="w-3.5 h-3.5" />}
       </button>
-      {error && <span className="text-red-600 text-[11px]">{error}</span>}
+      {(error ?? advertencia) && (
+        <span className="text-red-600 text-[11px]">{error ?? advertencia}</span>
+      )}
     </span>
   );
 }

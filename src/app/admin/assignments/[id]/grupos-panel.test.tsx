@@ -320,7 +320,7 @@ describe("GruposPanel", () => {
       expect(fetch).not.toHaveBeenCalled();
     });
 
-    it("la confirmación advierte sobre los colaboradores cuando el grupo ya entregó", async () => {
+    it("la confirmación advierte sobre los colaboradores cuando el grupo ya aceptó el TP", async () => {
       const user = userEvent.setup();
       const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
       render(
@@ -339,7 +339,7 @@ describe("GruposPanel", () => {
       );
     });
 
-    it("no advierte sobre colaboradores cuando el grupo no entregó", async () => {
+    it("no advierte sobre colaboradores cuando el grupo no aceptó el TP", async () => {
       const user = userEvent.setup();
       const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
       render(
@@ -409,7 +409,7 @@ describe("GruposPanel", () => {
       await waitFor(() => expect(mockRouterRefresh).toHaveBeenCalled());
     });
 
-    it("la confirmación también advierte cuando el grupo destino ya entregó", async () => {
+    it("la confirmación también advierte cuando el grupo destino ya aceptó el TP", async () => {
       const user = userEvent.setup();
       const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
       render(
@@ -433,7 +433,7 @@ describe("GruposPanel", () => {
       await user.click(screen.getAllByRole("button", { name: /^mover$/i })[0]);
 
       expect(confirmSpy).toHaveBeenCalledWith(
-        expect.stringContaining("grupo destino ya entregó")
+        expect.stringContaining("grupo destino ya aceptó el TP")
       );
     });
   });

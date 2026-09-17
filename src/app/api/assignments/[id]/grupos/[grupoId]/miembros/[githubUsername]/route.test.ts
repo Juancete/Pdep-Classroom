@@ -156,7 +156,7 @@ describe("PUT /api/assignments/[id]/grupos/[grupoId]/miembros/[githubUsername]",
     expect(response.status).toBe(409);
   });
 
-  it("devuelve 409 si el grupo origen ya entregó y no puede resolverlo un alumno", async () => {
+  it("devuelve 409 si el grupo origen ya aceptó el TP y no puede resolverlo un alumno", async () => {
     mockMoverAlumnoDeGrupo.mockRejectedValue(new GrupoConEntregaError("g0"));
     const response = await PUT(makeRequest("PUT"), makeParams());
     expect(response.status).toBe(409);
@@ -244,7 +244,7 @@ describe("DELETE /api/assignments/[id]/grupos/[grupoId]/miembros/[githubUsername
     expect(response.status).toBe(409);
   });
 
-  it("devuelve 409 si el grupo ya entregó", async () => {
+  it("devuelve 409 si el grupo ya aceptó el TP", async () => {
     mockSalirDeGrupo.mockRejectedValue(new GrupoConEntregaError("g1"));
     const response = await DELETE(makeRequest("DELETE"), makeParams());
     expect(response.status).toBe(409);

@@ -48,7 +48,7 @@ const ADVERTENCIAS: { aplica: (grupo: GrupoAdminResumen) => boolean; texto: stri
   {
     aplica: (grupo) => grupo.tieneEntrega,
     texto:
-      "El grupo ya entregó: el repositorio queda con los colaboradores desincronizados y hay que ajustarlos a mano en GitHub.",
+      "El grupo ya aceptó el TP: el repositorio está creado y queda con los colaboradores desincronizados; hay que ajustarlos a mano en GitHub.",
   },
   {
     aplica: (grupo) => grupo.miembros.length === 1 && !grupo.tieneEntrega,
@@ -71,7 +71,7 @@ function confirmacionPara(
 // que el destino sólo suma esta advertencia puntual sobre colaboradores.
 function advertenciaEntregaDestino(grupoDestino: GrupoAdminResumen): string | null {
   return grupoDestino.tieneEntrega
-    ? "El grupo destino ya entregó: sumar a alguien también desincroniza sus colaboradores."
+    ? "El grupo destino ya aceptó el TP: sumar a alguien también desincroniza sus colaboradores."
     : null;
 }
 
@@ -217,7 +217,7 @@ export function GruposPanel({
                     <div className="flex items-center gap-2">
                       {grupo.tieneEntrega && (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
-                          Ya entregó
+                          Repo creado
                         </span>
                       )}
                       <span

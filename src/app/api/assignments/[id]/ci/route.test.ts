@@ -5,6 +5,7 @@ const mockGetCurrentUser = vi.fn();
 const mockGetEntregasConRepoActivo = vi.fn();
 const mockGetEntregaDeUsuario = vi.fn();
 const mockSincronizar = vi.fn();
+const mockRegistrarErrorOperativo = vi.fn();
 
 vi.mock("@/infrastructure/auth/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
@@ -20,6 +21,18 @@ vi.mock("@/application/sincronizarCI", () => ({
   sincronizarCIDeEntregas: (entregas: unknown[], opts: unknown) =>
     mockSincronizar(entregas, opts),
 }));
+
+vi.mock("@/lib/api-errors", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api-errors")>();
+  return {
+    ...actual,
+    registrarErrorOperativo: (
+      route: string,
+      error: unknown,
+      context?: Record<string, unknown>
+    ) => mockRegistrarErrorOperativo(route, error, context),
+  };
+});
 
 import { POST } from "./route";
 
@@ -103,5 +116,43 @@ describe("POST /api/assignments/[id]/ci", () => {
     mockGetEntregasConRepoActivo.mockRejectedValue(new Error("DB caída"));
     const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(500);
+  });
+
+  it("registra un error operativo cuando el resultado trae fallidas, sin dejar de responder 200", async () => {
+    mockGetCurrentUser.mockResolvedValue({ githubUsername: "docente1", rol: DOCENTE });
+    mockGetEntregasConRepoActivo.mockResolvedValue([{ id: "e1" }]);
+    mockSincronizar.mockResolvedValue({
+      actualizadas: 0,
+      omitidas: 0,
+      fallidas: [
+        { repoName: "tp-x", error: "La GitHub App no tiene permisos suficientes (403)" },
+      ],
+    });
+
+    const response = await POST(makeRequest({ forzar: true }), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockRegistrarErrorOperativo).toHaveBeenCalledWith(
+      "POST /api/assignments/[id]/ci",
+      expect.objectContaining({
+        message: "No se pudo actualizar el CI de tp-x: La GitHub App no tiene permisos suficientes (403)",
+      }),
+      { assignmentId: "a1", fallidas: 1 }
+    );
+  });
+
+  it("no registra ningún error operativo cuando no hay fallidas", async () => {
+    mockGetCurrentUser.mockResolvedValue({ githubUsername: "docente1", rol: DOCENTE });
+    mockGetEntregasConRepoActivo.mockResolvedValue([{ id: "e1" }]);
+    mockSincronizar.mockResolvedValue({ actualizadas: 1, omitidas: 0, fallidas: [] });
+
+    const response = await POST(makeRequest({ forzar: true }), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockRegistrarErrorOperativo).not.toHaveBeenCalled();
   });
 });
