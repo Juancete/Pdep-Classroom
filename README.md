@@ -358,21 +358,29 @@ O desde el dashboard de Vercel: **Settings → Environment Variables → Add**.
 
 **Migraciones en producción:**
 
-Las migraciones están separadas del build: `vercel-build` sólo compila. Esto evita que dos builds
-de Vercel intenten modificar el schema en paralelo. Antes de promover una versión que requiere un
-schema nuevo hay que ejecutar manualmente el workflow **Migrate production database** de GitHub
-Actions, configurado con el secret `DATABASE_URL` en el environment protegido `Production`. Ese
-secret es independiente de la variable homónima de Vercel: hay que configurar ambos.
+Las migraciones siguen separadas del build: `vercel-build` sólo compila. Ahora corren en el
+workflow **Deploy production** de GitHub Actions, antes del deploy y en el mismo run — se disparan
+con cada push o merge a `master`. La integración Git de Vercel no buildea (`ignoreCommand` en
+`vercel.json`); el deploy lo hace el CLI de Vercel desde el job `deploy` de ese mismo workflow.
+
+El workflow necesita estos secrets en el environment protegido `production`:
+
+- `DATABASE_URL`: la connection string de Neon. Es independiente de la variable homónima de
+  Vercel — hay que configurar ambas.
+- `VERCEL_TOKEN`: desde Vercel → Account Settings → Tokens.
+- `VERCEL_ORG_ID` y `VERCEL_PROJECT_ID`: salen de `.vercel/project.json` después de correr
+  `vercel link`.
+
+Se cargan con `gh secret set <NOMBRE> --env production`.
 
 ```bash
 # Alternativa equivalente desde una terminal autorizada
 DATABASE_URL="postgresql://..." pnpm release:migrate
 ```
 
-La secuencia de release es: preparar el PR `development → master`, pausar el auto-deploy, crear un
-restore point, mergear, migrar el commit resultante, promover exactamente ese commit y hacer el
-smoke test. El detalle y el procedimiento de recuperación están en
-[`docs/production-runbook.md`](docs/production-runbook.md).
+La secuencia de release es: crear un restore point en Neon, mergear el PR `development → master`,
+seguir el run de **Deploy production** en Actions y hacer el smoke test. El detalle y el
+procedimiento de recuperación están en [`docs/production-runbook.md`](docs/production-runbook.md).
 
 #### Scripts de DB disponibles
 

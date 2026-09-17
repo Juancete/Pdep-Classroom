@@ -1,0 +1,118 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      solo_migrar:
+        description: "Sólo aplicar migraciones pendientes, sin desplegar"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Tests
+        run: pnpm test:run
+
+  # La migración corre antes del deploy: en un incidente previo, el
+  # auto-deploy de Vercel llegó a producción antes que la migración que
+  # renombraba la tabla "administrador" a "docente", y el código nuevo
+  # rompió contra el esquema viejo. Migrar primero evita ese desfasaje.
+  migrate:
+    needs: verificar
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verificar secret DATABASE_URL
+        if: env.DATABASE_URL == ''
+        run: |
+          echo "::error::El secret DATABASE_URL del environment 'production' está vacío o no existe. Cargarlo con: gh secret set DATABASE_URL --env production"
+          exit 1
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply pending migrations
+        run: pnpm release:migrate
+
+  deploy:
+    needs: migrate
+    if: ${{ !inputs.solo_migrar }}
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      # Node 24 acá porque el proyecto en Vercel corre Node 24.x y
+      # "vercel build" compila el proyecto en este runner, no en la
+      # infraestructura de Vercel.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Verificar secrets de Vercel
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "::error::Faltan secrets VERCEL_TOKEN, VERCEL_ORG_ID o VERCEL_PROJECT_ID en el environment 'production'. Cargarlos con: gh secret set <NOMBRE> --env production"
+            exit 1
+          fi
+
+      # VERCEL_ORG_ID y VERCEL_PROJECT_ID en el entorno reemplazan al
+      # archivo .vercel/project.json que "vercel pull" generaría al
+      # vincular el proyecto de forma interactiva.
+      - name: Vercel pull
+        run: pnpm dlx vercel@51 pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Vercel build
+        run: pnpm dlx vercel@51 build --prod --token="$VERCEL_TOKEN"
+
+      - name: Vercel deploy
+        run: pnpm dlx vercel@51 deploy --prebuilt --prod --token="$VERCEL_TOKEN"
