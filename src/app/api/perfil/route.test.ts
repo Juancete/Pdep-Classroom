@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ESTUDIANTE } from "@/domain/entities";
+import { PlanillaNoDisponibleError } from "@/infrastructure/PlanillaNoDisponibleError";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -13,6 +14,25 @@ vi.mock("@/infrastructure/auth/session", () => ({
 vi.mock("@/application/alumnoRegistro", () => ({
   confirmarYProcesarAlumno: (...args: unknown[]) =>
     mockConfirmarYProcesarAlumno(...args),
+}));
+
+// Para las aserciones sobre `internalServerError`/`respuestaDeErrorDeDominio`
+// (contexto que se loguea/persiste), mismo patrón que
+// `src/lib/internal-server-error.test.ts`: `after` sólo captura la tarea, y
+// se mockean el logger y el import perezoso de ErrorLogRepository.
+const mockAfter = vi.fn();
+const mockRegistrarErrorInesperado = vi.fn();
+const mockLoggerError = vi.fn();
+
+vi.mock("next/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/server")>();
+  return { ...actual, after: (task: () => unknown) => mockAfter(task) };
+});
+vi.mock("@/infrastructure/repositories/ErrorLogRepository", () => ({
+  registrarErrorInesperado: (...args: unknown[]) => mockRegistrarErrorInesperado(...args),
+}));
+vi.mock("@/lib/logger", () => ({
+  logger: { error: (...args: unknown[]) => mockLoggerError(...args) },
 }));
 
 import { PATCH } from "./route";
@@ -130,10 +150,64 @@ describe("PATCH /api/perfil", () => {
     expect(response.status).toBe(409);
   });
 
-  it("devuelve 500 si algo tira un error inesperado", async () => {
+  it("devuelve 500 si algo tira un error inesperado, y registra con el contexto de la sesión y el body", async () => {
     mockConfirmarYProcesarAlumno.mockRejectedValue(new Error("boom"));
     const response = await PATCH(makeRequest(validBody));
     expect(response.status).toBe(500);
+
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        githubUsername: "juangarcia",
+        legajo: validBody.legajo,
+        route: "PATCH /api/perfil",
+      }),
+      "handler error"
+    );
+    await mockAfter.mock.calls[0]![0]();
+    expect(mockRegistrarErrorInesperado).toHaveBeenCalledWith(
+      expect.objectContaining({
+        route: "PATCH /api/perfil",
+        context: expect.objectContaining({
+          githubUsername: "juangarcia",
+          legajo: validBody.legajo,
+        }),
+      })
+    );
+  });
+
+  it("devuelve 503 controlado (sin filtrar el detalle del SDK) y registra con contexto cuando Sheets no está disponible", async () => {
+    const errorDePlanilla = new PlanillaNoDisponibleError(
+      new Error("The caller does not have permission")
+    );
+    mockConfirmarYProcesarAlumno.mockRejectedValue(errorDePlanilla);
+
+    const response = await PATCH(makeRequest(validBody));
+    const json = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(json.error).toBe(
+      "Tus datos quedaron guardados, pero no pudimos actualizar la planilla de la cátedra. Reintentá en unos minutos y, si persiste, avisale a un docente."
+    );
+    expect(json.error).not.toContain("The caller does not have permission");
+
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        githubUsername: "juangarcia",
+        legajo: validBody.legajo,
+        route: "PATCH /api/perfil",
+      }),
+      "handler error"
+    );
+    await mockAfter.mock.calls[0]![0]();
+    expect(mockRegistrarErrorInesperado).toHaveBeenCalledWith(
+      expect.objectContaining({
+        route: "PATCH /api/perfil",
+        context: expect.objectContaining({
+          githubUsername: "juangarcia",
+          legajo: validBody.legajo,
+        }),
+      })
+    );
   });
 
   it("devuelve 400 si el body no es un objeto", async () => {

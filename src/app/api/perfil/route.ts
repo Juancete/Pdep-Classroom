@@ -6,11 +6,20 @@ import { confirmarYProcesarAlumno } from "@/application/alumnoRegistro";
 
 type PerfilInput = Omit<RegistroInput, "githubUsername">;
 
+const ROUTE = "PATCH /api/perfil";
+
 export async function PATCH(req: Request) {
+  // Visibles en el `catch` para que un error inesperado (incluido
+  // `PlanillaNoDisponibleError`) se registre con contexto útil para el
+  // admin, sin depender de en qué línea del try haya fallado.
+  let githubUsername: string | undefined;
+  let legajo: string | undefined;
   try {
     const user = await requireUser();
+    githubUsername = user.githubUsername;
     const body = await parseJsonObjectBody(req);
     if (body instanceof NextResponse) return body;
+    if (typeof body.legajo === "string") legajo = body.legajo;
 
     const resultado = await confirmarYProcesarAlumno({
       ...(body as PerfilInput),
@@ -31,6 +40,10 @@ export async function PATCH(req: Request) {
       ...(resultado.hooks.gruposSync === "error" && { gruposSync: "error" }),
     });
   } catch (error) {
-    return respuestaDeErrorDeDominio(error) ?? internalServerError("PATCH /api/perfil", error);
+    const context = { githubUsername, legajo };
+    return (
+      respuestaDeErrorDeDominio(error, { route: ROUTE, context }) ??
+      internalServerError(ROUTE, error, context)
+    );
   }
 }

@@ -51,6 +51,7 @@ vi.mock("@/infrastructure/sheets", async () => {
 });
 
 import { confirmarDatosAlumno, confirmarYProcesarAlumno } from "./alumnoRegistro";
+import { PlanillaNoDisponibleError } from "@/infrastructure/PlanillaNoDisponibleError";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -237,6 +238,19 @@ describe("confirmarDatosAlumno", () => {
     mockUpsertAlumno.mockRejectedValue(new Error("conexión caída"));
     await expect(confirmarDatosAlumno(validInput)).rejects.toThrow("conexión caída");
   });
+
+  // Issue #92: a diferencia del caso `{ ok:false }` (validación de datos),
+  // PlanillaNoDisponibleError es una falla operativa de la planilla — se
+  // propaga tal cual (no se traduce a un resultado 400) y no se marca el
+  // registro como confirmado.
+  it("propaga PlanillaNoDisponibleError si Sheets falla por un error de la API, sin marcar registroConfirmadoEn", async () => {
+    const errorDePlanilla = new PlanillaNoDisponibleError(new Error("The caller does not have permission"));
+    mockUpsertarAlumnoEnSheets.mockRejectedValue(errorDePlanilla);
+
+    await expect(confirmarDatosAlumno(validInput)).rejects.toBe(errorDePlanilla);
+
+    expect(mockMarcarRegistroConfirmado).not.toHaveBeenCalled();
+  });
 });
 
 // ── confirmarYProcesarAlumno ─────────────────────────────────
@@ -283,5 +297,14 @@ describe("confirmarYProcesarAlumno", () => {
   it("no consulta el email previo: la reconciliación usa el estado persistido", async () => {
     await confirmarYProcesarAlumno(validInput);
     expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
+  });
+
+  it("propaga PlanillaNoDisponibleError sin ejecutar los hooks post-confirmación", async () => {
+    const errorDePlanilla = new PlanillaNoDisponibleError(new Error("The caller does not have permission"));
+    mockUpsertarAlumnoEnSheets.mockRejectedValue(errorDePlanilla);
+
+    await expect(confirmarYProcesarAlumno(validInput)).rejects.toBe(errorDePlanilla);
+
+    expect(mockEjecutarHooksPostConfirmacion).not.toHaveBeenCalled();
   });
 });

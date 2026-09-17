@@ -202,7 +202,7 @@ Pegar el resultado en `GOOGLE_SERVICE_ACCOUNT_KEY` en el `.env.local`.
 1. Abrir la planilla de Google Sheets con los alumnos
 2. Botón **Compartir** (arriba a la derecha)
 3. En el campo de email, pegar el email de la service account — tiene la forma `pdep-classroom@<project-id>.iam.gserviceaccount.com` (se ve en la pantalla de Credentials o en el JSON descargado, campo `client_email`)
-4. Rol: **Viewer** (si solo se va a leer) o **Editor** (si la app también escribe el registro de alumnos)
+4. Rol: **Editor**. El registro de alumnos (`POST /api/registro`) y la actualización de perfil (`PATCH /api/perfil`) siempre escriben en la planilla, no sólo leen — con rol Viewer la lectura funciona (la precarga de datos anda bien) pero la escritura falla con un 403 de la API de Sheets ("The caller does not have permission"), visible como error persistido en `/admin/errores`
 5. Desmarcar "Notify people" → **Share**
 
 #### 4.7 Configurar el ID de la planilla
