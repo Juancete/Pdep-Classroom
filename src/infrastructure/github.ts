@@ -152,33 +152,6 @@ export async function crearEntrega(opts: {
   return { repoUrl, repoName, repoGithubId };
 }
 
-// ── Listar repos de un assignment ───────────────────────────
-
-export async function listarReposDeAssignment(
-  slug: string
-): Promise<{ name: string; url: string; updatedAt: string }[]> {
-  const octokit = getOctokit();
-
-  try {
-    const { data } = await octokit.repos.listForOrg({
-      org: ORG,
-      type: "all",
-      per_page: 100,
-      sort: "updated",
-    });
-
-    return data
-      .filter((repo) => repo.name.startsWith(`${slug}-`))
-      .map((repo) => ({
-        name: repo.name,
-        url: repo.html_url,
-        updatedAt: repo.updated_at ?? "",
-      }));
-  } catch (error) {
-    handleOctokitError(error);
-  }
-}
-
 // ── Eliminar un repo ─────────────────────────────────────────
 
 export type DeleteRepoResult = "deleted" | "already_absent";
@@ -235,16 +208,22 @@ export async function getRepoInfoPorId(
 ): Promise<{ repoName: string; repoUrl: string } | null> {
   const octokit = getOctokit();
   try {
-    // `repos.listForOrg` es una API REST documentada y además mantiene la
-    // reconciliación acotada a la organización configurada. `paginate` es
-    // necesario porque una org puede tener más de 100 repositorios.
-    const repos = await octokit.paginate(octokit.repos.listForOrg, {
-      org: ORG,
-      type: "all",
-      per_page: 100,
-    });
-    const repo = repos.find((candidate) => String(candidate.id) === repoGithubId);
-    return repo ? { repoName: repo.name, repoUrl: repo.html_url } : null;
+    // Resolución directa por id (issue #88): una sola llamada en vez de
+    // recorrer toda la org paginada y filtrar acá — con casi 300 repos eran
+    // tres requests por cada evento `repository`. `GET /repositories/{id}`
+    // no figura en la referencia REST publicada pero es estable, es lo que
+    // usa el propio Octokit para resolver ids y funciona con el token de
+    // instalación. Los tipos generados no lo declaran: se castea al shape
+    // mínimo que se consume (mismo criterio que `getConfiguracionDeApp`).
+    const { data: repo } = (await octokit.request("GET /repositories/{repository_id}", {
+      repository_id: Number(repoGithubId),
+    })) as { data: { name: string; html_url: string; owner: { login: string } } };
+    // La reconciliación sigue acotada a la organización configurada: un id
+    // de otra org no es "nuestro" aunque GitHub lo devuelva. Los logins de
+    // GitHub no distinguen mayúsculas de minúsculas, así que la comparación
+    // es case-insensitive, igual que en el router del webhook.
+    if (repo.owner.login.toLowerCase() !== ORG.toLowerCase()) return null;
+    return { repoName: repo.name, repoUrl: repo.html_url };
   } catch (error) {
     if (isRequestError(error) && error.status === 404) return null;
     handleOctokitError(error);
@@ -337,14 +316,15 @@ export async function getEstadoCI(repoName: string): Promise<EstadoCI> {
 
   let checkRuns;
   try {
-    ({
-      data: { check_runs: checkRuns },
-    } = await octokit.checks.listForRef({
+    // Es un agregado (passing/failing del commit), no una vista: se traen
+    // todos los check runs. `paginate` normaliza `{ total_count, check_runs }`
+    // a la lista plana (issue #88).
+    checkRuns = await octokit.paginate(octokit.checks.listForRef, {
       owner: ORG,
       repo: repoName,
       ref: defaultBranch,
       per_page: 100,
-    }));
+    });
   } catch (error) {
     handleOctokitError(error);
   }
