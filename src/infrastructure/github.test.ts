@@ -437,9 +437,17 @@ describe("getConfiguracionDeApp", () => {
     process.env = { ...ENV_BACKUP };
   });
 
-  it("devuelve permisos, eventos y webhook cuando está todo configurado", async () => {
+  it("devuelve permisos, eventos y webhook de la instalación cuando está todo configurado y aprobado", async () => {
     mockRequest.mockImplementation((route: string) => {
       if (route === "GET /app") {
+        return Promise.resolve({
+          data: {
+            permissions: { administration: "write", contents: "write" },
+            events: ["check_suite", "push"],
+          },
+        });
+      }
+      if (route === "GET /app/installations/{installation_id}") {
         return Promise.resolve({
           data: {
             permissions: { administration: "write", contents: "write" },
@@ -457,17 +465,62 @@ describe("getConfiguracionDeApp", () => {
       permisos: { administration: "write", contents: "write" },
       eventos: ["check_suite", "push"],
       webhook: { url: "https://classroom/api/webhooks/github" },
+      aprobacionPendiente: false,
     });
     expect(mockAuth).toHaveBeenCalledWith({ type: "app" });
     expect(mockRequest).toHaveBeenCalledWith(
       "GET /app",
       expect.objectContaining({ headers: { authorization: "bearer tok3n" } })
     );
+    expect(mockRequest).toHaveBeenCalledWith(
+      "GET /app/installations/{installation_id}",
+      expect.objectContaining({
+        installation_id: 456,
+        headers: { authorization: "bearer tok3n" },
+      })
+    );
+  });
+
+  it("marca aprobacionPendiente cuando la App tiene permisos/eventos que la instalación todavía no aprobó", async () => {
+    mockRequest.mockImplementation((route: string) => {
+      if (route === "GET /app") {
+        return Promise.resolve({
+          data: {
+            permissions: { administration: "write", contents: "write", checks: "write" },
+            events: ["check_suite", "push"],
+          },
+        });
+      }
+      if (route === "GET /app/installations/{installation_id}") {
+        return Promise.resolve({
+          data: {
+            permissions: { administration: "write", contents: "write" },
+            events: ["push"],
+          },
+        });
+      }
+      if (route === "GET /app/hook/config") {
+        return Promise.resolve({ data: { url: "https://classroom/api/webhooks/github" } });
+      }
+      throw new Error(`ruta inesperada: ${route}`);
+    });
+
+    await expect(getConfiguracionDeApp()).resolves.toEqual({
+      permisos: { administration: "write", contents: "write" },
+      eventos: ["push"],
+      webhook: { url: "https://classroom/api/webhooks/github" },
+      aprobacionPendiente: true,
+    });
   });
 
   it("devuelve webhook null cuando GET /app/hook/config responde 404 (sin webhook configurado)", async () => {
     mockRequest.mockImplementation((route: string) => {
       if (route === "GET /app") {
+        return Promise.resolve({
+          data: { permissions: { administration: "write" }, events: [] },
+        });
+      }
+      if (route === "GET /app/installations/{installation_id}") {
         return Promise.resolve({
           data: { permissions: { administration: "write" }, events: [] },
         });
@@ -482,6 +535,7 @@ describe("getConfiguracionDeApp", () => {
       permisos: { administration: "write" },
       eventos: [],
       webhook: null,
+      aprobacionPendiente: false,
     });
   });
 

@@ -416,12 +416,34 @@ export async function esColaborador(repoName: string, username: string): Promise
 // cuando alguien aprieta "Actualizar CI" y GitHub responde 403. Esta consulta
 // alimenta el check de `/admin/operaciones` que lista qué le falta a la App
 // contra lo que Classroom necesita (ver `evaluarConfiguracionDeApp`).
+//
+// "GET /app" devuelve lo *configurado en la App* — no necesariamente lo que
+// el token de instalación (el que usa `getEstadoCI`) puede hacer hoy: cuando
+// se agregan permisos a la App, la instalación en la org los conserva
+// viejos hasta que alguien los aprueba explícitamente. Por eso los permisos
+// y eventos efectivos salen de "GET /app/installations/{installation_id}"
+// (la instalación), y se marca `aprobacionPendiente` cuando la App pide algo
+// que la instalación todavía no tiene.
 
 export type ConfiguracionDeApp = {
-  permisos: Record<string, string>;
-  eventos: string[];
+  permisos: Record<string, string>; // los de la instalación (lo que el token realmente tiene)
+  eventos: string[]; // ídem
   webhook: { url: string } | null;
+  aprobacionPendiente: boolean; // la App configura algo que la instalación todavía no aprobó
 };
+
+// Sin ifs por tipo: recorre los permisos y eventos declarados por la App y
+// verifica que la instalación los tenga con el mismo valor.
+function hayCambiosSinAprobar(
+  app: { permissions: Record<string, string>; events: string[] },
+  instalacion: { permissions: Record<string, string>; events: string[] }
+): boolean {
+  const permisoSinAprobar = Object.entries(app.permissions).some(
+    ([nombrePermiso, valorPermiso]) => instalacion.permissions[nombrePermiso] !== valorPermiso
+  );
+  const eventoSinAprobar = app.events.some((evento) => !instalacion.events.includes(evento));
+  return permisoSinAprobar || eventoSinAprobar;
+}
 
 export async function getConfiguracionDeApp(): Promise<ConfiguracionDeApp> {
   // `getOctokit()` cae a un PAT clásico si falta cualquiera de estas tres env
@@ -451,8 +473,24 @@ export async function getConfiguracionDeApp(): Promise<ConfiguracionDeApp> {
     const { data: app } = (await octokit.request("GET /app", { headers })) as {
       data: { permissions?: Record<string, string>; events?: string[] };
     };
-    const permisos = app.permissions ?? {};
-    const eventos = app.events ?? [];
+    const permisosDeLaApp = app.permissions ?? {};
+    const eventosDeLaApp = app.events ?? [];
+
+    // Mismo motivo de cast que "GET /app": los tipos generados no alcanzan
+    // para el shape mínimo que se consume acá.
+    const { data: instalacion } = (await octokit.request(
+      "GET /app/installations/{installation_id}",
+      { installation_id: Number(process.env.GITHUB_APP_INSTALLATION_ID), headers }
+    )) as {
+      data: { permissions?: Record<string, string>; events?: string[] };
+    };
+    const permisos = instalacion.permissions ?? {};
+    const eventos = instalacion.events ?? [];
+
+    const aprobacionPendiente = hayCambiosSinAprobar(
+      { permissions: permisosDeLaApp, events: eventosDeLaApp },
+      { permissions: permisos, events: eventos }
+    );
 
     let webhook: { url: string } | null;
     try {
@@ -468,7 +506,7 @@ export async function getConfiguracionDeApp(): Promise<ConfiguracionDeApp> {
       }
     }
 
-    return { permisos, eventos, webhook };
+    return { permisos, eventos, webhook, aprobacionPendiente };
   } catch (error) {
     handleOctokitError(error);
   }

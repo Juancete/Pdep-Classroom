@@ -40,8 +40,12 @@ function describirPermisoFaltante(requerido: PermisoRequerido): string {
 /**
  * Compara la configuración real de la GitHub App (`getConfiguracionDeApp`)
  * contra lo que Classroom necesita y arma el diagnóstico que se muestra en
- * `/admin/operaciones`. Sin cadenas de `if` por tipo: itera las tablas de
- * requisitos y acumula lo que falta.
+ * `/admin/operaciones`. `config.permisos`/`config.eventos` son los de la
+ * *instalación* en la org (lo que el token realmente tiene), no los
+ * configurados en la App — por eso también se chequea
+ * `config.aprobacionPendiente`, que indica que la App pide algo que la
+ * instalación todavía no aprobó. Sin cadenas de `if` por tipo: itera las
+ * tablas de requisitos y acumula lo que falta.
  */
 export function evaluarConfiguracionDeApp(config: ConfiguracionDeApp): DiagnosticoDeApp {
   const faltantes: string[] = [];
@@ -59,8 +63,12 @@ export function evaluarConfiguracionDeApp(config: ConfiguracionDeApp): Diagnosti
     faltantes.push(`eventos ${eventosFaltantes.join("/")}`);
   }
 
-  if (config.webhook === null) {
+  if (config.webhook === null || config.webhook.url.trim() === "") {
     faltantes.push("webhook");
+  }
+
+  if (config.aprobacionPendiente) {
+    faltantes.push("aprobar los permisos nuevos en la instalación de la org");
   }
 
   if (faltantes.length > 0) {

@@ -6,6 +6,7 @@ const CONFIG_COMPLETA: ConfiguracionDeApp = {
   permisos: { administration: "write", contents: "write", members: "read", checks: "write" },
   eventos: ["check_suite", "push", "repository", "member"],
   webhook: { url: "https://classroom/api/webhooks/github" },
+  aprobacionPendiente: false,
 };
 
 describe("evaluarConfiguracionDeApp", () => {
@@ -57,15 +58,39 @@ describe("evaluarConfiguracionDeApp", () => {
     expect(resultado.detalle).toContain("webhook");
   });
 
+  it("falta el webhook cuando la url está vacía", () => {
+    const resultado = evaluarConfiguracionDeApp({ ...CONFIG_COMPLETA, webhook: { url: "" } });
+    expect(resultado.ok).toBe(false);
+    expect(resultado.detalle).toContain("webhook");
+  });
+
+  it("falta el webhook cuando la url es sólo espacios", () => {
+    const resultado = evaluarConfiguracionDeApp({ ...CONFIG_COMPLETA, webhook: { url: "   " } });
+    expect(resultado.ok).toBe(false);
+    expect(resultado.detalle).toContain("webhook");
+  });
+
   it("caso real de producción: sin checks, sin eventos suscriptos y sin webhook", () => {
     const resultado = evaluarConfiguracionDeApp({
       permisos: { administration: "write", contents: "write", members: "read", metadata: "read" },
       eventos: [],
       webhook: null,
+      aprobacionPendiente: false,
     });
     expect(resultado.ok).toBe(false);
     expect(resultado.detalle).toContain("permiso checks");
     expect(resultado.detalle).toContain("check_suite");
     expect(resultado.detalle).toContain("webhook");
+  });
+
+  it("completa en la App pero pendiente de aprobar en la instalación", () => {
+    const resultado = evaluarConfiguracionDeApp({
+      ...CONFIG_COMPLETA,
+      permisos: { administration: "write", contents: "write", members: "read" },
+      aprobacionPendiente: true,
+    });
+    expect(resultado.ok).toBe(false);
+    expect(resultado.detalle).toContain("permiso checks");
+    expect(resultado.detalle).toContain("aprobar los permisos nuevos en la instalación");
   });
 });
