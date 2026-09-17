@@ -20,8 +20,37 @@ if (process.env.NODE_ENV !== "production" && global.__mikro_orm__) {
   global.__mikro_orm_init__ = undefined;
 }
 
+// Guard contra el bug de raíz del issue #90: si dos layers/bundles de
+// webpack cargaron copias distintas de este módulo (por ejemplo porque una
+// server action se importa sólo desde un client component y Next la
+// compila en la layer `action-browser` en vez de `rsc` — ver el comentario
+// en `src/app/admin/administradores/page.tsx`), cada copia trae sus propias
+// clases de entidad. El ORM cacheado en `globalThis` sólo conoce los
+// prototipos de la copia que llamó primero a `MikroORM.init`; si otra copia
+// hace `persist()` con su propia clase, MikroORM revienta con un
+// "not discovered entity" críptico. Este chequeo compara, apenas se pide el
+// ORM ya cacheado, la clase de cada entidad de `config.entities` contra la
+// que el ORM tiene registrada por nombre, y falla rápido con un mensaje que
+// explica la causa real en vez del error de MikroORM.
+function asegurarMismaCopiaDeEntidades(orm: MikroORM): void {
+  const metadata = orm.getMetadata();
+  for (const entidad of config.entities ?? []) {
+    if (typeof entidad !== "function") continue;
+    const claseRegistrada = metadata.find(entidad.name)?.class;
+    if (claseRegistrada && claseRegistrada !== entidad) {
+      throw new Error(
+        "MikroORM ya fue inicializado con otra copia de las entidades: dos bundles/layers de " +
+          "webpack cargaron src/infrastructure/db.ts. Causa típica: una server action importada " +
+          "sólo desde client components (se compila en la layer action-browser). Importala desde " +
+          "el server component y pasala por props — ver issue #90."
+      );
+    }
+  }
+}
+
 export async function getOrm(): Promise<MikroORM> {
   if (global.__mikro_orm__) {
+    asegurarMismaCopiaDeEntidades(global.__mikro_orm__);
     return global.__mikro_orm__;
   }
 
