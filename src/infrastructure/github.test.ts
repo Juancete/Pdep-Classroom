@@ -369,6 +369,22 @@ describe("getRepoInfoPorId", () => {
     expect(mockListForOrg).not.toHaveBeenCalled();
   });
 
+  it("acepta el repo aunque el login de la org difiera en mayúsculas", async () => {
+    mockRequest.mockResolvedValue({
+      data: {
+        id: 555666,
+        name: "tp-ana",
+        html_url: "https://github.com/PdeP-MN-UTN/tp-ana",
+        owner: { login: "PdeP-MN-UTN" },
+      },
+    });
+
+    await expect(getRepoInfoPorId("555666")).resolves.toEqual({
+      repoName: "tp-ana",
+      repoUrl: "https://github.com/PdeP-MN-UTN/tp-ana",
+    });
+  });
+
   it("devuelve null cuando el id pertenece a un repo de otra organización", async () => {
     mockRequest.mockResolvedValue({
       data: {

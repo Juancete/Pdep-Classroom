@@ -219,8 +219,10 @@ export async function getRepoInfoPorId(
       repository_id: Number(repoGithubId),
     })) as { data: { name: string; html_url: string; owner: { login: string } } };
     // La reconciliación sigue acotada a la organización configurada: un id
-    // de otra org no es "nuestro" aunque GitHub lo devuelva.
-    if (repo.owner.login !== ORG) return null;
+    // de otra org no es "nuestro" aunque GitHub lo devuelva. Los logins de
+    // GitHub no distinguen mayúsculas de minúsculas, así que la comparación
+    // es case-insensitive, igual que en el router del webhook.
+    if (repo.owner.login.toLowerCase() !== ORG.toLowerCase()) return null;
     return { repoName: repo.name, repoUrl: repo.html_url };
   } catch (error) {
     if (isRequestError(error) && error.status === 404) return null;
