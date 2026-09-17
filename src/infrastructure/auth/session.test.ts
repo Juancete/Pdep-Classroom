@@ -5,7 +5,7 @@ const mockRedirect = vi.fn().mockImplementation((url: string) => {
   throw new Error(`redirect:${url}`);
 });
 const mockEsResponsableDeEntorno = vi.fn();
-const mockHayAdministradorActivo = vi.fn();
+const mockHayDocenteActivo = vi.fn();
 
 vi.mock("@/infrastructure/auth/auth", () => ({
   auth: () => mockAuth(),
@@ -20,7 +20,7 @@ vi.mock("@/lib/responsables-de-entorno", () => ({
 }));
 
 vi.mock("@/infrastructure/repositories", () => ({
-  hayAdministradorActivo: (githubUsername: string) => mockHayAdministradorActivo(githubUsername),
+  hayDocenteActivo: (githubUsername: string) => mockHayDocenteActivo(githubUsername),
 }));
 
 // `getCurrentUser()` memoiza con `cache()` de React dentro de una misma
@@ -56,33 +56,33 @@ describe("getCurrentUser", () => {
     expect(await getCurrentUser()).toBeNull();
   });
 
-  it("resuelve un responsable de entorno sin consultar la tabla de administradores", async () => {
+  it("resuelve un responsable de entorno sin consultar la tabla de docentes", async () => {
     mockAuth.mockResolvedValue(sessionCon("juancete"));
     mockEsResponsableDeEntorno.mockReturnValue(true);
 
     const user = await getCurrentUser();
 
     expect(user?.rol.puedeAdministrar()).toBe(true);
-    expect(user?.rol.puedeGestionarAdministradores()).toBe(true);
-    expect(mockHayAdministradorActivo).not.toHaveBeenCalled();
+    expect(user?.rol.puedeGestionarDocentes()).toBe(true);
+    expect(mockHayDocenteActivo).not.toHaveBeenCalled();
   });
 
-  it("resuelve un docente para un administrador activo en base", async () => {
+  it("resuelve un docente para un docente activo en base", async () => {
     mockAuth.mockResolvedValue(sessionCon("ayudante1"));
     mockEsResponsableDeEntorno.mockReturnValue(false);
-    mockHayAdministradorActivo.mockResolvedValue(true);
+    mockHayDocenteActivo.mockResolvedValue(true);
 
     const user = await getCurrentUser();
 
     expect(user?.rol.puedeAdministrar()).toBe(true);
-    expect(user?.rol.puedeGestionarAdministradores()).toBe(false);
-    expect(mockHayAdministradorActivo).toHaveBeenCalledWith("ayudante1");
+    expect(user?.rol.puedeGestionarDocentes()).toBe(false);
+    expect(mockHayDocenteActivo).toHaveBeenCalledWith("ayudante1");
   });
 
-  it("resuelve un alumno cuando no es responsable ni administrador activo", async () => {
+  it("resuelve un alumno cuando no es responsable ni docente activo", async () => {
     mockAuth.mockResolvedValue(sessionCon("ana"));
     mockEsResponsableDeEntorno.mockReturnValue(false);
-    mockHayAdministradorActivo.mockResolvedValue(false);
+    mockHayDocenteActivo.mockResolvedValue(false);
 
     const user = await getCurrentUser();
 
@@ -90,10 +90,10 @@ describe("getCurrentUser", () => {
     expect(user?.rol.veBannerDeSincronizacion()).toBe(true);
   });
 
-  it("resuelve un alumno para un administrador desactivado", async () => {
+  it("resuelve un alumno para un docente desactivado", async () => {
     mockAuth.mockResolvedValue(sessionCon("ex-ayudante"));
     mockEsResponsableDeEntorno.mockReturnValue(false);
-    mockHayAdministradorActivo.mockResolvedValue(false);
+    mockHayDocenteActivo.mockResolvedValue(false);
 
     const user = await getCurrentUser();
 
@@ -105,16 +105,16 @@ describe("getCurrentUser", () => {
       pdepUser: { githubUsername: "ana", name: "Ana García", image: "https://x" },
     });
     mockEsResponsableDeEntorno.mockReturnValue(false);
-    mockHayAdministradorActivo.mockResolvedValue(false);
+    mockHayDocenteActivo.mockResolvedValue(false);
 
     const user = await getCurrentUser();
     expect(user).toMatchObject({ githubUsername: "ana", name: "Ana García", image: "https://x" });
   });
 
-  it("lanza PermisosNoVerificablesError si falla la consulta de administradores (fail hard, no reutiliza rol anterior)", async () => {
+  it("lanza PermisosNoVerificablesError si falla la consulta de docentes (fail hard, no reutiliza rol anterior)", async () => {
     mockAuth.mockResolvedValue(sessionCon("ana"));
     mockEsResponsableDeEntorno.mockReturnValue(false);
-    mockHayAdministradorActivo.mockRejectedValue(new Error("DB caída"));
+    mockHayDocenteActivo.mockRejectedValue(new Error("DB caída"));
 
     await expect(getCurrentUser()).rejects.toBeInstanceOf(PermisosNoVerificablesError);
   });
@@ -133,7 +133,7 @@ describe("requireUser", () => {
   it("devuelve el usuario si hay sesión", async () => {
     mockAuth.mockResolvedValue(sessionCon("ana"));
     mockEsResponsableDeEntorno.mockReturnValue(false);
-    mockHayAdministradorActivo.mockResolvedValue(false);
+    mockHayDocenteActivo.mockResolvedValue(false);
 
     const user = await requireUser();
     expect(user.githubUsername).toBe("ana");
@@ -153,15 +153,15 @@ describe("requireAdmin", () => {
   it("redirige a /dashboard si el usuario no es docente ni responsable", async () => {
     mockAuth.mockResolvedValue(sessionCon("ana"));
     mockEsResponsableDeEntorno.mockReturnValue(false);
-    mockHayAdministradorActivo.mockResolvedValue(false);
+    mockHayDocenteActivo.mockResolvedValue(false);
 
     await expect(requireAdmin()).rejects.toThrow("redirect:/dashboard");
   });
 
-  it("devuelve el usuario si es un administrador activo en base", async () => {
+  it("devuelve el usuario si es un docente activo en base", async () => {
     mockAuth.mockResolvedValue(sessionCon("ayudante1"));
     mockEsResponsableDeEntorno.mockReturnValue(false);
-    mockHayAdministradorActivo.mockResolvedValue(true);
+    mockHayDocenteActivo.mockResolvedValue(true);
 
     const user = await requireAdmin();
     expect(user.githubUsername).toBe("ayudante1");
@@ -186,10 +186,10 @@ describe("requireResponsable", () => {
     await expect(requireResponsable()).rejects.toThrow("redirect:/login");
   });
 
-  it("redirige a /dashboard a un docente de base (no puede gestionar administradores)", async () => {
+  it("redirige a /dashboard a un docente de base (no puede gestionar docentes)", async () => {
     mockAuth.mockResolvedValue(sessionCon("ayudante1"));
     mockEsResponsableDeEntorno.mockReturnValue(false);
-    mockHayAdministradorActivo.mockResolvedValue(true);
+    mockHayDocenteActivo.mockResolvedValue(true);
 
     await expect(requireResponsable()).rejects.toThrow("redirect:/dashboard");
   });
@@ -197,7 +197,7 @@ describe("requireResponsable", () => {
   it("redirige a /dashboard a un alumno", async () => {
     mockAuth.mockResolvedValue(sessionCon("ana"));
     mockEsResponsableDeEntorno.mockReturnValue(false);
-    mockHayAdministradorActivo.mockResolvedValue(false);
+    mockHayDocenteActivo.mockResolvedValue(false);
 
     await expect(requireResponsable()).rejects.toThrow("redirect:/dashboard");
   });

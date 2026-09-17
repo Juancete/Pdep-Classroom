@@ -2,9 +2,9 @@
  * Sólo comprueba autenticación — no autorización. Hasta #83 esta función
  * también rebotaba a un alumno fuera de `/admin` mirando el `rolNombre` que
  * viajaba en el JWT. Ese rol dejó de existir en la sesión: a partir de #83 un
- * administrador puede desactivarse entre una request y la siguiente, y este
+ * docente puede desactivarse entre una request y la siguiente, y este
  * proxy corre en el Edge runtime, que no puede consultar la tabla
- * `Administrador` (arrastraría MikroORM al bundle Edge — ver el comentario en
+ * `Docente` (arrastraría MikroORM al bundle Edge — ver el comentario en
  * `src/infrastructure/auth/auth.ts`).
  *
  * La autorización por rol sigue existiendo, sólo que más adentro, donde sí

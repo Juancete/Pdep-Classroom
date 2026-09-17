@@ -24,7 +24,7 @@ if (process.env.NODE_ENV !== "production" && global.__mikro_orm__) {
 // webpack cargaron copias distintas de este módulo (por ejemplo porque una
 // server action se importa sólo desde un client component y Next la
 // compila en la layer `action-browser` en vez de `rsc` — ver el comentario
-// en `src/app/admin/administradores/page.tsx`), cada copia trae sus propias
+// en `src/app/admin/docentes/page.tsx`), cada copia trae sus propias
 // clases de entidad. El ORM cacheado en `globalThis` sólo conoce los
 // prototipos de la copia que llamó primero a `MikroORM.init`; si otra copia
 // hace `persist()` con su propia clase, MikroORM revienta con un

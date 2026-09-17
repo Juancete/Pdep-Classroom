@@ -138,11 +138,11 @@ describe("puedeAdministrar", () => {
   });
 });
 
-describe("puedeGestionarAdministradores", () => {
-  it("sólo el Responsable puede gestionar administradores", () => {
-    expect(RESPONSABLE.puedeGestionarAdministradores()).toBe(true);
-    expect(DOCENTE.puedeGestionarAdministradores()).toBe(false);
-    expect(ESTUDIANTE.puedeGestionarAdministradores()).toBe(false);
+describe("puedeGestionarDocentes", () => {
+  it("sólo el Responsable puede gestionar docentes", () => {
+    expect(RESPONSABLE.puedeGestionarDocentes()).toBe(true);
+    expect(DOCENTE.puedeGestionarDocentes()).toBe(false);
+    expect(ESTUDIANTE.puedeGestionarDocentes()).toBe(false);
   });
 });
 
@@ -165,7 +165,7 @@ describe("navegación por rol", () => {
     expect(ESTUDIANTE.itemsDeNavegacion()).toEqual([]);
   });
 
-  it("Responsable ve las mismas secciones que Docente más Docentes (gestión de administradores)", () => {
+  it("Responsable ve las mismas secciones que Docente más Docentes (gestión de docentes)", () => {
     const items = RESPONSABLE.itemsDeNavegacion();
     expect(items.map((item) => item.href)).toEqual([
       "/admin/assignments",
@@ -173,9 +173,9 @@ describe("navegación por rol", () => {
       "/admin/comisiones",
       "/admin/alumnos",
       "/admin/operaciones",
-      "/admin/administradores",
+      "/admin/docentes",
     ]);
-    expect(items.find((item) => item.href === "/admin/administradores")?.label).toBe("Docentes");
+    expect(items.find((item) => item.href === "/admin/docentes")?.label).toBe("Docentes");
   });
 
   it("solo el Estudiante ve el banner de sincronización", () => {
@@ -344,24 +344,24 @@ describe("motivoDeBloqueoDeMembresia", () => {
 });
 
 describe("resolverRol", () => {
-  it("devuelve RESPONSABLE si es responsable de entorno, sin importar si también es administrador activo", () => {
+  it("devuelve RESPONSABLE si es responsable de entorno, sin importar si también es docente activo", () => {
     expect(
-      resolverRol({ esResponsableDeEntorno: true, esAdministradorActivo: true })
+      resolverRol({ esResponsableDeEntorno: true, esDocenteActivo: true })
     ).toBe(RESPONSABLE);
     expect(
-      resolverRol({ esResponsableDeEntorno: true, esAdministradorActivo: false })
+      resolverRol({ esResponsableDeEntorno: true, esDocenteActivo: false })
     ).toBe(RESPONSABLE);
   });
 
-  it("devuelve DOCENTE si no es responsable pero sí administrador activo", () => {
+  it("devuelve DOCENTE si no es responsable pero sí docente activo", () => {
     expect(
-      resolverRol({ esResponsableDeEntorno: false, esAdministradorActivo: true })
+      resolverRol({ esResponsableDeEntorno: false, esDocenteActivo: true })
     ).toBe(DOCENTE);
   });
 
-  it("devuelve ESTUDIANTE si no es ni responsable ni administrador activo", () => {
+  it("devuelve ESTUDIANTE si no es ni responsable ni docente activo", () => {
     expect(
-      resolverRol({ esResponsableDeEntorno: false, esAdministradorActivo: false })
+      resolverRol({ esResponsableDeEntorno: false, esDocenteActivo: false })
     ).toBe(ESTUDIANTE);
   });
 });
@@ -371,8 +371,8 @@ describe("DOCENTE, ESTUDIANTE y RESPONSABLE son instancias de RolDeUsuario", () 
     expect(DOCENTE).toBeInstanceOf(RolDeUsuario);
     expect(ESTUDIANTE).toBeInstanceOf(RolDeUsuario);
     expect(RESPONSABLE).toBeInstanceOf(RolDeUsuario);
-    const rol1 = resolverRol({ esResponsableDeEntorno: false, esAdministradorActivo: false });
-    const rol2 = resolverRol({ esResponsableDeEntorno: false, esAdministradorActivo: false });
+    const rol1 = resolverRol({ esResponsableDeEntorno: false, esDocenteActivo: false });
+    const rol2 = resolverRol({ esResponsableDeEntorno: false, esDocenteActivo: false });
     expect(rol1).toBe(ESTUDIANTE);
     expect(rol1).toBe(rol2);
   });

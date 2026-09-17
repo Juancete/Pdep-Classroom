@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import type { AdministradorFormState } from "./actions";
+import type { DocenteFormState } from "./actions";
 import { INPUT_CLASS, FieldError, SubmitButton } from "../ui";
 import { PencilIcon, SpinnerIcon } from "@/components/icons";
 
 type RenombrarAction = (
-  prevState: AdministradorFormState,
+  prevState: DocenteFormState,
   formData: FormData
-) => Promise<AdministradorFormState>;
+) => Promise<DocenteFormState>;
 
 type CambiarEstadoAction = (
   id: string,
@@ -30,7 +30,7 @@ export function NombreEditable({ id, nombre, action }: NombreEditableProps) {
   // Lo que el usuario tipeó en un intento rechazado — React resetea el
   // input no controlado al terminar el submit, así que se repone como
   // `defaultValue` en el próximo render (mismo patrón que
-  // `administrador-form.tsx`); se limpia en éxito y al cancelar.
+  // `docente-form.tsx`); se limpia en éxito y al cancelar.
   const [nombreEnviado, setNombreEnviado] = useState<string | null>(null);
 
   // Llamada directa a la server action (no `useActionState`): así el cierre

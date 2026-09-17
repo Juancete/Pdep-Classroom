@@ -6,7 +6,7 @@ import {
   GITHUB_USERNAME_MAX_LENGTH,
 } from "./domain-constants";
 
-export interface AltaAdministradorInput {
+export interface AltaDocenteInput {
   githubUsername: string;
   nombre?: string | null;
   porUsuario: string;
@@ -17,34 +17,30 @@ export interface AltaAdministradorInput {
 // de `validarAlta`/`validarNombre`, que devuelven un string para que el
 // caller arme un error de campo antes de tocar la DB — esto es la defensa de
 // último recurso de la entidad misma.
-export class AdministradorInvalidoError extends Error {
+export class DocenteInvalidoError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "AdministradorInvalidoError";
+    this.name = "DocenteInvalidoError";
   }
 }
 
-export const ADMINISTRADOR_NOMBRE_MAX_LENGTH = 255;
+export const DOCENTE_NOMBRE_MAX_LENGTH = 255;
 
 /**
- * Administrador gestionado desde la aplicación (issue #83): un docente con
+ * Docente gestionado desde la aplicación (issue #83): un docente con
  * permisos docentes globales, sin necesitar registro académico. Distinto de
  * los responsables de `ADMIN_GITHUB_USERNAMES` (esos no tienen fila acá — ver
  * `resolverRol` en `RolDeUsuario.ts`): sólo ellos pueden dar de alta filas de
- * esta tabla, y esas filas nunca alcanzan `puedeGestionarAdministradores()`.
- *
- * `Administrador` es el nombre técnico de esta entidad (tabla, clase, ruta
- * `/admin/administradores` — issue #83); en la UI y en la documentación
- * visible al usuario estas filas se llaman "docentes".
+ * esta tabla, y esas filas nunca alcanzan `puedeGestionarDocentes()`.
  *
  * El username es la identidad y es inmutable — `readonly`, fijado una sola
  * vez en el constructor (mismo patrón que `Comision`). Para corregir una
  * cuenta mal cargada, el flujo es desactivar y crear otra (documentado en el
  * issue).
  */
-@Entity({ tableName: "administrador" })
-@Unique({ name: "administrador_github_username_unique_idx", properties: ["githubUsername"] })
-export class Administrador {
+@Entity({ tableName: "docente" })
+@Unique({ name: "docente_github_username_unique_idx", properties: ["githubUsername"] })
+export class Docente {
   @PrimaryKey({ type: "uuid" })
   id: string = randomUUID();
 
@@ -96,39 +92,39 @@ export class Administrador {
     if (!esGithubUsernameValido(normalizado)) {
       return "El usuario de GitHub no tiene un formato válido";
     }
-    return Administrador.validarNombre(input.nombre);
+    return Docente.validarNombre(input.nombre);
   }
 
   // Mismo criterio que `validarAlta`: un string con el motivo, o null si está
   // bien. La columna es `varchar(255)` — un texto más largo revienta el
   // flush en vez de devolver un mensaje de campo útil.
   static validarNombre(nombre: string | null | undefined): string | null {
-    if (nombre != null && nombre.trim().length > ADMINISTRADOR_NOMBRE_MAX_LENGTH) {
-      return `El nombre no puede superar los ${ADMINISTRADOR_NOMBRE_MAX_LENGTH} caracteres`;
+    if (nombre != null && nombre.trim().length > DOCENTE_NOMBRE_MAX_LENGTH) {
+      return `El nombre no puede superar los ${DOCENTE_NOMBRE_MAX_LENGTH} caracteres`;
     }
     return null;
   }
 
-  static crear({ githubUsername, nombre, porUsuario }: AltaAdministradorInput): Administrador {
-    const errorDeValidacion = Administrador.validarAlta({ githubUsername, nombre });
-    if (errorDeValidacion) throw new AdministradorInvalidoError(errorDeValidacion);
+  static crear({ githubUsername, nombre, porUsuario }: AltaDocenteInput): Docente {
+    const errorDeValidacion = Docente.validarAlta({ githubUsername, nombre });
+    if (errorDeValidacion) throw new DocenteInvalidoError(errorDeValidacion);
 
-    const administrador = new Administrador(githubUsername);
+    const docente = new Docente(githubUsername);
     const ahora = new Date();
-    administrador.nombre = nombre?.trim() || null;
-    administrador.activo = true;
-    administrador.creadoEn = ahora;
-    administrador.creadoPor = porUsuario;
-    administrador.modificadoEn = ahora;
-    administrador.modificadoPor = porUsuario;
-    return administrador;
+    docente.nombre = nombre?.trim() || null;
+    docente.activo = true;
+    docente.creadoEn = ahora;
+    docente.creadoPor = porUsuario;
+    docente.modificadoEn = ahora;
+    docente.modificadoPor = porUsuario;
+    return docente;
   }
 
   // Editar el nombre no toca la identidad ni los permisos (criterio de
   // aceptación del issue) — sólo el campo de referencia y la auditoría.
   renombrar(nombre: string | null | undefined, porUsuario: string, ahora: Date = new Date()): void {
-    const errorDeValidacion = Administrador.validarNombre(nombre);
-    if (errorDeValidacion) throw new AdministradorInvalidoError(errorDeValidacion);
+    const errorDeValidacion = Docente.validarNombre(nombre);
+    if (errorDeValidacion) throw new DocenteInvalidoError(errorDeValidacion);
 
     this.nombre = nombre?.trim() || null;
     this.modificadoEn = ahora;

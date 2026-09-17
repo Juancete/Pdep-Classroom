@@ -49,6 +49,6 @@ export function GruposLoading() {
   return <ListSkeleton title="Grupos" rows={4} />;
 }
 
-export function AdministradoresLoading() {
+export function DocentesLoading() {
   return <ListSkeleton title="Docentes" rows={4} />;
 }

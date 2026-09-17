@@ -2,35 +2,35 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-const mockCrearAdministradorAction = vi.fn();
+const mockCrearDocenteAction = vi.fn();
 
-import { AdministradorForm } from "./administrador-form";
+import { DocenteForm } from "./docente-form";
 
 function getInput(container: HTMLElement, name: string) {
   return container.querySelector<HTMLInputElement>(`[name="${name}"]`)!;
 }
 
-describe("AdministradorForm", () => {
+describe("DocenteForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("renderiza los campos de usuario y nombre y el botón Agregar", () => {
-    mockCrearAdministradorAction.mockResolvedValue(null);
-    const { container } = render(<AdministradorForm action={mockCrearAdministradorAction} />);
+    mockCrearDocenteAction.mockResolvedValue(null);
+    const { container } = render(<DocenteForm action={mockCrearDocenteAction} />);
     expect(getInput(container, "githubUsername")).toBeTruthy();
     expect(getInput(container, "nombre")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Agregar" })).toBeInTheDocument();
   });
 
   it("alta rechazada: conserva lo tipeado y muestra el error de campo", async () => {
-    mockCrearAdministradorAction.mockResolvedValue({
+    mockCrearDocenteAction.mockResolvedValue({
       ok: false,
       errors: { githubUsername: ["El usuario de GitHub no tiene un formato válido"] },
       valores: { githubUsername: "ayudante1", nombre: "Ana" },
     });
     const user = userEvent.setup();
-    const { container } = render(<AdministradorForm action={mockCrearAdministradorAction} />);
+    const { container } = render(<DocenteForm action={mockCrearDocenteAction} />);
 
     await user.type(getInput(container, "githubUsername"), "ayudante1");
     await user.type(getInput(container, "nombre"), "Ana");
@@ -41,14 +41,14 @@ describe("AdministradorForm", () => {
     expect(getInput(container, "githubUsername").value).toBe("ayudante1");
     expect(getInput(container, "nombre").value).toBe("Ana");
 
-    const formDataEnviado = mockCrearAdministradorAction.mock.calls[0][1] as FormData;
+    const formDataEnviado = mockCrearDocenteAction.mock.calls[0][1] as FormData;
     expect(formDataEnviado.get("githubUsername")).toBe("ayudante1");
   });
 
   it("alta exitosa: el form queda vacío tras el reset automático de React", async () => {
-    mockCrearAdministradorAction.mockResolvedValue({ ok: true });
+    mockCrearDocenteAction.mockResolvedValue({ ok: true });
     const user = userEvent.setup();
-    const { container } = render(<AdministradorForm action={mockCrearAdministradorAction} />);
+    const { container } = render(<DocenteForm action={mockCrearDocenteAction} />);
 
     await user.type(getInput(container, "githubUsername"), "ayudante1");
     await user.type(getInput(container, "nombre"), "Ana");

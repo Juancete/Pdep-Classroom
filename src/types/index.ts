@@ -72,7 +72,7 @@ export interface PdepUser {
 // Forma en la que viaja la identidad DENTRO del objeto de sesión de NextAuth.
 // A partir de #83 no incluye el rol: `RolDeUsuario` se resuelve por request
 // en `getCurrentUser()` (ver el comentario en `auth.config.ts`), nunca desde
-// un valor guardado en el JWT — un administrador puede darse de baja entre
+// un valor guardado en el JWT — un docente puede darse de baja entre
 // una request y la siguiente, y el JWT no se invalida en ese momento.
 export interface SessionPdepUser {
   githubUsername: string;

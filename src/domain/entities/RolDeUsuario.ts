@@ -34,12 +34,12 @@ export interface ContextoDeMembresia {
  * navegación mostrar) se delega al objeto concreto. Mismo criterio que
  * `EstadoAssignment` para el ciclo de vida de un assignment.
  *
- * Tres implementaciones: `Estudiante` (alumno registrado), `Docente`
- * (alcance administrativo global — docente dado de alta en `Administrador`
- * o, antes de #83, cualquiera en `ADMIN_GITHUB_USERNAMES`) y `Responsable`
- * (subtipo de `Docente` por herencia — especializa el comportamiento
+ * Tres implementaciones: `RolEstudiante` (alumno registrado), `RolDocente`
+ * (alcance administrativo global — docente dado de alta en `Docente`
+ * o, antes de #83, cualquiera en `ADMIN_GITHUB_USERNAMES`) y `RolResponsable`
+ * (subtipo de `RolDocente` por herencia — especializa el comportamiento
  * sobrescribiendo dos métodos: los responsables configurados por entorno,
- * únicos que además pueden gestionar el ABM de administradores).
+ * únicos que además pueden gestionar el ABM de docentes).
  *
  * Instancias singleton — el rol no tiene datos propios, solo comportamiento.
  */
@@ -68,12 +68,12 @@ export abstract class RolDeUsuario {
   abstract puedeAdministrar(): boolean;
 
   /**
-   * `true` si este rol puede dar de alta, editar y desactivar administradores
+   * `true` si este rol puede dar de alta, editar y desactivar docentes
    * (issue #83). Sólo lo tienen los responsables configurados por entorno —
    * ni un docente dado de alta en la app ni un alumno pueden gestionar
    * accesos, aunque el primero sí `puedeAdministrar()`.
    */
-  abstract puedeGestionarAdministradores(): boolean;
+  abstract puedeGestionarDocentes(): boolean;
 
   /** Secciones de `/admin/*` que este rol ve en la navegación. */
   abstract itemsDeNavegacion(): ItemDeNavegacion[];
@@ -120,7 +120,7 @@ export abstract class RolDeUsuario {
   }
 }
 
-class Docente extends RolDeUsuario {
+class RolDocente extends RolDeUsuario {
   autorizarAccesoAssignment(): void {
     // Alcance global: el docente accede a cualquier assignment.
   }
@@ -133,7 +133,7 @@ class Docente extends RolDeUsuario {
     return true;
   }
 
-  puedeGestionarAdministradores(): boolean {
+  puedeGestionarDocentes(): boolean {
     return false;
   }
 
@@ -161,23 +161,23 @@ class Docente extends RolDeUsuario {
   }
 }
 
-// Responsable: todo lo que puede hacer un Docente (herencia simple: hereda
-// todo el comportamiento de Docente y sobrescribe sólo lo que cambia —
+// Responsable: todo lo que puede hacer un RolDocente (herencia simple: hereda
+// todo el comportamiento de RolDocente y sobrescribe sólo lo que cambia —
 // issue #83 pide explícitamente "conservar todos los permisos docentes")
-// más la gestión del ABM de administradores. Sólo lo tienen los
+// más la gestión del ABM de docentes. Sólo lo tienen los
 // usernames configurados en `ADMIN_GITHUB_USERNAMES`: no hay alta de
 // responsables desde la aplicación (fuera de alcance del issue).
-class Responsable extends Docente {
-  override puedeGestionarAdministradores(): boolean {
+class RolResponsable extends RolDocente {
+  override puedeGestionarDocentes(): boolean {
     return true;
   }
 
   override itemsDeNavegacion(): ItemDeNavegacion[] {
-    return [...super.itemsDeNavegacion(), { href: "/admin/administradores", label: "Docentes" }];
+    return [...super.itemsDeNavegacion(), { href: "/admin/docentes", label: "Docentes" }];
   }
 }
 
-class Estudiante extends RolDeUsuario {
+class RolEstudiante extends RolDeUsuario {
   autorizarAccesoAssignment(alumno: Alumno | null, assignment: Assignment): void {
     if (
       !alumno ||
@@ -199,7 +199,7 @@ class Estudiante extends RolDeUsuario {
     return false;
   }
 
-  puedeGestionarAdministradores(): boolean {
+  puedeGestionarDocentes(): boolean {
     return false;
   }
 
@@ -225,9 +225,9 @@ class Estudiante extends RolDeUsuario {
   }
 }
 
-export const DOCENTE: RolDeUsuario = new Docente();
-export const ESTUDIANTE: RolDeUsuario = new Estudiante();
-export const RESPONSABLE: RolDeUsuario = new Responsable();
+export const DOCENTE: RolDeUsuario = new RolDocente();
+export const ESTUDIANTE: RolDeUsuario = new RolEstudiante();
+export const RESPONSABLE: RolDeUsuario = new RolResponsable();
 
 /**
  * Único punto de decisión de todo el sistema entre responsable, docente y
@@ -235,10 +235,10 @@ export const RESPONSABLE: RolDeUsuario = new Responsable();
  * objeto de rol. Análogo a `EstadoAssignment.desdeNombre`, pero acá no hay
  * columna que leer: la respuesta se arma a partir de dos hechos ya
  * resueltos por el caller (¿está en `ADMIN_GITHUB_USERNAMES`? ¿tiene un
- * registro activo en `Administrador`?), no de un `if` de tipo disperso por
+ * registro activo en `Docente`?), no de un `if` de tipo disperso por
  * el resto del sistema.
  *
- * No recibe la sesión ni el username: a partir de #83, un administrador
+ * No recibe la sesión ni el username: a partir de #83, un docente
  * puede darse de baja entre una request y la siguiente, así que esto no se
  * puede resolver una sola vez en la callback `session()` de NextAuth (el rol
  * quedaría obsoleto en el JWT) — se llama en cada request, desde
@@ -246,12 +246,12 @@ export const RESPONSABLE: RolDeUsuario = new Responsable();
  */
 export function resolverRol({
   esResponsableDeEntorno,
-  esAdministradorActivo,
+  esDocenteActivo,
 }: {
   esResponsableDeEntorno: boolean;
-  esAdministradorActivo: boolean;
+  esDocenteActivo: boolean;
 }): RolDeUsuario {
   if (esResponsableDeEntorno) return RESPONSABLE;
-  if (esAdministradorActivo) return DOCENTE;
+  if (esDocenteActivo) return DOCENTE;
   return ESTUDIANTE;
 }

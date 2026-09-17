@@ -1,22 +1,22 @@
 "use client";
 
 import { useActionState } from "react";
-import type { AdministradorFormState } from "./actions";
+import type { DocenteFormState } from "./actions";
 import { INPUT_CLASS, INPUT_ERROR_CLASS, FieldError, SubmitButton } from "../ui";
 
-const INITIAL_STATE: AdministradorFormState = null;
+const INITIAL_STATE: DocenteFormState = null;
 
 type Props = {
   // Recibida por prop desde el server component (`page.tsx`): ver el
   // comentario ahí sobre por qué este client component no importa la action
   // directamente (issue #90).
   action: (
-    prevState: AdministradorFormState,
+    prevState: DocenteFormState,
     formData: FormData
-  ) => Promise<AdministradorFormState>;
+  ) => Promise<DocenteFormState>;
 };
 
-export function AdministradorForm({ action }: Props) {
+export function DocenteForm({ action }: Props) {
   const [state, formAction] = useActionState(action, INITIAL_STATE);
   const errors = state && !state.ok ? state.errors : {};
 
@@ -34,9 +34,9 @@ export function AdministradorForm({ action }: Props) {
       <h2 className="text-sm font-semibold text-gray-700 mb-3">Nuevo docente</h2>
       <div className="flex flex-col sm:flex-row gap-3 sm:items-start">
         <div className="flex-1">
-          <label htmlFor="administrador-githubUsername" className="block text-xs font-medium text-gray-600 mb-1">Usuario de GitHub *</label>
+          <label htmlFor="docente-githubUsername" className="block text-xs font-medium text-gray-600 mb-1">Usuario de GitHub *</label>
           <input
-            id="administrador-githubUsername"
+            id="docente-githubUsername"
             name="githubUsername"
             type="text"
             placeholder="ej: docente1"
@@ -47,9 +47,9 @@ export function AdministradorForm({ action }: Props) {
           <FieldError message={errors.githubUsername?.[0]} />
         </div>
         <div className="flex-1">
-          <label htmlFor="administrador-nombre" className="block text-xs font-medium text-gray-600 mb-1">Nombre de referencia</label>
+          <label htmlFor="docente-nombre" className="block text-xs font-medium text-gray-600 mb-1">Nombre de referencia</label>
           <input
-            id="administrador-nombre"
+            id="docente-nombre"
             name="nombre"
             type="text"
             placeholder="opcional"

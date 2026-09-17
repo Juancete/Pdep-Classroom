@@ -1,5 +1,5 @@
 // Se lanza cuando no se pudo verificar el rol del usuario (típicamente, la
-// consulta a `Administrador` falló). A propósito no se atrapa acá ni en
+// consulta a `Docente` falló). A propósito no se atrapa acá ni en
 // `getCurrentUser()`: el issue #83 pide rechazar la operación con un error
 // controlado en vez de reutilizar un rol anterior, así que cada consumidor
 // decide cómo mostrarlo (ver `guardAdmin`/`guardUser` en `api-auth.ts` para

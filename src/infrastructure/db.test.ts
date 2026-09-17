@@ -77,7 +77,7 @@ describe("db.ts getOrm", () => {
     // Otra "copia" de webpack reemplazó la clase que el ORM tiene
     // registrada para "EntidadA" por una clase distinta con el mismo
     // nombre — el mismo síntoma que dos bundles con su propio
-    // `Administrador`.
+    // `Docente`.
     class OtraEntidadA {}
     entidadesRegistradas.EntidadA = { class: OtraEntidadA };
 

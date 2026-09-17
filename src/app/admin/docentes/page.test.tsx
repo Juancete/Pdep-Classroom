@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 // ── Mocks ────────────────────────────────────────────────────
 
 const mockRequireResponsable = vi.fn();
-const mockGetAdministradores = vi.fn();
+const mockGetDocentes = vi.fn();
 const mockResponsablesDeEntorno = vi.fn();
 
 vi.mock("@/infrastructure/auth/session", () => ({
@@ -12,7 +12,7 @@ vi.mock("@/infrastructure/auth/session", () => ({
 }));
 
 vi.mock("@/infrastructure/repositories", () => ({
-  getAdministradores: () => mockGetAdministradores(),
+  getDocentes: () => mockGetDocentes(),
 }));
 
 vi.mock("@/lib/responsables-de-entorno", () => ({
@@ -26,20 +26,20 @@ vi.mock("@/lib/responsables-de-entorno", () => ({
 // componente (issue #90: acá interesa que sean la misma referencia que
 // exporta `./actions`, no mockear su comportamiento).
 vi.mock("./actions", () => ({
-  crearAdministradorAction: vi.fn(),
-  renombrarAdministradorAction: vi.fn(),
-  cambiarEstadoAdministradorAction: vi.fn(),
+  crearDocenteAction: vi.fn(),
+  renombrarDocenteAction: vi.fn(),
+  cambiarEstadoDocenteAction: vi.fn(),
 }));
 
-// Los mocks de `AdministradorForm`/`NombreEditable`/`EstadoToggle` son
+// Los mocks de `DocenteForm`/`NombreEditable`/`EstadoToggle` son
 // `vi.fn()` (no sólo componentes) para poder inspeccionar con qué props los
 // llamó `page.tsx`.
-type AdministradorFormProps = { action: unknown };
-const mockAdministradorForm = vi.fn((_props: AdministradorFormProps) => (
-  <div data-testid="administrador-form" />
+type DocenteFormProps = { action: unknown };
+const mockDocenteForm = vi.fn((_props: DocenteFormProps) => (
+  <div data-testid="docente-form" />
 ));
-vi.mock("./administrador-form", () => ({
-  AdministradorForm: (props: AdministradorFormProps) => mockAdministradorForm(props),
+vi.mock("./docente-form", () => ({
+  DocenteForm: (props: DocenteFormProps) => mockDocenteForm(props),
 }));
 
 type NombreEditableProps = { nombre: string | null; action: unknown };
@@ -50,27 +50,27 @@ const mockNombreEditable = vi.fn(({ nombre }: NombreEditableProps) => (
 const mockEstadoToggle = vi.fn(({ activo }: EstadoToggleProps) => (
   <button>{activo ? "Desactivar" : "Reactivar"}</button>
 ));
-vi.mock("./administrador-acciones", () => ({
+vi.mock("./docente-acciones", () => ({
   NombreEditable: (props: NombreEditableProps) => mockNombreEditable(props),
   EstadoToggle: (props: EstadoToggleProps) => mockEstadoToggle(props),
 }));
 
-import AdminAdministradoresPage from "./page";
+import AdminDocentesPage from "./page";
 import {
-  crearAdministradorAction as mockCrearAdministradorAction,
-  renombrarAdministradorAction as mockRenombrarAdministradorAction,
-  cambiarEstadoAdministradorAction as mockCambiarEstadoAdministradorAction,
+  crearDocenteAction as mockCrearDocenteAction,
+  renombrarDocenteAction as mockRenombrarDocenteAction,
+  cambiarEstadoDocenteAction as mockCambiarEstadoDocenteAction,
 } from "./actions";
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function makeAdministrador(overrides?: Partial<{ id: string; githubUsername: string; nombre: string | null; activo: boolean }>) {
+function makeDocente(overrides?: Partial<{ id: string; githubUsername: string; nombre: string | null; activo: boolean }>) {
   return { id: "a1", githubUsername: "ayudante1", nombre: null, activo: true, ...overrides };
 }
 
 // ── Tests ────────────────────────────────────────────────────
 
-describe("Admin Administradores page", () => {
+describe("Admin Docentes page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireResponsable.mockResolvedValue(undefined);
@@ -78,80 +78,77 @@ describe("Admin Administradores page", () => {
   });
 
   it("pasa las actions reales de ./actions por props a los tres componentes (issue #90)", async () => {
-    mockGetAdministradores.mockResolvedValue([makeAdministrador({ githubUsername: "ayudante1" })]);
-    renderToStaticMarkup(await AdminAdministradoresPage());
+    mockGetDocentes.mockResolvedValue([makeDocente({ githubUsername: "ayudante1" })]);
+    renderToStaticMarkup(await AdminDocentesPage());
 
-    expect(mockAdministradorForm).toHaveBeenCalledWith(
-      expect.objectContaining({ action: mockCrearAdministradorAction })
+    expect(mockDocenteForm).toHaveBeenCalledWith(
+      expect.objectContaining({ action: mockCrearDocenteAction })
     );
     expect(mockNombreEditable).toHaveBeenCalledWith(
-      expect.objectContaining({ action: mockRenombrarAdministradorAction })
+      expect.objectContaining({ action: mockRenombrarDocenteAction })
     );
     expect(mockEstadoToggle).toHaveBeenCalledWith(
-      expect.objectContaining({ action: mockCambiarEstadoAdministradorAction })
+      expect.objectContaining({ action: mockCambiarEstadoDocenteAction })
     );
   });
 
   it("siempre llama a requireResponsable", async () => {
-    mockGetAdministradores.mockResolvedValue([]);
-    await AdminAdministradoresPage();
+    mockGetDocentes.mockResolvedValue([]);
+    await AdminDocentesPage();
     expect(mockRequireResponsable).toHaveBeenCalledOnce();
   });
 
   it("muestra el estado vacío cuando no hay filas", async () => {
-    mockGetAdministradores.mockResolvedValue([]);
-    const html = renderToStaticMarkup(await AdminAdministradoresPage());
+    mockGetDocentes.mockResolvedValue([]);
+    const html = renderToStaticMarkup(await AdminDocentesPage());
     expect(html).toContain("No hay nadie configurado todavía.");
   });
 
-  // Terminología: "Administrador" es sólo el nombre técnico de la entidad/
-  // tabla/ruta — todo lo visible en la UI dice "docente".
-  it("usa 'Docentes' como título visible, no 'Administradores'", async () => {
-    mockGetAdministradores.mockResolvedValue([]);
-    const html = renderToStaticMarkup(await AdminAdministradoresPage());
+  it("usa 'Docentes' como título visible", async () => {
+    mockGetDocentes.mockResolvedValue([]);
+    const html = renderToStaticMarkup(await AdminDocentesPage());
     expect(html).toContain("Docentes");
-    expect(html).not.toContain(">Administradores<");
   });
 
   it("muestra a los responsables de entorno con badge 'Entorno' y sin acciones", async () => {
-    mockGetAdministradores.mockResolvedValue([]);
+    mockGetDocentes.mockResolvedValue([]);
     mockResponsablesDeEntorno.mockReturnValue(["juancete"]);
-    const html = renderToStaticMarkup(await AdminAdministradoresPage());
+    const html = renderToStaticMarkup(await AdminDocentesPage());
     expect(html).toContain("@juancete");
     expect(html).toContain("Entorno");
     expect(html).toContain("Protegido");
   });
 
-  it("muestra a los administradores de base con badge 'Aplicación' y acciones", async () => {
-    mockGetAdministradores.mockResolvedValue([makeAdministrador({ githubUsername: "ayudante1" })]);
-    const html = renderToStaticMarkup(await AdminAdministradoresPage());
+  it("muestra a los docentes de base con badge 'Aplicación' y acciones", async () => {
+    mockGetDocentes.mockResolvedValue([makeDocente({ githubUsername: "ayudante1" })]);
+    const html = renderToStaticMarkup(await AdminDocentesPage());
     expect(html).toContain("@ayudante1");
     expect(html).toContain("Aplicación");
     expect(html).toContain("Desactivar");
   });
 
   it("un username presente en ambos (entorno y base) se renderiza una sola vez, como 'Entorno'", async () => {
-    mockGetAdministradores.mockResolvedValue([makeAdministrador({ githubUsername: "juancete" })]);
+    mockGetDocentes.mockResolvedValue([makeDocente({ githubUsername: "juancete" })]);
     mockResponsablesDeEntorno.mockReturnValue(["juancete"]);
-    const html = renderToStaticMarkup(await AdminAdministradoresPage());
+    const html = renderToStaticMarkup(await AdminDocentesPage());
 
     expect(html.match(/@juancete/g)).toHaveLength(1);
     expect(html).toContain("Entorno");
     expect(html).not.toContain("Desactivar");
   });
 
-  it("muestra badge 'Inactivo' para un administrador desactivado", async () => {
-    mockGetAdministradores.mockResolvedValue([
-      makeAdministrador({ githubUsername: "ex-ayudante", activo: false }),
+  it("muestra badge 'Inactivo' para un docente desactivado", async () => {
+    mockGetDocentes.mockResolvedValue([
+      makeDocente({ githubUsername: "ex-ayudante", activo: false }),
     ]);
-    const html = renderToStaticMarkup(await AdminAdministradoresPage());
+    const html = renderToStaticMarkup(await AdminDocentesPage());
     expect(html).toContain("Inactivo");
     expect(html).toContain("Reactivar");
   });
 
   it("renderiza el formulario de alta", async () => {
-    mockGetAdministradores.mockResolvedValue([]);
-    const html = renderToStaticMarkup(await AdminAdministradoresPage());
-    expect(html).toContain('data-testid="administrador-form"');
+    mockGetDocentes.mockResolvedValue([]);
+    const html = renderToStaticMarkup(await AdminDocentesPage());
+    expect(html).toContain('data-testid="docente-form"');
   });
 });

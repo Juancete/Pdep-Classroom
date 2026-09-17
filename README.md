@@ -394,12 +394,12 @@ ADMIN_GITHUB_USERNAMES=juancontardo,fdodino,nsicolo,dsquivel
 ```
 
 Un responsable tiene los mismos permisos que cualquier docente, más uno extra: es el único que
-puede gestionar docentes desde `/admin/administradores`. Esta lista no se copia a la base de
+puede gestionar docentes desde `/admin/docentes`. Esta lista no se copia a la base de
 datos — sigue siendo la única fuente de responsables, y darla de baja implica editar la variable
 de entorno y redesplegar, igual que hoy.
 
 Para sumar **docentes** sin tocar variables de entorno ni desplegar, un responsable los da de alta
-desde `/admin/administradores`: sólo pide el usuario de GitHub y, opcionalmente, un nombre de
+desde `/admin/docentes`: sólo pide el usuario de GitHub y, opcionalmente, un nombre de
 referencia. El docente entra con esa cuenta de GitHub sin necesitar registrarse como alumno.
 Desactivarlo le revoca los permisos desde la siguiente solicitud, incluso con una sesión ya
 abierta; reactivarlo se los devuelve sin que tenga que volver a loguearse. El login de desarrollo
@@ -472,7 +472,7 @@ vercel env add GITHUB_CLIENT_SECRET
 vercel env add NEXTAUTH_SECRET               # npx auth secret
 
 # Admins — sin esto, nadie entra como responsable (y por lo tanto nadie puede
-# dar de alta administradores desde /admin/administradores)
+# dar de alta docentes desde /admin/docentes)
 vercel env add ADMIN_GITHUB_USERNAMES        # usernames separados por coma
 ```
 

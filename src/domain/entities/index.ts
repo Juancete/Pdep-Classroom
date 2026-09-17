@@ -131,8 +131,8 @@ export {
   type OrigenCambioMembresia,
 } from "./RolDeUsuario";
 export {
-  Administrador,
-  AdministradorInvalidoError,
-  ADMINISTRADOR_NOMBRE_MAX_LENGTH,
-  type AltaAdministradorInput,
-} from "./Administrador";
+  Docente,
+  DocenteInvalidoError,
+  DOCENTE_NOMBRE_MAX_LENGTH,
+  type AltaDocenteInput,
+} from "./Docente";

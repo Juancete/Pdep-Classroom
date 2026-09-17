@@ -123,7 +123,7 @@ describe("GET /api/assignments", () => {
     expect(mockGetAssignmentsDeComision).not.toHaveBeenCalled();
   });
 
-  it("mantiene el listado global para administradores", async () => {
+  it("mantiene el listado global para docentes", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
 
     const response = await GET();
