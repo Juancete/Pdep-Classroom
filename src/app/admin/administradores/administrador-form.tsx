@@ -1,13 +1,23 @@
 "use client";
 
 import { useActionState } from "react";
-import { crearAdministradorAction, type AdministradorFormState } from "./actions";
+import type { AdministradorFormState } from "./actions";
 import { INPUT_CLASS, INPUT_ERROR_CLASS, FieldError, SubmitButton } from "../ui";
 
 const INITIAL_STATE: AdministradorFormState = null;
 
-export function AdministradorForm() {
-  const [state, formAction] = useActionState(crearAdministradorAction, INITIAL_STATE);
+type Props = {
+  // Recibida por prop desde el server component (`page.tsx`): ver el
+  // comentario ahí sobre por qué este client component no importa la action
+  // directamente (issue #90).
+  action: (
+    prevState: AdministradorFormState,
+    formData: FormData
+  ) => Promise<AdministradorFormState>;
+};
+
+export function AdministradorForm({ action }: Props) {
+  const [state, formAction] = useActionState(action, INITIAL_STATE);
   const errors = state && !state.ok ? state.errors : {};
 
   // React 19 resetea automáticamente los inputs no controlados de un

@@ -4,10 +4,6 @@ import userEvent from "@testing-library/user-event";
 
 const mockCrearAdministradorAction = vi.fn();
 
-vi.mock("./actions", () => ({
-  crearAdministradorAction: (...args: unknown[]) => mockCrearAdministradorAction(...args),
-}));
-
 import { AdministradorForm } from "./administrador-form";
 
 function getInput(container: HTMLElement, name: string) {
@@ -21,7 +17,7 @@ describe("AdministradorForm", () => {
 
   it("renderiza los campos de usuario y nombre y el botón Agregar", () => {
     mockCrearAdministradorAction.mockResolvedValue(null);
-    const { container } = render(<AdministradorForm />);
+    const { container } = render(<AdministradorForm action={mockCrearAdministradorAction} />);
     expect(getInput(container, "githubUsername")).toBeTruthy();
     expect(getInput(container, "nombre")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Agregar" })).toBeInTheDocument();
@@ -34,7 +30,7 @@ describe("AdministradorForm", () => {
       valores: { githubUsername: "ayudante1", nombre: "Ana" },
     });
     const user = userEvent.setup();
-    const { container } = render(<AdministradorForm />);
+    const { container } = render(<AdministradorForm action={mockCrearAdministradorAction} />);
 
     await user.type(getInput(container, "githubUsername"), "ayudante1");
     await user.type(getInput(container, "nombre"), "Ana");
@@ -52,7 +48,7 @@ describe("AdministradorForm", () => {
   it("alta exitosa: el form queda vacío tras el reset automático de React", async () => {
     mockCrearAdministradorAction.mockResolvedValue({ ok: true });
     const user = userEvent.setup();
-    const { container } = render(<AdministradorForm />);
+    const { container } = render(<AdministradorForm action={mockCrearAdministradorAction} />);
 
     await user.type(getInput(container, "githubUsername"), "ayudante1");
     await user.type(getInput(container, "nombre"), "Ana");

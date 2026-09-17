@@ -4,6 +4,11 @@ import { responsablesDeEntorno } from "@/lib/responsables-de-entorno";
 import { AdministradorForm } from "./administrador-form";
 import { NombreEditable, EstadoToggle } from "./administrador-acciones";
 import {
+  crearAdministradorAction,
+  renombrarAdministradorAction,
+  cambiarEstadoAdministradorAction,
+} from "./actions";
+import {
   DataTable,
   DataHeader,
   DataHeaderCell,
@@ -55,7 +60,17 @@ export default async function AdminAdministradoresPage() {
         </p>
       </div>
 
-      <AdministradorForm />
+      {/* Las tres actions se importan acá (server component) y se pasan por
+          props, igual que `ComisionForm` en comisiones — no las importa
+          directamente ningún client component. Si `administrador-form.tsx`
+          o `administrador-acciones.tsx` volvieran a importar valores de
+          `./actions`, Next compilaría ese módulo `"use server"` en la layer
+          `action-browser` (porque sólo lo importaría un client component) en
+          vez de `rsc`, con lo que `src/infrastructure/db.ts` y las entidades
+          se duplican en el bundle y el ORM cacheado en `globalThis` queda
+          con los prototipos de una copia mientras la otra hace `persist()`
+          → "not discovered entity" (issue #90). */}
+      <AdministradorForm action={crearAdministradorAction} />
 
       {!hayFilas ? (
         <DataEmpty>No hay nadie configurado todavía.</DataEmpty>
@@ -100,7 +115,11 @@ export default async function AdminAdministradoresPage() {
                 @{administrador.githubUsername}
               </DataCell>
               <DataCell label="Nombre">
-                <NombreEditable id={administrador.id} nombre={administrador.nombre} />
+                <NombreEditable
+                  id={administrador.id}
+                  nombre={administrador.nombre}
+                  action={renombrarAdministradorAction}
+                />
               </DataCell>
               <DataCell label="Estado">
                 <EstadoBadge activo={administrador.activo} />
@@ -111,7 +130,11 @@ export default async function AdminAdministradoresPage() {
                 </span>
               </DataCell>
               <DataCell label="Acciones">
-                <EstadoToggle id={administrador.id} activo={administrador.activo} />
+                <EstadoToggle
+                  id={administrador.id}
+                  activo={administrador.activo}
+                  action={cambiarEstadoAdministradorAction}
+                />
               </DataCell>
             </DataRow>
           ))}

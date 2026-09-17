@@ -19,18 +19,48 @@ vi.mock("@/lib/responsables-de-entorno", () => ({
   responsablesDeEntorno: () => mockResponsablesDeEntorno(),
 }));
 
-vi.mock("./administrador-form", () => ({
-  AdministradorForm: () => <div data-testid="administrador-form" />,
+// Las actions se mockean con `vi.fn()` creados adentro de la factory (en vez
+// de referenciar una `const` de más arriba) para no pisar la restricción de
+// hoisting de `vi.mock` — después se importan de vuelta más abajo para
+// poder comparar identidad con lo que `page.tsx` le pasa por props a cada
+// componente (issue #90: acá interesa que sean la misma referencia que
+// exporta `./actions`, no mockear su comportamiento).
+vi.mock("./actions", () => ({
+  crearAdministradorAction: vi.fn(),
+  renombrarAdministradorAction: vi.fn(),
+  cambiarEstadoAdministradorAction: vi.fn(),
 }));
 
+// Los mocks de `AdministradorForm`/`NombreEditable`/`EstadoToggle` son
+// `vi.fn()` (no sólo componentes) para poder inspeccionar con qué props los
+// llamó `page.tsx`.
+type AdministradorFormProps = { action: unknown };
+const mockAdministradorForm = vi.fn((_props: AdministradorFormProps) => (
+  <div data-testid="administrador-form" />
+));
+vi.mock("./administrador-form", () => ({
+  AdministradorForm: (props: AdministradorFormProps) => mockAdministradorForm(props),
+}));
+
+type NombreEditableProps = { nombre: string | null; action: unknown };
+type EstadoToggleProps = { activo: boolean; action: unknown };
+const mockNombreEditable = vi.fn(({ nombre }: NombreEditableProps) => (
+  <span>{nombre ?? "sin nombre"}</span>
+));
+const mockEstadoToggle = vi.fn(({ activo }: EstadoToggleProps) => (
+  <button>{activo ? "Desactivar" : "Reactivar"}</button>
+));
 vi.mock("./administrador-acciones", () => ({
-  NombreEditable: ({ nombre }: { nombre: string | null }) => <span>{nombre ?? "sin nombre"}</span>,
-  EstadoToggle: ({ activo }: { activo: boolean }) => (
-    <button>{activo ? "Desactivar" : "Reactivar"}</button>
-  ),
+  NombreEditable: (props: NombreEditableProps) => mockNombreEditable(props),
+  EstadoToggle: (props: EstadoToggleProps) => mockEstadoToggle(props),
 }));
 
 import AdminAdministradoresPage from "./page";
+import {
+  crearAdministradorAction as mockCrearAdministradorAction,
+  renombrarAdministradorAction as mockRenombrarAdministradorAction,
+  cambiarEstadoAdministradorAction as mockCambiarEstadoAdministradorAction,
+} from "./actions";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -45,6 +75,21 @@ describe("Admin Administradores page", () => {
     vi.clearAllMocks();
     mockRequireResponsable.mockResolvedValue(undefined);
     mockResponsablesDeEntorno.mockReturnValue([]);
+  });
+
+  it("pasa las actions reales de ./actions por props a los tres componentes (issue #90)", async () => {
+    mockGetAdministradores.mockResolvedValue([makeAdministrador({ githubUsername: "ayudante1" })]);
+    renderToStaticMarkup(await AdminAdministradoresPage());
+
+    expect(mockAdministradorForm).toHaveBeenCalledWith(
+      expect.objectContaining({ action: mockCrearAdministradorAction })
+    );
+    expect(mockNombreEditable).toHaveBeenCalledWith(
+      expect.objectContaining({ action: mockRenombrarAdministradorAction })
+    );
+    expect(mockEstadoToggle).toHaveBeenCalledWith(
+      expect.objectContaining({ action: mockCambiarEstadoAdministradorAction })
+    );
   });
 
   it("siempre llama a requireResponsable", async () => {

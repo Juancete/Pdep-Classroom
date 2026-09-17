@@ -5,11 +5,6 @@ import userEvent from "@testing-library/user-event";
 const mockRenombrarAdministradorAction = vi.fn();
 const mockCambiarEstadoAdministradorAction = vi.fn();
 
-vi.mock("./actions", () => ({
-  renombrarAdministradorAction: (...args: unknown[]) => mockRenombrarAdministradorAction(...args),
-  cambiarEstadoAdministradorAction: (...args: unknown[]) => mockCambiarEstadoAdministradorAction(...args),
-}));
-
 import { NombreEditable, EstadoToggle } from "./administrador-acciones";
 
 describe("NombreEditable", () => {
@@ -18,26 +13,26 @@ describe("NombreEditable", () => {
   });
 
   it("muestra el nombre actual y no el form de edición", () => {
-    render(<NombreEditable id="a1" nombre="Ana García" />);
+    render(<NombreEditable id="a1" nombre="Ana García" action={mockRenombrarAdministradorAction} />);
     expect(screen.getByText("Ana García")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Guardar" })).not.toBeInTheDocument();
   });
 
   it("muestra 'sin nombre' cuando no hay nombre cargado", () => {
-    render(<NombreEditable id="a1" nombre={null} />);
+    render(<NombreEditable id="a1" nombre={null} action={mockRenombrarAdministradorAction} />);
     expect(screen.getByText("sin nombre")).toBeInTheDocument();
   });
 
   it("al hacer click en editar, muestra el input con el nombre actual", async () => {
     const user = userEvent.setup();
-    render(<NombreEditable id="a1" nombre="Ana García" />);
+    render(<NombreEditable id="a1" nombre="Ana García" action={mockRenombrarAdministradorAction} />);
     await user.click(screen.getByRole("button", { name: "Editar nombre" }));
     expect(screen.getByDisplayValue("Ana García")).toBeInTheDocument();
   });
 
   it("cancelar cierra el form sin llamar a la action", async () => {
     const user = userEvent.setup();
-    render(<NombreEditable id="a1" nombre="Ana" />);
+    render(<NombreEditable id="a1" nombre="Ana" action={mockRenombrarAdministradorAction} />);
     await user.click(screen.getByRole("button", { name: "Editar nombre" }));
     await user.click(screen.getByRole("button", { name: "Cancelar" }));
     expect(screen.queryByRole("button", { name: "Guardar" })).not.toBeInTheDocument();
@@ -47,7 +42,7 @@ describe("NombreEditable", () => {
   it("guardar con éxito cierra el modo edición", async () => {
     mockRenombrarAdministradorAction.mockResolvedValue({ ok: true });
     const user = userEvent.setup();
-    render(<NombreEditable id="a1" nombre="Ana" />);
+    render(<NombreEditable id="a1" nombre="Ana" action={mockRenombrarAdministradorAction} />);
     await user.click(screen.getByRole("button", { name: "Editar nombre" }));
     await user.click(screen.getByRole("button", { name: "Guardar" }));
     expect(mockRenombrarAdministradorAction).toHaveBeenCalled();
@@ -60,7 +55,7 @@ describe("NombreEditable", () => {
       errors: { nombre: ["algo salió mal"] },
     });
     const user = userEvent.setup();
-    render(<NombreEditable id="a1" nombre="Ana" />);
+    render(<NombreEditable id="a1" nombre="Ana" action={mockRenombrarAdministradorAction} />);
     await user.click(screen.getByRole("button", { name: "Editar nombre" }));
     await user.click(screen.getByRole("button", { name: "Guardar" }));
     expect(await screen.findByText("algo salió mal")).toBeInTheDocument();
@@ -73,7 +68,7 @@ describe("NombreEditable", () => {
       errors: { nombre: ["algo salió mal"] },
     });
     const user = userEvent.setup();
-    render(<NombreEditable id="a1" nombre="Ana" />);
+    render(<NombreEditable id="a1" nombre="Ana" action={mockRenombrarAdministradorAction} />);
     await user.click(screen.getByRole("button", { name: "Editar nombre" }));
     const input = screen.getByDisplayValue("Ana");
     await user.clear(input);
@@ -97,7 +92,7 @@ describe("EstadoToggle", () => {
   it("desactivar pide confirmación antes de llamar a la action", async () => {
     vi.mocked(confirm).mockReturnValue(false);
     const user = userEvent.setup();
-    render(<EstadoToggle id="a1" activo={true} />);
+    render(<EstadoToggle id="a1" activo={true} action={mockCambiarEstadoAdministradorAction} />);
     await user.click(screen.getByRole("button", { name: "Desactivar" }));
     expect(confirm).toHaveBeenCalled();
     expect(mockCambiarEstadoAdministradorAction).not.toHaveBeenCalled();
@@ -107,7 +102,7 @@ describe("EstadoToggle", () => {
     vi.mocked(confirm).mockReturnValue(true);
     mockCambiarEstadoAdministradorAction.mockResolvedValue({ ok: true });
     const user = userEvent.setup();
-    render(<EstadoToggle id="a1" activo={true} />);
+    render(<EstadoToggle id="a1" activo={true} action={mockCambiarEstadoAdministradorAction} />);
     await user.click(screen.getByRole("button", { name: "Desactivar" }));
     expect(mockCambiarEstadoAdministradorAction).toHaveBeenCalledWith("a1", false);
   });
@@ -115,7 +110,7 @@ describe("EstadoToggle", () => {
   it("reactivar no pide confirmación", async () => {
     mockCambiarEstadoAdministradorAction.mockResolvedValue({ ok: true });
     const user = userEvent.setup();
-    render(<EstadoToggle id="a1" activo={false} />);
+    render(<EstadoToggle id="a1" activo={false} action={mockCambiarEstadoAdministradorAction} />);
     await user.click(screen.getByRole("button", { name: "Reactivar" }));
     expect(confirm).not.toHaveBeenCalled();
     expect(mockCambiarEstadoAdministradorAction).toHaveBeenCalledWith("a1", true);
@@ -124,7 +119,7 @@ describe("EstadoToggle", () => {
   it("muestra el error si la action falla", async () => {
     mockCambiarEstadoAdministradorAction.mockResolvedValue({ ok: false, error: "no se pudo" });
     const user = userEvent.setup();
-    render(<EstadoToggle id="a1" activo={false} />);
+    render(<EstadoToggle id="a1" activo={false} action={mockCambiarEstadoAdministradorAction} />);
     await user.click(screen.getByRole("button", { name: "Reactivar" }));
     expect(await screen.findByText("no se pudo")).toBeInTheDocument();
   });
@@ -132,7 +127,7 @@ describe("EstadoToggle", () => {
   it("si la action rechaza (falla de red), muestra el error y vuelve a habilitar el botón", async () => {
     mockCambiarEstadoAdministradorAction.mockRejectedValue(new Error("Failed to fetch"));
     const user = userEvent.setup();
-    render(<EstadoToggle id="a1" activo={false} />);
+    render(<EstadoToggle id="a1" activo={false} action={mockCambiarEstadoAdministradorAction} />);
     await user.click(screen.getByRole("button", { name: "Reactivar" }));
     expect(await screen.findByText("Failed to fetch")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reactivar" })).not.toBeDisabled();

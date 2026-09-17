@@ -30,7 +30,7 @@ import {
   AdministradorNoEncontradoError,
   AdministradorProtegidoError,
 } from "./AdministradorRepository";
-import { Administrador } from "@/domain/entities";
+import { Administrador, AdministradorInvalidoError } from "@/domain/entities";
 
 function usernameUniqueViolation(): Error {
   return Object.assign(
@@ -89,6 +89,46 @@ describe("AdministradorRepository", () => {
       expect(mockEm.persist).toHaveBeenCalledWith(administrador);
       expect(mockEm.flush).toHaveBeenCalled();
       expect(administrador.githubUsername).toBe("ayudante1");
+    });
+
+    // Regresión del parche de `em.create` (issue #90): esa versión salteaba
+    // `Administrador.crear` y con eso `validarAlta` y el trim de nombre.
+    // Acá se cubre que la instancia persistida vuelve a salir del factory de
+    // dominio.
+    it("construye la instancia con Administrador.crear (no con entityManager.create)", async () => {
+      mockEm.flush.mockResolvedValue(undefined);
+
+      const administrador = await crearAdministrador({
+        githubUsername: "ayudante1",
+        nombre: "  Ana  ",
+        porUsuario: "juancete",
+      });
+
+      expect(administrador).toBeInstanceOf(Administrador);
+      expect(administrador.nombre).toBe("Ana");
+      expect(administrador.activo).toBe(true);
+      expect(administrador.creadoPor).toBe("juancete");
+      expect(administrador.modificadoPor).toBe("juancete");
+    });
+
+    it("un nombre vacío o sólo espacios queda como null (no como string vacío)", async () => {
+      mockEm.flush.mockResolvedValue(undefined);
+
+      const administrador = await crearAdministrador({
+        githubUsername: "ayudante2",
+        nombre: "   ",
+        porUsuario: "juancete",
+      });
+
+      expect(administrador.nombre).toBeNull();
+    });
+
+    it("lanza AdministradorInvalidoError si el username no tiene un formato válido, sin persistir ni flushear", async () => {
+      await expect(
+        crearAdministrador({ githubUsername: "", porUsuario: "juancete" })
+      ).rejects.toBeInstanceOf(AdministradorInvalidoError);
+      expect(mockEm.persist).not.toHaveBeenCalled();
+      expect(mockEm.flush).not.toHaveBeenCalled();
     });
 
     it("traduce la violación única a AdministradorDuplicadoError (existente activo)", async () => {
