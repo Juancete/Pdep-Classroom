@@ -99,4 +99,30 @@ describe("db.ts getOrm", () => {
     expect(orm1).toBe(orm2);
     expect(mockInit).toHaveBeenCalledTimes(1);
   });
+
+  it("con una clase distinta registrada mientras la init compartida sigue pendiente, la segunda llamada rechaza con el error descriptivo", async () => {
+    let resolverInit!: (orm: ReturnType<typeof crearOrmFake>) => void;
+    mockInit.mockReturnValue(
+      new Promise((resolve) => {
+        resolverInit = resolve;
+      })
+    );
+
+    const [promesa1, promesa2] = [getOrm(), getOrm()];
+    // El guard corre sobre todas las llamadas que comparten la promesa
+    // pendiente, así que la primera también puede rechazar; lo que importa
+    // acá es la segunda, y evitamos que quede como "unhandled rejection".
+    promesa1.catch(() => {});
+
+    // Otra "copia" de webpack pisa, mientras la init compartida todavía no
+    // resolvió, la clase que se va a registrar para "EntidadA" por una
+    // distinta con el mismo nombre.
+    class OtraEntidadA {}
+    entidadesRegistradas.EntidadA = { class: OtraEntidadA };
+
+    resolverInit(crearOrmFake());
+
+    await expect(promesa2).rejects.toThrow(/otra copia de las entidades/);
+    expect(mockInit).toHaveBeenCalledTimes(1);
+  });
 });

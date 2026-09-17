@@ -79,7 +79,14 @@ export async function getOrm(): Promise<MikroORM> {
       });
   }
 
-  return global.__mikro_orm_init__;
+  // Mientras la init de la primera copia sigue pendiente, puede llegar otra
+  // copia del módulo (otra layer de webpack) con sus propias clases: hay que
+  // correr el guard también acá, sobre el ORM que resuelva la promesa
+  // compartida, antes de devolverlo.
+  return global.__mikro_orm_init__.then((orm) => {
+    asegurarMismaCopiaDeEntidades(orm);
+    return orm;
+  });
 }
 
 // Helper para obtener un EntityManager fresco por request (fork)
