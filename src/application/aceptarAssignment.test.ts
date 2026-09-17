@@ -411,7 +411,7 @@ describe("aceptarAssignment", () => {
     );
   });
 
-  it("permite acceso global al administrador", async () => {
+  it("permite acceso global al docente", async () => {
     mockGetAlumnoByGithub.mockResolvedValue(
       makeAlumno({ comision: makeComision("c2") })
     );
@@ -446,7 +446,7 @@ describe("aceptarAssignment", () => {
     expect(mockCrearEntrega).not.toHaveBeenCalled();
   });
 
-  it("permite al administrador aceptar un assignment en borrador", async () => {
+  it("permite al docente aceptar un assignment en borrador", async () => {
     const borrador = makeAssignment();
     borrador.estadoNombre = "borrador";
     mockGetAssignment.mockResolvedValue(borrador);

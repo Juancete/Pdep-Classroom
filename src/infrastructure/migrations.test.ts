@@ -243,6 +243,29 @@ describe("migrations", () => {
     expect(migration).not.toContain("foreign key");
   });
 
+  it("renombra la tabla administrador a docente, con su índice único y su PK", () => {
+    const migration = readFileSync(
+      join(process.cwd(), "migrations", "Migration20260917120000_docente.ts"),
+      "utf8"
+    );
+
+    expect(migration).toContain('alter table "administrador" rename to "docente";');
+    expect(migration).toContain(
+      'alter index "administrador_github_username_unique_idx" rename to "docente_github_username_unique_idx";'
+    );
+    expect(migration).toContain(
+      'alter table "docente" rename constraint "administrador_pkey" to "docente_pkey";'
+    );
+    // down(): el inverso exacto, en orden inverso.
+    expect(migration).toContain(
+      'alter table "docente" rename constraint "docente_pkey" to "administrador_pkey";'
+    );
+    expect(migration).toContain(
+      'alter index "docente_github_username_unique_idx" rename to "administrador_github_username_unique_idx";'
+    );
+    expect(migration).toContain('alter table "docente" rename to "administrador";');
+  });
+
   it("crea el registro deduplicado de errores con índices de lectura y retención", () => {
     const migration = readFileSync(
       join(process.cwd(), "migrations", "Migration20260821120000_error_logs.ts"),
