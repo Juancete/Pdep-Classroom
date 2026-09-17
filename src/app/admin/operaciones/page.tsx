@@ -2,7 +2,8 @@ import { requireAdmin } from "@/infrastructure/auth/session";
 import { getComisionActiva, getWebhookDeliveryOverview } from "@/infrastructure/repositories";
 import { getConfiguracionDeApp, listarTemplates } from "@/infrastructure/github";
 import { evaluarConfiguracionDeApp } from "@/application/diagnosticoGithubApp";
-import { getSheetNames } from "@/infrastructure/sheets";
+import { evaluarPermisoDePlanilla } from "@/application/diagnosticoPlanilla";
+import { getPermisoDePlanilla, getSheetNames } from "@/infrastructure/sheets";
 import { CANALES_DE_COMUNICACION } from "@/infrastructure/canales";
 import { ReprocessWebhookButton } from "./reprocess-button";
 
@@ -12,11 +13,14 @@ export default async function OperacionesPage() {
   await requireAdmin();
   const overview = await getWebhookDeliveryOverview();
   const comision = await getComisionActiva();
-  const [github, appConfig, sheets] = await Promise.all([
+  const [github, appConfig, sheets, escrituraPlanilla] = await Promise.all([
     listarTemplates().then((items) => ({ ok: true, detalle: `${items.length} templates accesibles` })).catch((error) => ({ ok: false, detalle: (error as Error).message })),
     getConfiguracionDeApp().then(evaluarConfiguracionDeApp).catch((error) => ({ ok: false, detalle: (error as Error).message })),
     comision
       ? getSheetNames(comision.spreadsheetId).then((items) => ({ ok: true, detalle: `${items.length} hojas accesibles` })).catch((error) => ({ ok: false, detalle: (error as Error).message }))
+      : Promise.resolve({ ok: false, detalle: "No hay comisión activa" }),
+    comision
+      ? getPermisoDePlanilla(comision.spreadsheetId).then(evaluarPermisoDePlanilla).catch((error) => ({ ok: false, detalle: (error as Error).message }))
       : Promise.resolve({ ok: false, detalle: "No hay comisión activa" }),
   ]);
   const checks: Check[] = [
@@ -24,6 +28,7 @@ export default async function OperacionesPage() {
     { nombre: "GitHub App", ...github },
     { nombre: "GitHub App: permisos y eventos", ...appConfig },
     { nombre: "Google Sheets", ...sheets },
+    { nombre: "Google Sheets: escritura", ...escrituraPlanilla },
     ...CANALES_DE_COMUNICACION.map((canal) => {
       const configurado = canal.estaConfigurado();
       return {

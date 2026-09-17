@@ -157,11 +157,12 @@ Ese número al final (`12345678`) es el **Installation ID**. Copiarlo en `GITHUB
 3. Darle un nombre (ej: `pdep-classroom`) → **Create**
 4. Asegurarse de que el nuevo proyecto quede seleccionado en el selector
 
-#### 4.2 Habilitar la API de Google Sheets
+#### 4.2 Habilitar las APIs de Google Sheets y Google Drive
 
 1. Ir al menú → **APIs & Services** → **Library**
 2. Buscar `Google Sheets API`
 3. Hacer click en el resultado → **Enable**
+4. Repetir con `Google Drive API`. No se usa para leer ni escribir la planilla: `/admin/operaciones` la consulta (`files.get` con `capabilities.canEdit`, scope `drive.metadata.readonly`) para verificar que la service account tenga rol **Editor** sin escribir nada. Si falta, el tablero marca "Revisar · Google Sheets: escritura" con el proyecto donde habilitarla
 
 #### 4.3 Crear Service Account
 
@@ -202,7 +203,7 @@ Pegar el resultado en `GOOGLE_SERVICE_ACCOUNT_KEY` en el `.env.local`.
 1. Abrir la planilla de Google Sheets con los alumnos
 2. Botón **Compartir** (arriba a la derecha)
 3. En el campo de email, pegar el email de la service account — tiene la forma `pdep-classroom@<project-id>.iam.gserviceaccount.com` (se ve en la pantalla de Credentials o en el JSON descargado, campo `client_email`)
-4. Rol: **Editor**. El registro de alumnos (`POST /api/registro`) y la actualización de perfil (`PATCH /api/perfil`) siempre escriben en la planilla, no sólo leen — con rol Viewer la lectura funciona (la precarga de datos anda bien) pero la escritura falla con un 403 de la API de Sheets ("The caller does not have permission"), visible como error persistido en `/admin/errores`
+4. Rol: **Editor**. El registro de alumnos (`POST /api/registro`) y la actualización de perfil (`PATCH /api/perfil`) siempre escriben en la planilla, no sólo leen — con rol Viewer la lectura funciona (la precarga de datos anda bien) pero la escritura falla con un 403 de la API de Sheets ("The caller does not have permission"), visible como error persistido en `/admin/errores`. `/admin/operaciones` lo detecta antes: el check "Google Sheets: escritura" queda en "Revisar" con el email de la service account a compartir
 5. Desmarcar "Notify people" → **Share**
 
 #### 4.7 Configurar el ID de la planilla
@@ -674,7 +675,8 @@ que tenga el mismo nombre.
 
 ### Diagnóstico y recuperación
 
-`/admin/operaciones` concentra el diagnóstico de base de datos, GitHub App, Google Sheets, Google
+`/admin/operaciones` concentra el diagnóstico de base de datos, GitHub App, Google Sheets (lectura
+y permiso de escritura de la service account sobre la planilla de la comisión activa), Google
 Groups y webhooks. También muestra deliveries recientes y permite reprocesar los que quedaron
 recibidos o fallidos. Los errores inesperados sanitizados se consultan en `/admin/errores`, con un
 badge para pendientes.

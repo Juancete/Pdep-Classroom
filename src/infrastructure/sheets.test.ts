@@ -6,14 +6,22 @@ const mockValuesGet = vi.fn();
 const mockValuesUpdate = vi.fn();
 const mockValuesAppend = vi.fn();
 const mockValuesBatchUpdate = vi.fn();
+const mockDriveFilesGet = vi.fn();
+const mockGoogleAuth = vi.fn();
 
 vi.mock("googleapis", () => ({
   google: {
     auth: {
       GoogleAuth: function (...args: unknown[]) {
+        mockGoogleAuth(...args);
         return args;
       },
     },
+    drive: () => ({
+      files: {
+        get: (...args: unknown[]) => mockDriveFilesGet(...args),
+      },
+    }),
     sheets: () => ({
       spreadsheets: {
         values: {
@@ -36,6 +44,7 @@ import {
   upsertarAlumnoEnSheets,
   getSheetNames,
   getDatosPrecargaByGithub,
+  getPermisoDePlanilla,
 } from "./sheets";
 import type { ColumnConfig, GruposColumnConfig } from "@/types";
 import { PlanillaNoDisponibleError } from "@/infrastructure/PlanillaNoDisponibleError";
@@ -813,5 +822,105 @@ describe("getDatosPrecargaByGithub", () => {
 describe("getSheetNames – validación de spreadsheetId", () => {
   it("lanza error de dominio si el spreadsheetId está vacío", async () => {
     await expect(getSheetNames("")).rejects.toThrow("No hay una comisión activa");
+  });
+});
+
+// ── getPermisoDePlanilla – permiso de escritura vía Drive (issue #95) ──
+
+describe("getPermisoDePlanilla", () => {
+  const CLIENT_EMAIL = "sa@proyecto.iam.gserviceaccount.com";
+  const SA_KEY = Buffer.from(
+    JSON.stringify({
+      client_email: CLIENT_EMAIL,
+      project_id: "proyecto",
+      private_key: "FAKE_PRIVATE_KEY",
+    })
+  ).toString("base64");
+  const ENV_BACKUP = { ...process.env };
+
+  function errorDeGoogleApi(code: number, message: string, reason?: string) {
+    const error = new Error(message) as Error & { code: number; errors?: { reason: string }[] };
+    error.code = code;
+    if (reason) error.errors = [{ reason }];
+    return error;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.GOOGLE_SERVICE_ACCOUNT_KEY = SA_KEY;
+  });
+
+  afterEach(() => {
+    process.env = { ...ENV_BACKUP };
+  });
+
+  it("lanza error de dominio si el spreadsheetId está vacío", async () => {
+    await expect(getPermisoDePlanilla("")).rejects.toThrow("No hay una comisión activa");
+    expect(mockDriveFilesGet).not.toHaveBeenCalled();
+  });
+
+  it("consulta capabilities.canEdit con el scope de metadata de Drive y soporte de unidades compartidas", async () => {
+    mockDriveFilesGet.mockResolvedValueOnce({ data: { capabilities: { canEdit: true } } });
+
+    const permiso = await getPermisoDePlanilla("sheet-123");
+
+    expect(permiso).toEqual({ puedeEditar: true, clientEmail: CLIENT_EMAIL });
+    expect(mockDriveFilesGet).toHaveBeenCalledWith({
+      fileId: "sheet-123",
+      fields: "capabilities/canEdit",
+      supportsAllDrives: true,
+    });
+    expect(mockGoogleAuth).toHaveBeenCalledWith(
+      expect.objectContaining({ scopes: ["https://www.googleapis.com/auth/drive.metadata.readonly"] })
+    );
+  });
+
+  it("puedeEditar es false con rol Viewer (canEdit false)", async () => {
+    mockDriveFilesGet.mockResolvedValueOnce({ data: { capabilities: { canEdit: false } } });
+
+    await expect(getPermisoDePlanilla("sheet-123")).resolves.toEqual({
+      puedeEditar: false,
+      clientEmail: CLIENT_EMAIL,
+    });
+  });
+
+  it("puedeEditar es false si Drive no devuelve capabilities", async () => {
+    mockDriveFilesGet.mockResolvedValueOnce({ data: {} });
+
+    await expect(getPermisoDePlanilla("sheet-123")).resolves.toMatchObject({ puedeEditar: false });
+  });
+
+  it("explica cómo habilitar la Drive API cuando el proyecto no la tiene activa (403 accessNotConfigured)", async () => {
+    mockDriveFilesGet.mockRejectedValueOnce(
+      errorDeGoogleApi(403, "Google Drive API has not been used in project 123 before or it is disabled", "accessNotConfigured")
+    );
+
+    await expect(getPermisoDePlanilla("sheet-123")).rejects.toThrow(
+      "La Drive API no está habilitada en el proyecto proyecto de la service account"
+    );
+  });
+
+  it("pide compartir la planilla cuando la service account no la ve (404)", async () => {
+    mockDriveFilesGet.mockRejectedValueOnce(errorDeGoogleApi(404, "File not found: sheet-123"));
+
+    await expect(getPermisoDePlanilla("sheet-123")).rejects.toThrow(
+      `La service account ${CLIENT_EMAIL} no tiene acceso a la planilla: compartirla como Editor`
+    );
+  });
+
+  it("cualquier otro error sale con prefijo y el mensaje original", async () => {
+    mockDriveFilesGet.mockRejectedValueOnce(errorDeGoogleApi(500, "Backend Error"));
+
+    await expect(getPermisoDePlanilla("sheet-123")).rejects.toThrow(
+      "No se pudo consultar el permiso sobre la planilla: Backend Error"
+    );
+  });
+
+  it("un 403 que no es accessNotConfigured no se confunde con la Drive API deshabilitada", async () => {
+    mockDriveFilesGet.mockRejectedValueOnce(errorDeGoogleApi(403, "The caller does not have permission", "forbidden"));
+
+    await expect(getPermisoDePlanilla("sheet-123")).rejects.toThrow(
+      "No se pudo consultar el permiso sobre la planilla: The caller does not have permission"
+    );
   });
 });
