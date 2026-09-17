@@ -10,6 +10,8 @@ const mockListForRef = vi.fn();
 const mockRerequestSuite = vi.fn();
 const mockCheckCollaborator = vi.fn();
 const mockSearchRepos = vi.fn();
+const mockAuth = vi.fn();
+const mockRequest = vi.fn();
 
 vi.mock("@octokit/rest", () => ({
   Octokit: class {
@@ -29,6 +31,8 @@ vi.mock("@octokit/rest", () => ({
       repos: mockSearchRepos,
     };
     paginate = mockPaginate;
+    auth = mockAuth;
+    request = mockRequest;
   },
 }));
 
@@ -37,6 +41,7 @@ vi.mock("@octokit/auth-app", () => ({ createAppAuth: vi.fn() }));
 import {
   crearEntrega,
   deleteRepo,
+  getConfiguracionDeApp,
   getEstadoCI,
   reejecutarCI,
   esColaborador,
@@ -414,5 +419,88 @@ describe("listarTemplates", () => {
     mockPaginate.mockRejectedValue(requestError(403, "Forbidden"));
 
     await expect(listarTemplates()).rejects.toThrow();
+  });
+});
+
+describe("getConfiguracionDeApp", () => {
+  const ENV_BACKUP = { ...process.env };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.GITHUB_APP_ID = "123";
+    process.env.GITHUB_APP_PRIVATE_KEY = "cGVtLWZha2U=";
+    process.env.GITHUB_APP_INSTALLATION_ID = "456";
+    mockAuth.mockResolvedValue({ token: "tok3n" });
+  });
+
+  afterEach(() => {
+    process.env = { ...ENV_BACKUP };
+  });
+
+  it("devuelve permisos, eventos y webhook cuando está todo configurado", async () => {
+    mockRequest.mockImplementation((route: string) => {
+      if (route === "GET /app") {
+        return Promise.resolve({
+          data: {
+            permissions: { administration: "write", contents: "write" },
+            events: ["check_suite", "push"],
+          },
+        });
+      }
+      if (route === "GET /app/hook/config") {
+        return Promise.resolve({ data: { url: "https://classroom/api/webhooks/github" } });
+      }
+      throw new Error(`ruta inesperada: ${route}`);
+    });
+
+    await expect(getConfiguracionDeApp()).resolves.toEqual({
+      permisos: { administration: "write", contents: "write" },
+      eventos: ["check_suite", "push"],
+      webhook: { url: "https://classroom/api/webhooks/github" },
+    });
+    expect(mockAuth).toHaveBeenCalledWith({ type: "app" });
+    expect(mockRequest).toHaveBeenCalledWith(
+      "GET /app",
+      expect.objectContaining({ headers: { authorization: "bearer tok3n" } })
+    );
+  });
+
+  it("devuelve webhook null cuando GET /app/hook/config responde 404 (sin webhook configurado)", async () => {
+    mockRequest.mockImplementation((route: string) => {
+      if (route === "GET /app") {
+        return Promise.resolve({
+          data: { permissions: { administration: "write" }, events: [] },
+        });
+      }
+      if (route === "GET /app/hook/config") {
+        return Promise.reject(requestError(404, "Not Found"));
+      }
+      throw new Error(`ruta inesperada: ${route}`);
+    });
+
+    await expect(getConfiguracionDeApp()).resolves.toEqual({
+      permisos: { administration: "write" },
+      eventos: [],
+      webhook: null,
+    });
+  });
+
+  it("propaga (traducido) un 403 de GET /app", async () => {
+    mockRequest.mockImplementation((route: string) => {
+      if (route === "GET /app") return Promise.reject(requestError(403, "Forbidden"));
+      throw new Error(`ruta inesperada: ${route}`);
+    });
+
+    await expect(getConfiguracionDeApp()).rejects.toThrow("permisos suficientes");
+  });
+
+  it("rechaza sin llamar a GitHub si falta configuración de GitHub App (fallback a PAT)", async () => {
+    delete process.env.GITHUB_APP_ID;
+
+    await expect(getConfiguracionDeApp()).rejects.toThrow(
+      "requiere autenticación como GitHub App"
+    );
+    expect(mockAuth).not.toHaveBeenCalled();
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 });

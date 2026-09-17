@@ -752,6 +752,10 @@ Un repo sin ningún check configurado no rompe nada más de la vista — se degr
   check suite conocido del commit (`POST /check-suites/{check_suite_id}/rerequest`) — si hay varios
   workflows, se reejecutan todos. Si nunca corrió ningún check, el botón queda deshabilitado — no
   hay nada que reejecutar.
+- **"Actualizar CI" no cambia nada o muestra "La GitHub App no tiene permisos suficientes (403)"**
+  → la App no tiene el permiso `Checks`, o la instalación en la org todavía no aprobó los permisos
+  nuevos (GitHub pide aprobarlos en Settings → GitHub Apps). `/admin/operaciones` lo lista en
+  "GitHub App: permisos y eventos", junto con los eventos y el webhook que falten.
 
 ### Resultado automático, no calificación
 
