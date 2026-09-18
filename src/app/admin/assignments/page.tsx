@@ -7,6 +7,7 @@ import {
 } from "@/infrastructure/repositories";
 import { obtenerContextoDeComision } from "@/application/comisionConsultada";
 import { AvisoSinComision } from "../aviso-sin-comision";
+import { BarraDeComision } from "../barra-de-comision";
 import Link from "next/link";
 import { DeleteAssignmentButton } from "./delete-button";
 import { DeleteReposButton } from "./delete-repos-button";
@@ -14,6 +15,7 @@ import { EstadoQuickActions } from "./estado-quick-actions";
 import { NOMBRES_ESTADO_ASSIGNMENT, transicionesDisponibles } from "@/domain/entities";
 import type { NombreEstadoAssignment } from "@/types";
 import { EstadoAssignmentBadge } from "@/components/EstadoAssignmentBadge";
+import { EtiquetaDeComision } from "@/components/EtiquetaDeComision";
 import { IconLink } from "@/components/IconLink";
 import { EyeIcon, PencilIcon } from "@/components/icons";
 import {
@@ -35,11 +37,12 @@ export default async function AdminAssignmentsPage(props: {
 
   // issue #114: la comisión consultada (activa u histórica) reemplaza a
   // "todas las comisiones a la vez" — sin comisión, ni se consulta el repo.
-  const { contexto } = await obtenerContextoDeComision();
+  const { contexto, comisiones } = await obtenerContextoDeComision();
   const comision = contexto.comisionConsultada();
   if (!comision) {
     return (
       <div>
+        <BarraDeComision contexto={contexto} comisiones={comisiones} />
         <h1 className="text-2xl font-bold mb-1">Assignments</h1>
         <AvisoSinComision />
       </div>
@@ -66,6 +69,7 @@ export default async function AdminAssignmentsPage(props: {
 
   return (
     <div>
+      <BarraDeComision contexto={contexto} comisiones={comisiones} />
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold">Assignments</h1>
         {contexto.permiteCrearAssignments() ? (
@@ -149,22 +153,7 @@ export default async function AdminAssignmentsPage(props: {
                   <span className="text-gray-500">{assignment.tipo}</span>
                 </DataCell>
                 <DataCell label="Comisión">
-                  {assignment.comision ? (
-                    <span className="inline-flex items-center gap-1.5 text-xs text-gray-600">
-                      {assignment.comision.anio}
-                      <span
-                        className={`rounded-full px-2 py-0.5 ${
-                          assignment.comision.activa
-                            ? "bg-green-50 text-green-700"
-                            : "bg-gray-100 text-gray-500"
-                        }`}
-                      >
-                        {assignment.comision.activa ? "Activa" : "Histórica"}
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="text-xs text-gray-400">Sin comisión</span>
-                  )}
+                  <EtiquetaDeComision comision={assignment.comision} />
                 </DataCell>
                 <DataCell label="Template">
                   <span className="font-mono text-xs text-gray-500 break-all">

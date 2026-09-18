@@ -7,12 +7,16 @@ type Props = {
   comisiones: Comision[];
 };
 
-// Header del panel admin con la comisión que se está consultando (issue
-// #114). Server component: sólo le pregunta al `contexto` (polimórfico —
-// nunca `instanceof` acá) y arma datos planos para el selector, que sí es
-// client. Sin badge activa/histórica aparte: `contexto.descripcion()` ya
-// distingue "(activa)"/"(histórica)" en el propio texto, un badge al lado
-// sólo repetía la misma pregunta con otro if.
+// Header con la comisión que se está consultando (issue #114). Cada página
+// de listado (`grupos`, `assignments`, `alumnos`) la renderiza por su cuenta
+// como primer hijo — no vive en un layout de `/admin/*`, porque el resto de
+// las páginas (detalle, edit, comisiones, operaciones...) no consultan ni
+// filtran por la comisión consultada y mostrarla ahí confundía qué comisión
+// aplica a esa pantalla. Server component: sólo le pregunta al `contexto`
+// (polimórfico — nunca `instanceof` acá) y arma datos planos para el
+// selector, que sí es client. Sin badge activa/histórica aparte:
+// `contexto.descripcion()` ya distingue "(activa)"/"(histórica)" en el
+// propio texto, un badge al lado sólo repetía la misma pregunta con otro if.
 export function BarraDeComision({ contexto, comisiones }: Props) {
   const comisionConsultada = contexto.comisionConsultada();
 

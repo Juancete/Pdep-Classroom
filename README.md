@@ -980,8 +980,7 @@ src/
 │   │   ├── alumnos/page.tsx                   # Ver alumnos de la comisión consultada (DB), con buscador y paginación de 25
 │   │   ├── grupos/page.tsx                    # Ver grupos de la comisión consultada (DB)
 │   │   ├── comision-consultada/actions.ts     # Server action: cambiar/borrar la cookie de comisión consultada
-│   │   ├── layout.tsx                         # Layout de /admin/*: requireAdmin + BarraDeComision
-│   │   ├── barra-de-comision.tsx              # Header con la comisión consultada, badge y selector (server)
+│   │   ├── barra-de-comision.tsx              # Header con la comisión consultada, badge y selector (server); lo renderizan alumnos/grupos/assignments, no un layout
 │   │   ├── selector-de-comision.tsx           # Select que dispara cambiarComisionConsultada al elegir (client)
 │   │   ├── aviso-sin-comision.tsx             # Aviso compartido cuando no hay comisión que consultar
 │   │   ├── delete-button.tsx                  # Componente genérico de eliminar

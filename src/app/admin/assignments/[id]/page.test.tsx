@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { IndividualAssignment, GrupalAssignment } from "@/domain/entities";
+import { IndividualAssignment, GrupalAssignment, Comision } from "@/domain/entities";
 import { Entrega } from "@/domain/entities";
 import { Alumno } from "@/domain/entities";
 import { Grupo } from "@/domain/entities";
@@ -338,6 +338,28 @@ describe("Admin Assignment Detail Page", () => {
       mockGetAssignment.mockResolvedValue(makeIndividualAssignment({ id: "a1" }));
       const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).toContain('href="/admin/assignments/a1/edit"');
+    });
+
+    // issue #114: la barra de comisión consultada vive sólo en las tres
+    // listas (grupos/assignments/alumnos), nunca en el detalle — antes vivía
+    // en un layout de /admin/* y aparecía acá también, confundiendo qué
+    // comisión aplica a las acciones de esta pantalla.
+    it("no muestra la barra de comisión consultada (regresión issue #114)", async () => {
+      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      expect(renderToStaticMarkup(element)).not.toContain("Viendo:");
+    });
+
+    it("muestra el año y Histórica cuando el TP pertenece a una comisión no activa", async () => {
+      const comisionHistorica = new Comision(2025, "sheet-old");
+      comisionHistorica.activa = false;
+      mockGetAssignment.mockResolvedValue(
+        makeIndividualAssignment({ comision: comisionHistorica })
+      );
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("2025");
+      expect(html).toContain("Histórica");
     });
   });
 

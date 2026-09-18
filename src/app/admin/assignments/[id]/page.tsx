@@ -18,6 +18,7 @@ import { Alumno, transicionesDisponibles } from "@/domain/entities";
 import { RepoDeletionHistory } from "./repo-deletion-history";
 import { HistorialDeMembresias } from "./historial-membresias";
 import { EstadoAssignmentBadge } from "@/components/EstadoAssignmentBadge";
+import { EtiquetaDeComision } from "@/components/EtiquetaDeComision";
 import { EstadoPanel } from "../estado-panel";
 
 export default async function AssignmentDetailPage(
@@ -164,6 +165,10 @@ export default async function AssignmentDetailPage(
           </Link>
           <h1 className="text-2xl font-bold">{assignment.titulo}</h1>
           <EstadoAssignmentBadge estado={assignment.estadoNombre} />
+          {/* issue #114: la barra de comisión consultada no llega hasta acá
+              (sólo vive en las tres listas) — sin esto, el detalle de un TP
+              no indicaba a qué comisión pertenece. */}
+          <EtiquetaDeComision comision={assignment.comision} />
         </div>
         <div className="flex items-center gap-3">
           <DeleteReposButton

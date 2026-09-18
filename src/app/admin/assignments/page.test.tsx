@@ -210,6 +210,34 @@ describe("Admin Assignments page", () => {
     });
   });
 
+  describe("barra de comisión consultada", () => {
+    it("renderiza la barra con la descripción del contexto", async () => {
+      mockObtenerContextoDeComision.mockResolvedValue(
+        contextoConComisionActiva("c-2026", 2026)
+      );
+      mockGetAssignments.mockResolvedValue([]);
+
+      const element = await AdminAssignmentsPage({});
+      const html = renderToStaticMarkup(element);
+
+      expect(html).toContain("Viendo: 2026 (activa)");
+    });
+
+    it("sin comisión consultada pero con históricas disponibles, muestra el selector", async () => {
+      const comisionHistorica = comisionCon("c-2025", 2025, false);
+      mockObtenerContextoDeComision.mockResolvedValue({
+        contexto: resolverContextoDeComision([comisionHistorica]),
+        comisiones: [comisionHistorica],
+      });
+
+      const element = await AdminAssignmentsPage({});
+      const html = renderToStaticMarkup(element);
+
+      expect(html).toContain("Sin comisión activa");
+      expect(html).toContain('id="selector-comision-consultada"');
+    });
+  });
+
   describe("estado vacío", () => {
     it("muestra mensaje cuando no hay assignments", async () => {
       mockGetAssignments.mockResolvedValue([]);

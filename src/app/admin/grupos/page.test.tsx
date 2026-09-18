@@ -165,6 +165,33 @@ describe("Admin Grupos page", () => {
     });
   });
 
+  describe("barra de comisión consultada", () => {
+    it("renderiza la barra con la descripción del contexto", async () => {
+      mockObtenerContextoDeComision.mockResolvedValue(
+        contextoConComisionActiva("c-2026", 2026)
+      );
+
+      const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
+      const html = renderToStaticMarkup(element);
+
+      expect(html).toContain("Viendo: 2026 (activa)");
+    });
+
+    it("sin comisión consultada pero con históricas disponibles, muestra el selector", async () => {
+      const comisionHistorica = comisionCon("c-2025", 2025, false);
+      mockObtenerContextoDeComision.mockResolvedValue({
+        contexto: resolverContextoDeComision([comisionHistorica]),
+        comisiones: [comisionHistorica],
+      });
+
+      const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
+      const html = renderToStaticMarkup(element);
+
+      expect(html).toContain("Sin comisión activa");
+      expect(html).toContain('id="selector-comision-consultada"');
+    });
+  });
+
   describe("con grupos", () => {
     it("muestra el nombre y paradigma del grupo", async () => {
       mockGetGrupos.mockResolvedValue([makeGrupo()]);

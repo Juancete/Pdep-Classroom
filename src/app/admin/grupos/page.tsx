@@ -2,6 +2,7 @@ import { requireAdmin } from "@/infrastructure/auth/session";
 import { getGrupos } from "@/infrastructure/repositories";
 import { obtenerContextoDeComision } from "@/application/comisionConsultada";
 import { AvisoSinComision } from "../aviso-sin-comision";
+import { BarraDeComision } from "../barra-de-comision";
 import { PARADIGMAS } from "@/types";
 import type { Paradigma } from "@/types";
 
@@ -15,11 +16,12 @@ export default async function AdminGruposPage(
 
   // issue #114: la comisión consultada (activa u histórica) reemplaza a
   // "todas las comisiones a la vez" — sin comisión, ni se consulta el repo.
-  const { contexto } = await obtenerContextoDeComision();
+  const { contexto, comisiones } = await obtenerContextoDeComision();
   const comision = contexto.comisionConsultada();
   if (!comision) {
     return (
       <div>
+        <BarraDeComision contexto={contexto} comisiones={comisiones} />
         <h1 className="text-2xl font-bold mb-1">Grupos</h1>
         <AvisoSinComision />
       </div>
@@ -36,6 +38,7 @@ export default async function AdminGruposPage(
 
   return (
     <div>
+      <BarraDeComision contexto={contexto} comisiones={comisiones} />
       <h1 className="text-2xl font-bold mb-1">Grupos</h1>
       <p className="text-gray-500 text-sm mb-6">
         Grupos registrados por assignment. Cada grupo pertenece al TP para el

@@ -127,6 +127,34 @@ describe("Admin Alumnos page", () => {
     expect(html).toContain("Alumnos sincronizados de la comisión 2027.");
   });
 
+  describe("barra de comisión consultada", () => {
+    it("renderiza la barra con la descripción del contexto", async () => {
+      mockObtenerContextoDeComision.mockResolvedValue(
+        contextoConComisionActiva("c1", 2026)
+      );
+      mockGetAlumnosPage.mockResolvedValue(paginaVacia());
+
+      const element = await AdminAlumnosPage({ searchParams: Promise.resolve({}) });
+      const html = renderToStaticMarkup(element);
+
+      expect(html).toContain("Viendo: 2026 (activa)");
+    });
+
+    it("sin comisión consultada pero con históricas disponibles, muestra el selector", async () => {
+      const comisionHistorica = comisionCon("c-2025", 2025, false);
+      mockObtenerContextoDeComision.mockResolvedValue({
+        contexto: resolverContextoDeComision([comisionHistorica]),
+        comisiones: [comisionHistorica],
+      });
+
+      const element = await AdminAlumnosPage({ searchParams: Promise.resolve({}) });
+      const html = renderToStaticMarkup(element);
+
+      expect(html).toContain("Sin comisión activa");
+      expect(html).toContain('id="selector-comision-consultada"');
+    });
+  });
+
   describe("estado vacío", () => {
     it("muestra mensaje cuando no hay alumnos y no hay búsqueda", async () => {
       mockGetAlumnosPage.mockResolvedValue(paginaVacia());
