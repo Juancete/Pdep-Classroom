@@ -6,6 +6,7 @@ const mockValuesGet = vi.fn();
 const mockValuesUpdate = vi.fn();
 const mockValuesAppend = vi.fn();
 const mockValuesBatchUpdate = vi.fn();
+const mockSpreadsheetsGet = vi.fn();
 const mockDriveFilesGet = vi.fn();
 const mockGoogleAuth = vi.fn();
 
@@ -24,6 +25,7 @@ vi.mock("googleapis", () => ({
     }),
     sheets: () => ({
       spreadsheets: {
+        get: (...args: unknown[]) => mockSpreadsheetsGet(...args),
         values: {
           get: (...args: unknown[]) => mockValuesGet(...args),
           update: (...args: unknown[]) => mockValuesUpdate(...args),
@@ -822,6 +824,63 @@ describe("getDatosPrecargaByGithub", () => {
 describe("getSheetNames – validación de spreadsheetId", () => {
   it("lanza error de dominio si el spreadsheetId está vacío", async () => {
     await expect(getSheetNames("")).rejects.toThrow("No hay una comisión activa");
+  });
+});
+
+// ── getSheetNames – happy path ────────────────────────────────
+
+describe("getSheetNames", () => {
+  const SA_KEY = Buffer.from(
+    JSON.stringify({
+      client_email: "sa@proyecto.iam.gserviceaccount.com",
+      private_key: "FAKE_PRIVATE_KEY",
+    })
+  ).toString("base64");
+  const ENV_BACKUP = { ...process.env };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.GOOGLE_SERVICE_ACCOUNT_KEY = SA_KEY;
+  });
+
+  afterEach(() => {
+    process.env = { ...ENV_BACKUP };
+  });
+
+  it("devuelve los títulos de las hojas respetando el orden de la planilla", async () => {
+    mockSpreadsheetsGet.mockResolvedValueOnce({
+      data: {
+        sheets: [
+          { properties: { title: "2026" } },
+          { properties: { title: "Notas" } },
+          { properties: { title: "Grupos" } },
+        ],
+      },
+    });
+
+    const nombres = await getSheetNames("sheet-1");
+
+    expect(nombres).toEqual(["2026", "Notas", "Grupos"]);
+    expect(mockSpreadsheetsGet).toHaveBeenCalledWith({
+      spreadsheetId: "sheet-1",
+      fields: "sheets.properties.title",
+    });
+  });
+
+  it("descarta hojas sin título", async () => {
+    mockSpreadsheetsGet.mockResolvedValueOnce({
+      data: {
+        sheets: [
+          { properties: { title: "Alumnos" } },
+          { properties: { title: "" } },
+          { properties: {} },
+        ],
+      },
+    });
+
+    const nombres = await getSheetNames("sheet-1");
+
+    expect(nombres).toEqual(["Alumnos"]);
   });
 });
 

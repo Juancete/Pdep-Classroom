@@ -63,27 +63,42 @@ function ColSelect({
   );
 }
 
+// Resuelve qué hoja queda seleccionada en el combo: el valor guardado si
+// sigue existiendo en la planilla, o la primera hoja real en caso contrario
+// (hoja renombrada/borrada, o alta nueva sin valor guardado).
+export function hojaSeleccionada(
+  valorGuardado: string | undefined,
+  sheetNames: string[]
+): string | undefined {
+  if (valorGuardado !== undefined && sheetNames.includes(valorGuardado)) {
+    return valorGuardado;
+  }
+  return sheetNames[0];
+}
+
 function SheetNameSelect({
   name,
   label,
   defaultValue,
+  valorGuardado,
   error,
   sheetNames,
 }: {
   name: string;
   label: string;
   defaultValue: string | undefined;
+  valorGuardado: string | undefined;
   error?: string;
   sheetNames: string[] | null;
 }) {
-  if (sheetNames === null) {
+  if (sheetNames === null || sheetNames.length === 0) {
     return (
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
         <input
           name={name}
           defaultValue={defaultValue}
-          placeholder="Alumnos"
+          placeholder="Nombre de la hoja"
           className={`${error ? INPUT_ERROR_CLASS : INPUT_CLASS} text-sm font-mono`}
         />
         <FieldError message={error} />
@@ -91,28 +106,35 @@ function SheetNameSelect({
     );
   }
 
-  // Si el valor guardado no está en la lista (hoja renombrada), lo incluimos para no perderlo
-  const options =
-    defaultValue && !sheetNames.includes(defaultValue)
-      ? [defaultValue, ...sheetNames]
-      : sheetNames;
+  const seleccionada = hojaSeleccionada(valorGuardado, sheetNames);
+  // El aviso sólo tiene sentido si había un valor guardado que se perdió; en
+  // el alta (sin valor guardado) "Alumnos" es sólo un default de UI, no una
+  // hoja inexistente reemplazada.
+  const huboReemplazo = valorGuardado !== undefined && seleccionada !== valorGuardado;
 
   return (
     <div>
       <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
       <select
+        key={sheetNames.join("|")}
         name={name}
-        defaultValue={defaultValue}
+        defaultValue={seleccionada}
         className={`w-full rounded-md border px-2 py-1.5 text-sm font-mono ${
           error ? "border-red-400 bg-red-50" : "border-gray-300 bg-white"
         } focus:ring-2 focus:ring-pdep-500 focus:border-pdep-500 outline-none`}
       >
-        {options.map((sheetName) => (
+        {sheetNames.map((sheetName) => (
           <option key={sheetName} value={sheetName}>
             {sheetName}
           </option>
         ))}
       </select>
+      {huboReemplazo && (
+        <p className="text-amber-600 text-xs mt-1">
+          La hoja &quot;{valorGuardado}&quot; no existe en la planilla; se
+          seleccionó &quot;{seleccionada}&quot;.
+        </p>
+      )}
       <FieldError message={error} />
     </div>
   );
@@ -129,6 +151,16 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel, initialS
   const [loadingSheets, setLoadingSheets] = useState(false);
   const [loadSheetsError, setLoadSheetsError] = useState<string | null>(null);
   const spreadsheetIdRef = useRef<HTMLInputElement>(null);
+
+  // Valor realmente guardado para el combo de hojas de alumnos: en el alta
+  // (sin columnConfig) "Alumnos" es sólo un default de UI, no un valor
+  // guardado, así que no debe disparar el aviso de reemplazo.
+  const sheetNameGuardado = defaultValues.columnConfig ? config.sheetName : undefined;
+  // Para el combo de grupos el "guardado" es sólo grupos?.sheetName (nunca
+  // config.sheetName). Si no hay hoja de grupos guardada, preferimos la
+  // hoja de alumnos ya resuelta contra la lista real, sin disparar aviso.
+  const gruposSheetNameGuardado =
+    grupos?.sheetName ?? (sheetNames ? hojaSeleccionada(sheetNameGuardado, sheetNames) : undefined);
 
   async function handleLoadSheets() {
     const spreadsheetId = spreadsheetIdRef.current?.value ?? "";
@@ -236,6 +268,7 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel, initialS
             name="sheetName"
             label="Nombre de la hoja"
             defaultValue={config.sheetName}
+            valorGuardado={sheetNameGuardado}
             error={errors.sheetName?.[0]}
             sheetNames={sheetNames}
           />
@@ -341,6 +374,7 @@ export function ComisionForm({ action, defaultValues = {}, submitLabel, initialS
                 name="grupos_sheetName"
                 label="Nombre de la hoja (grupos)"
                 defaultValue={grupos?.sheetName ?? config.sheetName}
+                valorGuardado={gruposSheetNameGuardado}
                 error={errors.grupos_sheetName?.[0]}
                 sheetNames={sheetNames}
               />

@@ -272,3 +272,70 @@ export async function countAlumnos(comisionId?: string): Promise<number> {
     comisionId ? { comision: { id: comisionId } } : {}
   );
 }
+
+export const ALUMNOS_PAGE_SIZE = 25;
+
+export type AlumnosPage = {
+  items: Alumno[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+function escaparParaIlike(termino: string): string {
+  return termino.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+/**
+ * Arma el `where` de MikroORM para la búsqueda libre de alumnos: cada término
+ * (separado por espacios) debe matchear alguno de los campos vía `$ilike`, y
+ * los términos se combinan con `$and` para que "perez juan" filtre por
+ * apellido y nombre a la vez, en cualquier orden. Sin términos, no agrega
+ * ninguna condición.
+ */
+export function filtroDeBusquedaDeAlumnos(busqueda?: string) {
+  const terminos = (busqueda ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter((termino) => termino.length > 0);
+  if (terminos.length === 0) return {};
+
+  return {
+    $and: terminos.map((termino) => {
+      const patron = `%${escaparParaIlike(termino)}%`;
+      return {
+        $or: [
+          { apellido: { $ilike: patron } },
+          { nombre: { $ilike: patron } },
+          { legajo: { $ilike: patron } },
+          { githubUsername: { $ilike: patron } },
+          { email: { $ilike: patron } },
+        ],
+      };
+    }),
+  };
+}
+
+export async function getAlumnosPage(input: {
+  comisionId: string;
+  page: number;
+  pageSize?: number;
+  busqueda?: string;
+}): Promise<AlumnosPage> {
+  const entityManager = await getEM();
+  const pageSize = input.pageSize ?? ALUMNOS_PAGE_SIZE;
+  const where = {
+    comision: { id: input.comisionId },
+    ...filtroDeBusquedaDeAlumnos(input.busqueda),
+  };
+  const total = await entityManager.count(Alumno, where);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(Math.max(1, input.page), totalPages);
+  const items = await entityManager.find(Alumno, where, {
+    orderBy: { apellido: "ASC", nombre: "ASC", id: "ASC" },
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+  });
+  return { items, page, pageSize, total, totalPages };
+}
