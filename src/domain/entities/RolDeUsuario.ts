@@ -182,8 +182,8 @@ class RolDocente extends RolDeUsuario {
     return [
       { href: "/admin/assignments", label: "Assignments" },
       { href: "/admin/grupos", label: "Grupos" },
-      { href: "/admin/comisiones", label: "Comisiones" },
       { href: "/admin/alumnos", label: "Alumnos" },
+      { href: "/admin/comisiones", label: "Comisiones" },
       { href: "/admin/operaciones", label: "Diagnóstico" },
     ];
   }

@@ -152,8 +152,8 @@ describe("navegación por rol", () => {
     expect(items.map((item) => item.href)).toEqual([
       "/admin/assignments",
       "/admin/grupos",
-      "/admin/comisiones",
       "/admin/alumnos",
+      "/admin/comisiones",
       "/admin/operaciones",
       "/dashboard",
     ]);
@@ -172,8 +172,8 @@ describe("navegación por rol", () => {
     expect(items.map((item) => item.href)).toEqual([
       "/admin/assignments",
       "/admin/grupos",
-      "/admin/comisiones",
       "/admin/alumnos",
+      "/admin/comisiones",
       "/admin/operaciones",
       "/admin/docentes",
       "/dashboard",
