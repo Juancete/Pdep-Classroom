@@ -23,6 +23,7 @@ function makeGrupo(overrides?: object) {
     id: "los-lambdas",
     nombre: "Los Lambdas",
     paradigma: "funcional",
+    tipoDeIntegrantes: "alumnos",
     usernamesDeMiembros: () => ["juangarcia", "mariaperez"],
     assignment: { id: "a1", titulo: "Kata Funcional" },
   };
@@ -165,6 +166,26 @@ describe("Admin Grupos page", () => {
       const html = renderToStaticMarkup(element);
       expect(html).toContain("Grupo A");
       expect(html).toContain("Grupo B");
+    });
+
+    // issue #107: distingue en el listado admin los grupos formados por
+    // docentes (demo) de los de alumnos.
+    it("muestra la marca Docentes en un grupo de docentes", async () => {
+      mockGetGrupos.mockResolvedValue([
+        makeGrupo({ nombre: "Grupo Docentes", tipoDeIntegrantes: "docentes" }),
+      ]);
+      const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("Docentes");
+    });
+
+    it("no muestra la marca Docentes en un grupo de alumnos", async () => {
+      mockGetGrupos.mockResolvedValue([
+        makeGrupo({ nombre: "Grupo Alumnos", tipoDeIntegrantes: "alumnos" }),
+      ]);
+      const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
+      const html = renderToStaticMarkup(element);
+      expect(html).not.toContain("Docentes");
     });
   });
 });

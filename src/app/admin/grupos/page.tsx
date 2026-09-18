@@ -72,6 +72,11 @@ export default async function AdminGruposPage(
                 <span className="text-xs bg-pdep-100 text-pdep-700 px-2 py-0.5 rounded-full">
                   {grupo.paradigma}
                 </span>
+                {grupo.tipoDeIntegrantes === "docentes" && (
+                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                    Docentes
+                  </span>
+                )}
               </div>
               <p className="text-xs text-gray-400 mb-2">
                 {grupo.assignment.titulo}

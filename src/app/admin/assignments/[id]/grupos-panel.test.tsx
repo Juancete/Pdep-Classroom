@@ -22,6 +22,7 @@ function makeGrupo(overrides: Partial<GrupoAdminResumen> = {}): GrupoAdminResume
     estaLleno: false,
     etiquetaCupo: "2/3 integrantes",
     tieneEntrega: false,
+    tipoDeIntegrantes: "alumnos",
     miembros: [
       { username: "ana", nombreCompleto: "García, Ana" },
       { username: "bob", nombreCompleto: "Smith, Bob" },
@@ -436,6 +437,34 @@ describe("GruposPanel", () => {
         expect.stringContaining("grupo destino ya aceptó el TP")
       );
     });
+
+    // issue #107: un grupo de docentes nunca es destino para mover a un
+    // alumno de un grupo de alumnos, aunque tenga cupo.
+    it("no ofrece un grupo de docentes como destino para mover a un alumno", () => {
+      render(
+        <GruposPanel
+          assignmentId="a1"
+          inscripcionesCerradas={false}
+          grupos={[
+            makeGrupo({ id: "g1", tipoDeIntegrantes: "alumnos" }),
+            makeGrupo({
+              id: "g2",
+              nombre: "Docentes Team",
+              miembros: [],
+              tipoDeIntegrantes: "docentes",
+            }),
+          ]}
+          alumnosSinGrupo={[]}
+        />
+      );
+
+      // Ningún combobox: el único otro grupo (docentes) no cuenta como
+      // destino con cupo para un miembro de un grupo de alumnos. El nombre
+      // "Docentes Team" sigue visible como encabezado de su propia fila,
+      // así que la aserción relevante es la ausencia del selector, no la
+      // ausencia del texto en toda la página.
+      expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    });
   });
 
   describe("agregar alumno sin grupo", () => {
@@ -474,6 +503,30 @@ describe("GruposPanel", () => {
         );
       });
       await waitFor(() => expect(mockRouterRefresh).toHaveBeenCalled());
+    });
+
+    // issue #107: un alumno sin grupo nunca puede sumarse a un grupo de
+    // docentes desde este selector.
+    it("no ofrece grupos de docentes para agregar a un alumno sin grupo", () => {
+      render(
+        <GruposPanel
+          assignmentId="a1"
+          inscripcionesCerradas={false}
+          grupos={[
+            makeGrupo({
+              id: "g2",
+              nombre: "Docentes Team",
+              tipoDeIntegrantes: "docentes",
+            }),
+          ]}
+          alumnosSinGrupo={[makeAlumnoSinGrupo({ username: "carlos" })]}
+        />
+      );
+
+      // El grupo de docentes sigue listado (con su propio encabezado), pero
+      // no aparece como opción del selector "Agregar a…" — de ahí que la
+      // aserción relevante sea la ausencia del combobox, no del texto.
+      expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     });
   });
 });

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApiCall } from "@/hooks/useApiCall";
+import type { TipoDeIntegrantes } from "@/types";
 
 export type GrupoAdminResumen = {
   id: string;
@@ -11,6 +12,7 @@ export type GrupoAdminResumen = {
   estaLleno: boolean;
   etiquetaCupo: string;
   tieneEntrega: boolean;
+  tipoDeIntegrantes: TipoDeIntegrantes;
   miembros: { username: string; nombreCompleto: string }[];
 };
 
@@ -208,13 +210,21 @@ export function GruposPanel({
           <ul className="divide-y divide-gray-100" data-testid="grupos-list">
             {grupos.map((grupo) => {
               const otrosGruposConCupo = grupos.filter(
-                (otro) => otro.id !== grupo.id && !otro.estaLleno
+                (otro) =>
+                  otro.id !== grupo.id &&
+                  !otro.estaLleno &&
+                  otro.tipoDeIntegrantes === grupo.tipoDeIntegrantes
               );
               return (
                 <li key={grupo.id} className="p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-medium text-sm">{grupo.nombre}</span>
                     <div className="flex items-center gap-2">
+                      {grupo.tipoDeIntegrantes === "docentes" && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                          Docentes
+                        </span>
+                      )}
                       {grupo.tieneEntrega && (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
                           Repo creado
@@ -300,7 +310,9 @@ export function GruposPanel({
           </h2>
           <ul className="space-y-1.5">
             {alumnosSinGrupo.map((alumno) => {
-              const gruposConCupo = grupos.filter((grupo) => !grupo.estaLleno);
+              const gruposConCupo = grupos.filter(
+                (grupo) => !grupo.estaLleno && grupo.tipoDeIntegrantes === "alumnos"
+              );
               return (
                 <li
                   key={alumno.username}

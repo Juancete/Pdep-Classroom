@@ -101,6 +101,7 @@ export default async function AssignmentDetailPage(
       estaLleno: grupo.estaLleno(),
       etiquetaCupo: grupo.etiquetaCupo(),
       tieneEntrega: gruposConEntrega.has(grupo.id),
+      tipoDeIntegrantes: grupo.tipoDeIntegrantes,
       miembros: grupo.usernamesDeMiembros().map((username) => ({
         username,
         nombreCompleto:

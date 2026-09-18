@@ -32,6 +32,16 @@ export interface RepoInfoMinimo {
   createdAt?: Date | null;
 }
 
+// Issue #107: la borra puntual desde admin (`borrarEntrega.ts`) necesita
+// distinguir "no existe" de "no pertenece a este assignment" del resto de
+// errores inesperados — mismo criterio que `AssignmentNoEncontradoError`.
+export class EntregaNoEncontradaError extends Error {
+  constructor(public readonly entregaId: string) {
+    super("Entrega no encontrada");
+    this.name = "EntregaNoEncontradaError";
+  }
+}
+
 @Entity()
 export class Entrega {
   @PrimaryKey({ type: "uuid" })
