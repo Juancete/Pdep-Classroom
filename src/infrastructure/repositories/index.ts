@@ -14,9 +14,12 @@ export {
   getAlumnosByComision,
   getAlumnosConGruposSyncPendiente,
   countAlumnos,
+  getAlumnosPage,
+  filtroDeBusquedaDeAlumnos,
+  ALUMNOS_PAGE_SIZE,
   LegajoConflictError,
 } from "./AlumnoRepository";
-export type { AlumnoData } from "./AlumnoRepository";
+export type { AlumnoData, AlumnosPage } from "./AlumnoRepository";
 
 export {
   actualizarSuscripcion,

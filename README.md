@@ -977,7 +977,7 @@ src/
 │   │   │   ├── comision-form.tsx              # Form compartido crear/editar
 │   │   │   ├── delete-button.tsx              # Eliminar comisión
 │   │   │   └── sync-button.tsx                # Sincronizar alumnos desde Sheets → DB
-│   │   ├── alumnos/page.tsx                   # Ver alumnos (desde comisión activa)
+│   │   ├── alumnos/page.tsx                   # Ver alumnos de la comisión activa (DB), con buscador y paginación de 25
 │   │   ├── grupos/page.tsx                    # Ver grupos (DB)
 │   │   ├── delete-button.tsx                  # Componente genérico de eliminar
 │   │   └── ui.tsx                             # Componentes UI compartidos del panel admin

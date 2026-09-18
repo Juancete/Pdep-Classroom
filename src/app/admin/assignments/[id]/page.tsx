@@ -7,6 +7,7 @@ import {
   getRepoDeletionHistory,
   getHistorialDeMembresias,
 } from "@/infrastructure/repositories";
+import { parsePage } from "@/lib/search-params";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { EntregasTable } from "./entregas-table";
@@ -18,12 +19,6 @@ import { RepoDeletionHistory } from "./repo-deletion-history";
 import { HistorialDeMembresias } from "./historial-membresias";
 import { EstadoAssignmentBadge } from "@/components/EstadoAssignmentBadge";
 import { EstadoPanel } from "../estado-panel";
-
-function paginaDeQuery(valor: string | string[] | undefined): number {
-  const crudo = Array.isArray(valor) ? valor[0] : valor;
-  const parseado = Number(crudo ?? 1);
-  return Number.isInteger(parseado) && parseado > 0 ? parseado : 1;
-}
 
 export default async function AssignmentDetailPage(
   props: {
@@ -48,8 +43,8 @@ export default async function AssignmentDetailPage(
   if (!assignment) redirect("/admin/assignments");
 
   const gruposPromise = assignment.cargarGruposCon(getGruposDeAssignment);
-  const historyPage = paginaDeQuery(searchParams.repoDeletionPage);
-  const membresiaPage = paginaDeQuery(searchParams.membresiaPage);
+  const historyPage = parsePage(searchParams.repoDeletionPage);
+  const membresiaPage = parsePage(searchParams.membresiaPage);
 
   const alumnosPromise = getAlumnos();
   const [entregas, alumnos, grupos, total, deletionHistory, historialMembresias] = await Promise.all([
