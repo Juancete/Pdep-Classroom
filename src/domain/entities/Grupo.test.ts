@@ -249,6 +249,17 @@ describe("Grupo", () => {
     });
   });
 
+  describe("exigeVinculoConAlumno", () => {
+    it("es true para grupos de alumnos y false para grupos de docentes", () => {
+      const grupoDeAlumnos = nuevoGrupo(3);
+      expect(grupoDeAlumnos.exigeVinculoConAlumno()).toBe(true);
+
+      const grupoDeDocentes = nuevoGrupo(3);
+      grupoDeDocentes.tipoDeIntegrantes = "docentes";
+      expect(grupoDeDocentes.exigeVinculoConAlumno()).toBe(false);
+    });
+  });
+
   describe("miembro sin alumno (docente en un grupo de demo)", () => {
     it("cuenta para el cupo y aparece en usernamesDeMiembros", () => {
       const grupo = nuevoGrupo(2, [fakeMiembro("ana")]);

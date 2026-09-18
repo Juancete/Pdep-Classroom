@@ -556,6 +556,14 @@ export async function moverAlumnoDeGrupo(params: {
       miembroOrigen?.alumno ??
       (await getAlumnoByGithub(usernameCanonico, false, transaction));
 
+    // Un grupo de alumnos no admite un miembro sin fila en `Alumno` (issue
+    // #107, revisión de code review): en self-service ya lo impide el
+    // acceso, pero un docente administrando a otro podía dar de alta
+    // cualquier username sin registro.
+    if (grupoDestino.exigeVinculoConAlumno() && !alumnoVinculado) {
+      throw new GrupoNoAdmiteParticipanteError(grupoDestino.id);
+    }
+
     let grupoOrigenEliminado = false;
     if (grupoOrigen) {
       grupoOrigen.quitarMiembro(usernameCanonico);

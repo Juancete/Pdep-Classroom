@@ -213,6 +213,11 @@ export class Grupo {
     return this.tipoDeIntegrantes === tipoDeIntegrantes;
   }
 
+  /** Un grupo de alumnos sólo integra alumnos registrados; uno de docentes admite miembros sin fila. */
+  exigeVinculoConAlumno(): boolean {
+    return this.tipoDeIntegrantes === "alumnos";
+  }
+
   /**
    * Predicción usada por la UI ANTES de que `githubUsername` confirme salir
    * del grupo: `true` si es el único integrante que queda (con lo cual
