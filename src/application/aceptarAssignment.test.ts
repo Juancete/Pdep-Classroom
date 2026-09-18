@@ -249,8 +249,8 @@ describe("aceptarAssignment", () => {
   });
 
   // issue #107/#112: el docente nunca se registra como alumno — aceptar un
-  // TP individual ya no exige una fila en `Alumno` (antes lanzaba
-  // `AlumnoNoRegistradoError`, retirado del dominio).
+  // TP individual ya no exige una fila en `Alumno` (antes lanzaba un error
+  // de dominio específico para este caso, retirado por completo).
   it("docente acepta un individual sin fila en Alumno", async () => {
     mockGetAlumnoByGithub.mockResolvedValue(null);
 

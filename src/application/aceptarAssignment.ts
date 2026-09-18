@@ -20,9 +20,9 @@ import { resolverParticipante } from "./participante";
 import { mensajeOperativo } from "@/lib/mensaje-operativo";
 
 // Reexportados por compatibilidad — la fuente real es el dominio
-// (`Assignment.ts` — antes vivían en `./assignmentAuthorization`, retirado
-// en el issue #107/#112 junto con la autorización académica que se mudó a
-// `Participante`).
+// (`Assignment.ts` — antes vivían en un módulo de autorización aparte,
+// retirado en el issue #107/#112 junto con la autorización académica que
+// se mudó a `Participante`).
 export { AssignmentNoEncontradoError, AssignmentNoDisponibleError };
 
 export class RepositorioPreexistenteNoAdministradoError extends Error {

@@ -81,9 +81,10 @@ describe("IndividualAssignment", () => {
   });
 
   // Fase 3 de la auditoría de dominio (y issue #107/#112): antes este
-  // chequeo era `if (!grupoId && !alumno) throw AlumnoNoRegistradoError` en
-  // `aceptarAssignment.ts` — se retiró por completo: un docente sin fila en
-  // `Alumno` también puede aceptar un TP individual desde la demo de Mis TPs.
+  // chequeo lanzaba un error de dominio específico en `aceptarAssignment.ts`
+  // cuando no había ni grupo ni alumno — se retiró por completo: un docente
+  // sin fila en `Alumno` también puede aceptar un TP individual desde la
+  // demo de Mis TPs.
   it("resolverParticipantesPara no exige un Alumno registrado", async () => {
     const individual = new IndividualAssignment();
     const participantes = await individual.resolverParticipantesPara(

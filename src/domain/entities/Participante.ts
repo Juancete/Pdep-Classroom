@@ -44,9 +44,11 @@ export interface ActorDeMembresia {
  * Quién participa en los flujos self-service de Mis TPs (aceptar, crear/
  * unirse/salir/cambiarse de grupo sobre sí mismo). Dos implementaciones —
  * `ParticipanteAlumno` y `ParticipanteDocente` — con reglas de participación
- * **idénticas** entre sí (las que antes tenía sólo `RolEstudiante`, ahora
- * jerárquicamente superiores a "quién es"): lo que varía es de qué comisión
- * participa, qué tipo de grupo integra y su vínculo (opcional) con `Alumno`.
+ * **idénticas** entre sí: antes esas reglas vivían sólo en `RolEstudiante` y
+ * dependían de qué rol tenía el usuario; ahora son las mismas para cualquier
+ * participante, sin importar el rol. Lo único que varía entre ambas
+ * implementaciones es de qué comisión participa, qué tipo de grupo integra
+ * y su vínculo (opcional) con `Alumno`.
  *
  * Reemplaza la autorización académica que vivía en `RolDeUsuario`
  * (`autorizarAccesoAssignment`, `autorizarAccionSobreAssignment`,

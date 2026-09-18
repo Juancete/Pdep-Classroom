@@ -622,9 +622,7 @@ No importar grupos reales antes de que el canary termine correctamente.
 
 ### Para docentes
 
-1. Entrar con GitHub → aterriza en Assignments. Mis TPs sigue en el menú; para aceptar TPs desde
-   ahí como alumno hay que registrarse en `/registro` (los datos se cargan en la planilla de la
-   comisión activa).
+1. Entrar con GitHub → aterriza en Assignments.
 2. Crear o seleccionar la comisión activa y sincronizar el padrón inicial.
 3. Crear un assignment en borrador: elegir template, paradigma y tipo individual o grupal. El tipo
    es el discriminador persistido y no se puede convertir después de crear el assignment.
@@ -633,6 +631,11 @@ No importar grupos reales antes de que el canary termine correctamente.
    que estén configurados (ej. Google Groups).
 6. Al finalizar, archivarlo para impedir nuevas aceptaciones y conservar sus entregas como
    histórico.
+7. Mis TPs (último ítem del menú) muestra exactamente lo que ve un alumno de la comisión activa y
+   sirve para proyectar el flujo en clase: el docente acepta TPs y arma grupos con las mismas
+   reglas que un alumno, sin registrarse ni tocar la planilla. Sus grupos son de docentes
+   (separados de los de alumnos, con la marca "Docentes" en admin). Para repetir la demo, en el
+   detalle del assignment se puede borrar una entrega puntual con su repo.
 
 ### Para alumnos
 
@@ -1010,19 +1013,20 @@ src/
 │       ├── GrupalAssignment.ts
 │       ├── EstadoAssignment.ts                # Ciclo de vida (borrador/publicado/archivado) como Strategy
 │       ├── ResultadoCI.ts                     # Estado combinado de CI del último commit, como Strategy
-│       ├── RolDeUsuario.ts                    # Docente/alumno como Strategy (reemplaza un booleano isAdmin); home por rol, navegación y alcance de Mis TPs
+│       ├── RolDeUsuario.ts                    # Alcance administrativo, home y navegación por rol como Strategy
+│       ├── Participante.ts                    # Alumno o docente actuando en Mis TPs; reglas de participación idénticas
 │       ├── Comision.ts                        # Incluye columnConfig para la planilla
 │       ├── Entrega.ts
 │       ├── Alumno.ts
 │       ├── SuscripcionAlumno.ts               # Estado de suscripción de un alumno a un canal (1 fila por canal)
 │       ├── Grupo.ts
+│       ├── MiembroDeGrupo.ts                  # Integrante de un grupo por username, con vínculo opcional a Alumno
 │       ├── CambioDeMembresia.ts               # Auditoría de altas/bajas/cambios de integrantes
 │       ├── RepoDeletionAttempt.ts             # Auditoría de borrado de repos
 │       ├── EstadoDelivery.ts                  # Estado de un delivery de webhook, como Strategy
 │       └── GithubWebhookDelivery.ts           # Auditoría de deliveries de webhook (dedup por delivery id)
 ├── application/                                # Casos de uso — acá vive la lógica de negocio
 │   ├── aceptarAssignment.ts                   # Aceptar un TP: crea entrega + repo
-│   ├── assignmentAuthorization.ts             # Quién puede ver/operar sobre un assignment
 │   ├── alumnoRegistro.ts                      # Alta de alumno (DB primero, después Sheets)
 │   ├── importarAlumnosDeComision.ts           # Sheets → DB, bulk por comisión
 │   ├── grupoSync.ts                           # Sheets → DB, membresía de grupos (sólo aditivo)
