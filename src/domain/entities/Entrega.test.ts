@@ -49,6 +49,59 @@ describe("Entrega.hasRepo", () => {
   });
 });
 
+// Issue #107 (revisión de code review): la ventana de "en vuelo" vivía
+// duplicada en `EntregaRepository.iniciarProvisionEntrega` — se mueve acá
+// para que `borrarEntrega.ts` la consulte sin repetirla.
+describe("Entrega.provisionEnCurso", () => {
+  it("devuelve true cuando el intento está pendiente, con intentos y actualizado hace 10 segundos", () => {
+    const ahora = new Date("2026-01-01T00:02:00.000Z");
+    const entrega = nuevaEntrega({
+      provisionEstado: "pendiente",
+      provisionIntentos: 1,
+      provisionActualizadoEn: new Date("2026-01-01T00:01:50.000Z"),
+    });
+    expect(entrega.provisionEnCurso(ahora)).toBe(true);
+  });
+
+  it("devuelve false cuando ya pasó la ventana de dos minutos", () => {
+    const ahora = new Date("2026-01-01T00:05:00.000Z");
+    const entrega = nuevaEntrega({
+      provisionEstado: "pendiente",
+      provisionIntentos: 1,
+      provisionActualizadoEn: new Date("2026-01-01T00:01:00.000Z"),
+    });
+    expect(entrega.provisionEnCurso(ahora)).toBe(false);
+  });
+
+  it("devuelve false cuando todavía no hubo ningún intento", () => {
+    const ahora = new Date("2026-01-01T00:02:00.000Z");
+    const entrega = nuevaEntrega({
+      provisionEstado: "pendiente",
+      provisionIntentos: 0,
+      provisionActualizadoEn: new Date("2026-01-01T00:01:50.000Z"),
+    });
+    expect(entrega.provisionEnCurso(ahora)).toBe(false);
+  });
+
+  it("devuelve false cuando la provisión está activa", () => {
+    const entrega = nuevaEntrega({
+      provisionEstado: "activa",
+      provisionIntentos: 1,
+      provisionActualizadoEn: new Date(),
+    });
+    expect(entrega.provisionEnCurso()).toBe(false);
+  });
+
+  it("devuelve false cuando la provisión falló", () => {
+    const entrega = nuevaEntrega({
+      provisionEstado: "fallida",
+      provisionIntentos: 1,
+      provisionActualizadoEn: new Date(),
+    });
+    expect(entrega.provisionEnCurso()).toBe(false);
+  });
+});
+
 // B1 de la auditoría de dominio: antes esta condición vivía duplicada en
 // `ci/rerun/route.ts` (sólo `resultadoCI.permiteReejecucion()`) y en
 // `sincronizarCI.reejecutarCIDeEntrega` (esa misma condición + repoName +

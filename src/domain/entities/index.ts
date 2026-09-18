@@ -91,7 +91,13 @@ export {
   GrupoNoAdmiteParticipanteError,
 } from "./Grupo";
 export { MiembroDeGrupo } from "./MiembroDeGrupo";
-export { Entrega, FRESCURA_CI_MS, EntregaNoEncontradaError } from "./Entrega";
+export {
+  Entrega,
+  FRESCURA_CI_MS,
+  EntregaNoEncontradaError,
+  VENTANA_PROVISION_EN_VUELO_MS,
+  EntregaConProvisionEnCursoError,
+} from "./Entrega";
 export {
   ResultadoCI,
   resultadoDesdeCheckRuns,

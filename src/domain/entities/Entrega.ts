@@ -42,6 +42,23 @@ export class EntregaNoEncontradaError extends Error {
   }
 }
 
+// Un intento abandonado se puede reclamar de nuevo pasados dos minutos —
+// única fuente, la usan tanto `provisionEnCurso()` acá como
+// `EntregaRepository.iniciarProvisionEntrega`.
+export const VENTANA_PROVISION_EN_VUELO_MS = 120_000;
+
+// Issue #107 (revisión de code review): borrar una entrega con la provisión
+// en vuelo (otra request ya reclamó el aprovisionamiento y todavía puede
+// terminar de crear el repo) deja a esa request en curso escribiendo sobre
+// una fila que ya no existe. `borrarEntrega.ts` usa esto para rechazar el
+// borrado mientras dure la ventana.
+export class EntregaConProvisionEnCursoError extends Error {
+  constructor(public readonly entregaId: string) {
+    super("El aprovisionamiento del repositorio está en curso. Reintentá en unos minutos.");
+    this.name = "EntregaConProvisionEnCursoError";
+  }
+}
+
 @Entity()
 export class Entrega {
   @PrimaryKey({ type: "uuid" })
@@ -370,6 +387,22 @@ export class Entrega {
   // `admin/assignments/[id]/page.tsx` — B2 de la auditoría de dominio).
   hasRepo(): boolean {
     return this.provisionEstado === "activa" && !!this.repoUrl && !this.repoDeleted;
+  }
+
+  /**
+   * `true` si otra request ya reclamó el aprovisionamiento y todavía está
+   * dentro de la ventana en la que puede seguir corriendo (issue #107) —
+   * misma lógica que antes vivía inline en
+   * `EntregaRepository.iniciarProvisionEntrega`, movida acá para que
+   * `borrarEntrega.ts` también pueda consultarla sin duplicarla.
+   */
+  provisionEnCurso(ahora: Date = new Date()): boolean {
+    return (
+      this.provisionEstado === "pendiente" &&
+      this.provisionIntentos > 0 &&
+      this.provisionActualizadoEn !== undefined &&
+      this.provisionActualizadoEn.getTime() > ahora.getTime() - VENTANA_PROVISION_EN_VUELO_MS
+    );
   }
 
   iniciarProvision(): void {

@@ -18,11 +18,18 @@ function fakeComision(id = "c1"): Comision {
   return comision;
 }
 
+// Registro confirmado en la misma comisión por defecto (issue #107, revisión
+// de code review): `ParticipanteAlumno` sólo participa con el registro
+// confirmado, no alcanza con tener `comision` asignada. Los tests que
+// ejercitan específicamente esa regla (`describe("comisionDeParticipacion
+// exige registro confirmado")`) pisan `registroConfirmadoEn` a mano.
 function fakeAlumno(comisionId = "c1"): Alumno {
+  const comision = fakeComision(comisionId);
   return Object.assign(new Alumno(), {
     id: "alumno-1",
     githubUsername: "ana",
-    comision: fakeComision(comisionId),
+    comision,
+    registroConfirmadoEn: comision,
   });
 }
 
@@ -94,6 +101,42 @@ describe("ParticipanteAlumno.autorizarAccesoAssignment", () => {
   it("rechaza assignments históricos sin comisión", () => {
     expect(() =>
       participanteAlumno("c1").autorizarAccesoAssignment(fakeAssignmentPublicado(null))
+    ).toThrow(AccesoAssignmentProhibidoError);
+  });
+});
+
+// Issue #107, revisión de code review: tener `comision` asignada no alcanza
+// — la UI manda a `/registro` justamente para esto, así que la API tiene
+// que exigir lo mismo, o un alumno importado sin confirmar podría actuar
+// igual que uno confirmado.
+describe("ParticipanteAlumno exige registro confirmado", () => {
+  it("un alumno con comisión pero sin registro confirmado no tiene acceso al assignment", () => {
+    const alumno = Object.assign(new Alumno(), {
+      id: "alumno-1",
+      githubUsername: "ana",
+      comision: fakeComision("c1"),
+      registroConfirmadoEn: undefined,
+    });
+    const participante = new ParticipanteAlumno(alumno, alumno.githubUsername);
+
+    expect(() =>
+      participante.autorizarAccesoAssignment(fakeAssignmentPublicado("c1"))
+    ).toThrow(AccesoAssignmentProhibidoError);
+  });
+
+  it("un alumno confirmado en otra comisión distinta a la de su fila no tiene acceso", () => {
+    const comisionVieja = fakeComision("c-vieja");
+    const comisionNueva = fakeComision("c1");
+    const alumno = Object.assign(new Alumno(), {
+      id: "alumno-1",
+      githubUsername: "ana",
+      comision: comisionNueva,
+      registroConfirmadoEn: comisionVieja,
+    });
+    const participante = new ParticipanteAlumno(alumno, alumno.githubUsername);
+
+    expect(() =>
+      participante.autorizarAccesoAssignment(fakeAssignmentPublicado("c1"))
     ).toThrow(AccesoAssignmentProhibidoError);
   });
 });
@@ -188,6 +231,12 @@ describe.each([
     const grupal = new GrupalAssignment();
     grupal.id = "a1";
     grupal.maxIntegrantes = 3;
+    // Comisión igual a la del participante (issue #107, revisión de code
+    // review): `autorizarCambioDeMembresia` ahora exige acceso al
+    // assignment antes de mirar el estado — sin esto, este fixture sin
+    // comisión rechazaría antes por `AccesoAssignmentProhibidoError`, no
+    // por las inscripciones cerradas que este test quiere ejercitar.
+    grupal.comision = fakeComision();
     expect(() =>
       crearParticipante().autorizarCambioDeMembresia({
         assignment: grupal,
@@ -215,6 +264,33 @@ describe.each([
         grupoTieneEntrega: true,
       })
     ).toThrow(InscripcionesCerradasError);
+  });
+});
+
+// Revisión de code review (issue #107/#112): antes `autorizarCambioDeMembresia`
+// no chequeaba acceso al assignment en self-service — a diferencia de
+// crear/unirse/mover, que ya pasaban por `autorizarAccionSobreAssignment`,
+// `salirDeGrupo` podía dejar salir a alguien sin acceso real al assignment.
+describe("Participante.autorizarCambioDeMembresia exige acceso al assignment", () => {
+  it("rechaza a un alumno de otra comisión con AccesoAssignmentProhibidoError", () => {
+    expect(() =>
+      participanteAlumno("c2").autorizarCambioDeMembresia({
+        assignment: fakeGrupal(), // comisión "c1"
+        grupo: fakeGrupo(),
+        grupoTieneEntrega: false,
+      })
+    ).toThrow(AccesoAssignmentProhibidoError);
+  });
+
+  it("rechaza a un alumno sin registro", () => {
+    const participante = new ParticipanteAlumno(null, "forastero");
+    expect(() =>
+      participante.autorizarCambioDeMembresia({
+        assignment: fakeGrupal(),
+        grupo: fakeGrupo(),
+        grupoTieneEntrega: false,
+      })
+    ).toThrow(AccesoAssignmentProhibidoError);
   });
 });
 
@@ -313,6 +389,17 @@ describe("motivoDeBloqueoDeMembresia", () => {
     };
     const motivo = participanteAlumno().motivoDeBloqueoDeMembresia(contexto);
     const error = new InscripcionesCerradasError(contexto.assignment.id);
+    expect(motivo).toBe(error.message);
+  });
+
+  it("devuelve el motivo de acceso prohibido en vez de lanzar", () => {
+    const contexto = {
+      assignment: fakeGrupal(), // comisión "c1"
+      grupo: fakeGrupo(),
+      grupoTieneEntrega: false,
+    };
+    const motivo = participanteAlumno("c2").motivoDeBloqueoDeMembresia(contexto);
+    const error = new AccesoAssignmentProhibidoError(contexto.assignment.id);
     expect(motivo).toBe(error.message);
   });
 

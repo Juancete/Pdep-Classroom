@@ -142,6 +142,15 @@ class RolDocente extends RolDeUsuario {
       // repo y los colaboradores desincronizados cuando el grupo ya aceptó el TP.
       autorizarCambioDeMembresia: () => {},
       origenDeAuditoria: () => "docente",
+      // Alcance administrativo global (issue #107/#112, revisión de code
+      // review): a diferencia de `Participante.autorizarAccionSobreAssignment`,
+      // acá no hay comisión propia que chequear — el docente administra
+      // cualquier assignment.
+      autorizarAccionSobreAssignment: () => {},
+      // Mueve dentro del mismo tipo que tenía en el grupo origen; un alta
+      // desde la lista "sin grupo" del panel admin siempre es de un alumno
+      // (esa lista sólo tiene alumnos).
+      tipoDeGrupoAlIngresar: (grupoOrigen) => grupoOrigen?.tipoDeIntegrantes ?? "alumnos",
     };
   }
 }

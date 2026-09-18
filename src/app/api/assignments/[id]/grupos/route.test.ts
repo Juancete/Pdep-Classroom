@@ -52,7 +52,17 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
 }
 
 function makeAlumno(id = "alumno-ana", github = "ana") {
-  return { id, githubUsername: github, comision: { id: "c1" } };
+  const comision = { id: "c1" };
+  // `confirmoRegistroEn` duck-typed (issue #107, revisión de code review):
+  // `ParticipanteAlumno.comisionDeParticipacion` ahora lo llama para exigir
+  // registro confirmado, no alcanza con tener `comision`.
+  return {
+    id,
+    githubUsername: github,
+    comision,
+    confirmoRegistroEn: (otraComision: { id: string } | null) =>
+      otraComision?.id === comision.id,
+  };
 }
 
 function makeAssignment(overrides = {}) {

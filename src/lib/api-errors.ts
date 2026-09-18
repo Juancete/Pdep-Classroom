@@ -16,6 +16,7 @@ import {
   GrupoConEntregaError,
   GrupoNoAdmiteParticipanteError,
   EntregaNoEncontradaError,
+  EntregaConProvisionEnCursoError,
 } from "@/domain/entities";
 import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 import { PermisosNoVerificablesError } from "@/infrastructure/auth/PermisosNoVerificablesError";
@@ -89,6 +90,7 @@ function getRespuestasPorError(): Map<ConstructorDeError, RespuestaDeError> {
       [GrupoConEntregaError, { status: 409 }],
       [AlumnoNoEsMiembroDelGrupoError, { status: 409 }],
       [GrupoNoAdmiteParticipanteError, { status: 409 }],
+      [EntregaConProvisionEnCursoError, { status: 409 }],
       [PermisosNoVerificablesError, { status: 503 }],
       [
         PlanillaNoDisponibleError,

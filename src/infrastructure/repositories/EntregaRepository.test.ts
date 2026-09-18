@@ -9,6 +9,7 @@ const mockEm: {
   getReference: ReturnType<typeof vi.fn>;
   getConnection: ReturnType<typeof vi.fn>;
   persist: ReturnType<typeof vi.fn>;
+  remove: ReturnType<typeof vi.fn>;
   flush: ReturnType<typeof vi.fn>;
   transactional: ReturnType<typeof vi.fn>;
 } = {
@@ -18,6 +19,7 @@ const mockEm: {
   getReference: vi.fn(),
   getConnection: vi.fn(() => mockConnection),
   persist: vi.fn(),
+  remove: vi.fn(),
   flush: vi.fn(),
   transactional: vi.fn(),
 };
@@ -36,6 +38,7 @@ import {
   Entrega,
   Grupo,
   AssignmentNoDisponibleError,
+  EntregaConProvisionEnCursoError,
 } from "@/domain/entities";
 import {
   createEntrega,
@@ -54,6 +57,7 @@ import {
   asegurarRepoGithubId,
   iniciarProvisionEntrega,
   marcarCreacionGithubIniciada,
+  eliminarEntrega,
 } from "./EntregaRepository";
 
 function fakeAssignmentDisponible(disponible: boolean) {
@@ -615,6 +619,54 @@ describe("EntregaRepository", () => {
 
       expect(entrega.provisionIntentos).toBe(2);
       expect(mockEm.flush).toHaveBeenCalled();
+    });
+  });
+
+  // Issue #107, revisión de code review: el chequeo de `provisionEnCurso()`
+  // que hace `borrarEntrega.ts` antes de tocar GitHub es sólo un fast-fail
+  // — acá se re-verifica bajo el mismo lock que toma `iniciarProvisionEntrega`,
+  // para que una provisión que arranque justo entre medio no pierda su fila.
+  describe("eliminarEntrega", () => {
+    it("bloquea la fila y rechaza si la provisión está en curso (no remueve)", async () => {
+      const entrega = new Entrega();
+      entrega.id = "e1";
+      entrega.provisionEstado = "pendiente";
+      entrega.provisionIntentos = 1;
+      entrega.provisionActualizadoEn = new Date();
+      mockEm.findOne.mockResolvedValueOnce(entrega);
+
+      await expect(eliminarEntrega("e1")).rejects.toBeInstanceOf(
+        EntregaConProvisionEnCursoError
+      );
+
+      expect(mockEm.findOne).toHaveBeenCalledWith(
+        Entrega,
+        { id: "e1" },
+        expect.objectContaining({ lockMode: LockMode.PESSIMISTIC_WRITE })
+      );
+      expect(mockEm.remove).not.toHaveBeenCalled();
+      expect(mockEm.flush).not.toHaveBeenCalled();
+    });
+
+    it("remueve la fila cuando no hay provisión en curso", async () => {
+      const entrega = new Entrega();
+      entrega.id = "e1";
+      entrega.provisionEstado = "activa";
+      mockEm.findOne.mockResolvedValueOnce(entrega);
+
+      await expect(eliminarEntrega("e1")).resolves.toBeUndefined();
+
+      expect(mockEm.remove).toHaveBeenCalledWith(entrega);
+      expect(mockEm.flush).toHaveBeenCalled();
+    });
+
+    it("es idempotente si la entrega ya no existe", async () => {
+      mockEm.findOne.mockResolvedValueOnce(null);
+
+      await expect(eliminarEntrega("no-existe")).resolves.toBeUndefined();
+
+      expect(mockEm.remove).not.toHaveBeenCalled();
+      expect(mockEm.flush).not.toHaveBeenCalled();
     });
   });
 

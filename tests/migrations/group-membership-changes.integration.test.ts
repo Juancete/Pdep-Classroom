@@ -109,16 +109,20 @@ async function seedGroups(
   );
 
   for (const [index, alumnoId] of alumnoIds.entries()) {
+    // `registro_confirmado_en_id` = la misma comisión: issue #107, revisión
+    // de code review — `ParticipanteAlumno` sólo participa con el registro
+    // confirmado, no alcanza con tener `comision_id`.
     await connection.execute(
       `insert into "alumno"
-        ("id", "legajo", "nombre", "apellido", "github_username", "email", "comision_id")
-       values (?, ?, ?, 'Test', ?, ?, ?)`,
+        ("id", "legajo", "nombre", "apellido", "github_username", "email", "comision_id", "registro_confirmado_en_id")
+       values (?, ?, ?, 'Test', ?, ?, ?, ?)`,
       [
         alumnoId,
         `${1000 + index}`,
         `Alumno ${index}`,
         githubUsernames[index],
         `${githubUsernames[index]}@example.com`,
+        comisionId,
         comisionId,
       ]
     );

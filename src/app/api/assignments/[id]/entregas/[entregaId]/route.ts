@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { guardAdmin } from "@/lib/api-auth";
 import { getCurrentUser } from "@/infrastructure/auth/session";
 import { borrarEntrega } from "@/application/borrarEntrega";
+import { RepositorioPreexistenteNoAdministradoError } from "@/application/aceptarAssignment";
 import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
 
 type Params = { id: string; entregaId: string };
@@ -38,6 +39,9 @@ export async function DELETE(
 
     return NextResponse.json({ ok: true, repo: resultado.repo });
   } catch (error) {
+    if (error instanceof RepositorioPreexistenteNoAdministradoError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     return (
       respuestaDeErrorDeDominio(error) ??
       internalServerError(

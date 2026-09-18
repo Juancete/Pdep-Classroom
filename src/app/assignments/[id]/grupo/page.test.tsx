@@ -93,10 +93,16 @@ function makeGrupalAssignment(overrides = {}): GrupalAssignment {
 }
 
 function makeAlumno(comisionId = "c1") {
+  const comision = { id: comisionId };
+  // `confirmoRegistroEn` duck-typed (issue #107, revisión de code review):
+  // `ParticipanteAlumno.comisionDeParticipacion` ahora lo llama para exigir
+  // registro confirmado, no alcanza con tener `comision`.
   return {
     id: "alumno-ana",
     githubUsername: "ana",
-    comision: { id: comisionId },
+    comision,
+    confirmoRegistroEn: (otraComision: { id: string } | null) =>
+      otraComision?.id === comision.id,
   };
 }
 

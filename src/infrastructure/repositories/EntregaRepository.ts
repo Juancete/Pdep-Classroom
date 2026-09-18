@@ -8,6 +8,7 @@ import {
   AssignmentNoDisponibleError,
   Grupo,
   Entrega,
+  EntregaConProvisionEnCursoError,
   type NombreResultadoCI,
 } from "@/domain/entities";
 
@@ -65,15 +66,34 @@ export async function getEntregaPorId(
 }
 
 // Borrado puntual de una entrega desde admin (issue #107, `borrarEntrega.ts`).
-// `nativeDelete` en vez de cargar + `remove`/flush: no hace falta la entidad
-// hidratada, sólo borrar la fila. `RepoDeletionAttempt.entregaId` es un uuid
-// escalar sin FK (ver su comentario), así que esto no rompe esa auditoría.
+// Transaccional y con lock (revisión de code review): el chequeo de
+// `entrega.provisionEnCurso()` que hace `borrarEntrega` antes de tocar
+// GitHub es sólo un fast-fail — una provisión puede arrancar recién después
+// de ese chequeo y antes de este borrado. `iniciarProvisionEntrega` toma el
+// mismo `LockMode.PESSIMISTIC_WRITE` sobre la misma fila, así que ese lock
+// serializa borrado y aprovisionamiento: quien llegue segundo ve el estado
+// real y actúa en consecuencia, en vez de que uno le pise la fila al otro.
+// Idempotente si la entrega ya no existe (no es un error borrarla dos
+// veces). `RepoDeletionAttempt.entregaId` es un uuid escalar sin FK (ver su
+// comentario), así que remover la fila no rompe esa auditoría.
 export async function eliminarEntrega(
   entregaId: string,
   em?: EntityManager
 ): Promise<void> {
   const entityManager = em ?? (await getEM());
-  await entityManager.nativeDelete(Entrega, { id: entregaId });
+  await entityManager.transactional(async (transaction) => {
+    const entrega = await transaction.findOne(
+      Entrega,
+      { id: entregaId },
+      { lockMode: LockMode.PESSIMISTIC_WRITE }
+    );
+    if (!entrega) return;
+    if (entrega.provisionEnCurso()) {
+      throw new EntregaConProvisionEnCursoError(entrega.id);
+    }
+    transaction.remove(entrega);
+    await transaction.flush();
+  });
 }
 
 export async function getEntregaByRepoName(
@@ -336,12 +356,11 @@ export async function createEntrega(
   return entrega;
 }
 
-const VENTANA_PROVISION_EN_VUELO_MS = 120_000;
-
 // Reclama el aprovisionamiento bajo lock. Si otra request ya lo está
 // ejecutando, devuelve null para que el segundo click observe la misma fila
 // pendiente sin volver a crear el repo en GitHub. Un intento abandonado se
-// puede reclamar de nuevo pasados dos minutos.
+// puede reclamar de nuevo pasados dos minutos (`Entrega.provisionEnCurso`,
+// issue #107 — antes esa ventana vivía duplicada acá).
 export async function iniciarProvisionEntrega(entregaId: string): Promise<Entrega | null> {
   const entityManager = await getEM();
   return entityManager.transactional(async (transaction) => {
@@ -354,15 +373,7 @@ export async function iniciarProvisionEntrega(entregaId: string): Promise<Entreg
       }
     );
     if (entrega.hasRepo()) return entrega;
-    const enVueloDesde = entrega.provisionActualizadoEn?.getTime();
-    if (
-      entrega.provisionEstado === "pendiente" &&
-      entrega.provisionIntentos > 0 &&
-      enVueloDesde !== undefined &&
-      enVueloDesde > Date.now() - VENTANA_PROVISION_EN_VUELO_MS
-    ) {
-      return null;
-    }
+    if (entrega.provisionEnCurso()) return null;
     entrega.iniciarProvision();
     await transaction.flush();
     return entrega;

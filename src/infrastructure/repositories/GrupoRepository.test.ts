@@ -99,6 +99,10 @@ function fakeAlumno(id: string, githubUsername: string): Alumno {
   alumno.apellido = "Test";
   alumno.email = `${githubUsername}@test`;
   alumno.comision = fakeComision();
+  // Registro confirmado en la misma comisión (issue #107, revisión de code
+  // review): `ParticipanteAlumno` sólo participa con el registro
+  // confirmado, no alcanza con tener `comision` asignada.
+  alumno.confirmarRegistroEn(alumno.comision);
   return alumno;
 }
 
@@ -791,6 +795,30 @@ describe("upsertGrupoConMiembro", () => {
     ).rejects.toBeInstanceOf(GrupoLlenoError);
   });
 
+  // Revisión de code review (issue #107): la planilla sólo importa alumnos —
+  // reutilizar acá un grupo de docentes homónimo sumaría un alumno a un
+  // grupo de demo del docente.
+  it("no reutiliza un grupo de docentes homónimo: lanza NombreGrupoDuplicadoError y no agrega al alumno", async () => {
+    const assignment = fakeGrupal();
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupoDeDocentes = fakeGrupo("g1", assignment, []);
+    grupoDeDocentes.tipoDeIntegrantes = "docentes";
+    mockTx.findOne.mockResolvedValueOnce(grupoDeDocentes);
+
+    await expect(
+      upsertGrupoConMiembro({
+        nombreGrupo: grupoDeDocentes.nombre,
+        paradigma: "funcional",
+        assignment,
+        alumno: ana,
+      })
+    ).rejects.toBeInstanceOf(NombreGrupoDuplicadoError);
+
+    expect(grupoDeDocentes.contieneA("ana")).toBe(false);
+    expect(mockTx.persist).not.toHaveBeenCalled();
+    expect(mockTx.flush).not.toHaveBeenCalled();
+  });
+
   it("traduce la restricción única si otra transacción gana la carrera", async () => {
     const assignment = fakeGrupal();
     const ana = fakeAlumno("alumno-ana", "ana");
@@ -1102,6 +1130,51 @@ describe("salirDeGrupo", () => {
       ["membresia:a1:ana"]
     );
   });
+
+  // Revisión de code review (issue #107/#112): antes `salirDeGrupo` en
+  // self-service sólo pedía `autorizarCambioDeMembresia`, que no chequeaba
+  // acceso al assignment — a diferencia de crear/unirse/mover, que ya lo
+  // hacían vía `autorizarAccionSobreAssignment`.
+  it("un participante sin acceso al assignment no puede salir del grupo por self-service", async () => {
+    const assignment = fakeGrupal(); // comisión "c1"
+    const ana = fakeAlumno("alumno-ana", "ana");
+    ana.comision = fakeComision("c2");
+    const grupo = fakeGrupo("g1", assignment, [ana]);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupo)
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      salirDeGrupo({
+        assignmentId: "a1",
+        grupoId: "g1",
+        githubUsername: "ana",
+        actor: participanteAlumno(ana),
+        realizadoPor: "ana",
+      })
+    ).rejects.toBeInstanceOf(AccesoAssignmentProhibidoError);
+    expect(mockTx.flush).not.toHaveBeenCalled();
+  });
+
+  it("el docente administrando a otro sí lo quita aunque no tenga comisión", async () => {
+    const assignment = fakeGrupal();
+    assignment.comision = undefined; // ej. un assignment histórico sin comisión
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupo = fakeGrupo("g1", assignment, [ana]);
+    mockTx.findOne
+      .mockResolvedValueOnce(grupo)
+      .mockResolvedValueOnce(null);
+
+    const resultado = await salirDeGrupo({
+      assignmentId: "a1",
+      grupoId: "g1",
+      githubUsername: "ana",
+      actor: actorDocente(),
+      realizadoPor: "docente1",
+    });
+
+    expect(resultado.grupo).toBe(grupo);
+  });
 });
 
 // ── moverAlumnoDeGrupo ──────────────────────────────────────
@@ -1339,5 +1412,123 @@ describe("moverAlumnoDeGrupo", () => {
         realizadoPor: "ana",
       })
     ).rejects.toBeInstanceOf(AlumnoYaEnGrupoDelAssignmentError);
+  });
+
+  // Revisión de code review (issue #107/#112): antes el tipo requerido se
+  // calculaba sólo a partir del grupo origen, sin validar acceso al
+  // assignment ni pedirle el tipo al actor — un docente o un alumno sin
+  // registro podían darse de alta en un grupo de alumnos vía este PUT,
+  // aunque `unirseAGrupo` ya los rechazaba.
+  it("un docente no puede darse de alta a sí mismo en un grupo de alumnos", async () => {
+    const assignment = fakeGrupal();
+    const grupoDestino = fakeGrupo("g2", assignment, []); // tipoDeIntegrantes por defecto: "alumnos"
+
+    mockTx.findOne
+      .mockResolvedValueOnce(null) // sin grupo previo
+      .mockResolvedValueOnce(grupoDestino); // lock destino
+
+    await expect(
+      moverAlumnoDeGrupo({
+        assignmentId: "a1",
+        grupoDestinoId: "g2",
+        githubUsername: "profe-docente",
+        actor: participanteDocente("profe-docente"),
+        realizadoPor: "profe-docente",
+      })
+    ).rejects.toBeInstanceOf(GrupoNoAdmiteParticipanteError);
+    expect(mockTx.flush).not.toHaveBeenCalled();
+  });
+
+  it("un usuario sin registro no puede darse de alta en un grupo", async () => {
+    const assignment = fakeGrupal();
+    const grupoDestino = fakeGrupo("g2", assignment, []);
+
+    mockTx.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(grupoDestino);
+
+    await expect(
+      moverAlumnoDeGrupo({
+        assignmentId: "a1",
+        grupoDestinoId: "g2",
+        githubUsername: "sinregistro",
+        actor: new ParticipanteAlumno(null, "sinregistro"),
+        realizadoPor: "sinregistro",
+      })
+    ).rejects.toBeInstanceOf(AccesoAssignmentProhibidoError);
+    expect(mockTx.flush).not.toHaveBeenCalled();
+  });
+
+  it("un alumno no puede darse de alta en un grupo de un assignment de otra comisión", async () => {
+    const assignment = fakeGrupal(); // comisión "c1"
+    const ana = fakeAlumno("alumno-ana", "ana");
+    ana.comision = fakeComision("c2");
+    const grupoDestino = fakeGrupo("g2", assignment, []);
+
+    mockTx.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(grupoDestino);
+
+    await expect(
+      moverAlumnoDeGrupo({
+        assignmentId: "a1",
+        grupoDestinoId: "g2",
+        githubUsername: "ana",
+        actor: participanteAlumno(ana),
+        realizadoPor: "ana",
+      })
+    ).rejects.toBeInstanceOf(AccesoAssignmentProhibidoError);
+    expect(mockTx.flush).not.toHaveBeenCalled();
+  });
+
+  it("un alumno no puede darse de alta en un assignment en borrador", async () => {
+    const assignment = fakeGrupal();
+    assignment.estadoNombre = "borrador";
+    const ana = fakeAlumno("alumno-ana", "ana");
+    const grupoDestino = fakeGrupo("g2", assignment, []);
+
+    mockTx.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(grupoDestino);
+
+    await expect(
+      moverAlumnoDeGrupo({
+        assignmentId: "a1",
+        grupoDestinoId: "g2",
+        githubUsername: "ana",
+        actor: participanteAlumno(ana),
+        realizadoPor: "ana",
+      })
+    ).rejects.toBeInstanceOf(AssignmentNoDisponibleError);
+    expect(mockTx.flush).not.toHaveBeenCalled();
+  });
+
+  it("el docente administrando a otro conserva el alcance global y mueve dentro del tipo del grupo origen", async () => {
+    const assignment = fakeGrupal();
+    // Borrador: un `Participante` en self-service sería rechazado acá
+    // (`AssignmentNoDisponibleError`) — el docente administrando a otro
+    // conserva su alcance global y no le importa el estado.
+    assignment.estadoNombre = "borrador";
+    const profeUno = fakeAlumno("alumno-profe1", "profe1");
+    const grupoOrigen = fakeGrupo("g1", assignment, [profeUno]);
+    grupoOrigen.tipoDeIntegrantes = "docentes";
+    const grupoDestino = fakeGrupo("g2", assignment, []);
+    grupoDestino.tipoDeIntegrantes = "docentes";
+
+    mockTx.findOne
+      .mockResolvedValueOnce(grupoOrigen) // grupoOrigenPrevio
+      .mockResolvedValueOnce(grupoOrigen) // lock g1
+      .mockResolvedValueOnce(grupoDestino) // lock g2
+      .mockResolvedValueOnce(null); // sin entrega
+
+    const resultado = await moverAlumnoDeGrupo({
+      assignmentId: "a1",
+      grupoDestinoId: "g2",
+      githubUsername: "profe1",
+      actor: actorDocente(),
+      realizadoPor: "docente1",
+    });
+
+    expect(resultado.grupoDestino).toBe(grupoDestino);
   });
 });

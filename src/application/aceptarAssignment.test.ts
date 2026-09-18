@@ -102,6 +102,10 @@ function makeAlumno(overrides?: Partial<Alumno>): Alumno {
   alumno.apellido = "García";
   alumno.email = "juan@example.com";
   alumno.comision = makeComision();
+  // Registro confirmado en la misma comisión por defecto (issue #107,
+  // revisión de code review): `ParticipanteAlumno` sólo participa con el
+  // registro confirmado, no alcanza con tener `comision` asignada.
+  alumno.confirmarRegistroEn(alumno.comision);
   return Object.assign(alumno, overrides);
 }
 
@@ -404,6 +408,25 @@ describe("aceptarAssignment", () => {
   it("rechaza un alumno de otra comisión antes de consultar entregas o GitHub", async () => {
     mockGetAlumnoByGithub.mockResolvedValue(
       makeAlumno({ comision: makeComision("c2") })
+    );
+
+    await expect(aceptarAssignment("a1", makeUser())).rejects.toBeInstanceOf(
+      AccesoAssignmentProhibidoError
+    );
+
+    expect(mockGetEntregaDeUsuario).not.toHaveBeenCalled();
+    expect(mockGetRepoInfo).not.toHaveBeenCalled();
+    expect(mockCrearEntrega).not.toHaveBeenCalled();
+    expect(mockCrearEntregaSiAssignmentDisponible).not.toHaveBeenCalled();
+  });
+
+  // Issue #107, revisión de code review: tener `comision` asignada no
+  // alcanza — un alumno importado desde Sheets pero sin confirmar el
+  // registro no puede aceptar por API, aunque la UI ya lo mande a
+  // `/registro` para eso mismo.
+  it("rechaza un alumno sin registro confirmado antes de consultar entregas o GitHub", async () => {
+    mockGetAlumnoByGithub.mockResolvedValue(
+      makeAlumno({ registroConfirmadoEn: undefined })
     );
 
     await expect(aceptarAssignment("a1", makeUser())).rejects.toBeInstanceOf(

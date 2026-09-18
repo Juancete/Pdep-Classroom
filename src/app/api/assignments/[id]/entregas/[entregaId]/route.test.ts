@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextResponse } from "next/server";
-import { EntregaNoEncontradaError } from "@/domain/entities";
+import { EntregaNoEncontradaError, EntregaConProvisionEnCursoError } from "@/domain/entities";
+import { RepositorioPreexistenteNoAdministradoError } from "@/application/aceptarAssignment";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -68,6 +69,22 @@ describe("DELETE /api/assignments/[id]/entregas/[entregaId]", () => {
     mockBorrarEntrega.mockRejectedValue(new EntregaNoEncontradaError("e1"));
     const response = await DELETE(makeRequest(), makeParams());
     expect(response.status).toBe(404);
+  });
+
+  it("devuelve 409 si la provisión del repo está en curso", async () => {
+    mockBorrarEntrega.mockRejectedValue(new EntregaConProvisionEnCursoError("e1"));
+    const response = await DELETE(makeRequest(), makeParams());
+    expect(response.status).toBe(409);
+  });
+
+  it("devuelve 409 si hay un repo preexistente no administrado por esta entrega", async () => {
+    mockBorrarEntrega.mockRejectedValue(
+      new RepositorioPreexistenteNoAdministradoError("kata-funcional-usuario1")
+    );
+    const response = await DELETE(makeRequest(), makeParams());
+    expect(response.status).toBe(409);
+    const data = await response.json();
+    expect(data.error).toContain("kata-funcional-usuario1");
   });
 
   it("devuelve 502 con el error cuando falla el borrado en GitHub", async () => {

@@ -34,10 +34,22 @@ export interface ContextoDeMembresia {
  * administrando la membresía de otro). Permite que `GrupoRepository` reciba
  * un único tipo en `salirDeGrupo`/`moverAlumnoDeGrupo`, sin necesitar saber
  * si quien actúa es el propio interesado o un tercero administrando.
+ *
+ * Dar de alta a alguien en un grupo (`moverAlumnoDeGrupo`) necesita, además
+ * de `autorizarCambioDeMembresia`, dos cosas más que difieren entre
+ * self-service y administración: acceso al assignment
+ * (`autorizarAccionSobreAssignment` — en self-service exige comisión propia
+ * y estado habilitado, igual que `unirseAGrupo`; administrando a otro es
+ * el alcance global del docente, un no-op) y qué tipo de grupo puede
+ * integrar (`tipoDeGrupoAlIngresar` — en self-service siempre el tipo del
+ * propio participante; administrando a otro, el tipo del grupo origen, o
+ * "alumnos" si es un alta sin origen).
  */
 export interface ActorDeMembresia {
   autorizarCambioDeMembresia(contexto: ContextoDeMembresia): void;
   origenDeAuditoria(): OrigenCambioMembresia;
+  autorizarAccionSobreAssignment(assignment: Assignment): void;
+  tipoDeGrupoAlIngresar(grupoOrigen: Grupo | null): TipoDeIntegrantes;
 }
 
 /**
@@ -112,13 +124,20 @@ export abstract class Participante implements ActorDeMembresia {
 
   /**
    * Autoriza que este participante modifique la composición de un grupo
-   * (crear, unirse, salir, cambiarse) sobre sí mismo: exige inscripciones
-   * abiertas y que el grupo no tenga entrega todavía. Idéntica para alumno y
-   * docente — antes sólo la tenía `RolEstudiante`, el docente resolvía
-   * siempre (bypass administrativo). Ese bypass sigue existiendo, pero sólo
-   * para administrar la membresía de *otros* (`RolDeUsuario.actorSobreMembresiaAjena`).
+   * (crear, unirse, salir, cambiarse) sobre sí mismo: exige acceso al
+   * assignment (comisión — revisión de code review, issue #107/#112: antes
+   * `salirDeGrupo` en self-service no lo chequeaba, a diferencia de crear/
+   * unirse/mover, que ya lo hacían vía `autorizarAccionSobreAssignment`) e
+   * inscripciones abiertas y que el grupo no tenga entrega todavía. NO exige
+   * el chequeo de *estado* de `autorizarAccionSobreAssignment` (salir de un
+   * grupo no requiere que el assignment esté publicado, más allá de lo que
+   * ya exige `aceptaNuevasInscripciones`). Idéntica para alumno y docente —
+   * antes sólo la tenía `RolEstudiante`, el docente resolvía siempre (bypass
+   * administrativo). Ese bypass sigue existiendo, pero sólo para administrar
+   * la membresía de *otros* (`RolDeUsuario.actorSobreMembresiaAjena`).
    */
   autorizarCambioDeMembresia({ assignment, grupo, grupoTieneEntrega }: ContextoDeMembresia): void {
+    this.autorizarAccesoAssignment(assignment);
     if (!assignment.aceptaNuevasInscripciones()) {
       throw new InscripcionesCerradasError(assignment.id);
     }
@@ -145,6 +164,7 @@ export abstract class Participante implements ActorDeMembresia {
       // `TypeError` por un contexto mal armado, por ejemplo) es un bug real
       // que tiene que romper fuerte, no disfrazarse de "grupo bloqueado".
       if (
+        error instanceof AccesoAssignmentProhibidoError ||
         error instanceof InscripcionesCerradasError ||
         error instanceof GrupoConEntregaError
       ) {
@@ -157,6 +177,16 @@ export abstract class Participante implements ActorDeMembresia {
   /** Id de `Alumno` para auditoría/entrega, o `undefined` si no tiene vínculo. */
   alumnoId(): string | undefined {
     return this.alumno?.id;
+  }
+
+  /**
+   * En self-service, un participante siempre ingresa a un grupo de su
+   * propio tipo — tenga o no grupo origen, y sin importar de qué tipo sea
+   * ese origen (issue #107/#112, revisión de code review). El parámetro
+   * existe sólo para cumplir `ActorDeMembresia`: acá se ignora.
+   */
+  tipoDeGrupoAlIngresar(): TipoDeIntegrantes {
+    return this.tipoDeGrupo();
   }
 }
 
@@ -193,8 +223,18 @@ export class ParticipanteAlumno extends Participante {
     );
   }
 
+  /**
+   * Un alumno participa desde la comisión en la que confirmó su registro —
+   * no alcanza con tener `comision` asignada (revisión de code review,
+   * issue #107/#112): un alumno importado desde Sheets pero que todavía no
+   * confirmó (`registroConfirmadoEn`) no tiene acceso a ningún assignment
+   * por API, aunque la UI ya lo mande a `/registro` para eso mismo.
+   */
   protected comisionDeParticipacion(): Comision | null {
-    return this.alumnoRegistrado?.comision ?? null;
+    if (!this.alumnoRegistrado?.comision) return null;
+    return this.alumnoRegistrado.confirmoRegistroEn(this.alumnoRegistrado.comision)
+      ? this.alumnoRegistrado.comision
+      : null;
   }
 }
 

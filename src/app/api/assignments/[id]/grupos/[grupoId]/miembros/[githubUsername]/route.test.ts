@@ -9,6 +9,8 @@ import {
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
   AlumnoNoEsMiembroDelGrupoError,
+  GrupoNoAdmiteParticipanteError,
+  AccesoAssignmentProhibidoError,
   Grupo,
   Alumno,
 } from "@/domain/entities";
@@ -183,6 +185,21 @@ describe("PUT /api/assignments/[id]/grupos/[grupoId]/miembros/[githubUsername]",
     );
     const response = await PUT(makeRequest("PUT"), makeParams());
     expect(response.status).toBe(409);
+  });
+
+  // Revisión de code review (issue #107/#112): `moverAlumnoDeGrupo` ahora
+  // valida acceso al assignment y el tipo de grupo antes de dar de alta —
+  // la ruta sólo necesita traducir esos dos errores de dominio nuevos.
+  it("un docente que intenta sumarse a un grupo de alumnos recibe 409", async () => {
+    mockMoverAlumnoDeGrupo.mockRejectedValue(new GrupoNoAdmiteParticipanteError("g1"));
+    const response = await PUT(makeRequest("PUT"), makeParams());
+    expect(response.status).toBe(409);
+  });
+
+  it("un usuario sin registro que intenta sumarse recibe 403", async () => {
+    mockMoverAlumnoDeGrupo.mockRejectedValue(new AccesoAssignmentProhibidoError("a1"));
+    const response = await PUT(makeRequest("PUT"), makeParams());
+    expect(response.status).toBe(403);
   });
 
   it("devuelve 500 para errores inesperados", async () => {

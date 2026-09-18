@@ -516,10 +516,23 @@ export async function moverAlumnoDeGrupo(params: {
       return { grupoDestino, grupoOrigenEliminado: false };
     }
 
-    // El tipo que debe admitir el destino es el del grupo origen — o
-    // "alumnos" si es un alta sin origen (issue #107/#112: la lista "sin
-    // grupo" del panel admin sólo tiene alumnos).
-    const tipoRequerido = grupoOrigen?.tipoDeIntegrantes ?? "alumnos";
+    // Acceso al assignment antes de decidir el tipo requerido (revisión de
+    // code review, issue #107/#112): en self-service, `actor` es el propio
+    // `Participante` y esto repite la misma regla que ya exige
+    // `unirseAGrupo` (comisión + estado) — sin esto, un docente o un alumno
+    // sin registro podían darse de alta acá aunque `unirseAGrupo` los
+    // hubiera rechazado. Administrando a otro, el docente conserva su
+    // alcance global (no-op).
+    actor.autorizarAccionSobreAssignment(grupoDestino.assignment);
+
+    // El tipo que debe admitir el destino lo decide el actor, no el grupo
+    // origen directamente: en self-service es siempre el tipo del propio
+    // participante (issue #107/#112 — un docente nunca puede terminar en un
+    // grupo de alumnos, tenga o no grupo origen); administrando a otro, el
+    // docente sigue moviendo dentro del mismo tipo del grupo origen, o
+    // "alumnos" si es un alta sin origen (la lista "sin grupo" del panel
+    // admin sólo tiene alumnos).
+    const tipoRequerido = actor.tipoDeGrupoAlIngresar(grupoOrigen ?? null);
     if (!grupoDestino.admiteIntegrantesDe(tipoRequerido)) {
       throw new GrupoNoAdmiteParticipanteError(grupoDestino.id);
     }
@@ -655,6 +668,11 @@ async function ejecutarUpsertGrupoConMiembro(params: {
               assignment.id,
               candidato.nombre
             );
+          }
+          // La planilla sólo importa alumnos: un grupo de docentes homónimo
+          // no se reutiliza, se informa como nombre ya tomado (issue #107).
+          if (!existente.admiteIntegrantesDe("alumnos")) {
+            throw new NombreGrupoDuplicadoError(assignment.id, candidato.nombre);
           }
           grupo = existente;
           await transaction.populate(grupo, ["miembros"], { refresh: true });

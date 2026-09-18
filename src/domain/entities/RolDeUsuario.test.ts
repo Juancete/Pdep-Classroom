@@ -9,6 +9,7 @@ import {
 import { AccesoAssignmentProhibidoError, ParticipanteAlumno, ParticipanteDocente } from "./Participante";
 import { Alumno } from "./Alumno";
 import { Comision } from "./Comision";
+import type { Grupo } from "./Grupo";
 
 function fakeComision(id = "c1"): Comision {
   const comision = new Comision(2026, "sheet-test");
@@ -170,6 +171,20 @@ describe("actorSobreMembresiaAjena", () => {
     expect(() => ESTUDIANTE.actorSobreMembresiaAjena("a1")).toThrow(
       AccesoAssignmentProhibidoError
     );
+  });
+
+  // Revisión de code review (issue #107/#112): `moverAlumnoDeGrupo` ahora le
+  // pide al actor tanto el acceso al assignment como el tipo de grupo a
+  // ingresar — el docente administrando a otro conserva el alcance global
+  // (no-op) y mueve dentro del tipo del grupo origen.
+  it("el Docente autoriza cualquier assignment y devuelve el tipo del origen o 'alumnos'", () => {
+    const actor = DOCENTE.actorSobreMembresiaAjena("a1");
+
+    expect(() => actor.autorizarAccionSobreAssignment({} as never)).not.toThrow();
+    expect(actor.tipoDeGrupoAlIngresar({ tipoDeIntegrantes: "docentes" } as Grupo)).toBe(
+      "docentes"
+    );
+    expect(actor.tipoDeGrupoAlIngresar(null)).toBe("alumnos");
   });
 });
 
