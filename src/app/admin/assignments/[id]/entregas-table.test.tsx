@@ -1,14 +1,25 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { filterEntregas, EntregasTable } from "./entregas-table";
 import type { EntregaRow } from "./entregas-table";
 
-// CISyncButton/CIRerunButton usan useRouter — no hay Router context en un
-// render estático fuera de Next, hay que mockearlo igual que en
-// delete-repos-button.test.tsx.
+// CISyncButton/CIRerunButton/BorrarEntregaButton usan useRouter — no hay
+// Router context en un render estático fuera de Next, hay que mockearlo
+// igual que en delete-repos-button.test.tsx.
+const mockRouterRefresh = vi.fn();
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn() }),
+  useRouter: () => ({ refresh: mockRouterRefresh }),
 }));
+
+function mockFetch(ok: boolean, data: object = {}) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({ ok, json: async () => data })
+  );
+}
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -200,5 +211,102 @@ describe("EntregasTable", () => {
     expect(html).toContain("alumno1");
     expect(html).toContain("alumno2");
     expect(html).toContain("alumno3");
+  });
+});
+
+// ── botón Borrar ──────────────────────────────────────────────
+
+describe("botón Borrar", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("muestra el botón Borrar en cada fila", () => {
+    render(<EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow()]} />);
+    expect(screen.getByRole("button", { name: /^borrar$/i })).toBeInTheDocument();
+  });
+
+  it("cancelar la confirmación no llama a fetch", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    mockFetch(true);
+    render(<EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow()]} />);
+
+    await user.click(screen.getByRole("button", { name: /^borrar$/i }));
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("aceptar la confirmación llama al DELETE de la entrega y refresca", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    mockFetch(true);
+    render(
+      <EntregasTable
+        assignmentId={ASSIGNMENT_ID}
+        entregas={[makeRow({ id: "e1", repoName: "kata-funcional-usuario1" })]}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: /^borrar$/i }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        `/api/assignments/${ASSIGNMENT_ID}/entregas/e1`,
+        { method: "DELETE" }
+      );
+    });
+    await waitFor(() => expect(mockRouterRefresh).toHaveBeenCalled());
+  });
+
+  it("la confirmación nombra el repo cuando la entrega tiene uno", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(
+      <EntregasTable
+        assignmentId={ASSIGNMENT_ID}
+        entregas={[makeRow({ repoName: "kata-funcional-usuario1" })]}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: /^borrar$/i }));
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      expect.stringContaining("kata-funcional-usuario1")
+    );
+  });
+
+  it("la confirmación usa 'esta entrega sin repo' cuando no hay repositorio", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(
+      <EntregasTable
+        assignmentId={ASSIGNMENT_ID}
+        entregas={[makeRow({ repoName: undefined, estadoRepo: "sin-repo" })]}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: /^borrar$/i }));
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      expect.stringContaining("esta entrega sin repo")
+    );
+  });
+
+  it("muestra el error del hook si el borrado falla", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    mockFetch(false, { error: "No se pudo borrar el repositorio" });
+    render(<EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow()]} />);
+
+    await user.click(screen.getByRole("button", { name: /^borrar$/i }));
+
+    expect(await screen.findByText("No se pudo borrar el repositorio")).toBeInTheDocument();
+    expect(mockRouterRefresh).not.toHaveBeenCalled();
   });
 });

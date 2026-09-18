@@ -14,9 +14,7 @@ export async function Nav() {
     ? (await resolverEstadoDeSincronizacion(alumno)).hayPendientes
     : false;
 
-  const links: NavLink[] = user
-    ? [{ href: "/dashboard", label: "Mis TPs" }, ...user.rol.itemsDeNavegacion()]
-    : [];
+  const links: NavLink[] = user ? user.rol.itemsDeNavegacion() : [];
 
   return (
     <nav className="bg-pdep-900 text-white">

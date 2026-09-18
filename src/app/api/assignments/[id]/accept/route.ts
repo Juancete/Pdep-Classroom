@@ -1,19 +1,18 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/infrastructure/auth/session";
-import { GrupoNoAsignadoError } from "@/domain/entities";
+import {
+  GrupoNoAsignadoError,
+  AccesoAssignmentProhibidoError,
+  AssignmentNoDisponibleError,
+} from "@/domain/entities";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
 import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 import {
   aceptarAssignment,
-  AlumnoNoRegistradoError,
   RepositorioPreexistenteNoAdministradoError,
   AssignmentNoEncontradoError,
 } from "@/application/aceptarAssignment";
-import {
-  AccesoAssignmentProhibidoError,
-  AssignmentNoDisponibleError,
-} from "@/application/assignmentAuthorization";
 
 export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -47,7 +46,6 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
     }
     if (
       error instanceof GrupoNoAsignadoError ||
-      error instanceof AlumnoNoRegistradoError ||
       error instanceof NombreRepositorioDemasiadoLargoError
     ) {
       return NextResponse.json({ error: error.message }, { status: 400 });

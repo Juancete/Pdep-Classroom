@@ -51,10 +51,7 @@ export {
   type NombreEstadoAssignment,
   type ContextoTransicionEstado,
 } from "./EstadoAssignment";
-export {
-  IndividualAssignment,
-  AlumnoNoRegistradoError,
-} from "./IndividualAssignment";
+export { IndividualAssignment } from "./IndividualAssignment";
 export {
   GrupalAssignment,
   GrupoNoAsignadoError,
@@ -91,8 +88,16 @@ export {
   GrupoNoEncontradoError,
   AlumnoNoEsMiembroDelGrupoError,
   GrupoConEntregaError,
+  GrupoNoAdmiteParticipanteError,
 } from "./Grupo";
-export { Entrega, FRESCURA_CI_MS } from "./Entrega";
+export { MiembroDeGrupo } from "./MiembroDeGrupo";
+export {
+  Entrega,
+  FRESCURA_CI_MS,
+  EntregaNoEncontradaError,
+  VENTANA_PROVISION_EN_VUELO_MS,
+  EntregaConProvisionEnCursoError,
+} from "./Entrega";
 export {
   ResultadoCI,
   resultadoDesdeCheckRuns,
@@ -125,11 +130,18 @@ export {
   ESTUDIANTE,
   RESPONSABLE,
   resolverRol,
-  AccesoAssignmentProhibidoError,
   type ItemDeNavegacion,
+  type FuentesDeParticipante,
+} from "./RolDeUsuario";
+export {
+  Participante,
+  ParticipanteAlumno,
+  ParticipanteDocente,
+  AccesoAssignmentProhibidoError,
+  type ActorDeMembresia,
   type ContextoDeMembresia,
   type OrigenCambioMembresia,
-} from "./RolDeUsuario";
+} from "./Participante";
 export {
   Docente,
   DocenteInvalidoError,

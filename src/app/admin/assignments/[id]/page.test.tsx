@@ -75,7 +75,7 @@ vi.mock("./grupos-panel", () => ({
   }: {
     assignmentId: string;
     inscripcionesCerradas: boolean;
-    grupos: { id: string; tieneEntrega: boolean }[];
+    grupos: { id: string; tieneEntrega: boolean; tipoDeIntegrantes: string }[];
     alumnosSinGrupo: { username: string }[];
   }) => (
     <div
@@ -85,6 +85,7 @@ vi.mock("./grupos-panel", () => ({
       data-grupos={grupos.length}
       data-sin-grupo={alumnosSinGrupo.length}
       data-grupos-con-entrega={grupos.filter((grupo) => grupo.tieneEntrega).map((grupo) => grupo.id).join(",")}
+      data-grupos-docentes={grupos.filter((grupo) => grupo.tipoDeIntegrantes === "docentes").map((grupo) => grupo.id).join(",")}
     />
   ),
 }));
@@ -600,6 +601,21 @@ describe("Admin Assignment Detail Page", () => {
       const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
 
       expect(renderToStaticMarkup(element)).toContain('data-grupos-con-entrega="g1"');
+    });
+
+    // issue #107: la serialización a GrupoAdminResumen propaga
+    // `tipoDeIntegrantes` — sin esto el panel no puede distinguir un grupo
+    // de docentes al filtrar destinos de "Mover a…"/"Agregar a…".
+    it("propaga tipoDeIntegrantes en la serialización de cada grupo", async () => {
+      mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
+      mockGetGruposDeAssignment.mockResolvedValue([
+        makeGrupo({ id: "g1", tipoDeIntegrantes: "alumnos" }),
+        makeGrupo({ id: "g2", tipoDeIntegrantes: "docentes" }),
+      ]);
+
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
+
+      expect(renderToStaticMarkup(element)).toContain('data-grupos-docentes="g2"');
     });
   });
 

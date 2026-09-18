@@ -57,7 +57,7 @@ export async function requireUser(): Promise<PdepUser> {
 export async function requireAdmin(): Promise<PdepUser> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (!user.rol.puedeAdministrar()) redirect("/dashboard");
+  if (!user.rol.puedeAdministrar()) redirect(user.rol.rutaDeInicio());
   return user;
 }
 
@@ -66,6 +66,6 @@ export async function requireAdmin(): Promise<PdepUser> {
 export async function requireResponsable(): Promise<PdepUser> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (!user.rol.puedeGestionarDocentes()) redirect("/dashboard");
+  if (!user.rol.puedeGestionarDocentes()) redirect(user.rol.rutaDeInicio());
   return user;
 }

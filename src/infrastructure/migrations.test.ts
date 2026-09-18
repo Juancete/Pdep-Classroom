@@ -266,6 +266,44 @@ describe("migrations", () => {
     expect(migration).toContain('alter table "docente" rename to "administrador";');
   });
 
+  it("reemplaza grupo_alumnos por grupo_miembro (membresía por username) y agrega tipo_integrantes", () => {
+    const migration = readFileSync(
+      join(process.cwd(), "migrations", "Migration20260918120000_grupo_miembro.ts"),
+      "utf8"
+    );
+
+    expect(migration).toContain('create table "grupo_miembro"');
+    expect(migration).toContain('"github_username" varchar(255) not null');
+    expect(migration).toContain('"alumno_id" uuid null');
+    expect(migration).toContain(
+      'constraint "grupo_miembro_grupo_assignment_foreign"'
+    );
+    expect(migration).toContain(
+      'foreign key ("grupo_id", "assignment_id") references "grupo" ("id", "assignment_id")'
+    );
+    expect(migration).toContain(
+      'create unique index "grupo_miembro_assignment_username_unique_idx"'
+    );
+    expect(migration).toContain('lower("a"."github_username")');
+    expect(migration).toContain(
+      'alter table "grupo" add column "tipo_integrantes" varchar(255) not null default \'alumnos\';'
+    );
+    expect(migration).toContain(
+      'alter table "cambio_membresia" alter column "alumno_id" drop not null;'
+    );
+    expect(migration).toContain('drop table if exists "grupo_alumnos";');
+    // down(): recrea grupo_alumnos sólo con los miembros vinculados a un
+    // alumno — un integrante sin fila en Alumno (docente en un grupo de
+    // demo) se pierde en el rollback, documentado en el propio archivo.
+    expect(migration).toContain('create table "grupo_alumnos"');
+    expect(migration).toContain('where "alumno_id" is not null');
+    expect(migration).toContain('drop table if exists "grupo_miembro" cascade;');
+    expect(migration).toContain('alter table "grupo" drop column "tipo_integrantes";');
+    expect(migration).toContain(
+      'alter table "cambio_membresia" alter column "alumno_id" set not null;'
+    );
+  });
+
   it("crea el registro deduplicado de errores con índices de lectura y retención", () => {
     const migration = readFileSync(
       join(process.cwd(), "migrations", "Migration20260821120000_error_logs.ts"),
@@ -296,8 +334,8 @@ describe("migrations", () => {
       (table) => table.name === "assignment"
     );
     const grupo = snapshot.tables.find((table) => table.name === "grupo");
-    const grupoAlumnos = snapshot.tables.find(
-      (table) => table.name === "grupo_alumnos"
+    const grupoMiembro = snapshot.tables.find(
+      (table) => table.name === "grupo_miembro"
     );
     const repoDeletionAttempt = snapshot.tables.find(
       (table) => table.name === "repo_deletion_attempt"
@@ -353,14 +391,25 @@ describe("migrations", () => {
       })
     );
     expect(grupo?.columns).toHaveProperty("nombre_normalizado");
-    expect(grupoAlumnos?.columns).toHaveProperty("assignment_id");
-    expect(grupoAlumnos?.indexes).toContainEqual(
+    // Membresía por username (issue #107/#112): `grupo_miembro` reemplaza al
+    // pivot `grupo_alumnos` — ver Migration20260918120000_grupo_miembro.
+    expect(grupo?.columns.tipo_integrantes).toMatchObject({
+      nullable: false,
+      default: "'alumnos'",
+    });
+    expect(grupoMiembro?.columns).toHaveProperty("assignment_id");
+    expect(grupoMiembro?.columns).toHaveProperty("github_username");
+    expect(grupoMiembro?.columns.alumno_id).toMatchObject({ nullable: true });
+    expect(grupoMiembro?.indexes).toContainEqual(
       expect.objectContaining({
-        keyName: "grupo_alumnos_assignment_alumno_unique_idx",
+        keyName: "grupo_miembro_assignment_username_unique_idx",
       })
     );
-    expect(grupoAlumnos?.foreignKeys).toHaveProperty(
-      "grupo_alumnos_grupo_assignment_foreign"
+    expect(grupoMiembro?.foreignKeys).toHaveProperty(
+      "grupo_miembro_grupo_assignment_foreign"
+    );
+    expect(grupoMiembro?.foreignKeys).toHaveProperty(
+      "grupo_miembro_alumno_id_foreign"
     );
     expect(repoDeletionAttempt?.columns).toHaveProperty("operation_id");
     expect(repoDeletionAttempt?.columns).toHaveProperty("requested_by");
@@ -370,6 +419,9 @@ describe("migrations", () => {
     ).toBe("set null");
     expect(cambioMembresia?.columns).toHaveProperty("assignment_id");
     expect(cambioMembresia?.columns).toHaveProperty("alumno_id");
+    // Nullable desde #107/#112: un docente en un grupo de demo no tiene
+    // fila en `Alumno`.
+    expect(cambioMembresia?.columns.alumno_id).toMatchObject({ nullable: true });
     expect(cambioMembresia?.columns).toHaveProperty("grupo_origen_id");
     expect(cambioMembresia?.columns).toHaveProperty("grupo_destino_id");
     expect(cambioMembresia?.indexes).toContainEqual(

@@ -52,6 +52,7 @@ export {
   getEntregasDeUsuario,
   getEntregaDeUsuario,
   getEntregaPorId,
+  eliminarEntrega,
   getEntregaByRepoName,
   getEntregaPorRepoGithubId,
   asegurarRepoGithubId,

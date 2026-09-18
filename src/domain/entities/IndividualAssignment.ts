@@ -1,7 +1,7 @@
 import { Collection, Entity, ManyToMany } from "@mikro-orm/core";
 import { Alumno } from "./Alumno";
 import type { Grupo } from "./Grupo";
-import type { RolDeUsuario } from "./RolDeUsuario";
+import type { Participante } from "./Participante";
 import {
   Assignment,
   type ParticipantesResueltos,
@@ -9,19 +9,6 @@ import {
   type BuscadorDeGrupoDelAlumno,
 } from "./Assignment";
 import { buildRepoName } from "@/lib/naming";
-
-// Lanzado cuando un alumno todavía no completó su registro (falta el
-// `Alumno` en la base) e intenta aceptar un TP individual — un TP grupal
-// no lo necesita para este chequeo puntual, ahí lo resuelve
-// `GrupoNoAsignadoError` si no tiene grupo (Fase 3 de la auditoría de
-// dominio: antes vivía en `aceptarAssignment.ts`, un servicio, no en el
-// dominio).
-export class AlumnoNoRegistradoError extends Error {
-  constructor(public readonly githubUsername: string) {
-    super("Completá tu registro antes de aceptar este assignment.");
-    this.name = "AlumnoNoRegistradoError";
-  }
-}
 
 @Entity({ discriminatorValue: "individual" })
 export class IndividualAssignment extends Assignment {
@@ -38,19 +25,19 @@ export class IndividualAssignment extends Assignment {
   }
 
   async resolverParticipantesPara(
-    user: { githubUsername: string },
-    _buscarGrupoDelAlumno: BuscadorDeGrupoDelAlumno,
-    alumno: Alumno | null
+    participante: Participante,
+    _buscarGrupoDelAlumno: BuscadorDeGrupoDelAlumno
   ): Promise<ParticipantesResueltos> {
-    if (!alumno) throw new AlumnoNoRegistradoError(user.githubUsername);
-    return { usernames: [user.githubUsername] };
+    // Sin exigir un `Alumno` registrado (issue #107/#112): un docente
+    // aceptando desde la demo de Mis TPs tampoco tiene fila en `Alumno`.
+    return { usernames: [participante.githubUsername] };
   }
 
   nombreDeRepoPara(participantes: ParticipantesResueltos): string {
     return buildRepoName({ slug: this.slug, githubUsername: participantes.usernames[0]! });
   }
 
-  requiereSeleccionDeGrupo(_user: { rol: RolDeUsuario }, _grupo: Grupo | null): boolean {
+  requiereSeleccionDeGrupo(_grupo: Grupo | null): boolean {
     return false;
   }
 

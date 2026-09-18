@@ -7,9 +7,10 @@ import {
   type DatosEstructurales,
 } from "./Assignment";
 import type { Alumno } from "./Alumno";
+import type { Participante } from "./Participante";
 import { Grupo, NombreGrupoInvalidoError } from "./Grupo";
-import type { RolDeUsuario } from "./RolDeUsuario";
 import { GRUPAL_MIN_MAX_INTEGRANTES } from "./domain-constants";
+import type { TipoDeIntegrantes } from "@/types";
 import { buildRepoName, slugify } from "@/lib/naming";
 
 // Lanzado cuando un alumno intenta aceptar un TP grupal y no figura en
@@ -68,13 +69,12 @@ export class GrupalAssignment extends Assignment {
   }
 
   async resolverParticipantesPara(
-    user: { githubUsername: string },
-    buscarGrupoDelAlumno: BuscadorDeGrupoDelAlumno,
-    _alumno: Alumno | null
+    participante: Participante,
+    buscarGrupoDelAlumno: BuscadorDeGrupoDelAlumno
   ): Promise<ParticipantesResueltos> {
-    const grupo = await buscarGrupoDelAlumno(this.id, user.githubUsername);
+    const grupo = await buscarGrupoDelAlumno(this.id, participante.githubUsername);
     if (!grupo) {
-      throw new GrupoNoAsignadoError(this.id, user.githubUsername);
+      throw new GrupoNoAsignadoError(this.id, participante.githubUsername);
     }
     return {
       usernames: grupo.usernamesDeMiembros(),
@@ -103,9 +103,15 @@ export class GrupalAssignment extends Assignment {
    * `buildRepoName` cuyo resultado se descartaba, duplicada en los dos
    * sitios de construcción de `GrupoRepository.ts` (Fase 3 de la auditoría
    * de dominio). Fija `paradigma`/`maxIntegrantes`/`assignment` desde este
-   * assignment — el caller sólo decide `nombre` y `creadoPor`.
+   * assignment — el caller sólo decide `nombre`, `creadoPor` y, opcional,
+   * `tipoDeIntegrantes` ("alumnos" por defecto): un grupo de docentes
+   * arrancado desde la demo de Mis TPs lo pasa explícito (issue #107/#112).
    */
-  crearGrupo(nombre: string, creadoPor: string): Grupo {
+  crearGrupo(
+    nombre: string,
+    creadoPor: string,
+    tipoDeIntegrantes: TipoDeIntegrantes = "alumnos"
+  ): Grupo {
     const nombreVisible = nombre.trim();
     const nombreNormalizado = slugify(nombreVisible);
     if (!nombreNormalizado) throw new NombreGrupoInvalidoError(nombre);
@@ -118,11 +124,12 @@ export class GrupalAssignment extends Assignment {
     grupo.assignment = this;
     grupo.maxIntegrantes = this.maxIntegrantes;
     grupo.creadoPor = creadoPor;
+    grupo.tipoDeIntegrantes = tipoDeIntegrantes;
     return grupo;
   }
 
-  requiereSeleccionDeGrupo(user: { rol: RolDeUsuario }, grupo: Grupo | null): boolean {
-    return !user.rol.puedeAdministrar() && !grupo;
+  requiereSeleccionDeGrupo(grupo: Grupo | null): boolean {
+    return !grupo;
   }
 
   alumnosSinGrupo(alumnos: Alumno[], grupos: Grupo[]): Alumno[] {

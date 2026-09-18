@@ -11,6 +11,7 @@ import { Comision } from "./Comision";
 import type { Alumno } from "./Alumno";
 import type { Grupo } from "./Grupo";
 import type { GrupalAssignment } from "./GrupalAssignment";
+import type { Participante } from "./Participante";
 import type { Paradigma, TipoAssignment } from "@/types";
 import { PARADIGMAS, TIPOS_ASSIGNMENT } from "./domain-constants";
 import {
@@ -18,7 +19,6 @@ import {
   type ContextoTransicionEstado,
   type NombreEstadoAssignment,
 } from "./EstadoAssignment";
-import type { RolDeUsuario } from "./RolDeUsuario";
 import { slugify } from "@/lib/naming";
 
 // Dependencias de lectura que las subclases pueden usar desde sus métodos
@@ -362,20 +362,17 @@ export abstract class Assignment {
   abstract totalEsperado(fuentes: FuentesDeConteo): Promise<number>;
 
   /**
-   * Resuelve a qué github users darles acceso al repo cuando un alumno acepta
+   * Resuelve a qué github users darles acceso al repo cuando alguien acepta
    * el assignment. La lambda `buscarGrupoDelAlumno` sólo la usa la variante
-   * grupal — individual la ignora. `alumno` (el registro de `Alumno`, o
-   * `null` si todavía no se registró) sólo lo usa la variante individual,
-   * para exigir el registro antes de aceptar (`AlumnoNoRegistradoError`) —
-   * en grupal la falta de registro no aplica igual, la resuelve
-   * `GrupoNoAsignadoError` si no tiene grupo. Antes este chequeo vivía como
-   * `if (!grupoId && !alumno)` en `aceptarAssignment.ts`, un branch por
-   * tipo fuera del dominio (Fase 3 de la auditoría de dominio).
+   * grupal — individual la ignora y devuelve directo al propio
+   * `participante` (sin exigir un `Alumno` — issue #107/#112: un docente
+   * sin fila en `Alumno` también puede aceptar un TP individual desde la
+   * demo de Mis TPs). En grupal, no tener grupo lo resuelve
+   * `GrupoNoAsignadoError`, idéntico para alumno y docente.
    */
   abstract resolverParticipantesPara(
-    user: { githubUsername: string },
-    buscarGrupoDelAlumno: BuscadorDeGrupoDelAlumno,
-    alumno: Alumno | null
+    participante: Participante,
+    buscarGrupoDelAlumno: BuscadorDeGrupoDelAlumno
   ): Promise<ParticipantesResueltos>;
 
   /**
@@ -388,10 +385,13 @@ export abstract class Assignment {
   abstract nombreDeRepoPara(participantes: ParticipantesResueltos): string;
 
   /**
-   * `true` cuando el alumno debe elegir un grupo antes de poder aceptar el TP.
-   * Individual: siempre `false`. Grupal: `true` cuando no es admin y no tiene grupo.
+   * `true` cuando el usuario debe elegir un grupo antes de poder aceptar el TP.
+   * Individual: siempre `false`. Grupal: `true` cuando no tiene grupo — sin
+   * distinguir por rol: un docente que entra a Mis TPs sin grupo pasa por
+   * "Elegir grupo" igual que un alumno (el bypass de estado/comisión del
+   * docente vive en `RolDeUsuario`, no acá).
    */
-  abstract requiereSeleccionDeGrupo(user: { rol: RolDeUsuario }, grupo: Grupo | null): boolean;
+  abstract requiereSeleccionDeGrupo(grupo: Grupo | null): boolean;
 
   /**
    * Alumnos del curso que todavía no están en ningún grupo de este assignment.

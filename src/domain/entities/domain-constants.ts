@@ -32,6 +32,14 @@ export type Paradigma = (typeof PARADIGMAS)[number];
 export const TIPOS_ASSIGNMENT = ["individual", "grupal"] as const;
 export type TipoAssignment = (typeof TIPOS_ASSIGNMENT)[number];
 
+// Quién puede integrar un `Grupo` (issue #107/#112): un grupo de alumnos
+// (el caso de siempre) o un grupo de docentes armado para la demo de Mis
+// TPs. Lo fija el creador al crear el grupo (`GrupalAssignment.crearGrupo`)
+// y no cambia después — separa por completo el cupo y el selector de un
+// tipo del otro (`Grupo.admiteIntegrantesDe`).
+export const TIPOS_DE_INTEGRANTES = ["alumnos", "docentes"] as const;
+export type TipoDeIntegrantes = (typeof TIPOS_DE_INTEGRANTES)[number];
+
 export function normalizarGithubUsername(raw: unknown): string {
   return String(raw ?? "").trim().replace(/^@+/, "").toLowerCase();
 }

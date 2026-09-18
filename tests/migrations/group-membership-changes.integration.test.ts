@@ -14,10 +14,12 @@ vi.mock("@/infrastructure/db", () => ({
 
 import {
   DOCENTE,
-  ESTUDIANTE,
   GrupoLlenoError,
   GrupoConEntregaError,
   InscripcionesCerradasError,
+  Alumno,
+  ParticipanteAlumno,
+  type ActorDeMembresia,
 } from "../../src/domain/entities";
 import {
   crearGrupo,
@@ -25,7 +27,6 @@ import {
   moverAlumnoDeGrupo,
 } from "../../src/infrastructure/repositories/GrupoRepository";
 import { crearEntregaSiAssignmentDisponible } from "../../src/infrastructure/repositories/EntregaRepository";
-import type { PdepUser } from "../../src/types";
 
 function getSafeTestDatabaseUrl(): string {
   const value = process.env.MIGRATION_TEST_DATABASE_URL;
@@ -55,8 +56,18 @@ async function resetPublicSchema(orm: MikroORM): Promise<void> {
   await connection.execute('create schema "public"');
 }
 
-function fakeUsuario(githubUsername: string, rol = ESTUDIANTE): PdepUser {
-  return { githubUsername, name: githubUsername, image: "", rol };
+// `salirDeGrupo`/`moverAlumnoDeGrupo`/`crearGrupo` piden quién actúa como
+// `Participante` (self-service) o `ActorDeMembresia` (issue #107/#112) — se
+// construyen acá desde el `Alumno` real recién sembrado, o desde el bypass
+// administrativo del docente cuando administra la membresía de otro.
+async function participanteDeAlumno(orm: MikroORM, alumnoId: string): Promise<ParticipanteAlumno> {
+  const em = orm.em.fork();
+  const alumno = await em.findOneOrFail(Alumno, { id: alumnoId }, { populate: ["comision"] });
+  return new ParticipanteAlumno(alumno, alumno.githubUsername);
+}
+
+function actorDocente(assignmentId: string): ActorDeMembresia {
+  return DOCENTE.actorSobreMembresiaAjena(assignmentId);
 }
 
 type Seed = {
@@ -98,16 +109,20 @@ async function seedGroups(
   );
 
   for (const [index, alumnoId] of alumnoIds.entries()) {
+    // `registro_confirmado_en_id` = la misma comisión: issue #107, revisión
+    // de code review — `ParticipanteAlumno` sólo participa con el registro
+    // confirmado, no alcanza con tener `comision_id`.
     await connection.execute(
       `insert into "alumno"
-        ("id", "legajo", "nombre", "apellido", "github_username", "email", "comision_id")
-       values (?, ?, ?, 'Test', ?, ?, ?)`,
+        ("id", "legajo", "nombre", "apellido", "github_username", "email", "comision_id", "registro_confirmado_en_id")
+       values (?, ?, ?, 'Test', ?, ?, ?, ?)`,
       [
         alumnoId,
         `${1000 + index}`,
         `Alumno ${index}`,
         githubUsernames[index],
         `${githubUsernames[index]}@example.com`,
+        comisionId,
         comisionId,
       ]
     );
@@ -126,11 +141,17 @@ async function seedGroups(
   return { comisionId, assignmentId, alumnoIds, githubUsernames, grupoIds };
 }
 
-async function seedMembership(orm: MikroORM, grupoId: string, alumnoId: string): Promise<void> {
-  // `assignment_id` lo completa el trigger `grupo_alumnos_completar_assignment`.
+async function seedMembership(
+  orm: MikroORM,
+  grupoId: string,
+  assignmentId: string,
+  alumnoId: string,
+  githubUsername: string
+): Promise<void> {
   await orm.em.getConnection().execute(
-    `insert into "grupo_alumnos" ("grupo_id", "alumno_id") values (?, ?)`,
-    [grupoId, alumnoId]
+    `insert into "grupo_miembro" ("id", "grupo_id", "assignment_id", "github_username", "alumno_id")
+     values (?, ?, ?, ?, ?)`,
+    [randomUUID(), grupoId, assignmentId, githubUsername, alumnoId]
   );
 }
 
@@ -177,9 +198,9 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
     await orm.em.getConnection().execute('truncate table "comision" cascade');
   });
 
-  it("rechaza al alumno con inscripciones cerradas, pero permite al docente", async () => {
+  it("rechaza al alumno con inscripciones cerradas, pero permite al docente administrando a otro", async () => {
     const seed = await seedGroups(orm, { alumnos: 1, grupos: 1, maxIntegrantes: 3 });
-    await seedMembership(orm, seed.grupoIds[0]!, seed.alumnoIds[0]!);
+    await seedMembership(orm, seed.grupoIds[0]!, seed.assignmentId, seed.alumnoIds[0]!, seed.githubUsernames[0]!);
     await orm.em.getConnection().execute(
       `update "assignment" set "inscripciones_cerradas" = true where "id" = ?`,
       [seed.assignmentId]
@@ -190,7 +211,8 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
         assignmentId: seed.assignmentId,
         grupoId: seed.grupoIds[0]!,
         githubUsername: seed.githubUsernames[0]!,
-        usuario: fakeUsuario(seed.githubUsernames[0]!, ESTUDIANTE),
+        actor: await participanteDeAlumno(orm, seed.alumnoIds[0]!),
+        realizadoPor: seed.githubUsernames[0]!,
       })
     ).rejects.toBeInstanceOf(InscripcionesCerradasError);
 
@@ -199,27 +221,29 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
         assignmentId: seed.assignmentId,
         grupoId: seed.grupoIds[0]!,
         githubUsername: seed.githubUsernames[0]!,
-        usuario: fakeUsuario("docente1", DOCENTE),
+        actor: actorDocente(seed.assignmentId),
+        realizadoPor: "docente1",
       })
     ).resolves.toMatchObject({ grupoEliminado: true });
   });
 
   it("un cambio a un grupo lleno falla y el alumno conserva su grupo original", async () => {
     const seed = await seedGroups(orm, { alumnos: 2, grupos: 2, maxIntegrantes: 1 });
-    await seedMembership(orm, seed.grupoIds[0]!, seed.alumnoIds[0]!);
-    await seedMembership(orm, seed.grupoIds[1]!, seed.alumnoIds[1]!);
+    await seedMembership(orm, seed.grupoIds[0]!, seed.assignmentId, seed.alumnoIds[0]!, seed.githubUsernames[0]!);
+    await seedMembership(orm, seed.grupoIds[1]!, seed.assignmentId, seed.alumnoIds[1]!, seed.githubUsernames[1]!);
 
     await expect(
       moverAlumnoDeGrupo({
         assignmentId: seed.assignmentId,
         grupoDestinoId: seed.grupoIds[1]!,
         githubUsername: seed.githubUsernames[0]!,
-        usuario: fakeUsuario(seed.githubUsernames[0]!, ESTUDIANTE),
+        actor: await participanteDeAlumno(orm, seed.alumnoIds[0]!),
+        realizadoPor: seed.githubUsernames[0]!,
       })
     ).rejects.toBeInstanceOf(GrupoLlenoError);
 
     const rows = await orm.em.getConnection().execute<{ grupo_id: string }[]>(
-      `select "grupo_id" from "grupo_alumnos" where "alumno_id" = ?`,
+      `select "grupo_id" from "grupo_miembro" where "alumno_id" = ?`,
       [seed.alumnoIds[0]]
     );
     expect(rows).toEqual([{ grupo_id: seed.grupoIds[0] }]);
@@ -227,7 +251,7 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
 
   it("rechaza al alumno si el grupo ya entregó; el docente puede y el grupo no se borra aunque quede vacío", async () => {
     const seed = await seedGroups(orm, { alumnos: 1, grupos: 1, maxIntegrantes: 3 });
-    await seedMembership(orm, seed.grupoIds[0]!, seed.alumnoIds[0]!);
+    await seedMembership(orm, seed.grupoIds[0]!, seed.assignmentId, seed.alumnoIds[0]!, seed.githubUsernames[0]!);
     await seedEntrega(orm, { assignmentId: seed.assignmentId, grupoId: seed.grupoIds[0]! });
 
     await expect(
@@ -235,7 +259,8 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
         assignmentId: seed.assignmentId,
         grupoId: seed.grupoIds[0]!,
         githubUsername: seed.githubUsernames[0]!,
-        usuario: fakeUsuario(seed.githubUsernames[0]!, ESTUDIANTE),
+        actor: await participanteDeAlumno(orm, seed.alumnoIds[0]!),
+        realizadoPor: seed.githubUsernames[0]!,
       })
     ).rejects.toBeInstanceOf(GrupoConEntregaError);
 
@@ -243,7 +268,8 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
       assignmentId: seed.assignmentId,
       grupoId: seed.grupoIds[0]!,
       githubUsername: seed.githubUsernames[0]!,
-      usuario: fakeUsuario("docente1", DOCENTE),
+      actor: actorDocente(seed.assignmentId),
+      realizadoPor: "docente1",
     });
     expect(resultado.grupoEliminado).toBe(false);
 
@@ -260,13 +286,14 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
       `update "grupo" set "nombre" = 'Los Lambdas', "nombre_normalizado" = 'los-lambdas' where "id" = ?`,
       [seed.grupoIds[0]]
     );
-    await seedMembership(orm, seed.grupoIds[0]!, seed.alumnoIds[0]!);
+    await seedMembership(orm, seed.grupoIds[0]!, seed.assignmentId, seed.alumnoIds[0]!, seed.githubUsernames[0]!);
 
     const resultado = await salirDeGrupo({
       assignmentId: seed.assignmentId,
       grupoId: seed.grupoIds[0]!,
       githubUsername: seed.githubUsernames[0]!,
-      usuario: fakeUsuario(seed.githubUsernames[0]!, ESTUDIANTE),
+      actor: await participanteDeAlumno(orm, seed.alumnoIds[0]!),
+      realizadoPor: seed.githubUsernames[0]!,
     });
     expect(resultado.grupoEliminado).toBe(true);
 
@@ -278,25 +305,25 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
 
     const nuevoGrupo = await crearGrupo({
       assignmentId: seed.assignmentId,
-      alumnoId: seed.alumnoIds[0]!,
       nombre: "Los Lambdas",
-      rol: ESTUDIANTE,
+      participante: await participanteDeAlumno(orm, seed.alumnoIds[0]!),
     });
     expect(nuevoGrupo.nombreNormalizado).toBe("los-lambdas");
   });
 
   it("dos salidas simultáneas del mismo grupo de dos integrantes resuelven sin error y lo borran una sola vez", async () => {
     const seed = await seedGroups(orm, { alumnos: 2, grupos: 1, maxIntegrantes: 2 });
-    await seedMembership(orm, seed.grupoIds[0]!, seed.alumnoIds[0]!);
-    await seedMembership(orm, seed.grupoIds[0]!, seed.alumnoIds[1]!);
+    await seedMembership(orm, seed.grupoIds[0]!, seed.assignmentId, seed.alumnoIds[0]!, seed.githubUsernames[0]!);
+    await seedMembership(orm, seed.grupoIds[0]!, seed.assignmentId, seed.alumnoIds[1]!, seed.githubUsernames[1]!);
 
     const results = await Promise.allSettled(
-      [0, 1].map((index) =>
+      [0, 1].map(async (index) =>
         salirDeGrupo({
           assignmentId: seed.assignmentId,
           grupoId: seed.grupoIds[0]!,
           githubUsername: seed.githubUsernames[index]!,
-          usuario: fakeUsuario(seed.githubUsernames[index]!, ESTUDIANTE),
+          actor: await participanteDeAlumno(orm, seed.alumnoIds[index]!),
+          realizadoPor: seed.githubUsernames[index]!,
         })
       )
     );
@@ -311,22 +338,23 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
 
   it("dos cambios simultáneos del mismo alumno a distintos grupos dejan una sola membresía final", async () => {
     const seed = await seedGroups(orm, { alumnos: 1, grupos: 3, maxIntegrantes: 3 });
-    await seedMembership(orm, seed.grupoIds[0]!, seed.alumnoIds[0]!);
+    await seedMembership(orm, seed.grupoIds[0]!, seed.assignmentId, seed.alumnoIds[0]!, seed.githubUsernames[0]!);
 
     const results = await Promise.allSettled(
-      [seed.grupoIds[1]!, seed.grupoIds[2]!].map((grupoDestinoId) =>
+      [seed.grupoIds[1]!, seed.grupoIds[2]!].map(async (grupoDestinoId) =>
         moverAlumnoDeGrupo({
           assignmentId: seed.assignmentId,
           grupoDestinoId,
           githubUsername: seed.githubUsernames[0]!,
-          usuario: fakeUsuario(seed.githubUsernames[0]!, ESTUDIANTE),
+          actor: await participanteDeAlumno(orm, seed.alumnoIds[0]!),
+          realizadoPor: seed.githubUsernames[0]!,
         })
       )
     );
 
     expect(results.every((result) => result.status === "fulfilled")).toBe(true);
     const memberships = await orm.em.getConnection().execute<{ count: string }[]>(
-      `select count(*) from "grupo_alumnos" where "assignment_id" = ? and "alumno_id" = ?`,
+      `select count(*) from "grupo_miembro" where "assignment_id" = ? and "alumno_id" = ?`,
       [seed.assignmentId, seed.alumnoIds[0]]
     );
     expect(Number(memberships[0]?.count)).toBe(1);
@@ -339,16 +367,17 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
       `update "grupo" set "max_integrantes" = 1 where "id" = ?`,
       [destino]
     );
-    await seedMembership(orm, origenA!, seed.alumnoIds[0]!);
-    await seedMembership(orm, origenB!, seed.alumnoIds[1]!);
+    await seedMembership(orm, origenA!, seed.assignmentId, seed.alumnoIds[0]!, seed.githubUsernames[0]!);
+    await seedMembership(orm, origenB!, seed.assignmentId, seed.alumnoIds[1]!, seed.githubUsernames[1]!);
 
     const results = await Promise.allSettled(
-      [0, 1].map((index) =>
+      [0, 1].map(async (index) =>
         moverAlumnoDeGrupo({
           assignmentId: seed.assignmentId,
           grupoDestinoId: destino!,
           githubUsername: seed.githubUsernames[index]!,
-          usuario: fakeUsuario(seed.githubUsernames[index]!, ESTUDIANTE),
+          actor: await participanteDeAlumno(orm, seed.alumnoIds[index]!),
+          realizadoPor: seed.githubUsernames[index]!,
         })
       )
     );
@@ -361,7 +390,7 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
     expect(rejected[0]?.reason).toBeInstanceOf(GrupoLlenoError);
 
     const memberships = await orm.em.getConnection().execute<{ count: string }[]>(
-      `select count(*) from "grupo_alumnos" where "assignment_id" = ?`,
+      `select count(*) from "grupo_miembro" where "assignment_id" = ?`,
       [seed.assignmentId]
     );
     expect(Number(memberships[0]?.count)).toBe(2);
@@ -369,25 +398,23 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
 
   it("una salida concurrente con la creación de la entrega nunca deja una entrega huérfana", async () => {
     const seed = await seedGroups(orm, { alumnos: 1, grupos: 1, maxIntegrantes: 3 });
-    await seedMembership(orm, seed.grupoIds[0]!, seed.alumnoIds[0]!);
+    await seedMembership(orm, seed.grupoIds[0]!, seed.assignmentId, seed.alumnoIds[0]!, seed.githubUsernames[0]!);
 
     await Promise.allSettled([
       salirDeGrupo({
         assignmentId: seed.assignmentId,
         grupoId: seed.grupoIds[0]!,
         githubUsername: seed.githubUsernames[0]!,
-        usuario: fakeUsuario(seed.githubUsernames[0]!, ESTUDIANTE),
+        actor: await participanteDeAlumno(orm, seed.alumnoIds[0]!),
+        realizadoPor: seed.githubUsernames[0]!,
       }),
-      crearEntregaSiAssignmentDisponible(
-        {
-          assignmentId: seed.assignmentId,
-          repoName: `tp-${seed.assignmentId}-los-lambdas`,
-          repoUrl: "https://github.com/org/tp-concurrente",
-          githubUsernames: [seed.githubUsernames[0]!],
-          grupoId: seed.grupoIds[0]!,
-        },
-        ESTUDIANTE
-      ),
+      crearEntregaSiAssignmentDisponible({
+        assignmentId: seed.assignmentId,
+        repoName: `tp-${seed.assignmentId}-los-lambdas`,
+        repoUrl: "https://github.com/org/tp-concurrente",
+        githubUsernames: [seed.githubUsernames[0]!],
+        grupoId: seed.grupoIds[0]!,
+      }),
     ]);
 
     // No importa cuál gana la carrera: si la salida gana, borra el grupo y el
@@ -423,23 +450,25 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
     // cruce, así que la única variable que se está probando es el orden de
     // los locks.
     const seed = await seedGroups(orm, { alumnos: 4, grupos: 2, maxIntegrantes: 3 });
-    await seedMembership(orm, seed.grupoIds[0]!, seed.alumnoIds[0]!);
-    await seedMembership(orm, seed.grupoIds[0]!, seed.alumnoIds[2]!);
-    await seedMembership(orm, seed.grupoIds[1]!, seed.alumnoIds[1]!);
-    await seedMembership(orm, seed.grupoIds[1]!, seed.alumnoIds[3]!);
+    await seedMembership(orm, seed.grupoIds[0]!, seed.assignmentId, seed.alumnoIds[0]!, seed.githubUsernames[0]!);
+    await seedMembership(orm, seed.grupoIds[0]!, seed.assignmentId, seed.alumnoIds[2]!, seed.githubUsernames[2]!);
+    await seedMembership(orm, seed.grupoIds[1]!, seed.assignmentId, seed.alumnoIds[1]!, seed.githubUsernames[1]!);
+    await seedMembership(orm, seed.grupoIds[1]!, seed.assignmentId, seed.alumnoIds[3]!, seed.githubUsernames[3]!);
 
     const results = await Promise.allSettled([
       moverAlumnoDeGrupo({
         assignmentId: seed.assignmentId,
         grupoDestinoId: seed.grupoIds[1]!,
         githubUsername: seed.githubUsernames[0]!,
-        usuario: fakeUsuario(seed.githubUsernames[0]!, ESTUDIANTE),
+        actor: await participanteDeAlumno(orm, seed.alumnoIds[0]!),
+        realizadoPor: seed.githubUsernames[0]!,
       }),
       moverAlumnoDeGrupo({
         assignmentId: seed.assignmentId,
         grupoDestinoId: seed.grupoIds[0]!,
         githubUsername: seed.githubUsernames[1]!,
-        usuario: fakeUsuario(seed.githubUsernames[1]!, ESTUDIANTE),
+        actor: await participanteDeAlumno(orm, seed.alumnoIds[1]!),
+        realizadoPor: seed.githubUsernames[1]!,
       }),
     ]);
 
@@ -451,19 +480,19 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
     expect(results.every((result) => result.status === "fulfilled")).toBe(true);
 
     const memberships = await orm.em.getConnection().execute<{ count: string }[]>(
-      `select count(*) from "grupo_alumnos" where "assignment_id" = ?`,
+      `select count(*) from "grupo_miembro" where "assignment_id" = ?`,
       [seed.assignmentId]
     );
     expect(Number(memberships[0]?.count)).toBe(4);
 
     const alumno0Grupo = await orm.em.getConnection().execute<{ grupo_id: string }[]>(
-      `select "grupo_id" from "grupo_alumnos" where "alumno_id" = ?`,
+      `select "grupo_id" from "grupo_miembro" where "alumno_id" = ?`,
       [seed.alumnoIds[0]]
     );
     expect(alumno0Grupo[0]?.grupo_id).toBe(seed.grupoIds[1]);
 
     const alumno1Grupo = await orm.em.getConnection().execute<{ grupo_id: string }[]>(
-      `select "grupo_id" from "grupo_alumnos" where "alumno_id" = ?`,
+      `select "grupo_id" from "grupo_miembro" where "alumno_id" = ?`,
       [seed.alumnoIds[1]]
     );
     expect(alumno1Grupo[0]?.grupo_id).toBe(seed.grupoIds[0]);
@@ -471,13 +500,14 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
 
   it("registra la auditoría, incluida la fila cuyo grupo origen ya no existe", async () => {
     const seed = await seedGroups(orm, { alumnos: 1, grupos: 1, maxIntegrantes: 3 });
-    await seedMembership(orm, seed.grupoIds[0]!, seed.alumnoIds[0]!);
+    await seedMembership(orm, seed.grupoIds[0]!, seed.assignmentId, seed.alumnoIds[0]!, seed.githubUsernames[0]!);
 
     await salirDeGrupo({
       assignmentId: seed.assignmentId,
       grupoId: seed.grupoIds[0]!,
       githubUsername: seed.githubUsernames[0]!,
-      usuario: fakeUsuario(seed.githubUsernames[0]!, ESTUDIANTE),
+      actor: await participanteDeAlumno(orm, seed.alumnoIds[0]!),
+      realizadoPor: seed.githubUsernames[0]!,
       motivo: "me equivoqué de grupo",
     });
 

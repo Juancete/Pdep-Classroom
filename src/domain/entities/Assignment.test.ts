@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { IndividualAssignment, AlumnoNoRegistradoError } from "./IndividualAssignment";
+import { IndividualAssignment } from "./IndividualAssignment";
 import {
   GrupalAssignment,
   GrupoNoAsignadoError,
@@ -8,8 +8,8 @@ import {
 import type { Assignment } from "./Assignment";
 import { Alumno } from "./Alumno";
 import type { Grupo } from "./Grupo";
+import type { Participante } from "./Participante";
 import { TransicionDeEstadoInvalidaError } from "./EstadoAssignment";
-import { DOCENTE, ESTUDIANTE } from "./RolDeUsuario";
 import {
   AssignmentEstructuraInmutableError,
   AssignmentTipoInmutableError,
@@ -18,6 +18,12 @@ import {
 
 function fakeAlumno(github: string): Alumno {
   return Object.assign(new Alumno(), { githubUsername: github });
+}
+
+// Duck-typed a propósito: `IndividualAssignment`/`GrupalAssignment` sólo
+// usan `githubUsername` de `Participante` en `resolverParticipantesPara`.
+function fakeParticipante(githubUsername: string): Participante {
+  return { githubUsername } as unknown as Participante;
 }
 
 function fakeGrupo(id: string, usernames: string[]): Grupo {
@@ -58,9 +64,8 @@ describe("IndividualAssignment", () => {
   it("resolverParticipantesPara devuelve solo al usuario que acepta", async () => {
     const individual = new IndividualAssignment();
     const participantes = await individual.resolverParticipantesPara(
-      { githubUsername: "ana" },
-      vi.fn(),
-      fakeAlumno("ana")
+      fakeParticipante("ana"),
+      vi.fn()
     );
     expect(participantes.usernames).toEqual(["ana"]);
     expect(participantes.grupoId).toBeUndefined();
@@ -71,25 +76,28 @@ describe("IndividualAssignment", () => {
     // y verificar que la implementación individual no lo invoca.
     const individual: Assignment = new IndividualAssignment();
     const buscar = vi.fn();
-    await individual.resolverParticipantesPara({ githubUsername: "ana" }, buscar, fakeAlumno("ana"));
+    await individual.resolverParticipantesPara(fakeParticipante("ana"), buscar);
     expect(buscar).not.toHaveBeenCalled();
   });
 
-  // Fase 3 de la auditoría de dominio: antes este chequeo era
-  // `if (!grupoId && !alumno) throw AlumnoNoRegistradoError` en
-  // `aceptarAssignment.ts`, un branch por tipo fuera del dominio.
-  it("resolverParticipantesPara lanza AlumnoNoRegistradoError si el alumno no está registrado", async () => {
+  // Fase 3 de la auditoría de dominio (y issue #107/#112): antes este
+  // chequeo lanzaba un error de dominio específico en `aceptarAssignment.ts`
+  // cuando no había ni grupo ni alumno — se retiró por completo: un docente
+  // sin fila en `Alumno` también puede aceptar un TP individual desde la
+  // demo de Mis TPs.
+  it("resolverParticipantesPara no exige un Alumno registrado", async () => {
     const individual = new IndividualAssignment();
-    await expect(
-      individual.resolverParticipantesPara({ githubUsername: "forastero" }, vi.fn(), null)
-    ).rejects.toBeInstanceOf(AlumnoNoRegistradoError);
+    const participantes = await individual.resolverParticipantesPara(
+      fakeParticipante("profe-docente"),
+      vi.fn()
+    );
+    expect(participantes.usernames).toEqual(["profe-docente"]);
   });
 
   it("requiereSeleccionDeGrupo siempre devuelve false", () => {
     const individual = new IndividualAssignment();
-    expect(individual.requiereSeleccionDeGrupo({ rol: ESTUDIANTE }, null)).toBe(false);
-    expect(individual.requiereSeleccionDeGrupo({ rol: ESTUDIANTE }, fakeGrupo("g1", []))).toBe(false);
-    expect(individual.requiereSeleccionDeGrupo({ rol: DOCENTE }, null)).toBe(false);
+    expect(individual.requiereSeleccionDeGrupo(null)).toBe(false);
+    expect(individual.requiereSeleccionDeGrupo(fakeGrupo("g1", []))).toBe(false);
   });
 
   it("alumnosSinGrupo siempre devuelve arreglo vacío", () => {
@@ -141,7 +149,7 @@ describe("GrupalAssignment", () => {
     const buscar = vi.fn().mockResolvedValue(
       fakeGrupo("los-lambdas", ["ana", "bob"])
     );
-    const participantes = await grupal.resolverParticipantesPara({ githubUsername: "ana" }, buscar, null);
+    const participantes = await grupal.resolverParticipantesPara(fakeParticipante("ana"), buscar);
     expect(participantes).toEqual({
       usernames: ["ana", "bob"],
       grupoId: "los-lambdas",
@@ -154,7 +162,7 @@ describe("GrupalAssignment", () => {
     const grupal = nuevoGrupal();
     const buscar = vi.fn().mockResolvedValue(null);
     await expect(
-      grupal.resolverParticipantesPara({ githubUsername: "forastero" }, buscar, null)
+      grupal.resolverParticipantesPara(fakeParticipante("forastero"), buscar)
     ).rejects.toBeInstanceOf(GrupoNoAsignadoError);
   });
 
@@ -162,7 +170,7 @@ describe("GrupalAssignment", () => {
     const grupal = nuevoGrupal();
     const buscar = vi.fn().mockResolvedValue(null);
     try {
-      await grupal.resolverParticipantesPara({ githubUsername: "forastero" }, buscar, null);
+      await grupal.resolverParticipantesPara(fakeParticipante("forastero"), buscar);
       expect.fail("debería haber lanzado GrupoNoAsignadoError");
     } catch (error) {
       expect(error).toBeInstanceOf(GrupoNoAsignadoError);
@@ -172,16 +180,12 @@ describe("GrupalAssignment", () => {
     }
   });
 
-  it("requiereSeleccionDeGrupo devuelve true cuando no es admin y no tiene grupo", () => {
-    expect(nuevoGrupal().requiereSeleccionDeGrupo({ rol: ESTUDIANTE }, null)).toBe(true);
+  it("requiereSeleccionDeGrupo devuelve true cuando no tiene grupo", () => {
+    expect(nuevoGrupal().requiereSeleccionDeGrupo(null)).toBe(true);
   });
 
   it("requiereSeleccionDeGrupo devuelve false cuando ya tiene grupo", () => {
-    expect(nuevoGrupal().requiereSeleccionDeGrupo({ rol: ESTUDIANTE }, fakeGrupo("g1", []))).toBe(false);
-  });
-
-  it("requiereSeleccionDeGrupo devuelve false cuando es admin", () => {
-    expect(nuevoGrupal().requiereSeleccionDeGrupo({ rol: DOCENTE }, null)).toBe(false);
+    expect(nuevoGrupal().requiereSeleccionDeGrupo(fakeGrupo("g1", []))).toBe(false);
   });
 
   it("alumnosSinGrupo devuelve los alumnos no asignados a ningún grupo", () => {
