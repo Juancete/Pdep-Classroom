@@ -1,15 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/infrastructure/auth/session";
-import {
-  getAlumnoByGithub,
-  getAssignment,
-  getGruposDeAssignment,
-  crearGrupo,
-} from "@/infrastructure/repositories";
+import { getAssignment, getGruposDeAssignment, crearGrupo } from "@/infrastructure/repositories";
 import { AssignmentNoEncontradoError } from "@/domain/entities";
 import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
-import { autorizarAccesoAssignment } from "@/application/assignmentAuthorization";
+import { resolverParticipante } from "@/application/participante";
 
 const CrearGrupoSchema = z.object({
   nombre: z.string().trim().min(1).max(100),
@@ -23,17 +18,20 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const [assignment, alumno] = await Promise.all([
+    const [assignment, participante] = await Promise.all([
       getAssignment(params.id),
-      user.rol.puedeAdministrar()
-        ? Promise.resolve(null)
-        : getAlumnoByGithub(user.githubUsername, true),
+      resolverParticipante(user),
     ]);
     if (!assignment) throw new AssignmentNoEncontradoError(params.id);
-    autorizarAccesoAssignment(user, alumno, assignment);
+    participante.autorizarAccesoAssignment(assignment);
 
+    // Sólo los grupos del tipo que integra este participante — un alumno no
+    // ve grupos de docentes, y viceversa (issue #107/#112).
     const grupos = await getGruposDeAssignment(params.id);
-    return NextResponse.json(grupos.map((grupo) => grupo.toResumen()));
+    const gruposVisibles = grupos.filter((grupo) =>
+      grupo.admiteIntegrantesDe(participante.tipoDeGrupo())
+    );
+    return NextResponse.json(gruposVisibles.map((grupo) => grupo.toResumen()));
   } catch (error) {
     return (
       respuestaDeErrorDeDominio(error) ??
@@ -61,19 +59,11 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       );
     }
 
-    const alumno = await getAlumnoByGithub(user.githubUsername, true);
-    if (!alumno) {
-      return NextResponse.json(
-        { error: "No tenés acceso a este assignment" },
-        { status: 403 }
-      );
-    }
-
+    const participante = await resolverParticipante(user);
     const grupo = await crearGrupo({
       assignmentId: params.id,
-      alumnoId: alumno.id,
       nombre: parsed.data.nombre,
-      rol: user.rol,
+      participante,
     });
 
     return NextResponse.json(grupo.toResumen(), { status: 201 });

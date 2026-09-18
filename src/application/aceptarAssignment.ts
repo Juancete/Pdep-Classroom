@@ -1,7 +1,11 @@
-import { Entrega, type ParticipantesResueltos } from "@/domain/entities";
+import {
+  Entrega,
+  AssignmentNoEncontradoError,
+  AssignmentNoDisponibleError,
+  type ParticipantesResueltos,
+} from "@/domain/entities";
 import type { PdepUser } from "@/types";
 import {
-  getAlumnoByGithub,
   getAssignment,
   getEntregaDeUsuario,
   getGrupoDeAlumnoEnAssignment,
@@ -12,20 +16,14 @@ import {
   fallarProvisionEntrega,
 } from "@/infrastructure/repositories";
 import { addCollaborators, crearEntrega, getRepoInfo, type RepoInfo } from "@/infrastructure/github";
-import {
-  AssignmentNoEncontradoError,
-  autorizarAccionSobreAssignment,
-} from "./assignmentAuthorization";
+import { resolverParticipante } from "./participante";
 import { mensajeOperativo } from "@/lib/mensaje-operativo";
 
-export {
-  AssignmentNoEncontradoError,
-  AssignmentNoDisponibleError,
-} from "./assignmentAuthorization";
 // Reexportados por compatibilidad — la fuente real es el dominio
-// (`IndividualAssignment.ts`/`GrupalAssignment.ts` — Fase 3 de la
-// auditoría de dominio).
-export { AlumnoNoRegistradoError } from "@/domain/entities";
+// (`Assignment.ts` — antes vivían en `./assignmentAuthorization`, retirado
+// en el issue #107/#112 junto con la autorización académica que se mudó a
+// `Participante`).
+export { AssignmentNoEncontradoError, AssignmentNoDisponibleError };
 
 export class RepositorioPreexistenteNoAdministradoError extends Error {
   constructor(public readonly repoName: string) {
@@ -40,35 +38,35 @@ export async function aceptarAssignment(
   assignmentId: string,
   user: PdepUser
 ): Promise<Entrega> {
-  const [assignment, alumno] = await Promise.all([
+  const [assignment, participante] = await Promise.all([
     getAssignment(assignmentId),
-    getAlumnoByGithub(user.githubUsername, true),
+    resolverParticipante(user),
   ]);
   if (!assignment) throw new AssignmentNoEncontradoError(assignmentId);
-  autorizarAccionSobreAssignment(user, alumno, assignment);
+  participante.autorizarAccionSobreAssignment(assignment);
 
-  const existente = await getEntregaDeUsuario(assignment.id, user.githubUsername);
+  const existente = await getEntregaDeUsuario(assignment.id, participante.githubUsername);
   if (existente?.hasRepo()) return existente;
 
   const participantes: ParticipantesResueltos = await assignment.resolverParticipantesPara(
-    user,
-    getGrupoDeAlumnoEnAssignment,
-    alumno
+    participante,
+    getGrupoDeAlumnoEnAssignment
   );
 
   const { usernames, grupoId } = participantes;
   const repoName = assignment.nombreDeRepoPara(participantes);
-  const entrega = await crearEntregaSiAssignmentDisponible(
-    {
-      assignmentId: assignment.id,
-      repoName,
-      githubUsernames: usernames,
-      alumnoId: grupoId ? undefined : alumno?.id,
-      grupoId,
-      provisionEstado: "pendiente",
-    },
-    user.rol
-  );
+  // Individual sin grupoId: un docente sin fila en `Alumno` no tiene
+  // `alumnoId` — `crearEntregaSiAssignmentDisponible`/`findExistingEntrega`
+  // caen entonces al lookup por `repoName` (único por username), que alcanza
+  // para la idempotencia (ver comentario en `EntregaRepository.findExistingEntrega`).
+  const entrega = await crearEntregaSiAssignmentDisponible({
+    assignmentId: assignment.id,
+    repoName,
+    githubUsernames: usernames,
+    alumnoId: grupoId ? undefined : participante.alumnoId(),
+    grupoId,
+    provisionEstado: "pendiente",
+  });
   const descripcionRepo = `${assignment.titulo} — PdeP ${entrega.marcadorDeRepo()}`;
   if (entrega.hasRepo()) return entrega;
 

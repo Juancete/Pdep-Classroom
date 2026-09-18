@@ -17,6 +17,7 @@ import {
   IndividualAssignment,
   GrupalAssignment,
   Grupo,
+  MiembroDeGrupo,
   Entrega,
   RepoDeletionAttempt,
   CambioDeMembresia,
@@ -46,6 +47,7 @@ export default defineConfig({
     IndividualAssignment,
     GrupalAssignment,
     Grupo,
+    MiembroDeGrupo,
     Entrega,
     RepoDeletionAttempt,
     CambioDeMembresia,
@@ -65,11 +67,13 @@ export default defineConfig({
     glob: "!(*.d).{js,ts}",
   },
 
-  // `grupo_alumnos` incluye assignment_id, un índice único y una FK compuesta
-  // mantenidos por una migración manual. La relación sigue disponible para el
-  // runtime, pero el schema diff no debe intentar simplificar ese pivot.
+  // `grupo_miembro` incluye assignment_id (denormalizado), un índice único y
+  // una FK compuesta mantenidos por una migración manual — reemplaza al viejo
+  // pivot `grupo_alumnos`, que tenía la misma restricción. La relación sigue
+  // disponible para el runtime, pero el schema diff no debe intentar
+  // simplificar esa tabla.
   schemaGenerator: {
-    skipTables: ["grupo_alumnos"],
+    skipTables: ["grupo_miembro"],
   },
 
   // Debugging (solo en dev)

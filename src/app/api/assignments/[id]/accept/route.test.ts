@@ -1,24 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PdepUser } from "@/types";
-import { Entrega, GrupoNoAsignadoError, ESTUDIANTE } from "@/domain/entities";
 import {
+  Entrega,
+  GrupoNoAsignadoError,
+  ESTUDIANTE,
   AccesoAssignmentProhibidoError,
   AssignmentNoDisponibleError,
-} from "@/application/assignmentAuthorization";
+} from "@/domain/entities";
 import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
 const {
   mockGetCurrentUser,
   mockCheckRateLimit,
   mockAceptarAssignment,
-  FakeAlumnoNoRegistradoError,
   FakeAssignmentNoEncontradoError,
   FakeRepositorioPreexistenteError,
 } = vi.hoisted(() => ({
   mockGetCurrentUser: vi.fn(),
   mockCheckRateLimit: vi.fn(),
   mockAceptarAssignment: vi.fn(),
-  FakeAlumnoNoRegistradoError: class AlumnoNoRegistradoError extends Error {},
   FakeAssignmentNoEncontradoError: class AssignmentNoEncontradoError extends Error {},
   FakeRepositorioPreexistenteError: class RepositorioPreexistenteNoAdministradoError extends Error {},
 }));
@@ -35,7 +35,6 @@ vi.mock("@/application/aceptarAssignment", () => {
   return {
     aceptarAssignment: (assignmentId: string, user: PdepUser) =>
       mockAceptarAssignment(assignmentId, user),
-    AlumnoNoRegistradoError: FakeAlumnoNoRegistradoError,
     AssignmentNoEncontradoError: FakeAssignmentNoEncontradoError,
     RepositorioPreexistenteNoAdministradoError: FakeRepositorioPreexistenteError,
   };
@@ -165,12 +164,6 @@ describe("POST /api/assignments/[id]/accept", () => {
 
   it("devuelve 400 si assignment grupal y el usuario no tiene grupo", async () => {
     mockAceptarAssignment.mockRejectedValue(new GrupoNoAsignadoError("a1", "juangarcia"));
-    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
-    expect(response.status).toBe(400);
-  });
-
-  it("devuelve 400 si el alumno no está registrado para una entrega individual", async () => {
-    mockAceptarAssignment.mockRejectedValue(new FakeAlumnoNoRegistradoError("Completá tu registro"));
     const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(400);
   });

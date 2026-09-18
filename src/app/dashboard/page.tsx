@@ -1,40 +1,34 @@
 import { requireUser } from "@/infrastructure/auth/session";
 import {
-  getAssignments,
   getAssignmentsDeComision,
   getEntregasDeUsuario,
-  getAlumnoByGithub,
   getComisionActiva,
   getGruposDeAlumno,
 } from "@/infrastructure/repositories";
 import { AcceptButton } from "./accept-button";
-import { RegistroPendienteAviso } from "./registro-pendiente-aviso";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { EstadoAssignmentBadge } from "@/components/EstadoAssignmentBadge";
 import { CIBadge } from "@/components/CIBadge";
 import { CIRefreshButton } from "./ci-refresh-button";
+import { resolverParticipante } from "@/application/participante";
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [alumno, comisionActiva] = await Promise.all([
-    getAlumnoByGithub(user.githubUsername),
+  const [participante, comisionActiva] = await Promise.all([
+    resolverParticipante(user),
     getComisionActiva(),
   ]);
-  // Mismo predicado para todos los roles; sólo cambia la consecuencia: al
-  // alumno lo manda a /registro, al docente le muestra el aviso más abajo.
-  const registroPendiente =
-    comisionActiva !== null &&
-    (!alumno || alumno.necesitaConfirmarRegistroPara(comisionActiva));
-  if (registroPendiente && user.rol.exigeRegistroDeAlumno()) redirect("/registro");
+
+  // Mismo predicado para todos los roles, resuelto por el `Participante`: un
+  // docente nunca lo necesita (issue #107/#112) — se registra sólo el
+  // alumno, y sólo si hay comisión activa y todavía no confirmó en ella.
+  if (participante.necesitaRegistro(comisionActiva)) redirect("/registro");
 
   const [assignments, entregasMap, gruposMap] = await Promise.all([
-    user.rol.assignmentsParaMisTps(
-      { todos: getAssignments, deComision: getAssignmentsDeComision },
-      comisionActiva?.id ?? null
-    ),
-    getEntregasDeUsuario(user.githubUsername),
-    getGruposDeAlumno(user.githubUsername),
+    comisionActiva ? getAssignmentsDeComision(comisionActiva.id) : Promise.resolve([]),
+    getEntregasDeUsuario(participante.githubUsername),
+    getGruposDeAlumno(participante.githubUsername),
   ]);
 
   const assignmentsConEntrega = assignments
@@ -44,13 +38,9 @@ export default async function DashboardPage() {
       entrega: entregasMap.get(assignment.id) ?? null,
       grupo: gruposMap.get(assignment.id) ?? null,
     }))
-    // Filtro fino de estado, del lado del rol: la query de
-    // getAssignmentsDeComision ya excluye los borradores; acá se resuelve
-    // "un archivado solo se ve si ya tenés entrega" para el alumno (el
-    // docente ve todo, incluso borradores y archivados sin entrega).
-    .filter(({ assignment, entrega }) =>
-      user.rol.veAssignmentEnMisTps(assignment, entrega !== null)
-    );
+    // Mis TPs es la vista del alumno para todos (issue #107/#112): publicado
+    // siempre, archivado sólo si ya tenés entrega — sin ningún `if` de rol.
+    .filter(({ assignment, entrega }) => assignment.esVisibleParaAlumno(entrega !== null));
 
   return (
     <div>
@@ -60,9 +50,6 @@ export default async function DashboardPage() {
         podés aceptar los TPs y acceder a tus repos.
       </p>
 
-      {/* Sólo llega acá un rol que no exige registro (el alumno ya redirigió a /registro más arriba). */}
-      {registroPendiente && <RegistroPendienteAviso />}
-
       {assignmentsConEntrega.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-lg p-8 text-center text-gray-500">
           No hay assignments publicados todavía.
@@ -70,7 +57,7 @@ export default async function DashboardPage() {
       ) : (
         <div className="space-y-3">
           {assignmentsConEntrega.map(({ assignment, entrega, grupo }) => {
-            const puedeActuar = !registroPendiente && user.rol.habilitaAccionesSobre(assignment);
+            const puedeActuar = assignment.permiteAccionesDeAlumno();
             return (
               <div
                 key={assignment.id}
@@ -85,7 +72,7 @@ export default async function DashboardPage() {
                     <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
                       {assignment.tipo}
                     </span>
-                    {!assignment.permiteAccionesDeAlumno() && (
+                    {!puedeActuar && (
                       <EstadoAssignmentBadge estado={assignment.estadoNombre} />
                     )}
                   </div>
@@ -143,7 +130,7 @@ export default async function DashboardPage() {
                   ) : entrega ? (
                     <div className="flex flex-col items-end gap-1">
                       <span className="text-xs text-amber-700">
-                        {user.rol.habilitaAccionesSobre(assignment)
+                        {puedeActuar
                           ? entrega.provisionEstado === "fallida"
                             ? "No se pudo crear el repo. Podés reintentar."
                             : "Estamos creando el repositorio."

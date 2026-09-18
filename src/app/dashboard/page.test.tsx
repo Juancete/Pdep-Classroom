@@ -4,11 +4,15 @@ import type { PdepUser } from "@/types";
 import { Alumno, IndividualAssignment, GrupalAssignment, Entrega, DOCENTE, ESTUDIANTE } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
+//
+// `@/infrastructure/repositories` se mockea entero — `resolverParticipante`
+// (issue #107/#112) corre real y se resuelve a través de estos mismos
+// mocks (`getAlumnoByGithub`/`getComisionActiva`), sin necesidad de mockear
+// `@/application/participante` por separado.
 
 const mockRequireUser = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
 const mockGetComisionActiva = vi.fn();
-const mockGetAssignments = vi.fn();
 const mockGetAssignmentsDeComision = vi.fn();
 const mockGetEntregaDeUsuario = vi.fn();
 const mockGetGruposDeAlumno = vi.fn();
@@ -21,7 +25,6 @@ vi.mock("@/infrastructure/auth/session", () => ({
 }));
 
 vi.mock("@/infrastructure/repositories", () => ({
-  getAssignments: () => mockGetAssignments(),
   getAssignmentsDeComision: (comisionId: string) =>
     mockGetAssignmentsDeComision(comisionId),
   getEntregasDeUsuario: (username: string) => mockGetEntregaDeUsuario(username),
@@ -71,10 +74,6 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
   };
 }
 
-function alumnoConfirmadoEn(comisionId = "c1"): Alumno {
-  return makeAlumno({ registroConfirmadoEn: { id: comisionId } as any });
-}
-
 function makeAssignment(overrides?: Partial<IndividualAssignment>): IndividualAssignment {
   const assignment = new IndividualAssignment();
   assignment.id = "a1";
@@ -85,8 +84,8 @@ function makeAssignment(overrides?: Partial<IndividualAssignment>): IndividualAs
   assignment.paradigma = "funcional";
   assignment.slug = "kata-funcional";
   assignment.createdAt = new Date();
-  // Publicado por defecto: el dashboard de alumno solo muestra lo visible.
-  // Los tests de ciclo de vida overridean `estadoNombre` explícitamente.
+  // Publicado por defecto: el dashboard solo muestra lo visible. Los tests
+  // de ciclo de vida overridean `estadoNombre` explícitamente.
   assignment.transicionarA("publicado", { tieneEntregas: false }, "docente1");
   return Object.assign(assignment, overrides);
 }
@@ -124,7 +123,6 @@ describe("Dashboard page", () => {
     mockRedirect.mockImplementation((url: string) => {
       throw new Error(`REDIRECT:${url}`);
     });
-    mockGetAssignments.mockResolvedValue([]);
     mockGetAssignmentsDeComision.mockResolvedValue([]);
     mockGetEntregaDeUsuario.mockResolvedValue(new Map());
     mockGetComisionActiva.mockResolvedValue({ id: "c1" });
@@ -133,7 +131,7 @@ describe("Dashboard page", () => {
   });
 
   describe("redirecciones", () => {
-    it("redirige a /registro si el alumno no existe en la DB y no es admin", async () => {
+    it("redirige a /registro si el alumno no existe en la DB", async () => {
       mockRequireUser.mockResolvedValue(makeUser({ rol: ESTUDIANTE }));
       mockGetAlumnoByGithub.mockResolvedValue(null);
 
@@ -182,7 +180,6 @@ describe("Dashboard page", () => {
       const html = renderToStaticMarkup(element);
 
       expect(mockGetAssignmentsDeComision).toHaveBeenCalledWith("c1");
-      expect(mockGetAssignments).not.toHaveBeenCalled();
       expect(html).toContain("TP Vigente");
     });
 
@@ -197,25 +194,23 @@ describe("Dashboard page", () => {
       expect(mockGetAssignmentsDeComision).not.toHaveBeenCalled();
     });
 
-    it("no redirige a /registro a un docente sin registro: muestra el aviso", async () => {
+    // issue #107/#112: el docente nunca se registra como alumno — jamás
+    // redirige a /registro, tenga o no comisión activa.
+    it("el docente nunca redirige a /registro, ni consulta Alumno", async () => {
       mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
-      mockGetAlumnoByGithub.mockResolvedValue(null);
+      mockGetComisionActiva.mockResolvedValue(null);
 
       const element = await DashboardPage();
-      const html = renderToStaticMarkup(element);
+      expect(element).toBeDefined();
       expect(mockRedirect).not.toHaveBeenCalled();
-      expect(mockGetAlumnoByGithub).toHaveBeenCalled();
-      expect(mockGetAssignments).toHaveBeenCalled();
-      expect(mockGetAssignmentsDeComision).not.toHaveBeenCalled();
-      expect(html).toContain('data-testid="aviso-registro-pendiente"');
-      expect(html).toContain('href="/registro"');
+      expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
     });
   });
 
   describe("estado vacío", () => {
     beforeEach(() => {
       mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
-      mockGetAssignments.mockResolvedValue([]);
+      mockGetAssignmentsDeComision.mockResolvedValue([]);
     });
 
     it("muestra mensaje cuando no hay assignments", async () => {
@@ -228,14 +223,12 @@ describe("Dashboard page", () => {
   describe("con assignments", () => {
     beforeEach(() => {
       mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
-      mockGetAlumnoByGithub.mockResolvedValue(alumnoConfirmadoEn());
     });
 
     it("muestra el título del assignment", async () => {
-      mockGetAssignments.mockResolvedValue([
+      mockGetAssignmentsDeComision.mockResolvedValue([
         makeAssignment({ titulo: "TP Funcional" }),
       ]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -243,10 +236,9 @@ describe("Dashboard page", () => {
     });
 
     it("muestra el paradigma del assignment", async () => {
-      mockGetAssignments.mockResolvedValue([
+      mockGetAssignmentsDeComision.mockResolvedValue([
         makeAssignment({ paradigma: "logico" }),
       ]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -254,10 +246,9 @@ describe("Dashboard page", () => {
     });
 
     it("muestra el tipo del assignment", async () => {
-      mockGetAssignments.mockResolvedValue([
+      mockGetAssignmentsDeComision.mockResolvedValue([
         makeAssignment({ tipo: "grupal" }),
       ]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -265,10 +256,9 @@ describe("Dashboard page", () => {
     });
 
     it("muestra la descripción si está presente", async () => {
-      mockGetAssignments.mockResolvedValue([
+      mockGetAssignmentsDeComision.mockResolvedValue([
         makeAssignment({ descripcion: "Una kata introductoria" }),
       ]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -276,10 +266,9 @@ describe("Dashboard page", () => {
     });
 
     it("no muestra la descripción si está vacía", async () => {
-      mockGetAssignments.mockResolvedValue([
+      mockGetAssignmentsDeComision.mockResolvedValue([
         makeAssignment({ descripcion: "" }),
       ]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -288,10 +277,9 @@ describe("Dashboard page", () => {
     });
 
     it("muestra el deadline formateado si está presente", async () => {
-      mockGetAssignments.mockResolvedValue([
+      mockGetAssignmentsDeComision.mockResolvedValue([
         makeAssignment({ deadline: new Date("2026-06-15") }),
       ]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -299,10 +287,9 @@ describe("Dashboard page", () => {
     });
 
     it("no muestra la sección de deadline si no está presente", async () => {
-      mockGetAssignments.mockResolvedValue([
+      mockGetAssignmentsDeComision.mockResolvedValue([
         makeAssignment({ deadline: undefined }),
       ]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -313,13 +300,10 @@ describe("Dashboard page", () => {
   describe("render condicional según entrega", () => {
     beforeEach(() => {
       mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
-      mockGetAlumnoByGithub.mockResolvedValue(alumnoConfirmadoEn());
-      mockGetAssignments.mockResolvedValue([makeAssignment()]);
+      mockGetAssignmentsDeComision.mockResolvedValue([makeAssignment()]);
     });
 
     it("muestra AcceptButton cuando no hay entrega", async () => {
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
-
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
       expect(html).toContain("data-testid=\"accept-button\"");
@@ -338,10 +322,9 @@ describe("Dashboard page", () => {
     });
 
     it("pasa el assignmentId correcto al AcceptButton", async () => {
-      mockGetAssignments.mockResolvedValue([
+      mockGetAssignmentsDeComision.mockResolvedValue([
         makeAssignment({ id: "assignment-123" }),
       ]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -352,8 +335,7 @@ describe("Dashboard page", () => {
       mockRequireUser.mockResolvedValue(
         makeUser({ githubUsername: "miusuario", rol: DOCENTE })
       );
-      mockGetAssignments.mockResolvedValue([makeAssignment({ id: "tp-1" })]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
+      mockGetAssignmentsDeComision.mockResolvedValue([makeAssignment({ id: "tp-1" })]);
 
       await DashboardPage();
       expect(mockGetEntregaDeUsuario).toHaveBeenCalledWith("miusuario");
@@ -370,8 +352,6 @@ describe("Dashboard page", () => {
 
     it("muestra 'Elegir grupo' cuando es grupal y el alumno no tiene grupo", async () => {
       mockGetAssignmentsDeComision.mockResolvedValue([makeGrupalAssignment()]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
-      mockGetGruposDeAlumno.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -381,8 +361,6 @@ describe("Dashboard page", () => {
 
     it("el link 'Elegir grupo' apunta a la página del grupo del assignment", async () => {
       mockGetAssignmentsDeComision.mockResolvedValue([makeGrupalAssignment({ id: "tp-g1" })]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
-      mockGetGruposDeAlumno.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -392,7 +370,6 @@ describe("Dashboard page", () => {
     it("muestra AcceptButton cuando es grupal y el alumno ya tiene grupo", async () => {
       const grupalAssignment = makeGrupalAssignment({ id: "tp-g1" });
       mockGetAssignmentsDeComision.mockResolvedValue([grupalAssignment]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
       mockGetGruposDeAlumno.mockResolvedValue(
         new Map([["tp-g1", { nombre: "Los Lambdas" }]])
       );
@@ -406,7 +383,6 @@ describe("Dashboard page", () => {
     it("muestra el nombre del grupo cuando el alumno ya tiene grupo sin entrega", async () => {
       const grupalAssignment = makeGrupalAssignment({ id: "tp-g1" });
       mockGetAssignmentsDeComision.mockResolvedValue([grupalAssignment]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
       mockGetGruposDeAlumno.mockResolvedValue(
         new Map([["tp-g1", { nombre: "Los Lambdas" }]])
       );
@@ -434,8 +410,7 @@ describe("Dashboard page", () => {
 
     it("carga los grupos del docente igual que los de un alumno", async () => {
       mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
-      mockGetAssignments.mockResolvedValue([makeGrupalAssignment()]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
+      mockGetAssignmentsDeComision.mockResolvedValue([makeGrupalAssignment()]);
 
       await DashboardPage();
       expect(mockGetGruposDeAlumno).toHaveBeenCalledWith("testuser");
@@ -448,7 +423,6 @@ describe("Dashboard page", () => {
       mockGetAlumnoByGithub.mockResolvedValue(
         makeAlumno({ registroConfirmadoEn: { id: "c1" } as any })
       );
-      mockGetGruposDeAlumno.mockResolvedValue(new Map());
     });
 
     it("muestra un archivado con entrega: badge, link al repo, sin botón de aceptar", async () => {
@@ -467,7 +441,7 @@ describe("Dashboard page", () => {
       expect(html).not.toContain("Elegir grupo");
     });
 
-    it("informa una provisión fallida archivada sin ofrecer reintento al alumno", async () => {
+    it("informa una provisión fallida archivada sin ofrecer reintento", async () => {
       const archivado = makeAssignment({ id: "a-archivado" });
       archivado.transicionarA("archivado", { tieneEntregas: true }, "docente1");
       const entrega = makeEntrega({ provisionEstado: "fallida", repoUrl: undefined });
@@ -485,7 +459,6 @@ describe("Dashboard page", () => {
       const archivado = makeAssignment({ id: "a-archivado", titulo: "TP Archivado" });
       archivado.transicionarA("archivado", { tieneEntregas: false }, "docente1");
       mockGetAssignmentsDeComision.mockResolvedValue([archivado]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -496,7 +469,6 @@ describe("Dashboard page", () => {
       const borrador = makeAssignment({ id: "a-borrador", titulo: "TP Borrador" });
       borrador.estadoNombre = "borrador";
       mockGetAssignmentsDeComision.mockResolvedValue([borrador]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
@@ -506,23 +478,24 @@ describe("Dashboard page", () => {
     it("no muestra badge para assignments publicados", async () => {
       const publicado = makeAssignment({ id: "a-publicado" });
       mockGetAssignmentsDeComision.mockResolvedValue([publicado]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
       expect(html).not.toContain('data-testid="estado-badge"');
     });
 
-    it("el admin ve assignments en cualquier estado, incluido borrador", async () => {
+    // issue #107/#112: reemplaza al viejo "el admin ve assignments en
+    // cualquier estado, incluido borrador" — Mis TPs del docente es ahora la
+    // vista del alumno de la comisión activa, así que nunca ve un borrador.
+    it("el docente no ve un assignment en borrador (mismas reglas que un alumno)", async () => {
       mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
-      const borrador = makeAssignment({ id: "a-borrador", titulo: "TP Borrador Admin" });
+      const borrador = makeAssignment({ id: "a-borrador", titulo: "TP Borrador Docente" });
       borrador.estadoNombre = "borrador";
-      mockGetAssignments.mockResolvedValue([borrador]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
+      mockGetAssignmentsDeComision.mockResolvedValue([borrador]);
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
-      expect(html).toContain("TP Borrador Admin");
+      expect(html).not.toContain("TP Borrador Docente");
     });
   });
 
@@ -531,8 +504,7 @@ describe("Dashboard page", () => {
       mockRequireUser.mockResolvedValue(
         makeUser({ githubUsername: "miusuario", rol: DOCENTE })
       );
-      mockGetAlumnoByGithub.mockResolvedValue(alumnoConfirmadoEn());
-      mockGetAssignments.mockResolvedValue([]);
+      mockGetAssignmentsDeComision.mockResolvedValue([]);
     });
 
     it("muestra el username en el saludo", async () => {
@@ -548,66 +520,56 @@ describe("Dashboard page", () => {
     });
   });
 
+  // issue #107/#112: Mis TPs para el docente es la vista del alumno de la
+  // comisión activa — mismos assignments, mismas reglas de estado, sin
+  // registro ni aviso (el aviso y el bypass administrativo se retiraron).
   describe("docente en Mis TPs", () => {
     beforeEach(() => {
       mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
     });
 
-    it("registrado en la comisión activa: sin aviso y con Aceptar", async () => {
-      mockGetAlumnoByGithub.mockResolvedValue(alumnoConfirmadoEn());
-      mockGetAssignments.mockResolvedValue([makeAssignment()]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
+    it("sin registro no redirige a /registro", async () => {
+      mockGetAlumnoByGithub.mockResolvedValue(null);
+
+      const element = await DashboardPage();
+      expect(element).toBeDefined();
+      expect(mockRedirect).not.toHaveBeenCalled();
+      expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
+    });
+
+    it("ve sólo publicados de la comisión activa (no borradores)", async () => {
+      const publicado = makeAssignment({ id: "a-publicado", titulo: "TP Publicado" });
+      const borrador = makeAssignment({ id: "a-borrador", titulo: "TP Borrador" });
+      borrador.estadoNombre = "borrador";
+      mockGetAssignmentsDeComision.mockResolvedValue([publicado, borrador]);
 
       const element = await DashboardPage();
       const html = renderToStaticMarkup(element);
-      expect(html).not.toContain('data-testid="aviso-registro-pendiente"');
+      expect(html).toContain("TP Publicado");
+      expect(html).not.toContain("TP Borrador");
+      expect(mockGetAssignmentsDeComision).toHaveBeenCalledWith("c1");
+    });
+
+    it("sin comisión activa ve una lista vacía", async () => {
+      mockGetComisionActiva.mockResolvedValue(null);
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("No hay assignments publicados todavía");
+      expect(mockGetAssignmentsDeComision).not.toHaveBeenCalled();
+    });
+
+    it("acepta un individual sin haberse registrado como alumno", async () => {
+      mockGetAssignmentsDeComision.mockResolvedValue([makeAssignment()]);
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
       expect(html).toContain('data-testid="accept-button"');
     });
 
-    it("sin registro: sin Aceptar ni Elegir grupo, pero con 'Ir al repo' si ya tiene entrega", async () => {
-      mockGetAlumnoByGithub.mockResolvedValue(null);
-      const conEntrega = makeAssignment({ id: "a-con-entrega" });
-      const sinEntrega = makeGrupalAssignment({ id: "a-sin-entrega" });
-      mockGetAssignments.mockResolvedValue([conEntrega, sinEntrega]);
-      const entrega = makeEntrega({ repoUrl: "https://github.com/pdep/a-con-entrega" });
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map([["a-con-entrega", entrega]]));
-      mockGetGruposDeAlumno.mockResolvedValue(new Map());
-
-      const element = await DashboardPage();
-      const html = renderToStaticMarkup(element);
-      expect(html).toContain('data-testid="aviso-registro-pendiente"');
-      expect(html).not.toContain('data-testid="accept-button"');
-      expect(html).not.toContain("Elegir grupo");
-      expect(html).toContain("Ir al repo");
-    });
-
-    it("registrado en otra comisión (no la activa): ve el aviso", async () => {
-      mockGetComisionActiva.mockResolvedValue({ id: "c1" });
-      mockGetAlumnoByGithub.mockResolvedValue(alumnoConfirmadoEn("c2"));
-      mockGetAssignments.mockResolvedValue([]);
-
-      const element = await DashboardPage();
-      const html = renderToStaticMarkup(element);
-      expect(html).toContain('data-testid="aviso-registro-pendiente"');
-    });
-
-    it("sin comisión activa: sin aviso, getAssignments igual se llama", async () => {
-      mockGetComisionActiva.mockResolvedValue(null);
-      mockGetAlumnoByGithub.mockResolvedValue(null);
-      mockGetAssignments.mockResolvedValue([]);
-
-      const element = await DashboardPage();
-      const html = renderToStaticMarkup(element);
-      expect(html).not.toContain('data-testid="aviso-registro-pendiente"');
-      expect(mockGetAssignments).toHaveBeenCalled();
-    });
-
     it("registrado sin grupo ve 'Elegir grupo' en un grupal; con grupo ve Aceptar", async () => {
-      mockGetAlumnoByGithub.mockResolvedValue(alumnoConfirmadoEn());
       const grupal = makeGrupalAssignment({ id: "tp-g1" });
-      mockGetAssignments.mockResolvedValue([grupal]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
-      mockGetGruposDeAlumno.mockResolvedValue(new Map());
+      mockGetAssignmentsDeComision.mockResolvedValue([grupal]);
 
       const sinGrupo = await DashboardPage();
       const htmlSinGrupo = renderToStaticMarkup(sinGrupo);
@@ -618,19 +580,6 @@ describe("Dashboard page", () => {
       const htmlConGrupo = renderToStaticMarkup(conGrupo);
       expect(htmlConGrupo).toContain('data-testid="accept-button"');
       expect(htmlConGrupo).not.toContain("Elegir grupo");
-    });
-
-    it("ve un archivado sin entrega y puede aceptarlo", async () => {
-      mockGetAlumnoByGithub.mockResolvedValue(alumnoConfirmadoEn());
-      const archivado = makeAssignment({ id: "a-archivado", titulo: "TP Archivado" });
-      archivado.transicionarA("archivado", { tieneEntregas: false }, "docente1");
-      mockGetAssignments.mockResolvedValue([archivado]);
-      mockGetEntregaDeUsuario.mockResolvedValue(new Map());
-
-      const element = await DashboardPage();
-      const html = renderToStaticMarkup(element);
-      expect(html).toContain("TP Archivado");
-      expect(html).toContain('data-testid="accept-button"');
     });
   });
 });

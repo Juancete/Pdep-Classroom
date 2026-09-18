@@ -8,7 +8,6 @@ import {
   AssignmentNoDisponibleError,
   Grupo,
   Entrega,
-  type RolDeUsuario,
   type NombreResultadoCI,
 } from "@/domain/entities";
 
@@ -63,6 +62,18 @@ export async function getEntregaPorId(
     { id: entregaId },
     { populate: ["assignment"] }
   );
+}
+
+// Borrado puntual de una entrega desde admin (issue #107, `borrarEntrega.ts`).
+// `nativeDelete` en vez de cargar + `remove`/flush: no hace falta la entidad
+// hidratada, sólo borrar la fila. `RepoDeletionAttempt.entregaId` es un uuid
+// escalar sin FK (ver su comentario), así que esto no rompe esa auditoría.
+export async function eliminarEntrega(
+  entregaId: string,
+  em?: EntityManager
+): Promise<void> {
+  const entityManager = em ?? (await getEM());
+  await entityManager.nativeDelete(Entrega, { id: entregaId });
 }
 
 export async function getEntregaByRepoName(
@@ -394,6 +405,10 @@ function isUniqueViolation(error: unknown): boolean {
   return code === UNIQUE_VIOLATION || /unique constraint|duplicate key/i.test(error.message);
 }
 
+// Para una entrega individual sin `alumnoId` (un docente sin fila en
+// `Alumno`, issue #107/#112), `getEntregaLogica` no tiene nada para buscar
+// por — devuelve `null` de entrada. El lookup por `repoName` (arriba, único
+// por username) es el que alcanza para la idempotencia en ese caso.
 async function findExistingEntrega(
   data: {
     assignmentId: string;
@@ -448,8 +463,13 @@ export async function createOrGetEntrega(
  * que el estado siga habilitando la aceptación. Cierra la ventana entre el
  * chequeo inicial de aceptarAssignment (antes de las llamadas a GitHub, que
  * no pueden vivir dentro de una transacción de DB) y la persistencia final:
- * si un admin despublica el assignment mientras un alumno lo está aceptando,
+ * si un admin despublica el assignment mientras alguien lo está aceptando,
  * quien llegue segundo a este lock ve el estado real y actúa en consecuencia.
+ *
+ * Sin bypass por rol (issue #107/#112): en Mis TPs, un docente sigue las
+ * mismas reglas de estado que un alumno — el alcance administrativo global
+ * del docente es para actuar *sobre otros*, no para saltarse esto en su
+ * propia demo.
  */
 export async function crearEntregaSiAssignmentDisponible(
   data: {
@@ -461,8 +481,7 @@ export async function crearEntregaSiAssignmentDisponible(
     grupoId?: string;
     repoGithubId?: string;
     provisionEstado?: "pendiente" | "activa" | "fallida";
-  },
-  rol: RolDeUsuario
+  }
 ): Promise<Entrega> {
   const entityManager = await getEM();
 
@@ -472,7 +491,7 @@ export async function crearEntregaSiAssignmentDisponible(
       { id: data.assignmentId },
       { lockMode: LockMode.PESSIMISTIC_WRITE }
     );
-    if (!rol.puedeAdministrar() && !assignment?.permiteAccionesDeAlumno()) {
+    if (!assignment?.permiteAccionesDeAlumno()) {
       throw new AssignmentNoDisponibleError(data.assignmentId);
     }
 

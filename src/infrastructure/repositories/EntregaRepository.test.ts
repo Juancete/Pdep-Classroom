@@ -35,8 +35,6 @@ import {
   Assignment,
   Entrega,
   Grupo,
-  DOCENTE,
-  ESTUDIANTE,
   AssignmentNoDisponibleError,
 } from "@/domain/entities";
 import {
@@ -208,22 +206,19 @@ describe("EntregaRepository", () => {
   });
 
   describe("crearEntregaSiAssignmentDisponible", () => {
-    it("crea la entrega cuando el assignment está disponible para el alumno", async () => {
+    it("crea la entrega cuando el assignment está disponible", async () => {
       mockEm.findOne
         .mockResolvedValueOnce(fakeAssignmentDisponible(true)) // lock del assignment
         .mockResolvedValueOnce(null) // repo lookup
         .mockResolvedValueOnce(null); // lógica lookup
 
-      await crearEntregaSiAssignmentDisponible(
-        {
-          assignmentId: "a1",
-          repoName: "kata-juan",
-          repoUrl: "https://github.com/org/kata-juan",
-          githubUsernames: ["juan"],
-          alumnoId: "alumno-1",
-        },
-        ESTUDIANTE
-      );
+      await crearEntregaSiAssignmentDisponible({
+        assignmentId: "a1",
+        repoName: "kata-juan",
+        repoUrl: "https://github.com/org/kata-juan",
+        githubUsernames: ["juan"],
+        alumnoId: "alumno-1",
+      });
 
       expect(mockEm.transactional).toHaveBeenCalled();
       expect(mockEm.findOne).toHaveBeenNthCalledWith(
@@ -235,45 +230,22 @@ describe("EntregaRepository", () => {
       expect(mockEm.persist).toHaveBeenCalled();
     });
 
-    it("rechaza con AssignmentNoDisponibleError si el estado cambió bajo el lock y no es admin", async () => {
+    // issue #107/#112: sin bypass por rol — un docente en Mis TPs sigue las
+    // mismas reglas de estado que un alumno.
+    it("rechaza con AssignmentNoDisponibleError si el estado cambió bajo el lock, sin excepción por rol", async () => {
       mockEm.findOne.mockResolvedValueOnce(fakeAssignmentDisponible(false));
 
       await expect(
-        crearEntregaSiAssignmentDisponible(
-          {
-            assignmentId: "a1",
-            repoName: "kata-juan",
-            repoUrl: "https://github.com/org/kata-juan",
-            githubUsernames: ["juan"],
-            alumnoId: "alumno-1",
-          },
-          ESTUDIANTE
-        )
+        crearEntregaSiAssignmentDisponible({
+          assignmentId: "a1",
+          repoName: "kata-juan",
+          repoUrl: "https://github.com/org/kata-juan",
+          githubUsernames: ["juan"],
+          alumnoId: "alumno-1",
+        })
       ).rejects.toBeInstanceOf(AssignmentNoDisponibleError);
 
       expect(mockEm.persist).not.toHaveBeenCalled();
-    });
-
-    it("permite al admin crear la entrega aunque el assignment no esté disponible", async () => {
-      mockEm.findOne
-        .mockResolvedValueOnce(fakeAssignmentDisponible(false)) // lock del assignment
-        .mockResolvedValueOnce(null) // repo lookup
-        .mockResolvedValueOnce(null); // lógica lookup
-
-      await expect(
-        crearEntregaSiAssignmentDisponible(
-          {
-            assignmentId: "a1",
-            repoName: "kata-juan",
-            repoUrl: "https://github.com/org/kata-juan",
-            githubUsernames: ["juan"],
-            alumnoId: "alumno-1",
-          },
-          DOCENTE
-        )
-      ).resolves.toBeDefined();
-
-      expect(mockEm.persist).toHaveBeenCalled();
     });
   });
 

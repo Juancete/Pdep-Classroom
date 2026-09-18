@@ -14,6 +14,8 @@ import {
   GrupoLlenoError,
   AlumnoNoEsMiembroDelGrupoError,
   GrupoConEntregaError,
+  GrupoNoAdmiteParticipanteError,
+  EntregaNoEncontradaError,
 } from "@/domain/entities";
 import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 import { PermisosNoVerificablesError } from "@/infrastructure/auth/PermisosNoVerificablesError";
@@ -74,6 +76,7 @@ function getRespuestasPorError(): Map<ConstructorDeError, RespuestaDeError> {
     respuestasPorError = new Map<ConstructorDeError, RespuestaDeError>([
       [AssignmentNoEncontradoError, { status: 404 }],
       [GrupoNoEncontradoError, { status: 404 }],
+      [EntregaNoEncontradaError, { status: 404 }],
       [AccesoAssignmentProhibidoError, { status: 403 }],
       [AssignmentNoDisponibleError, { status: 403 }],
       [AssignmentNoGrupalError, { status: 400, mensaje: "Este assignment no es grupal" }],
@@ -85,6 +88,7 @@ function getRespuestasPorError(): Map<ConstructorDeError, RespuestaDeError> {
       [NombreGrupoDuplicadoError, { status: 409 }],
       [GrupoConEntregaError, { status: 409 }],
       [AlumnoNoEsMiembroDelGrupoError, { status: 409 }],
+      [GrupoNoAdmiteParticipanteError, { status: 409 }],
       [PermisosNoVerificablesError, { status: 503 }],
       [
         PlanillaNoDisponibleError,

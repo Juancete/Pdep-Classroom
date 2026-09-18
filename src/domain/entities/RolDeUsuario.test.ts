@@ -5,12 +5,8 @@ import {
   ESTUDIANTE,
   RESPONSABLE,
   resolverRol,
-  AccesoAssignmentProhibidoError,
 } from "./RolDeUsuario";
-import { AssignmentNoDisponibleError } from "./Assignment";
-import { GrupalAssignment } from "./GrupalAssignment";
-import { Grupo, InscripcionesCerradasError, GrupoConEntregaError } from "./Grupo";
-import { IndividualAssignment } from "./IndividualAssignment";
+import { AccesoAssignmentProhibidoError, ParticipanteAlumno, ParticipanteDocente } from "./Participante";
 import { Alumno } from "./Alumno";
 import { Comision } from "./Comision";
 
@@ -27,102 +23,6 @@ function fakeAlumno(comisionId = "c1"): Alumno {
     comision: fakeComision(comisionId),
   });
 }
-
-function fakeAssignmentPublicado(comisionId: string | null = "c1"): IndividualAssignment {
-  const assignment = new IndividualAssignment();
-  assignment.id = "a1";
-  assignment.comision = comisionId ? fakeComision(comisionId) : undefined;
-  assignment.transicionarA("publicado", { tieneEntregas: false }, "docente1");
-  return assignment;
-}
-
-function fakeAssignmentBorrador(comisionId: string | null = "c1"): IndividualAssignment {
-  const assignment = new IndividualAssignment();
-  assignment.id = "a1";
-  assignment.comision = comisionId ? fakeComision(comisionId) : undefined;
-  return assignment;
-}
-
-function fakeGrupal(overrides: Partial<GrupalAssignment> = {}): GrupalAssignment {
-  const grupal = new GrupalAssignment();
-  grupal.id = "a1";
-  grupal.maxIntegrantes = 3;
-  grupal.comision = fakeComision();
-  grupal.inscripcionesCerradas = false;
-  grupal.transicionarA("publicado", { tieneEntregas: false }, "docente1");
-  Object.assign(grupal, overrides);
-  return grupal;
-}
-
-function fakeGrupo(id = "g1"): Grupo {
-  const grupo = new Grupo();
-  grupo.id = id;
-  grupo.nombre = "Los Lambdas";
-  grupo.nombreNormalizado = "los-lambdas";
-  return grupo;
-}
-
-describe("Estudiante.autorizarAccesoAssignment", () => {
-  it("permite al alumno de la misma comisión", () => {
-    expect(() =>
-      ESTUDIANTE.autorizarAccesoAssignment(fakeAlumno("c1"), fakeAssignmentPublicado("c1"))
-    ).not.toThrow();
-  });
-
-  it("rechaza al alumno de otra comisión", () => {
-    expect(() =>
-      ESTUDIANTE.autorizarAccesoAssignment(fakeAlumno("c2"), fakeAssignmentPublicado("c1"))
-    ).toThrow(AccesoAssignmentProhibidoError);
-  });
-
-  it("rechaza sin alumno registrado", () => {
-    expect(() =>
-      ESTUDIANTE.autorizarAccesoAssignment(null, fakeAssignmentPublicado("c1"))
-    ).toThrow(AccesoAssignmentProhibidoError);
-  });
-
-  it("rechaza assignments históricos sin comisión", () => {
-    expect(() =>
-      ESTUDIANTE.autorizarAccesoAssignment(fakeAlumno("c1"), fakeAssignmentPublicado(null))
-    ).toThrow(AccesoAssignmentProhibidoError);
-  });
-});
-
-describe("Docente.autorizarAccesoAssignment", () => {
-  it("permite acceso global, sin alumno y sin comisión", () => {
-    expect(() =>
-      DOCENTE.autorizarAccesoAssignment(null, fakeAssignmentPublicado(null))
-    ).not.toThrow();
-  });
-});
-
-describe("Estudiante.autorizarAccionSobreAssignment", () => {
-  it("permite sobre un assignment publicado de la comisión", () => {
-    expect(() =>
-      ESTUDIANTE.autorizarAccionSobreAssignment(fakeAlumno("c1"), fakeAssignmentPublicado("c1"))
-    ).not.toThrow();
-  });
-
-  it("rechaza sobre un assignment en borrador", () => {
-    expect(() =>
-      ESTUDIANTE.autorizarAccionSobreAssignment(fakeAlumno("c1"), fakeAssignmentBorrador("c1"))
-    ).toThrow(AssignmentNoDisponibleError);
-  });
-
-  it("prioriza el rechazo por comisión sobre el de estado", () => {
-    expect(() =>
-      ESTUDIANTE.autorizarAccionSobreAssignment(fakeAlumno("c2"), fakeAssignmentPublicado("c1"))
-    ).toThrow(AccesoAssignmentProhibidoError);
-  });
-});
-
-describe("Docente.autorizarAccionSobreAssignment", () => {
-  it("permite actuar sobre un assignment en borrador", () => {
-    expect(() =>
-      DOCENTE.autorizarAccionSobreAssignment(null, fakeAssignmentBorrador("c1"))
-    ).not.toThrow();
-  });
-});
 
 describe("puedeAdministrar", () => {
   it("Docente tiene alcance administrativo", () => {
@@ -208,241 +108,68 @@ describe("rutaDeInicio", () => {
   });
 });
 
-describe("exigeRegistroDeAlumno", () => {
-  it("sólo el Estudiante exige registro confirmado para Mis TPs", () => {
-    expect(ESTUDIANTE.exigeRegistroDeAlumno()).toBe(true);
-    expect(DOCENTE.exigeRegistroDeAlumno()).toBe(false);
-    expect(RESPONSABLE.exigeRegistroDeAlumno()).toBe(false);
+describe("comoParticipante", () => {
+  it("Estudiante construye un ParticipanteAlumno consultando sólo fuentes.alumno", async () => {
+    const alumno = fakeAlumno();
+    const fuentesAlumno = vi.fn().mockResolvedValue(alumno);
+    const fuentesComisionActiva = vi.fn();
+
+    const participante = await ESTUDIANTE.comoParticipante("ana", {
+      alumno: fuentesAlumno,
+      comisionActiva: fuentesComisionActiva,
+    });
+
+    expect(participante).toBeInstanceOf(ParticipanteAlumno);
+    expect(participante.alumno).toBe(alumno);
+    expect(fuentesAlumno).toHaveBeenCalled();
+    expect(fuentesComisionActiva).not.toHaveBeenCalled();
+  });
+
+  it("Docente construye un ParticipanteDocente consultando sólo fuentes.comisionActiva", async () => {
+    const comisionActiva = fakeComision();
+    const fuentesAlumno = vi.fn();
+    const fuentesComisionActiva = vi.fn().mockResolvedValue(comisionActiva);
+
+    const participante = await DOCENTE.comoParticipante("profe-docente", {
+      alumno: fuentesAlumno,
+      comisionActiva: fuentesComisionActiva,
+    });
+
+    expect(participante).toBeInstanceOf(ParticipanteDocente);
+    expect(participante.alumno).toBeNull();
+    expect(participante.githubUsername).toBe("profe-docente");
+    expect(fuentesComisionActiva).toHaveBeenCalled();
+    expect(fuentesAlumno).not.toHaveBeenCalled();
+  });
+
+  it("Responsable hereda el comoParticipante del Docente", async () => {
+    const participante = await RESPONSABLE.comoParticipante("responsable1", {
+      alumno: vi.fn(),
+      comisionActiva: vi.fn().mockResolvedValue(null),
+    });
+    expect(participante).toBeInstanceOf(ParticipanteDocente);
   });
 });
 
-describe("assignmentsParaMisTps", () => {
-  it("Docente pide todos los assignments sin mirar la comisión activa", async () => {
-    const todos = vi.fn().mockResolvedValue([fakeAssignmentPublicado()]);
-    const deComision = vi.fn();
-
-    const assignments = await DOCENTE.assignmentsParaMisTps({ todos, deComision }, "c1");
-
-    expect(assignments).toHaveLength(1);
-    expect(deComision).not.toHaveBeenCalled();
-  });
-
-  it("Estudiante pide los assignments de la comisión activa", async () => {
-    const todos = vi.fn();
-    const deComision = vi.fn().mockResolvedValue([fakeAssignmentPublicado("c1")]);
-
-    const assignments = await ESTUDIANTE.assignmentsParaMisTps({ todos, deComision }, "c1");
-
-    expect(deComision).toHaveBeenCalledWith("c1");
-    expect(assignments).toHaveLength(1);
-    expect(todos).not.toHaveBeenCalled();
-  });
-
-  it("Estudiante sin comisión activa no consulta ninguna fuente", async () => {
-    const todos = vi.fn();
-    const deComision = vi.fn();
-
-    const assignments = await ESTUDIANTE.assignmentsParaMisTps({ todos, deComision }, null);
-
-    expect(assignments).toEqual([]);
-    expect(todos).not.toHaveBeenCalled();
-    expect(deComision).not.toHaveBeenCalled();
-  });
-});
-
-describe("veAssignmentEnMisTps", () => {
-  it("Docente ve un assignment en borrador", () => {
-    expect(DOCENTE.veAssignmentEnMisTps(fakeAssignmentBorrador(), false)).toBe(true);
-  });
-
-  it("Docente ve un assignment archivado sin entrega", () => {
-    const assignment = fakeAssignmentPublicado();
-    assignment.transicionarA("archivado", { tieneEntregas: false }, "docente1");
-
-    expect(DOCENTE.veAssignmentEnMisTps(assignment, false)).toBe(true);
-  });
-
-  it("Estudiante delega en esVisibleParaAlumno del assignment", () => {
-    expect(ESTUDIANTE.veAssignmentEnMisTps(fakeAssignmentPublicado(), false)).toBe(true);
-    expect(ESTUDIANTE.veAssignmentEnMisTps(fakeAssignmentBorrador(), false)).toBe(false);
-
-    const archivado = fakeAssignmentPublicado();
-    archivado.transicionarA("archivado", { tieneEntregas: false }, "docente1");
-    expect(ESTUDIANTE.veAssignmentEnMisTps(archivado, false)).toBe(false);
-    expect(ESTUDIANTE.veAssignmentEnMisTps(archivado, true)).toBe(true);
-  });
-});
-
-describe("habilitaAccionesSobre", () => {
-  it("Docente puede actuar sobre un assignment en borrador", () => {
-    expect(DOCENTE.habilitaAccionesSobre(fakeAssignmentBorrador())).toBe(true);
-  });
-
-  it("Estudiante sólo puede actuar sobre un assignment publicado", () => {
-    expect(ESTUDIANTE.habilitaAccionesSobre(fakeAssignmentPublicado())).toBe(true);
-    expect(ESTUDIANTE.habilitaAccionesSobre(fakeAssignmentBorrador())).toBe(false);
-  });
-
-  it("Responsable hereda el comportamiento del Docente", () => {
-    expect(RESPONSABLE.habilitaAccionesSobre(fakeAssignmentBorrador())).toBe(true);
-  });
-});
-
-describe("Estudiante.autorizarCambioDeMembresia", () => {
-  it("autoriza con inscripciones abiertas y sin entrega", () => {
+describe("actorSobreMembresiaAjena", () => {
+  it("el Docente resuelve siempre y se audita como 'docente'", () => {
+    const actor = DOCENTE.actorSobreMembresiaAjena("a1");
     expect(() =>
-      ESTUDIANTE.autorizarCambioDeMembresia({
-        assignment: fakeGrupal(),
-        grupo: fakeGrupo(),
-        grupoTieneEntrega: false,
-      })
+      actor.autorizarCambioDeMembresia({} as never)
     ).not.toThrow();
+    expect(actor.origenDeAuditoria()).toBe("docente");
   });
 
-  it("rechaza con InscripcionesCerradasError cuando el docente cerró las inscripciones", () => {
-    expect(() =>
-      ESTUDIANTE.autorizarCambioDeMembresia({
-        assignment: fakeGrupal({ inscripcionesCerradas: true }),
-        grupo: fakeGrupo(),
-        grupoTieneEntrega: false,
-      })
-    ).toThrow(InscripcionesCerradasError);
+  it("el Responsable hereda el mismo comportamiento que el Docente", () => {
+    const actor = RESPONSABLE.actorSobreMembresiaAjena("a1");
+    expect(() => actor.autorizarCambioDeMembresia({} as never)).not.toThrow();
+    expect(actor.origenDeAuditoria()).toBe("docente");
   });
 
-  it("rechaza con InscripcionesCerradasError cuando el assignment no está publicado", () => {
-    const grupal = new GrupalAssignment();
-    grupal.id = "a1";
-    grupal.maxIntegrantes = 3;
-    expect(() =>
-      ESTUDIANTE.autorizarCambioDeMembresia({
-        assignment: grupal,
-        grupo: fakeGrupo(),
-        grupoTieneEntrega: false,
-      })
-    ).toThrow(InscripcionesCerradasError);
-  });
-
-  it("rechaza con GrupoConEntregaError cuando el grupo ya aceptó el TP", () => {
-    expect(() =>
-      ESTUDIANTE.autorizarCambioDeMembresia({
-        assignment: fakeGrupal(),
-        grupo: fakeGrupo(),
-        grupoTieneEntrega: true,
-      })
-    ).toThrow(GrupoConEntregaError);
-  });
-
-  it("prioriza inscripciones cerradas sobre grupo con entrega", () => {
-    expect(() =>
-      ESTUDIANTE.autorizarCambioDeMembresia({
-        assignment: fakeGrupal({ inscripcionesCerradas: true }),
-        grupo: fakeGrupo(),
-        grupoTieneEntrega: true,
-      })
-    ).toThrow(InscripcionesCerradasError);
-  });
-});
-
-describe("Docente.autorizarCambioDeMembresia", () => {
-  it("autoriza siempre, incluso con inscripciones cerradas y grupo con entrega", () => {
-    expect(() =>
-      DOCENTE.autorizarCambioDeMembresia({
-        assignment: fakeGrupal({ inscripcionesCerradas: true }),
-        grupo: fakeGrupo(),
-        grupoTieneEntrega: true,
-      })
-    ).not.toThrow();
-  });
-});
-
-describe("origenDeAuditoria", () => {
-  it("Estudiante se audita como 'alumno'", () => {
-    expect(ESTUDIANTE.origenDeAuditoria()).toBe("alumno");
-  });
-
-  it("Docente se audita como 'docente'", () => {
-    expect(DOCENTE.origenDeAuditoria()).toBe("docente");
-  });
-
-  it("Responsable también se audita como 'docente' (hereda de Docente)", () => {
-    expect(RESPONSABLE.origenDeAuditoria()).toBe("docente");
-  });
-});
-
-describe("Responsable conserva el resto de los permisos docentes por herencia", () => {
-  it("accede a cualquier assignment como el Docente", () => {
-    expect(() =>
-      RESPONSABLE.autorizarAccesoAssignment(null, fakeAssignmentPublicado(null))
-    ).not.toThrow();
-  });
-
-  it("resuelve cambios de membresía siempre, como el Docente", () => {
-    expect(() =>
-      RESPONSABLE.autorizarCambioDeMembresia({
-        assignment: fakeGrupal({ inscripcionesCerradas: true }),
-        grupo: fakeGrupo(),
-        grupoTieneEntrega: true,
-      })
-    ).not.toThrow();
-  });
-});
-
-describe("motivoDeBloqueoDeMembresia", () => {
-  it("devuelve null cuando el cambio está autorizado", () => {
-    expect(
-      ESTUDIANTE.motivoDeBloqueoDeMembresia({
-        assignment: fakeGrupal(),
-        grupo: fakeGrupo(),
-        grupoTieneEntrega: false,
-      })
-    ).toBeNull();
-  });
-
-  it("devuelve el mensaje del error que el servidor tiraría", () => {
-    const contexto = {
-      assignment: fakeGrupal(),
-      grupo: fakeGrupo(),
-      grupoTieneEntrega: true,
-    };
-    const motivo = ESTUDIANTE.motivoDeBloqueoDeMembresia(contexto);
-    const error = new GrupoConEntregaError("g1");
-    expect(motivo).toBe(error.message);
-  });
-
-  it("nunca bloquea al Docente", () => {
-    expect(
-      DOCENTE.motivoDeBloqueoDeMembresia({
-        assignment: fakeGrupal({ inscripcionesCerradas: true }),
-        grupo: fakeGrupo(),
-        grupoTieneEntrega: true,
-      })
-    ).toBeNull();
-  });
-
-  it("también traduce InscripcionesCerradasError a motivo", () => {
-    const contexto = {
-      assignment: fakeGrupal({ inscripcionesCerradas: true }),
-      grupo: fakeGrupo(),
-      grupoTieneEntrega: false,
-    };
-    const motivo = ESTUDIANTE.motivoDeBloqueoDeMembresia(contexto);
-    const error = new InscripcionesCerradasError(contexto.assignment.id);
-    expect(motivo).toBe(error.message);
-  });
-
-  it("relanza un error inesperado en vez de mostrarlo como bloqueo", () => {
-    const rolConBug = Object.create(ESTUDIANTE) as typeof ESTUDIANTE;
-    rolConBug.autorizarCambioDeMembresia = () => {
-      throw new TypeError("contexto mal armado");
-    };
-
-    expect(() =>
-      rolConBug.motivoDeBloqueoDeMembresia({
-        assignment: fakeGrupal(),
-        grupo: fakeGrupo(),
-        grupoTieneEntrega: false,
-      })
-    ).toThrow(TypeError);
+  it("el Estudiante nunca administra la membresía de otro", () => {
+    expect(() => ESTUDIANTE.actorSobreMembresiaAjena("a1")).toThrow(
+      AccesoAssignmentProhibidoError
+    );
   });
 });
 

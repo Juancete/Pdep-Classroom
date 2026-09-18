@@ -23,6 +23,7 @@ describe("ORM metadata", () => {
       "IndividualAssignment",
       "GrupalAssignment",
       "Grupo",
+      "MiembroDeGrupo",
       "Entrega",
       "RepoDeletionAttempt",
     ];
@@ -69,8 +70,11 @@ describe("ORM metadata", () => {
     const orm = await MikroORM.init({ ...testConfig, connect: false });
     const meta = orm.getMetadata();
     const grupo = meta.get("Grupo");
+    const miembroDeGrupo = meta.get("MiembroDeGrupo");
 
-    expect(grupo.properties.alumnos.pivotTable).toBe("grupo_alumnos");
+    expect(grupo.properties.miembros.kind).toBe("1:m");
+    expect(grupo.properties.miembros.type).toBe("MiembroDeGrupo");
+    expect(miembroDeGrupo.tableName).toBe("grupo_miembro");
     expect(grupo.uniques).toContainEqual(
       expect.objectContaining({
         name: "grupo_id_assignment_unique",
@@ -83,7 +87,13 @@ describe("ORM metadata", () => {
         properties: ["assignment", "nombreNormalizado"],
       })
     );
-    expect(config.schemaGenerator?.skipTables).toContain("grupo_alumnos");
+    expect(miembroDeGrupo.uniques).toContainEqual(
+      expect.objectContaining({
+        name: "grupo_miembro_assignment_username_unique_idx",
+        properties: ["assignmentId", "githubUsername"],
+      })
+    );
+    expect(config.schemaGenerator?.skipTables).toContain("grupo_miembro");
 
     await orm.close(true);
   });

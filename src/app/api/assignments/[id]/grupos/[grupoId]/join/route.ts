@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/infrastructure/auth/session";
-import { getAlumnoByGithub, unirseAGrupo } from "@/infrastructure/repositories";
+import { unirseAGrupo } from "@/infrastructure/repositories";
 import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
+import { resolverParticipante } from "@/application/participante";
 
 export async function POST(_req: Request, props: { params: Promise<{ id: string; grupoId: string }> }) {
   const params = await props.params;
@@ -11,19 +12,11 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string;
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const alumno = await getAlumnoByGithub(user.githubUsername, true);
-    if (!alumno) {
-      return NextResponse.json(
-        { error: "No tenés acceso a este assignment" },
-        { status: 403 }
-      );
-    }
-
+    const participante = await resolverParticipante(user);
     const grupo = await unirseAGrupo({
       assignmentId: params.id,
       grupoId: params.grupoId,
-      alumnoId: alumno.id,
-      usuario: user,
+      participante,
     });
 
     return NextResponse.json(grupo.toResumen());

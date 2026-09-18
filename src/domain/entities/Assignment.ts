@@ -11,6 +11,7 @@ import { Comision } from "./Comision";
 import type { Alumno } from "./Alumno";
 import type { Grupo } from "./Grupo";
 import type { GrupalAssignment } from "./GrupalAssignment";
+import type { Participante } from "./Participante";
 import type { Paradigma, TipoAssignment } from "@/types";
 import { PARADIGMAS, TIPOS_ASSIGNMENT } from "./domain-constants";
 import {
@@ -361,20 +362,17 @@ export abstract class Assignment {
   abstract totalEsperado(fuentes: FuentesDeConteo): Promise<number>;
 
   /**
-   * Resuelve a qué github users darles acceso al repo cuando un alumno acepta
+   * Resuelve a qué github users darles acceso al repo cuando alguien acepta
    * el assignment. La lambda `buscarGrupoDelAlumno` sólo la usa la variante
-   * grupal — individual la ignora. `alumno` (el registro de `Alumno`, o
-   * `null` si todavía no se registró) sólo lo usa la variante individual,
-   * para exigir el registro antes de aceptar (`AlumnoNoRegistradoError`) —
-   * en grupal la falta de registro no aplica igual, la resuelve
-   * `GrupoNoAsignadoError` si no tiene grupo. Antes este chequeo vivía como
-   * `if (!grupoId && !alumno)` en `aceptarAssignment.ts`, un branch por
-   * tipo fuera del dominio (Fase 3 de la auditoría de dominio).
+   * grupal — individual la ignora y devuelve directo al propio
+   * `participante` (sin exigir un `Alumno` — issue #107/#112: un docente
+   * sin fila en `Alumno` también puede aceptar un TP individual desde la
+   * demo de Mis TPs). En grupal, no tener grupo lo resuelve
+   * `GrupoNoAsignadoError`, idéntico para alumno y docente.
    */
   abstract resolverParticipantesPara(
-    user: { githubUsername: string },
-    buscarGrupoDelAlumno: BuscadorDeGrupoDelAlumno,
-    alumno: Alumno | null
+    participante: Participante,
+    buscarGrupoDelAlumno: BuscadorDeGrupoDelAlumno
   ): Promise<ParticipantesResueltos>;
 
   /**

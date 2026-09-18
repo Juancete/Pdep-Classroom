@@ -16,6 +16,8 @@ import {
 // ── Mocks ────────────────────────────────────────────────────
 
 const mockGetCurrentUser = vi.fn();
+const mockGetAlumnoByGithub = vi.fn();
+const mockGetComisionActiva = vi.fn();
 const mockSalirDeGrupo = vi.fn();
 const mockMoverAlumnoDeGrupo = vi.fn();
 
@@ -24,6 +26,8 @@ vi.mock("@/infrastructure/auth/session", () => ({
 }));
 
 vi.mock("@/infrastructure/repositories", () => ({
+  getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
+  getComisionActiva: () => mockGetComisionActiva(),
   salirDeGrupo: (params: unknown) => mockSalirDeGrupo(params),
   moverAlumnoDeGrupo: (params: unknown) => mockMoverAlumnoDeGrupo(params),
 }));
@@ -52,7 +56,7 @@ function makeGrupoEntity(overrides: Partial<Grupo> = {}): Grupo {
   grupo.creadoPor = "ana";
   const miembro = Object.assign(new Alumno(), { githubUsername: "ana" });
   Object.assign(grupo, {
-    alumnos: { getItems: () => [miembro], length: 1 },
+    miembros: { getItems: () => [miembro], length: 1 },
   });
   return Object.assign(grupo, overrides);
 }
@@ -77,6 +81,12 @@ describe("PUT /api/assignments/[id]/grupos/[grupoId]/miembros/[githubUsername]",
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetCurrentUser.mockResolvedValue(makeUser());
+    mockGetAlumnoByGithub.mockResolvedValue({
+      id: "alumno-ana",
+      githubUsername: "ana",
+      comision: { id: "c1" },
+    });
+    mockGetComisionActiva.mockResolvedValue({ id: "c1" });
     mockMoverAlumnoDeGrupo.mockResolvedValue({
       grupoDestino: makeGrupoEntity(),
       grupoOrigenEliminado: false,
@@ -107,21 +117,26 @@ describe("PUT /api/assignments/[id]/grupos/[grupoId]/miembros/[githubUsername]",
       assignmentId: "a1",
       grupoDestinoId: "g1",
       githubUsername: "ana",
-      usuario: expect.objectContaining({ githubUsername: "ana" }),
+      actor: expect.objectContaining({ githubUsername: "ana" }),
+      realizadoPor: "ana",
       motivo: undefined,
     });
   });
 
-  it("permite al docente mover a otro alumno", async () => {
+  // issue #107/#112: el docente administra con el bypass de
+  // `RolDeUsuario.actorSobreMembresiaAjena()` — ya no es un `Participante`.
+  it("el docente administra la membresía de otro con el bypass administrativo", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser({ githubUsername: "docente1", rol: DOCENTE }));
+
     const response = await PUT(makeRequest("PUT"), makeParams("ana"));
+
     expect(response.status).toBe(200);
-    expect(mockMoverAlumnoDeGrupo).toHaveBeenCalledWith(
-      expect.objectContaining({
-        githubUsername: "ana",
-        usuario: expect.objectContaining({ githubUsername: "docente1", rol: DOCENTE }),
-      })
-    );
+    expect(mockMoverAlumnoDeGrupo).toHaveBeenCalledTimes(1);
+    const [{ githubUsername, actor, realizadoPor }] = mockMoverAlumnoDeGrupo.mock.calls[0];
+    expect(githubUsername).toBe("ana");
+    expect(realizadoPor).toBe("docente1");
+    expect(actor.origenDeAuditoria()).toBe("docente");
+    expect(() => actor.autorizarCambioDeMembresia({} as never)).not.toThrow();
   });
 
   it("acepta un motivo opcional y lo propaga", async () => {
@@ -181,6 +196,12 @@ describe("DELETE /api/assignments/[id]/grupos/[grupoId]/miembros/[githubUsername
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetCurrentUser.mockResolvedValue(makeUser());
+    mockGetAlumnoByGithub.mockResolvedValue({
+      id: "alumno-ana",
+      githubUsername: "ana",
+      comision: { id: "c1" },
+    });
+    mockGetComisionActiva.mockResolvedValue({ id: "c1" });
     mockSalirDeGrupo.mockResolvedValue({
       grupo: makeGrupoEntity(),
       grupoEliminado: false,
@@ -201,28 +222,28 @@ describe("DELETE /api/assignments/[id]/grupos/[grupoId]/miembros/[githubUsername
     expect(mockSalirDeGrupo).not.toHaveBeenCalled();
   });
 
-  it("un alumno puede salir de su propio grupo, pasando rol ESTUDIANTE", async () => {
+  it("un alumno puede salir de su propio grupo con el Participante resuelto", async () => {
     const response = await DELETE(makeRequest("DELETE"), makeParams());
     expect(response.status).toBe(200);
     expect(mockSalirDeGrupo).toHaveBeenCalledWith({
       assignmentId: "a1",
       grupoId: "g1",
       githubUsername: "ana",
-      usuario: expect.objectContaining({ githubUsername: "ana", rol: ESTUDIANTE }),
+      actor: expect.objectContaining({ githubUsername: "ana" }),
+      realizadoPor: "ana",
       motivo: undefined,
     });
   });
 
-  it("un docente puede sacar a otro alumno, pasando rol DOCENTE", async () => {
+  it("el docente saca a otro alumno con el bypass administrativo", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser({ githubUsername: "docente1", rol: DOCENTE }));
     const response = await DELETE(makeRequest("DELETE"), makeParams("ana"));
     expect(response.status).toBe(200);
-    expect(mockSalirDeGrupo).toHaveBeenCalledWith(
-      expect.objectContaining({
-        githubUsername: "ana",
-        usuario: expect.objectContaining({ githubUsername: "docente1", rol: DOCENTE }),
-      })
-    );
+    expect(mockSalirDeGrupo).toHaveBeenCalledTimes(1);
+    const [{ githubUsername, actor, realizadoPor }] = mockSalirDeGrupo.mock.calls[0];
+    expect(githubUsername).toBe("ana");
+    expect(realizadoPor).toBe("docente1");
+    expect(actor.origenDeAuditoria()).toBe("docente");
   });
 
   it("devuelve grupoEliminado en la respuesta cuando el grupo se borró", async () => {

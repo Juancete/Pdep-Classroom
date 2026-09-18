@@ -1,16 +1,11 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/infrastructure/auth/session";
-import {
-  getAssignment,
-  getAlumnoByGithub,
-  getGruposDeAssignment,
-  getEntregaLogica,
-} from "@/infrastructure/repositories";
+import { getAssignment, getGruposDeAssignment, getEntregaLogica } from "@/infrastructure/repositories";
 import type { GrupalAssignment } from "@/domain/entities";
 import { GrupoSelector } from "./grupo-selector";
 import { MiGrupo } from "./mi-grupo";
 import type { GrupoResumen } from "./mi-grupo";
-import { autorizarAccionSobreAssignment } from "@/application/assignmentAuthorization";
+import { resolverParticipante } from "@/application/participante";
 
 export default async function GrupoPage(
   props: {
@@ -20,11 +15,9 @@ export default async function GrupoPage(
   const params = await props.params;
   const user = await requireUser();
 
-  const [assignment, alumno] = await Promise.all([
+  const [assignment, participante] = await Promise.all([
     getAssignment(params.id),
-    user.rol.puedeAdministrar()
-      ? Promise.resolve(null)
-      : getAlumnoByGithub(user.githubUsername, true),
+    resolverParticipante(user),
   ]);
 
   if (!assignment) {
@@ -34,30 +27,36 @@ export default async function GrupoPage(
   let grupal: GrupalAssignment;
   try {
     grupal = assignment.exigirGrupal();
-    autorizarAccionSobreAssignment(user, alumno, grupal);
+    participante.autorizarAccionSobreAssignment(grupal);
   } catch {
     notFound();
   }
 
   const grupos = await getGruposDeAssignment(params.id);
+  // Sólo los grupos del tipo que integra este participante — un alumno no
+  // ve grupos de docentes, y viceversa (issue #107/#112).
+  const gruposVisibles = grupos.filter((grupo) =>
+    grupo.admiteIntegrantesDe(participante.tipoDeGrupo())
+  );
 
-  const miGrupo = grupos.find((grupo) => grupo.contieneA(user.githubUsername));
+  const miGrupo = gruposVisibles.find((grupo) => grupo.contieneA(participante.githubUsername));
 
   // getEntregaLogica busca por grupoId, no por el snapshot de usernames de
-  // la entrega: un alumno agregado al grupo después de aceptar el TP también
-  // cuenta como "el grupo ya aceptó el TP" (getEntregaDeUsuario no lo vería).
+  // la entrega: un integrante agregado al grupo después de aceptar el TP
+  // también cuenta como "el grupo ya aceptó el TP" (getEntregaDeUsuario no
+  // lo vería).
   const entrega = miGrupo
     ? await getEntregaLogica({ assignmentId: assignment.id, grupoId: miGrupo.id })
     : null;
 
-  function serializar(grupo: (typeof grupos)[number]): GrupoResumen {
+  function serializar(grupo: (typeof gruposVisibles)[number]): GrupoResumen {
     // `toResumen()` cubre los campos comunes con las routes de grupos —
     // acá se agrega `etiquetaCupo`, específico de esta pantalla.
     return { ...grupo.toResumen(), etiquetaCupo: grupo.etiquetaCupo() };
   }
 
   const motivoBloqueo = miGrupo
-    ? user.rol.motivoDeBloqueoDeMembresia({
+    ? participante.motivoDeBloqueoDeMembresia({
         assignment: grupal,
         grupo: miGrupo,
         grupoTieneEntrega: !!entrega,
@@ -65,7 +64,7 @@ export default async function GrupoPage(
     : null;
 
   const gruposDisponibles = miGrupo
-    ? grupos
+    ? gruposVisibles
         .filter((grupo) => grupo.id !== miGrupo.id && !grupo.estaLleno())
         .map((grupo) => ({ id: grupo.id, nombre: grupo.nombre }))
     : [];
@@ -91,15 +90,15 @@ export default async function GrupoPage(
           grupo={serializar(miGrupo)}
           assignmentId={params.id}
           tieneEntrega={!!entrega}
-          githubUsername={user.githubUsername}
+          githubUsername={participante.githubUsername}
           motivoBloqueo={motivoBloqueo}
-          esUltimoMiembro={miGrupo.quedaraVacioSiSale(user.githubUsername)}
+          esUltimoMiembro={miGrupo.quedaraVacioSiSale(participante.githubUsername)}
           gruposDisponibles={gruposDisponibles}
         />
       ) : (
         <GrupoSelector
           assignmentId={params.id}
-          grupos={grupos.map(serializar)}
+          grupos={gruposVisibles.map(serializar)}
           inscripcionesCerradas={grupal.inscripcionesCerradas}
         />
       )}
