@@ -118,12 +118,32 @@ describe("Admin Alumnos page", () => {
       expect(html).toContain("2 alumnos");
     });
 
-    it("muestra la cantidad de resultados para la búsqueda actual", async () => {
+    it("muestra la cantidad de resultados para la búsqueda actual en singular cuando hay uno solo", async () => {
       mockGetAlumnosPage.mockResolvedValue(paginaVacia({ items: [makeAlumno()], total: 1 }));
 
       const element = await AdminAlumnosPage({ searchParams: Promise.resolve({ q: "garcia" }) });
       const html = renderToStaticMarkup(element);
-      expect(html).toContain("1 resultados para &quot;garcia&quot;");
+      expect(html).toContain("1 resultado para &quot;garcia&quot;");
+      expect(html).not.toContain("1 resultados");
+    });
+
+    it("muestra la cantidad de resultados para la búsqueda actual en plural cuando hay más de uno", async () => {
+      mockGetAlumnosPage.mockResolvedValue(
+        paginaVacia({ items: [makeAlumno(), makeAlumno({ legajo: "67890" })], total: 2 })
+      );
+
+      const element = await AdminAlumnosPage({ searchParams: Promise.resolve({ q: "garcia" }) });
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("2 resultados para &quot;garcia&quot;");
+    });
+
+    it("muestra 1 alumno en singular en el subtítulo cuando no hay búsqueda", async () => {
+      mockGetAlumnosPage.mockResolvedValue(paginaVacia({ items: [makeAlumno()], total: 1 }));
+
+      const element = await AdminAlumnosPage({ searchParams: Promise.resolve({}) });
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("1 alumno");
+      expect(html).not.toContain("1 alumnos");
     });
 
     it("muestra el legajo del alumno", async () => {

@@ -56,7 +56,9 @@ export default async function AdminAlumnosPage(props: {
       <p className="text-gray-500 text-sm mb-6">
         Alumnos sincronizados de la comisión activa.{" "}
         <span className="font-mono text-xs">
-          {busqueda ? `${result.total} resultados para "${busqueda}"` : `${result.total} alumnos`}
+          {busqueda
+            ? `${result.total} ${result.total === 1 ? "resultado" : "resultados"} para "${busqueda}"`
+            : `${result.total} ${result.total === 1 ? "alumno" : "alumnos"}`}
         </span>
       </p>
 
