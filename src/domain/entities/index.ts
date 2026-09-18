@@ -28,6 +28,10 @@ export {
   INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS,
 } from "./Comision";
 export {
+  ContextoDeComision,
+  resolverContextoDeComision,
+} from "./ContextoDeComision";
+export {
   Assignment,
   AssignmentNoEncontradoError,
   AssignmentNoDisponibleError,

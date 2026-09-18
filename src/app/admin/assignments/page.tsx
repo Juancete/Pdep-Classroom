@@ -5,6 +5,8 @@ import {
   getActiveRepoCountsByAssignment,
   getGrupoCountsByAssignment,
 } from "@/infrastructure/repositories";
+import { obtenerContextoDeComision } from "@/application/comisionConsultada";
+import { AvisoSinComision } from "../aviso-sin-comision";
 import Link from "next/link";
 import { DeleteAssignmentButton } from "./delete-button";
 import { DeleteReposButton } from "./delete-repos-button";
@@ -31,6 +33,19 @@ export default async function AdminAssignmentsPage(props: {
   const searchParams = await (props.searchParams ?? Promise.resolve(emptySearchParams));
   await requireAdmin();
 
+  // issue #114: la comisión consultada (activa u histórica) reemplaza a
+  // "todas las comisiones a la vez" — sin comisión, ni se consulta el repo.
+  const { contexto } = await obtenerContextoDeComision();
+  const comision = contexto.comisionConsultada();
+  if (!comision) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold mb-1">Assignments</h1>
+        <AvisoSinComision />
+      </div>
+    );
+  }
+
   const estadoFilter = NOMBRES_ESTADO_ASSIGNMENT.includes(
     searchParams.estado as NombreEstadoAssignment
   )
@@ -38,7 +53,7 @@ export default async function AdminAssignmentsPage(props: {
     : undefined;
 
   const [assignments, entregasCounts, activeRepoCounts, gruposCounts] = await Promise.all([
-    getAssignments(estadoFilter ? { estado: estadoFilter } : undefined),
+    getAssignments({ comisionId: comision.id, estado: estadoFilter }),
     getEntregaCountsByAssignment(),
     getActiveRepoCountsByAssignment(),
     getGrupoCountsByAssignment(),
@@ -53,12 +68,18 @@ export default async function AdminAssignmentsPage(props: {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold">Assignments</h1>
-        <Link
-          href="/admin/assignments/new"
-          className="bg-pdep-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-pdep-700 transition-colors"
-        >
-          + Nuevo Assignment
-        </Link>
+        {contexto.permiteCrearAssignments() ? (
+          <Link
+            href="/admin/assignments/new"
+            className="bg-pdep-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-pdep-700 transition-colors"
+          >
+            + Nuevo Assignment
+          </Link>
+        ) : (
+          <span className="text-sm text-gray-400">
+            Los assignments se crean en la comisión activa.
+          </span>
+        )}
       </div>
 
       {/* Filtro por estado */}

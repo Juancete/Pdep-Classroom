@@ -1,5 +1,7 @@
 import { requireAdmin } from "@/infrastructure/auth/session";
 import { getGrupos } from "@/infrastructure/repositories";
+import { obtenerContextoDeComision } from "@/application/comisionConsultada";
+import { AvisoSinComision } from "../aviso-sin-comision";
 import { PARADIGMAS } from "@/types";
 import type { Paradigma } from "@/types";
 
@@ -11,13 +13,26 @@ export default async function AdminGruposPage(
   const searchParams = await props.searchParams;
   await requireAdmin();
 
+  // issue #114: la comisión consultada (activa u histórica) reemplaza a
+  // "todas las comisiones a la vez" — sin comisión, ni se consulta el repo.
+  const { contexto } = await obtenerContextoDeComision();
+  const comision = contexto.comisionConsultada();
+  if (!comision) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold mb-1">Grupos</h1>
+        <AvisoSinComision />
+      </div>
+    );
+  }
+
   const paradigmaFilter = PARADIGMAS.includes(
     searchParams.paradigma as Paradigma
   )
     ? (searchParams.paradigma as Paradigma)
     : undefined;
 
-  const grupos = await getGrupos(paradigmaFilter);
+  const grupos = await getGrupos({ comisionId: comision.id, paradigma: paradigmaFilter });
 
   return (
     <div>

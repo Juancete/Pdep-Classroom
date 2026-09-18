@@ -99,10 +99,24 @@ export async function getGruposDeAlumno(
   return new Map(grupos.map((grupo) => [grupo.assignment.id, grupo]));
 }
 
-export async function getGrupos(paradigma?: Paradigma): Promise<Grupo[]> {
+// `comisionId` obligatorio (issue #114): único llamador es la página de
+// grupos del panel admin, que ahora filtra siempre por la comisión
+// consultada (activa u histórica) en vez de traer grupos de todas las
+// comisiones a la vez.
+export async function getGrupos(filtro: {
+  comisionId: string;
+  paradigma?: Paradigma;
+}): Promise<Grupo[]> {
   const entityManager = await getEM();
-  const where = paradigma ? { paradigma } : {};
-  return entityManager.find(Grupo, where, { populate: ["assignment", "miembros"] });
+  const { comisionId, paradigma } = filtro;
+  return entityManager.find(
+    Grupo,
+    {
+      assignment: { comision: { id: comisionId } },
+      ...(paradigma && { paradigma }),
+    },
+    { populate: ["assignment", "miembros"] }
+  );
 }
 
 export async function getGruposDeAssignment(assignmentId: string): Promise<Grupo[]> {

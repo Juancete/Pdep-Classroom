@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Comision, IndividualAssignment } from "@/domain/entities";
+import { Comision, IndividualAssignment, resolverContextoDeComision } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -9,6 +9,7 @@ const mockGetAssignments = vi.fn();
 const mockGetEntregaCountsByAssignment = vi.fn();
 const mockGetActiveRepoCountsByAssignment = vi.fn();
 const mockGetGrupoCountsByAssignment = vi.fn();
+const mockObtenerContextoDeComision = vi.fn();
 
 vi.mock("@/infrastructure/auth/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
@@ -19,6 +20,10 @@ vi.mock("@/infrastructure/repositories", () => ({
   getEntregaCountsByAssignment: () => mockGetEntregaCountsByAssignment(),
   getActiveRepoCountsByAssignment: () => mockGetActiveRepoCountsByAssignment(),
   getGrupoCountsByAssignment: () => mockGetGrupoCountsByAssignment(),
+}));
+
+vi.mock("@/application/comisionConsultada", () => ({
+  obtenerContextoDeComision: () => mockObtenerContextoDeComision(),
 }));
 
 vi.mock("next/link", () => ({
@@ -106,6 +111,33 @@ function makeAssignment(overrides?: Partial<IndividualAssignment>): IndividualAs
   return Object.assign(assignment, overrides);
 }
 
+// Contextos armados con la factory real (no se mockea `ContextoDeComision`):
+// la página sólo le pregunta al contexto, igual que en producción.
+function comisionCon(id: string, anio: number, activa: boolean): Comision {
+  const comision = new Comision(anio, "sheet-test");
+  comision.id = id;
+  comision.activa = activa;
+  return comision;
+}
+
+function contextoConComisionActiva(id = "c-activa", anio = 2026) {
+  const comision = comisionCon(id, anio, true);
+  return { contexto: resolverContextoDeComision([comision]), comisiones: [comision] };
+}
+
+function contextoConComisionHistorica(id = "c-historica", anio = 2025) {
+  const comisionActiva = comisionCon("c-activa", 2026, true);
+  const comisionHistorica = comisionCon(id, anio, false);
+  return {
+    contexto: resolverContextoDeComision([comisionActiva, comisionHistorica], id),
+    comisiones: [comisionActiva, comisionHistorica],
+  };
+}
+
+function contextoSinComision() {
+  return { contexto: resolverContextoDeComision([]), comisiones: [] };
+}
+
 // ── Tests ────────────────────────────────────────────────────
 
 describe("Admin Assignments page", () => {
@@ -115,6 +147,7 @@ describe("Admin Assignments page", () => {
     mockGetEntregaCountsByAssignment.mockResolvedValue(new Map());
     mockGetActiveRepoCountsByAssignment.mockResolvedValue(new Map());
     mockGetGrupoCountsByAssignment.mockResolvedValue(new Map());
+    mockObtenerContextoDeComision.mockResolvedValue(contextoConComisionActiva());
   });
 
   it("siempre llama a requireAdmin", async () => {
@@ -123,12 +156,58 @@ describe("Admin Assignments page", () => {
     expect(mockRequireAdmin).toHaveBeenCalledOnce();
   });
 
-  it("muestra el link para crear un nuevo assignment", async () => {
+  it("sin comisión consultada muestra el aviso y no llama al repo", async () => {
+    mockObtenerContextoDeComision.mockResolvedValue(contextoSinComision());
+
+    const element = await AdminAssignmentsPage({});
+    const html = renderToStaticMarkup(element);
+
+    expect(html).toContain("No hay ninguna comisión activa configurada");
+    expect(mockGetAssignments).not.toHaveBeenCalled();
+  });
+
+  it("muestra el link para crear un nuevo assignment cuando el contexto lo permite (activa)", async () => {
     mockGetAssignments.mockResolvedValue([]);
     const element = await AdminAssignmentsPage({});
     const html = renderToStaticMarkup(element);
     expect(html).toContain("href=\"/admin/assignments/new\"");
     expect(html).toContain("Nuevo Assignment");
+  });
+
+  it("oculta el link de crear y muestra el texto deshabilitado cuando la comisión consultada es histórica", async () => {
+    mockObtenerContextoDeComision.mockResolvedValue(contextoConComisionHistorica());
+    mockGetAssignments.mockResolvedValue([]);
+
+    const element = await AdminAssignmentsPage({});
+    const html = renderToStaticMarkup(element);
+
+    expect(html).not.toContain("href=\"/admin/assignments/new\"");
+    expect(html).toContain("Los assignments se crean en la comisión activa");
+  });
+
+  describe("filtro por comisión consultada", () => {
+    it("llama a getAssignments con el comisionId de la activa", async () => {
+      mockGetAssignments.mockResolvedValue([]);
+      await AdminAssignmentsPage({});
+      expect(mockGetAssignments).toHaveBeenCalledWith({
+        comisionId: "c-activa",
+        estado: undefined,
+      });
+    });
+
+    it("llama a getAssignments con el comisionId de la histórica consultada", async () => {
+      mockObtenerContextoDeComision.mockResolvedValue(
+        contextoConComisionHistorica("c-2025")
+      );
+      mockGetAssignments.mockResolvedValue([]);
+
+      await AdminAssignmentsPage({});
+
+      expect(mockGetAssignments).toHaveBeenCalledWith({
+        comisionId: "c-2025",
+        estado: undefined,
+      });
+    });
   });
 
   describe("estado vacío", () => {
@@ -387,13 +466,16 @@ describe("Admin Assignments page", () => {
       expect(html).toContain('href="/admin/assignments?estado=archivado"');
     });
 
-    it("pasa el filtro al repositorio cuando el estado es válido", async () => {
+    it("combina el comisionId consultado con el estado cuando es válido", async () => {
       mockGetAssignments.mockResolvedValue([]);
       const element = await AdminAssignmentsPage({
         searchParams: Promise.resolve({ estado: "archivado" }),
       });
       renderToStaticMarkup(element);
-      expect(mockGetAssignments).toHaveBeenCalledWith({ estado: "archivado" });
+      expect(mockGetAssignments).toHaveBeenCalledWith({
+        comisionId: "c-activa",
+        estado: "archivado",
+      });
     });
 
     it("ignora un estado desconocido en el query string", async () => {
@@ -402,7 +484,10 @@ describe("Admin Assignments page", () => {
         searchParams: Promise.resolve({ estado: "basura" }),
       });
       renderToStaticMarkup(element);
-      expect(mockGetAssignments).toHaveBeenCalledWith(undefined);
+      expect(mockGetAssignments).toHaveBeenCalledWith({
+        comisionId: "c-activa",
+        estado: undefined,
+      });
     });
   });
 });

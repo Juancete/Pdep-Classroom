@@ -977,8 +977,13 @@ src/
 │   │   │   ├── comision-form.tsx              # Form compartido crear/editar
 │   │   │   ├── delete-button.tsx              # Eliminar comisión
 │   │   │   └── sync-button.tsx                # Sincronizar alumnos desde Sheets → DB
-│   │   ├── alumnos/page.tsx                   # Ver alumnos de la comisión activa (DB), con buscador y paginación de 25
-│   │   ├── grupos/page.tsx                    # Ver grupos (DB)
+│   │   ├── alumnos/page.tsx                   # Ver alumnos de la comisión consultada (DB), con buscador y paginación de 25
+│   │   ├── grupos/page.tsx                    # Ver grupos de la comisión consultada (DB)
+│   │   ├── comision-consultada/actions.ts     # Server action: cambiar/borrar la cookie de comisión consultada
+│   │   ├── layout.tsx                         # Layout de /admin/*: requireAdmin + BarraDeComision
+│   │   ├── barra-de-comision.tsx              # Header con la comisión consultada, badge y selector (server)
+│   │   ├── selector-de-comision.tsx           # Select que dispara cambiarComisionConsultada al elegir (client)
+│   │   ├── aviso-sin-comision.tsx             # Aviso compartido cuando no hay comisión que consultar
 │   │   ├── delete-button.tsx                  # Componente genérico de eliminar
 │   │   └── ui.tsx                             # Componentes UI compartidos del panel admin
 │   ├── assignments/[id]/grupo/                # UI del alumno: crear/unirse/salir/cambiar de grupo
@@ -1016,6 +1021,7 @@ src/
 │       ├── RolDeUsuario.ts                    # Alcance administrativo, home y navegación por rol como Strategy
 │       ├── Participante.ts                    # Alumno o docente actuando en Mis TPs; reglas de participación idénticas
 │       ├── Comision.ts                        # Incluye columnConfig para la planilla
+│       ├── ContextoDeComision.ts               # Comisión consultada en el panel admin (activa/histórica/sin comisión) como Strategy
 │       ├── Entrega.ts
 │       ├── Alumno.ts
 │       ├── SuscripcionAlumno.ts               # Estado de suscripción de un alumno a un canal (1 fila por canal)
@@ -1037,12 +1043,15 @@ src/
 │   ├── borrarRepositoriosDeAssignment.ts      # Borrado auditado de repos de un assignment
 │   ├── sincronizarCI.ts                       # Consulta y cachea el estado de CI
 │   ├── recibirWebhookGithub.ts                # Dedup + estado de un delivery entrante, reproceso
-│   └── procesarEventoGithub.ts                # Router evento → efecto sobre la entrega correspondiente
+│   ├── procesarEventoGithub.ts                # Router evento → efecto sobre la entrega correspondiente
+│   └── comisionConsultada.ts                  # obtenerContextoDeComision(): cookie + getComisiones() → ContextoDeComision, cacheado por request
 ├── infrastructure/
 │   ├── db.ts                                  # Singleton MikroORM (getOrm / getEM)
 │   ├── auth/
 │   │   ├── auth.ts / auth.config.ts / auth.events.ts   # NextAuth: config, providers (GitHub + login de desarrollo), eventos
 │   │   └── session.ts                         # requireUser / requireAdmin
+│   ├── navegacion/
+│   │   └── comisionConsultadaCookie.ts        # Cookie httpOnly `comision_consultada` (leer/guardar/borrar)
 │   ├── repositories/                          # Acceso a datos por entidad
 │   │   ├── AlumnoRepository.ts
 │   │   ├── SuscripcionAlumnoRepository.ts     # Estado de suscripción por (alumno, canal)

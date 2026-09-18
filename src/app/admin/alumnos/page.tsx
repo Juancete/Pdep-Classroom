@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { requireAdmin } from "@/infrastructure/auth/session";
-import { getAlumnosPage, getComisionActiva } from "@/infrastructure/repositories";
+import { getAlumnosPage } from "@/infrastructure/repositories";
+import { obtenerContextoDeComision } from "@/application/comisionConsultada";
+import { AvisoSinComision } from "../aviso-sin-comision";
 import { parsePage, single } from "@/lib/search-params";
 import { Paginador } from "@/components/Paginador";
 import {
@@ -18,18 +20,15 @@ export default async function AdminAlumnosPage(props: {
 }) {
   await requireAdmin();
 
-  const comision = await getComisionActiva();
+  // issue #114: la comisión consultada (activa u histórica) reemplaza a
+  // `getComisionActiva()` — sin comisión, ni se consulta el repo.
+  const { contexto } = await obtenerContextoDeComision();
+  const comision = contexto.comisionConsultada();
   if (!comision) {
     return (
       <div>
         <h1 className="text-2xl font-bold mb-1">Alumnos</h1>
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8 text-center text-yellow-800">
-          No hay ninguna comisión activa configurada.{" "}
-          <Link href="/admin/comisiones/new" className="underline font-medium">
-            Crear una comisión
-          </Link>{" "}
-          para poder ver los alumnos.
-        </div>
+        <AvisoSinComision />
       </div>
     );
   }
@@ -54,7 +53,7 @@ export default async function AdminAlumnosPage(props: {
     <div>
       <h1 className="text-2xl font-bold mb-1">Alumnos</h1>
       <p className="text-gray-500 text-sm mb-6">
-        Alumnos sincronizados de la comisión activa.{" "}
+        Alumnos sincronizados de la comisión {comision.anio}.{" "}
         <span className="font-mono text-xs">
           {busqueda
             ? `${result.total} ${result.total === 1 ? "resultado" : "resultados"} para "${busqueda}"`

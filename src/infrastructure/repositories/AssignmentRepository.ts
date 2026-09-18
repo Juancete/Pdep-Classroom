@@ -23,13 +23,22 @@ const ESTADOS_VISIBLES_PARA_ALUMNO: NombreEstadoAssignment[] = [
   "archivado",
 ];
 
+// `comisionId` opcional (issue #114): `GET /api/assignments`
+// (`src/app/api/assignments/route.ts`) sigue llamando sin filtro y no
+// cambia; la página de assignments del panel admin sí filtra siempre por la
+// comisión consultada. Los assignments "sin comisión" quedan fuera de una
+// consulta filtrada — esperado, ya no se muestran en la vista por comisión.
 export async function getAssignments(filtro?: {
+  comisionId?: string;
   estado?: NombreEstadoAssignment;
 }): Promise<Assignment[]> {
   const entityManager = await getEM();
   return entityManager.find(
     Assignment,
-    filtro?.estado ? { estadoNombre: filtro.estado } : {},
+    {
+      ...(filtro?.estado && { estadoNombre: filtro.estado }),
+      ...(filtro?.comisionId && { comision: { id: filtro.comisionId } }),
+    },
     { orderBy: { createdAt: "DESC" }, populate: ["comision"] }
   );
 }

@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Alumno } from "@/domain/entities";
+import { Alumno, Comision, resolverContextoDeComision } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
 const mockRequireAdmin = vi.fn();
 const mockGetAlumnosPage = vi.fn();
-const mockGetComisionActiva = vi.fn();
+const mockObtenerContextoDeComision = vi.fn();
 
 vi.mock("@/infrastructure/auth/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
@@ -14,7 +14,10 @@ vi.mock("@/infrastructure/auth/session", () => ({
 
 vi.mock("@/infrastructure/repositories", () => ({
   getAlumnosPage: (...args: unknown[]) => mockGetAlumnosPage(...args),
-  getComisionActiva: () => mockGetComisionActiva(),
+}));
+
+vi.mock("@/application/comisionConsultada", () => ({
+  obtenerContextoDeComision: () => mockObtenerContextoDeComision(),
 }));
 
 import AdminAlumnosPage from "./page";
@@ -37,13 +40,40 @@ function paginaVacia(overrides?: Partial<Awaited<ReturnType<typeof mockGetAlumno
   return { items: [], page: 1, pageSize: 25, total: 0, totalPages: 1, ...overrides };
 }
 
+// Contextos armados con la factory real (no se mockea `ContextoDeComision`):
+// la página sólo le pregunta al contexto, igual que en producción.
+function comisionCon(id: string, anio: number, activa: boolean): Comision {
+  const comision = new Comision(anio, "sheet-1");
+  comision.id = id;
+  comision.activa = activa;
+  return comision;
+}
+
+function contextoConComisionActiva(id = "c1", anio = 2026) {
+  const comision = comisionCon(id, anio, true);
+  return { contexto: resolverContextoDeComision([comision]), comisiones: [comision] };
+}
+
+function contextoConComisionHistorica(id = "c-historica", anio = 2025) {
+  const comisionActiva = comisionCon("c-activa", 2026, true);
+  const comisionHistorica = comisionCon(id, anio, false);
+  return {
+    contexto: resolverContextoDeComision([comisionActiva, comisionHistorica], id),
+    comisiones: [comisionActiva, comisionHistorica],
+  };
+}
+
+function contextoSinComision() {
+  return { contexto: resolverContextoDeComision([]), comisiones: [] };
+}
+
 // ── Tests ────────────────────────────────────────────────────
 
 describe("Admin Alumnos page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireAdmin.mockResolvedValue(undefined);
-    mockGetComisionActiva.mockResolvedValue({ id: "c1", spreadsheetId: "sheet-1" });
+    mockObtenerContextoDeComision.mockResolvedValue(contextoConComisionActiva());
   });
 
   it("siempre llama a requireAdmin", async () => {
@@ -52,8 +82,8 @@ describe("Admin Alumnos page", () => {
     expect(mockRequireAdmin).toHaveBeenCalledOnce();
   });
 
-  it("muestra el aviso cuando no hay comisión activa y no consulta alumnos", async () => {
-    mockGetComisionActiva.mockResolvedValue(null);
+  it("muestra el aviso cuando no hay comisión consultada y no consulta alumnos", async () => {
+    mockObtenerContextoDeComision.mockResolvedValue(contextoSinComision());
 
     const element = await AdminAlumnosPage({ searchParams: Promise.resolve({}) });
     const html = renderToStaticMarkup(element);
@@ -61,7 +91,7 @@ describe("Admin Alumnos page", () => {
     expect(mockGetAlumnosPage).not.toHaveBeenCalled();
   });
 
-  it("llama a getAlumnosPage con comisionId, page y busqueda", async () => {
+  it("llama a getAlumnosPage con el comisionId de la activa, page y busqueda", async () => {
     mockGetAlumnosPage.mockResolvedValue(paginaVacia());
 
     await AdminAlumnosPage({ searchParams: Promise.resolve({ page: "2", q: "perez" }) });
@@ -71,6 +101,30 @@ describe("Admin Alumnos page", () => {
       page: 2,
       busqueda: "perez",
     });
+  });
+
+  it("llama a getAlumnosPage con el comisionId de la histórica consultada", async () => {
+    mockObtenerContextoDeComision.mockResolvedValue(
+      contextoConComisionHistorica("c-2025")
+    );
+    mockGetAlumnosPage.mockResolvedValue(paginaVacia());
+
+    await AdminAlumnosPage({ searchParams: Promise.resolve({}) });
+
+    expect(mockGetAlumnosPage).toHaveBeenCalledWith({
+      comisionId: "c-2025",
+      page: 1,
+      busqueda: undefined,
+    });
+  });
+
+  it("muestra el año de la comisión consultada en el subtítulo", async () => {
+    mockObtenerContextoDeComision.mockResolvedValue(contextoConComisionActiva("c1", 2027));
+    mockGetAlumnosPage.mockResolvedValue(paginaVacia());
+
+    const element = await AdminAlumnosPage({ searchParams: Promise.resolve({}) });
+    const html = renderToStaticMarkup(element);
+    expect(html).toContain("Alumnos sincronizados de la comisión 2027.");
   });
 
   describe("estado vacío", () => {

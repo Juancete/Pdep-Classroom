@@ -15,6 +15,7 @@ import config from "../../../mikro-orm.config";
 // metadata de las entidades (mismo truco que `orm.test.ts`).
 
 type MockTx = {
+  find: ReturnType<typeof vi.fn>;
   findOne: ReturnType<typeof vi.fn>;
   findOneOrFail: ReturnType<typeof vi.fn>;
   populate: ReturnType<typeof vi.fn>;
@@ -28,6 +29,7 @@ type MockTx = {
 };
 
 const mockTx: MockTx = {
+  find: vi.fn(),
   findOne: vi.fn(),
   findOneOrFail: vi.fn(),
   populate: vi.fn(),
@@ -54,6 +56,7 @@ import {
   upsertGrupoConMiembro,
   salirDeGrupo,
   moverAlumnoDeGrupo,
+  getGrupos,
 } from "./GrupoRepository";
 import { getEM } from "@/infrastructure/db";
 import {
@@ -226,6 +229,34 @@ beforeEach(() => {
   mockEm.transactional.mockImplementation(
     async (callback: (transaction: MockTx) => Promise<unknown>) => callback(mockTx)
   );
+});
+
+// ── getGrupos ───────────────────────────────────────────────
+
+describe("getGrupos", () => {
+  it("filtra por comisionId a través del assignment, sin paradigma", async () => {
+    mockEm.find.mockResolvedValue([]);
+
+    await getGrupos({ comisionId: "c1" });
+
+    expect(mockEm.find).toHaveBeenCalledWith(
+      Grupo,
+      { assignment: { comision: { id: "c1" } } },
+      { populate: ["assignment", "miembros"] }
+    );
+  });
+
+  it("combina comisionId con paradigma cuando se pide", async () => {
+    mockEm.find.mockResolvedValue([]);
+
+    await getGrupos({ comisionId: "c1", paradigma: "funcional" });
+
+    expect(mockEm.find).toHaveBeenCalledWith(
+      Grupo,
+      { assignment: { comision: { id: "c1" } }, paradigma: "funcional" },
+      { populate: ["assignment", "miembros"] }
+    );
+  });
 });
 
 // ── crearGrupo ──────────────────────────────────────────────
