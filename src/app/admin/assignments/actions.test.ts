@@ -17,10 +17,12 @@ const {
   FakeComisionActivaRequeridaError,
   FakeColumnaDeGrupoNoConfiguradaError,
   FakeAssignmentSinComisionError,
+  FakeColumnaDeGrupoOcupadaPorDatosPersonalesError,
 } = vi.hoisted(() => ({
   FakeComisionActivaRequeridaError: class FakeComisionActivaRequeridaError extends Error {},
   FakeColumnaDeGrupoNoConfiguradaError: class FakeColumnaDeGrupoNoConfiguradaError extends Error {},
   FakeAssignmentSinComisionError: class FakeAssignmentSinComisionError extends Error {},
+  FakeColumnaDeGrupoOcupadaPorDatosPersonalesError: class FakeColumnaDeGrupoOcupadaPorDatosPersonalesError extends Error {},
 }));
 
 vi.mock("@/infrastructure/auth/session", () => ({
@@ -39,6 +41,7 @@ vi.mock("@/application/volcarGruposAPlanilla", () => ({
   volcarGruposAPlanilla: (...args: unknown[]) => mockVolcarGruposAPlanilla(...args),
   ColumnaDeGrupoNoConfiguradaError: FakeColumnaDeGrupoNoConfiguradaError,
   AssignmentSinComisionError: FakeAssignmentSinComisionError,
+  ColumnaDeGrupoOcupadaPorDatosPersonalesError: FakeColumnaDeGrupoOcupadaPorDatosPersonalesError,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -474,6 +477,19 @@ describe("volcarGruposALaPlanilla", () => {
     );
 
     expect(result).toMatchObject({ status: "error", message: "sin comisión" });
+  });
+
+  it("captura ColumnaDeGrupoOcupadaPorDatosPersonalesError (columna reasignada a un dato personal)", async () => {
+    mockVolcarGruposAPlanilla.mockRejectedValue(
+      new FakeColumnaDeGrupoOcupadaPorDatosPersonalesError("columna ocupada")
+    );
+
+    const result = await volcarGruposALaPlanilla(
+      { status: "idle" },
+      makeVolcadoFormData("a2")
+    );
+
+    expect(result).toMatchObject({ status: "error", message: "columna ocupada" });
   });
 
   it("relanza errores inesperados sin tragarlos", async () => {

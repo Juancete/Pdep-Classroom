@@ -20,6 +20,7 @@ import {
   volcarGruposAPlanilla,
   ColumnaDeGrupoNoConfiguradaError,
   AssignmentSinComisionError,
+  ColumnaDeGrupoOcupadaPorDatosPersonalesError,
 } from "@/application/volcarGruposAPlanilla";
 import { PlanillaNoDisponibleError } from "@/infrastructure/PlanillaNoDisponibleError";
 
@@ -156,7 +157,8 @@ export async function volcarGruposALaPlanilla(
       error instanceof AssignmentNoEncontradoError ||
       error instanceof AssignmentNoGrupalError ||
       error instanceof ColumnaDeGrupoNoConfiguradaError ||
-      error instanceof AssignmentSinComisionError
+      error instanceof AssignmentSinComisionError ||
+      error instanceof ColumnaDeGrupoOcupadaPorDatosPersonalesError
     ) {
       return { status: "error", message: error.message };
     }

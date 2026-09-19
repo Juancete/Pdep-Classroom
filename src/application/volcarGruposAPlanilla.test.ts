@@ -30,6 +30,7 @@ import {
   volcarGruposAPlanilla,
   ColumnaDeGrupoNoConfiguradaError,
   AssignmentSinComisionError,
+  ColumnaDeGrupoOcupadaPorDatosPersonalesError,
 } from "./volcarGruposAPlanilla";
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -118,6 +119,20 @@ describe("volcarGruposAPlanilla", () => {
       AssignmentSinComisionError
     );
     expect(mockGetAlumnosByComision).not.toHaveBeenCalled();
+    expect(mockEscribirColumnaDeGrupoEnSheets).not.toHaveBeenCalled();
+  });
+
+  it("lanza ColumnaDeGrupoOcupadaPorDatosPersonalesError si la columna configurada quedó ocupada por un dato personal", async () => {
+    const comision = fakeComision({
+      columnaOcupadaPorDatosPersonales: () => true,
+    });
+    mockGetAssignment.mockResolvedValue(fakeGrupal({ columna: 5, comision }));
+
+    await expect(volcarGruposAPlanilla("a1")).rejects.toBeInstanceOf(
+      ColumnaDeGrupoOcupadaPorDatosPersonalesError
+    );
+    expect(mockGetAlumnosByComision).not.toHaveBeenCalled();
+    expect(mockGetGruposDeAssignment).not.toHaveBeenCalled();
     expect(mockEscribirColumnaDeGrupoEnSheets).not.toHaveBeenCalled();
   });
 

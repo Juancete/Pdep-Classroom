@@ -27,6 +27,22 @@ export class AssignmentSinComisionError extends Error {
   }
 }
 
+// Issue #109: la columna se valida contra datos personales al configurarla
+// en el form del TP, pero `comision.columnConfig` puede cambiar después —
+// esta segunda validación, justo antes de escribir, evita pisar un dato
+// personal si la columna quedó reasignada mientras tanto.
+export class ColumnaDeGrupoOcupadaPorDatosPersonalesError extends Error {
+  constructor(
+    public readonly assignmentId: string,
+    public readonly columna: number
+  ) {
+    super(
+      "La columna configurada para volcar los grupos ahora está ocupada por un dato personal del alumno en la planilla de la comisión. Elegí otra columna en el TP."
+    );
+    this.name = "ColumnaDeGrupoOcupadaPorDatosPersonalesError";
+  }
+}
+
 /**
  * Vuelca a la planilla de alumnos de la comisión el nombre del grupo de
  * cada alumno, en la columna configurada en el assignment grupal. Espejo
@@ -54,6 +70,9 @@ export async function volcarGruposAPlanilla(
 
   const comision = assignment.comision;
   if (!comision) throw new AssignmentSinComisionError(assignmentId);
+  if (comision.columnaOcupadaPorDatosPersonales(columna)) {
+    throw new ColumnaDeGrupoOcupadaPorDatosPersonalesError(assignmentId, columna);
+  }
 
   const [alumnos, grupos] = await Promise.all([
     getAlumnosByComision(comision.id),
