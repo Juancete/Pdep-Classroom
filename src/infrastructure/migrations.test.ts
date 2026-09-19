@@ -319,6 +319,24 @@ describe("migrations", () => {
     expect(migration).toContain('where "acknowledged_at" is not null');
   });
 
+  it("agrega la columna de destino del grupo en la planilla a assignment", () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        "migrations",
+        "Migration20260919120000_add_columna_grupo_en_planilla_to_assignment.ts"
+      ),
+      "utf8"
+    );
+
+    expect(migration).toContain(
+      'add column "columna_grupo_en_planilla" int null;'
+    );
+    expect(migration).toContain(
+      'drop column "columna_grupo_en_planilla";'
+    );
+  });
+
   it("mantiene el snapshot alineado con Google Groups y las cascadas", () => {
     const snapshot = JSON.parse(
       readFileSync(
@@ -382,6 +400,12 @@ describe("migrations", () => {
     expect(
       assignment?.foreignKeys.assignment_comision_id_foreign.deleteRule
     ).toBe("cascade");
+    // Columna de destino del grupo en la planilla (issue #109) — nullable:
+    // el assignment no puede volcarse a la planilla hasta configurarla.
+    expect(assignment?.columns.columna_grupo_en_planilla).toMatchObject({
+      nullable: true,
+      default: null,
+    });
     expect(grupo?.indexes).toContainEqual(
       expect.objectContaining({ keyName: "grupo_id_assignment_unique" })
     );

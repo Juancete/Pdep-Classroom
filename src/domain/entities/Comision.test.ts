@@ -122,6 +122,88 @@ describe("Comision.completarImportacionDeGrupos", () => {
   });
 });
 
+// Issue #109: la columna elegida para volcar el grupo de un assignment
+// grupal no puede coincidir con ninguna columna de datos personales de la
+// hoja de alumnos de la comisión.
+describe("Comision.columnaOcupadaPorDatosPersonales", () => {
+  it("modo separado: detecta legajo, apellido, nombre, github y email", () => {
+    const comision = nuevaComision({
+      columnConfig: {
+        sheetName: "Alumnos",
+        headerRows: 1,
+        legajo: 0,
+        apellido: 1,
+        nombre: 2,
+        githubUsername: 3,
+        email: 4,
+      },
+    });
+
+    expect(comision.columnaOcupadaPorDatosPersonales(0)).toBe(true); // legajo
+    expect(comision.columnaOcupadaPorDatosPersonales(1)).toBe(true); // apellido
+    expect(comision.columnaOcupadaPorDatosPersonales(2)).toBe(true); // nombre
+    expect(comision.columnaOcupadaPorDatosPersonales(3)).toBe(true); // github
+    expect(comision.columnaOcupadaPorDatosPersonales(4)).toBe(true); // email
+  });
+
+  it("modo separado: una columna libre no está ocupada", () => {
+    const comision = nuevaComision({
+      columnConfig: {
+        sheetName: "Alumnos",
+        headerRows: 1,
+        legajo: 0,
+        apellido: 1,
+        nombre: 2,
+        githubUsername: 3,
+        email: 4,
+      },
+    });
+
+    expect(comision.columnaOcupadaPorDatosPersonales(5)).toBe(false);
+  });
+
+  it("modo completo: detecta la columna de nombre completo en vez de apellido/nombre", () => {
+    const comision = nuevaComision({
+      columnConfig: {
+        sheetName: "Alumnos",
+        headerRows: 1,
+        legajo: 0,
+        apellido: 1,
+        nombre: 2,
+        githubUsername: 3,
+        email: 4,
+        modoNombre: "completo",
+        nombreCompleto: 5,
+      },
+    });
+
+    expect(comision.columnaOcupadaPorDatosPersonales(5)).toBe(true); // nombreCompleto
+    expect(comision.columnaOcupadaPorDatosPersonales(1)).toBe(false); // apellido ya no se usa
+  });
+
+  it("no considera ocupada la columna de grupos del bootstrap Sheets → DB", () => {
+    const comision = nuevaComision({
+      columnConfig: {
+        sheetName: "Alumnos",
+        headerRows: 1,
+        legajo: 0,
+        apellido: 1,
+        nombre: 2,
+        githubUsername: 3,
+        email: 4,
+        grupos: {
+          sheetName: "Grupos",
+          headerRows: 1,
+          githubUsername: 0,
+          nombreGrupoPorParadigma: { funcional: 6 },
+        },
+      },
+    });
+
+    expect(comision.columnaOcupadaPorDatosPersonales(6)).toBe(false);
+  });
+});
+
 describe("Comision.liberarImportacion", () => {
   it("libera el reclamo cuando el token coincide", () => {
     const comision = nuevaComision({

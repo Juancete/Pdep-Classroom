@@ -14,6 +14,7 @@ import { EntregasTable } from "./entregas-table";
 import { DeleteReposButton } from "../delete-repos-button";
 import { GruposPanel } from "./grupos-panel";
 import type { GrupoAdminResumen, AlumnoSinGrupoResumen } from "./grupos-panel";
+import { VolcarGruposButton } from "./volcar-grupos-button";
 import { Alumno, transicionesDisponibles } from "@/domain/entities";
 import { RepoDeletionHistory } from "./repo-deletion-history";
 import { HistorialDeMembresias } from "./historial-membresias";
@@ -87,6 +88,11 @@ export default async function AssignmentDetailPage(
   );
 
   const grupal = assignment.comoGrupal();
+  // Sin `instanceof`/ifs de tipo: `puedeVolcarseAPlanilla()` es polimórfico
+  // (default `false` en `Assignment`, `GrupalAssignment` lo pisa) y la
+  // columna sale del mismo `extraFormDefaults()` que ya usa el form de
+  // edición — ninguno de los dos necesita el narrowing a `GrupalAssignment`.
+  const columnaGrupoEnPlanilla = assignment.extraFormDefaults().columnaGrupoEnPlanilla;
 
   let gruposPanel: React.ReactNode = null;
   if (grupal) {
@@ -266,6 +272,15 @@ export default async function AssignmentDetailPage(
           historial={historialMembresias}
           repoDeletionPage={historyPage}
         />
+      )}
+
+      {assignment.puedeVolcarseAPlanilla() && columnaGrupoEnPlanilla !== undefined && (
+        <div className="mb-4">
+          <VolcarGruposButton
+            assignmentId={assignment.id}
+            columna={columnaGrupoEnPlanilla}
+          />
+        </div>
       )}
 
       {gruposPanel}

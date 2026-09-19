@@ -26,6 +26,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { DEFAULT_COLUMN_CONFIG, type ColumnConfig, type GruposColumnConfig } from "@/types";
 import { canalesActivos, canalPorNombre } from "@/infrastructure/canales";
+import { ColumnIndexSchema, OptionalColumnIndexSchema } from "@/lib/column-index-schema";
 
 export type ComisionFormState =
   | { ok: false; errors: Record<string, string[] | undefined> }
@@ -42,22 +43,6 @@ export async function fetchSheetNames(
     return { error: (error as Error).message };
   }
 }
-
-// Tope en 701 (columna ZZ, 0-indexed): la Fase 1 del issue #82 agrega el
-// legajo al final de una planilla de cursada en marcha, después de los
-// bloques de notas de Funcional, Lógico y Objetos — eso cae bien pasada la Z.
-const ColumnIndexSchema = z.coerce
-  .number({ invalid_type_error: "Debe ser un número de columna" })
-  .int()
-  .min(0, "Columna inválida")
-  .max(701, "Columna inválida");
-
-// "" → undefined para columnas opcionales de grupos: la UI envía string vacío
-// cuando el admin elige "(sin columna)".
-const OptionalColumnIndexSchema = z.preprocess(
-  (value) => (value === "" || value === undefined || value === null ? undefined : value),
-  ColumnIndexSchema.optional()
-);
 
 const ModoNombreSchema = z.enum(["separado", "completo"]);
 

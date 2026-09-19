@@ -52,6 +52,15 @@ export type ParticipantesResueltos =
       grupoNombreNormalizado: string;
     };
 
+// Campos extra del formulario de assignment específicos de cada subtipo —
+// alias compartido por `extraFormDefaults()`/`aplicarCamposExtra()` de las
+// tres entidades (`Assignment` abstracta, `GrupalAssignment`,
+// `IndividualAssignment`) para no repetir el literal en los tres archivos.
+export type CamposExtraDeAssignment = Partial<{
+  maxIntegrantes: number;
+  columnaGrupoEnPlanilla: number;
+}>;
+
 // Subconjunto estructural de `AssignmentFormData` (lib/assignment-schema.ts)
 // que puede tocar `actualizarEstructura` — se declara acá en vez de
 // importar ese tipo para no acoplar la entidad a la capa de formularios/zod
@@ -68,6 +77,7 @@ export interface DatosEstructurales {
   paradigma?: string;
   deadline?: string;
   maxIntegrantes?: number;
+  columnaGrupoEnPlanilla?: number;
 }
 
 // Errores de dominio sobre la existencia/disponibilidad de un assignment.
@@ -401,16 +411,27 @@ export abstract class Assignment {
 
   /**
    * Campos extra del formulario de assignment específicos del subtipo.
-   * Individual: `{}`. Grupal: `{ maxIntegrantes }`.
+   * Individual: `{}`. Grupal: `{ maxIntegrantes, columnaGrupoEnPlanilla }`.
    */
-  abstract extraFormDefaults(): Partial<{ maxIntegrantes: number }>;
+  abstract extraFormDefaults(): CamposExtraDeAssignment;
 
   /**
    * Aplica los campos extra del form al subtipo (inverso de `extraFormDefaults()`).
-   * Individual: no-op. Grupal: setea `maxIntegrantes` si viene en `data`.
-   * Evita `instanceof GrupalAssignment` en la capa de repositorios.
+   * Individual: no-op. Grupal: setea `maxIntegrantes`/`columnaGrupoEnPlanilla`
+   * si vienen en `data`. Evita `instanceof GrupalAssignment` en la capa de
+   * repositorios.
    */
-  abstract aplicarCamposExtra(data: Partial<{ maxIntegrantes: number }>): void;
+  abstract aplicarCamposExtra(data: CamposExtraDeAssignment): void;
+
+  /**
+   * `true` si este assignment puede volcar sus datos a una columna de la
+   * planilla de alumnos (issue #109). Sólo tiene sentido para grupales con
+   * columna configurada — acá vive el default para que las pages no
+   * ramifiquen con `instanceof GrupalAssignment`/`comoGrupal()`.
+   */
+  puedeVolcarseAPlanilla(): boolean {
+    return false;
+  }
 
   /** Nombre del repo template sin el prefijo de organización (ej. "org/repo" → "repo"). */
   nombreDelTemplate(): string {

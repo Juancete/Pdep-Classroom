@@ -46,6 +46,7 @@ export type {
   BuscadorDeGrupoDelAlumno,
   MotivoNoEliminable,
   DatosEstructurales,
+  CamposExtraDeAssignment,
 } from "./Assignment";
 export {
   EstadoAssignment,
