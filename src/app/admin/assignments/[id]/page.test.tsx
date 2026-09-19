@@ -90,6 +90,22 @@ vi.mock("./grupos-panel", () => ({
   ),
 }));
 
+vi.mock("./volcar-grupos-button", () => ({
+  VolcarGruposButton: ({
+    assignmentId,
+    columna,
+  }: {
+    assignmentId: string;
+    columna: number;
+  }) => (
+    <div
+      data-testid="volcar-grupos-button"
+      data-assignment={assignmentId}
+      data-columna={columna}
+    />
+  ),
+}));
+
 vi.mock("./historial-membresias", () => ({
   HistorialDeMembresias: ({
     assignmentId,
@@ -638,6 +654,40 @@ describe("Admin Assignment Detail Page", () => {
       const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
 
       expect(renderToStaticMarkup(element)).toContain('data-grupos-docentes="g2"');
+    });
+  });
+
+  // Issue #109
+  describe("botón de volcar grupos a la planilla", () => {
+    it("no lo muestra para assignments individuales", async () => {
+      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      expect(renderToStaticMarkup(element)).not.toContain("volcar-grupos-button");
+    });
+
+    it("no lo muestra para un grupal sin columna configurada", async () => {
+      mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
+      expect(renderToStaticMarkup(element)).not.toContain("volcar-grupos-button");
+    });
+
+    it("lo muestra para un grupal con columna configurada, pasando assignmentId y columna", async () => {
+      mockGetAssignment.mockResolvedValue(
+        makeGrupalAssignment({ id: "a2", columnaGrupoEnPlanilla: 5 })
+      );
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
+      const markup = renderToStaticMarkup(element);
+      expect(markup).toContain('data-testid="volcar-grupos-button"');
+      expect(markup).toContain('data-assignment="a2"');
+      expect(markup).toContain('data-columna="5"');
+    });
+
+    it("lo muestra aunque la columna configurada sea 0 (columna A)", async () => {
+      mockGetAssignment.mockResolvedValue(
+        makeGrupalAssignment({ id: "a2", columnaGrupoEnPlanilla: 0 })
+      );
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
+      expect(renderToStaticMarkup(element)).toContain('data-columna="0"');
     });
   });
 

@@ -55,6 +55,9 @@ function getDeadlineInput(container: HTMLElement) {
 function getMaxIntegrantesInput(container: HTMLElement) {
   return container.querySelector<HTMLInputElement>('[name="maxIntegrantes"]')!;
 }
+function getColumnaGrupoSelect(container: HTMLElement) {
+  return container.querySelector<HTMLSelectElement>('[name="columnaGrupoEnPlanilla"]')!;
+}
 
 // ── Tests ────────────────────────────────────────────────────
 
@@ -160,6 +163,71 @@ describe("AssignmentForm", () => {
       await user.selectOptions(getTipoSelect(container), "individual");
 
       expect(getMaxIntegrantesInput(container)).toBeNull();
+    });
+  });
+
+  // Issue #109
+  describe("campo columnaGrupoEnPlanilla (tipo grupal)", () => {
+    it("no muestra el campo cuando tipo=individual (default)", () => {
+      const { container } = render(
+        <AssignmentForm action={noop} templates={[]} submitLabel="Crear" />
+      );
+      expect(getColumnaGrupoSelect(container)).toBeNull();
+    });
+
+    it("muestra el campo al cambiar tipo a 'grupal'", async () => {
+      const user = userEvent.setup();
+      const { container } = render(
+        <AssignmentForm action={noop} templates={[]} submitLabel="Crear" />
+      );
+
+      await user.selectOptions(getTipoSelect(container), "grupal");
+
+      expect(getColumnaGrupoSelect(container)).toBeInTheDocument();
+    });
+
+    it("precarga la columna desde defaultValues", () => {
+      const { container } = render(
+        <AssignmentForm
+          action={noop}
+          templates={[]}
+          submitLabel="Guardar"
+          defaultValues={{ tipo: "grupal", maxIntegrantes: 4, columnaGrupoEnPlanilla: 5 }}
+        />
+      );
+      expect(getColumnaGrupoSelect(container).value).toBe("5");
+    });
+
+    it("no queda deshabilitado con structuralLocked (a diferencia de maxIntegrantes)", () => {
+      const { container } = render(
+        <AssignmentForm
+          action={noop}
+          templates={[]}
+          submitLabel="Guardar"
+          defaultValues={{ id: "a1", tipo: "grupal", maxIntegrantes: 4 }}
+          structuralLocked
+        />
+      );
+      expect(getMaxIntegrantesInput(container)).toBeDisabled();
+      expect(getColumnaGrupoSelect(container)).not.toBeDisabled();
+    });
+
+    it("muestra error de columnaGrupoEnPlanilla en modo grupal", () => {
+      mockUseActionState.mockReturnValue([
+        { ok: false, errors: { columnaGrupoEnPlanilla: ["Esta columna ya está usada por un dato personal del alumno."] } },
+        noop,
+      ]);
+      render(
+        <AssignmentForm
+          action={noop}
+          templates={[]}
+          submitLabel="Crear"
+          defaultValues={{ tipo: "grupal" }}
+        />
+      );
+      expect(
+        screen.getByText("Esta columna ya está usada por un dato personal del alumno.")
+      ).toBeInTheDocument();
     });
   });
 

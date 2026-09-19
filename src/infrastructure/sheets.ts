@@ -202,15 +202,18 @@ export async function getDatosPrecargaByGithub(
   };
 }
 
-// ── Encontrar el número de fila de un alumno (1-based, incluyendo header) ──
+// ── Leer todas las filas de la columna de GitHub (1-based, incluyendo header) ──
 // Lee sólo la columna de github (no el rango ancho A→maxCol): más barato y
 // no depende de dónde caiga el legajo ni ninguna otra columna mapeada.
-
-async function findAlumnoRowIndex(
-  githubUsername: string,
+// Username normalizado → fila. Ante duplicados gana la primera fila (se
+// ignora cualquier repetición posterior); celdas vacías se ignoran. Única
+// lectura reutilizada tanto por `findAlumnoRowIndex` (un alumno) como por
+// `escribirColumnaDeGrupoEnSheets` (issue #109, todos los alumnos de la
+// comisión en una sola llamada a la API).
+export async function leerFilasPorGithub(
   spreadsheetId: string,
   config: ColumnConfig
-): Promise<number | null> {
+): Promise<Map<string, number>> {
   const sheets = getSheetsClient();
   const startRow = config.headerRows + 1;
   const columnaGithub = colLetter(config.githubUsername);
@@ -219,11 +222,24 @@ async function findAlumnoRowIndex(
     range: rangoDeHoja(config.sheetName, `${columnaGithub}${startRow}:${columnaGithub}500`),
   });
   const rows = data.values ?? [];
-  const rowIndex = rows.findIndex(
-    (row) => Alumno.normalizarUsername(row[0]) === Alumno.normalizarUsername(githubUsername)
-  );
-  if (rowIndex === -1) return null;
-  return config.headerRows + 1 + rowIndex;
+
+  const filasPorGithub = new Map<string, number>();
+  rows.forEach((row, rowIndex) => {
+    const username = Alumno.normalizarUsername(row[0]);
+    if (!username) return;
+    if (filasPorGithub.has(username)) return;
+    filasPorGithub.set(username, config.headerRows + 1 + rowIndex);
+  });
+  return filasPorGithub;
+}
+
+async function findAlumnoRowIndex(
+  githubUsername: string,
+  spreadsheetId: string,
+  config: ColumnConfig
+): Promise<number | null> {
+  const filasPorGithub = await leerFilasPorGithub(spreadsheetId, config);
+  return filasPorGithub.get(Alumno.normalizarUsername(githubUsername)) ?? null;
 }
 
 // ── Upsert de alumno en la planilla ─────────────────────────
@@ -365,6 +381,88 @@ export async function getAsignacionesGrupos(
     return parseAsignacionesGrupos(data.values ?? [], config);
   } catch (error) {
     throw new Error(`No se pudo leer la hoja de grupos: ${(error as Error).message}`);
+  }
+}
+
+// ── Volcado del grupo de cada assignment grupal a la planilla (DB → Sheets) ──
+// Camino inverso al bootstrap de arriba (Sheets → DB, sólo al inicio de la
+// cursada): una vez que Classroom es la fuente de verdad de los grupos, el
+// docente puede volcar manualmente el nombre del grupo de cada alumno a una
+// columna de la hoja de alumnos (issue #109). No toca `ColumnConfig.grupos`.
+
+// Una celda por alumno con fila conocida — `""` si no tiene grupo (el
+// volcado es un espejo idempotente: limpia membresías viejas que ya no
+// corresponden). Pura y testeable: no depende de la API de Sheets. Recibe
+// `nombreGrupoPorUsername`/`usernames`/`filasPorGithub` ya con las claves
+// normalizadas (lo resuelve `escribirColumnaDeGrupoEnSheets`).
+export function celdasDeGrupo(
+  nombreGrupoPorUsername: Map<string, string>,
+  usernames: string[],
+  filasPorGithub: Map<string, number>,
+  columna: number,
+  sheetName: string
+): { range: string; values: string[][] }[] {
+  const columnaLetra = colLetter(columna);
+  const celdas: { range: string; values: string[][] }[] = [];
+  for (const username of usernames) {
+    const fila = filasPorGithub.get(username);
+    if (fila === undefined) continue;
+    const nombreGrupo = nombreGrupoPorUsername.get(username) ?? "";
+    celdas.push({
+      range: rangoDeHoja(sheetName, `${columnaLetra}${fila}`),
+      values: [[nombreGrupo]],
+    });
+  }
+  return celdas;
+}
+
+export type ResultadoDeVolcado = { alumnosEscritos: number; sinFila: string[] };
+
+// Lectura con cliente readonly (`leerFilasPorGithub`) + un único
+// `values.batchUpdate` en modo Editor, una celda por alumno con fila — nunca
+// filas enteras (mismo criterio que `upsertarAlumnoEnSheets`: no pisar
+// fórmulas ni notas de columnas intermedias). Si ningún alumno tiene fila no
+// llama a `batchUpdate`. Cualquier error del SDK sale como
+// `PlanillaNoDisponibleError`, igual que `upsertarAlumnoEnSheets`.
+export async function escribirColumnaDeGrupoEnSheets(
+  spreadsheetId: string,
+  config: ColumnConfig,
+  columna: number,
+  nombreGrupoPorUsername: Map<string, string>,
+  usernames: string[]
+): Promise<ResultadoDeVolcado> {
+  try {
+    const filasPorGithub = await leerFilasPorGithub(spreadsheetId, config);
+
+    const nombreGrupoNormalizado = new Map<string, string>();
+    for (const [username, nombreGrupo] of nombreGrupoPorUsername) {
+      nombreGrupoNormalizado.set(Alumno.normalizarUsername(username), nombreGrupo);
+    }
+    const usernamesNormalizados = usernames.map((username) => Alumno.normalizarUsername(username));
+
+    const celdas = celdasDeGrupo(
+      nombreGrupoNormalizado,
+      usernamesNormalizados,
+      filasPorGithub,
+      columna,
+      config.sheetName
+    );
+
+    const sinFila = usernames.filter(
+      (_username, index) => !filasPorGithub.has(usernamesNormalizados[index]!)
+    );
+
+    if (celdas.length > 0) {
+      const sheets = getSheetsClient(false);
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId,
+        requestBody: { valueInputOption: "RAW", data: celdas },
+      });
+    }
+
+    return { alumnosEscritos: celdas.length, sinFila };
+  } catch (error) {
+    throw new PlanillaNoDisponibleError(error);
   }
 }
 

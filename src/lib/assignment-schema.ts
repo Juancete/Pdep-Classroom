@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PARADIGMAS, TIPOS_ASSIGNMENT } from "@/types";
 import { GRUPAL_MIN_MAX_INTEGRANTES } from "@/domain/entities/domain-constants";
+import { OptionalColumnIndexSchema } from "@/lib/column-index-schema";
 
 export const AssignmentBaseSchema = z.object({
   titulo: z.string().min(1, "El título es obligatorio"),
@@ -19,6 +20,11 @@ export const AssignmentBaseSchema = z.object({
     .int()
     .min(GRUPAL_MIN_MAX_INTEGRANTES, `Mínimo ${GRUPAL_MIN_MAX_INTEGRANTES} integrantes`)
     .optional(),
+  // Sólo tiene sentido en assignments grupales, pero se declara para todos
+  // los tipos: así la clave siempre llega presente en el objeto parseado
+  // (incluso en `undefined`), lo que le permite a `""` → limpiar la columna
+  // ya configurada en edición (ver `GrupalAssignment.aplicarCamposExtra`).
+  columnaGrupoEnPlanilla: OptionalColumnIndexSchema,
 });
 
 export const AssignmentSchema = AssignmentBaseSchema.refine(

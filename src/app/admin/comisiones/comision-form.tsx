@@ -3,17 +3,9 @@
 import { useActionState, useState, useRef } from "react";
 import type { ComisionFormState } from "./actions";
 import { fetchSheetNames } from "./actions";
-import { INPUT_CLASS, INPUT_ERROR_CLASS, FieldError, SubmitButton } from "../ui";
+import { INPUT_CLASS, INPUT_ERROR_CLASS, FieldError, SubmitButton, ColSelect } from "../ui";
 import { DEFAULT_COLUMN_CONFIG, type ColumnConfig, type ModoNombre } from "@/types";
 import { COMISION_ANIO_MIN, COMISION_ANIO_MAX } from "@/domain/entities/domain-constants";
-import { colLetter } from "@/lib/sheets-columns";
-
-// A=0, B=1, … ZZ=701 — el legajo de una cursada en marcha puede caer bien
-// pasada la Z, después de los bloques de notas de los tres paradigmas.
-const COL_OPTIONS = Array.from({ length: 702 }, (_, colIndex) => ({
-  value: colIndex,
-  label: colLetter(colIndex),
-}));
 
 type DefaultValues = {
   id?: string;
@@ -29,39 +21,6 @@ type Props = {
   submitLabel: string;
   initialSheetNames?: string[];
 };
-
-function ColSelect({
-  name,
-  label,
-  defaultValue,
-  error,
-  optional = false,
-}: {
-  name: string;
-  label: string;
-  defaultValue: number | undefined;
-  error?: string;
-  optional?: boolean;
-}) {
-  return (
-    <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
-      <select
-        name={name}
-        defaultValue={defaultValue ?? ""}
-        className={`w-full rounded-md border px-2 py-1.5 text-sm font-mono ${error ? "border-red-400 bg-red-50" : "border-gray-300 bg-white"} focus:ring-2 focus:ring-pdep-500 focus:border-pdep-500 outline-none`}
-      >
-        {optional && <option value="">(sin columna)</option>}
-        {COL_OPTIONS.map(({ value, label: lbl }) => (
-          <option key={value} value={value}>
-            {lbl} (col {value + 1})
-          </option>
-        ))}
-      </select>
-      <FieldError message={error} />
-    </div>
-  );
-}
 
 // Resuelve qué hoja queda seleccionada en el combo: el valor guardado si
 // sigue existiendo en la planilla, o la primera hoja real en caso contrario
