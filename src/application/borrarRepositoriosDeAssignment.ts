@@ -30,7 +30,7 @@ export type DeleteAssignmentReposResult = {
   results: RepoDeletionItemResult[];
 };
 
-async function borrarRepositorio(data: {
+export async function borrarRepositorio(data: {
   entrega: Entrega;
   assignmentId: string;
   operationId: string;

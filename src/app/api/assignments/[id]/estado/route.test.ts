@@ -23,10 +23,6 @@ vi.mock("@/infrastructure/repositories", () => ({
     mockCambiarEstadoAssignment(id, estado, porUsuario),
 }));
 
-vi.mock("@/application/assignmentAuthorization", () => ({
-  AssignmentNoEncontradoError: FakeAssignmentNoEncontradoError,
-}));
-
 // Mock parcial (con `importOriginal`): `respuestaDeErrorDeDominio` (usada
 // ahora en el catch de la ruta, issue de traducir `PermisosNoVerificablesError`
 // a 503) arma su tabla con varios errores de dominio reales de este módulo —
@@ -36,6 +32,7 @@ vi.mock("@/domain/entities", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/domain/entities")>();
   return {
     ...actual,
+    AssignmentNoEncontradoError: FakeAssignmentNoEncontradoError,
     TransicionDeEstadoInvalidaError: FakeTransicionDeEstadoInvalidaError,
   };
 });

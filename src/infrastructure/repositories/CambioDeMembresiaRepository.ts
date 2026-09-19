@@ -21,7 +21,10 @@ export async function registrarCambioDeMembresia(
   transaction: EntityManager,
   data: {
     assignmentId: string;
-    alumnoId: string;
+    // Opcional desde el issue #107/#112: un cambio de membresía sin fila en
+    // `Alumno` (docente en un grupo de demo) no tiene id de alumno que
+    // auditar — ver `CambioDeMembresia.alumnoId`.
+    alumnoId?: string;
     alumnoUsername: string;
     grupoOrigenId?: string;
     grupoOrigenNombre?: string;

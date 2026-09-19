@@ -3,8 +3,6 @@ import type { PdepUser } from "@/types";
 import {
   AccesoAssignmentProhibidoError,
   AssignmentNoEncontradoError,
-} from "@/application/assignmentAuthorization";
-import {
   AssignmentNoGrupalError,
   InscripcionesCerradasError,
   AlumnoYaEnGrupoDelAssignmentError,
@@ -12,6 +10,7 @@ import {
   NombreGrupoInvalidoError,
   DOCENTE,
   ESTUDIANTE,
+  ParticipanteDocente,
   Grupo,
   Alumno,
 } from "@/domain/entities";
@@ -21,6 +20,7 @@ import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
 const mockGetCurrentUser = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
+const mockGetComisionActiva = vi.fn();
 const mockGetAssignment = vi.fn();
 const mockGetGruposDeAssignment = vi.fn();
 const mockCrearGrupo = vi.fn();
@@ -31,6 +31,7 @@ vi.mock("@/infrastructure/auth/session", () => ({
 
 vi.mock("@/infrastructure/repositories", () => ({
   getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
+  getComisionActiva: () => mockGetComisionActiva(),
   getAssignment: (id: string) => mockGetAssignment(id),
   getGruposDeAssignment: (id: string) => mockGetGruposDeAssignment(id),
   crearGrupo: (params: unknown) => mockCrearGrupo(params),
@@ -51,7 +52,17 @@ function makeUser(overrides?: Partial<PdepUser>): PdepUser {
 }
 
 function makeAlumno(id = "alumno-ana", github = "ana") {
-  return { id, githubUsername: github, comision: { id: "c1" } };
+  const comision = { id: "c1" };
+  // `confirmoRegistroEn` duck-typed (issue #107, revisión de code review):
+  // `ParticipanteAlumno.comisionDeParticipacion` ahora lo llama para exigir
+  // registro confirmado, no alcanza con tener `comision`.
+  return {
+    id,
+    githubUsername: github,
+    comision,
+    confirmoRegistroEn: (otraComision: { id: string } | null) =>
+      otraComision?.id === comision.id,
+  };
 }
 
 function makeAssignment(overrides = {}) {
@@ -68,7 +79,7 @@ function makeGrupoEntity(overrides: Partial<Grupo> = {}): Grupo {
   grupo.creadoPor = "ana";
   const miembro = Object.assign(new Alumno(), { githubUsername: "ana" });
   Object.assign(grupo, {
-    alumnos: { getItems: () => [miembro], length: 1 },
+    miembros: { getItems: () => [miembro], length: 1 },
   });
   return Object.assign(grupo, overrides);
 }
@@ -88,6 +99,7 @@ describe("GET /api/assignments/[id]/grupos", () => {
     vi.clearAllMocks();
     mockGetCurrentUser.mockResolvedValue(makeUser());
     mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
+    mockGetComisionActiva.mockResolvedValue({ id: "c1" });
     mockGetAssignment.mockResolvedValue(makeAssignment());
     mockGetGruposDeAssignment.mockResolvedValue([makeGrupoEntity()]);
   });
@@ -114,6 +126,21 @@ describe("GET /api/assignments/[id]/grupos", () => {
     expect(data).toEqual([]);
   });
 
+  // issue #107/#112: sólo se listan los grupos del tipo que integra este
+  // participante — un alumno no ve los grupos de docentes.
+  it("filtra los grupos por el tipo que integra el participante", async () => {
+    const grupoDeAlumnos = makeGrupoEntity({ id: "g1" });
+    const grupoDeDocentes = makeGrupoEntity({ id: "g2" });
+    grupoDeDocentes.tipoDeIntegrantes = "docentes";
+    mockGetGruposDeAssignment.mockResolvedValue([grupoDeAlumnos, grupoDeDocentes]);
+
+    const response = await GET(makeRequest(undefined, "GET"), { params: Promise.resolve({ id: "a1" }) });
+    const data = await response.json();
+
+    expect(data).toHaveLength(1);
+    expect(data[0].id).toBe("g1");
+  });
+
   it("devuelve 403 y no consulta grupos para un alumno de otra comisión", async () => {
     mockGetAlumnoByGithub.mockResolvedValue(makeAlumno("alumno-ana", "ana"));
     mockGetAssignment.mockResolvedValue(makeAssignment({ comision: { id: "c2" } }));
@@ -133,13 +160,25 @@ describe("GET /api/assignments/[id]/grupos", () => {
     expect(mockGetGruposDeAssignment).not.toHaveBeenCalled();
   });
 
-  it("permite acceso global al docente", async () => {
+  // issue #107/#112: el docente ya no tiene acceso global — participa desde
+  // la comisión activa, igual que un alumno participa desde la suya.
+  it("el docente ve los grupos cuando la comisión activa coincide con la del assignment", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
 
     const response = await GET(makeRequest(undefined, "GET"), { params: Promise.resolve({ id: "a1" }) });
 
     expect(response.status).toBe(200);
     expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 403 al docente si la comisión activa no coincide con la del assignment", async () => {
+    mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
+    mockGetComisionActiva.mockResolvedValue({ id: "c2" });
+
+    const response = await GET(makeRequest(undefined, "GET"), { params: Promise.resolve({ id: "a1" }) });
+
+    expect(response.status).toBe(403);
+    expect(mockGetGruposDeAssignment).not.toHaveBeenCalled();
   });
 
   it("devuelve 401 si el usuario no está autenticado", async () => {
@@ -155,6 +194,7 @@ describe("POST /api/assignments/[id]/grupos", () => {
     vi.clearAllMocks();
     mockGetCurrentUser.mockResolvedValue(makeUser());
     mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
+    mockGetComisionActiva.mockResolvedValue({ id: "c1" });
     mockCrearGrupo.mockResolvedValue(makeGrupoEntity());
   });
 
@@ -166,36 +206,34 @@ describe("POST /api/assignments/[id]/grupos", () => {
     expect(data.miembros).toContain("ana");
   });
 
-  it("llama a crearGrupo con assignmentId, alumnoId y nombre", async () => {
+  it("llama a crearGrupo con assignmentId, nombre y el participante resuelto", async () => {
     await POST(makeRequest({ nombre: "Los Lambdas" }), { params: Promise.resolve({ id: "a1" }) });
-    expect(mockCrearGrupo).toHaveBeenCalledWith({
-      assignmentId: "a1",
-      alumnoId: "alumno-ana",
-      nombre: "Los Lambdas",
-      rol: ESTUDIANTE,
-    });
+    expect(mockCrearGrupo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assignmentId: "a1",
+        nombre: "Los Lambdas",
+        participante: expect.objectContaining({ githubUsername: "ana" }),
+      })
+    );
   });
 
-  it("propaga el contexto administrativo confiable a la transacción", async () => {
-    mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
+  // issue #107/#112: el docente participa con un `ParticipanteDocente`
+  // (tipo de grupo "docentes"), no con el bypass administrativo del rol.
+  it("resuelve un ParticipanteDocente para el rol docente", async () => {
+    mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE, githubUsername: "profe-docente" }));
 
-    await POST(makeRequest({ nombre: "Los Lambdas" }), { params: Promise.resolve({ id: "a1" }) });
+    await POST(makeRequest({ nombre: "Profes FP" }), { params: Promise.resolve({ id: "a1" }) });
 
-    expect(mockCrearGrupo).toHaveBeenCalledWith(
-      expect.objectContaining({ rol: DOCENTE })
-    );
+    expect(mockCrearGrupo).toHaveBeenCalledTimes(1);
+    const [{ participante }] = mockCrearGrupo.mock.calls[0];
+    expect(participante).toBeInstanceOf(ParticipanteDocente);
+    expect(participante.githubUsername).toBe("profe-docente");
+    expect(participante.tipoDeGrupo()).toBe("docentes");
   });
 
   it("devuelve 400 si el body no tiene nombre", async () => {
     const response = await POST(makeRequest({}), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(400);
-  });
-
-  it("devuelve 403 si el alumno no está registrado", async () => {
-    mockGetAlumnoByGithub.mockResolvedValue(null);
-    const response = await POST(makeRequest({ nombre: "x" }), { params: Promise.resolve({ id: "a1" }) });
-    expect(response.status).toBe(403);
-    expect(mockCrearGrupo).not.toHaveBeenCalled();
   });
 
   it("devuelve 400 si el assignment no es grupal", async () => {

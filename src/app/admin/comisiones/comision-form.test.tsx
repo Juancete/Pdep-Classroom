@@ -20,7 +20,7 @@ vi.mock("./actions", () => ({
   fetchSheetNames: (...args: unknown[]) => mockFetchSheetNames(...args),
 }));
 
-import { ComisionForm } from "./comision-form";
+import { ComisionForm, hojaSeleccionada } from "./comision-form";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -48,6 +48,12 @@ function getActivaCheckbox(container: HTMLElement) {
 }
 function getSheetNameField(container: HTMLElement) {
   return container.querySelector<HTMLElement>('[name="sheetName"]')!;
+}
+function getGruposSheetNameField(container: HTMLElement) {
+  return container.querySelector<HTMLElement>('[name="grupos_sheetName"]')!;
+}
+function getGruposEnabledCheckbox(container: HTMLElement) {
+  return container.querySelector<HTMLInputElement>('[name="grupos_enabled"]')!;
 }
 function getModoNombreSelect(container: HTMLElement) {
   return container.querySelector<HTMLSelectElement>('[name="modoNombre"]')!;
@@ -200,6 +206,128 @@ describe("ComisionForm", () => {
         />
       );
       expect(screen.getByRole("button", { name: "Recargar hojas" })).toBeInTheDocument();
+    });
+
+    it("si la hoja guardada no existe en la planilla, selecciona la primera y avisa", () => {
+      const { container } = render(
+        <ComisionForm
+          action={noop}
+          submitLabel="Guardar"
+          initialSheetNames={["2026", "Notas"]}
+          defaultValues={{
+            columnConfig: { ...DEFAULT_COLUMN_CONFIG, sheetName: "Alumnos" },
+          }}
+        />
+      );
+      const select = getSheetNameField(container) as HTMLSelectElement;
+      const opciones = Array.from(select.options).map((option) => option.value);
+
+      expect(opciones).not.toContain("Alumnos");
+      expect(select.value).toBe("2026");
+      expect(
+        screen.getByText('La hoja "Alumnos" no existe en la planilla; se seleccionó "2026".')
+      ).toBeInTheDocument();
+    });
+
+    it("en el alta, sin hoja guardada, selecciona la primera hoja real sin mostrar aviso", () => {
+      const { container } = render(
+        <ComisionForm
+          action={noop}
+          submitLabel="Crear"
+          initialSheetNames={["2026", "Notas"]}
+        />
+      );
+      const select = getSheetNameField(container) as HTMLSelectElement;
+
+      expect(select.value).toBe("2026");
+      expect(screen.queryByText(/no existe en la planilla/)).not.toBeInTheDocument();
+    });
+
+    it("si la hoja guardada está en la lista, queda seleccionada y las opciones respetan el orden de la planilla", () => {
+      const { container } = render(
+        <ComisionForm
+          action={noop}
+          submitLabel="Guardar"
+          initialSheetNames={["Notas", "Alumnos", "Grupos"]}
+          defaultValues={{
+            columnConfig: { ...DEFAULT_COLUMN_CONFIG, sheetName: "Alumnos" },
+          }}
+        />
+      );
+      const select = getSheetNameField(container) as HTMLSelectElement;
+      const opciones = Array.from(select.options).map((option) => option.value);
+
+      expect(select.value).toBe("Alumnos");
+      expect(opciones).toEqual(["Notas", "Alumnos", "Grupos"]);
+      expect(screen.queryByText(/no existe en la planilla/)).not.toBeInTheDocument();
+    });
+
+    it("combo de grupos: si la hoja de grupos guardada no existe en la planilla, selecciona la primera y avisa", () => {
+      const { container } = render(
+        <ComisionForm
+          action={noop}
+          submitLabel="Guardar"
+          initialSheetNames={["2026", "Notas"]}
+          defaultValues={{
+            columnConfig: {
+              ...DEFAULT_COLUMN_CONFIG,
+              sheetName: "2026",
+              grupos: {
+                sheetName: "Alumnos",
+                headerRows: 1,
+                githubUsername: 3,
+                nombreGrupoPorParadigma: { funcional: 5 },
+              },
+            },
+          }}
+        />
+      );
+      const select = getGruposSheetNameField(container) as HTMLSelectElement;
+      const opciones = Array.from(select.options).map((option) => option.value);
+
+      expect(opciones).not.toContain("Alumnos");
+      expect(select.value).toBe("2026");
+      expect(
+        screen.getByText('La hoja "Alumnos" no existe en la planilla; se seleccionó "2026".')
+      ).toBeInTheDocument();
+    });
+
+    it("combo de grupos: sin hoja de grupos guardada, preselecciona la hoja de alumnos ya resuelta sin avisar", async () => {
+      const user = userEvent.setup();
+      const { container } = render(
+        <ComisionForm
+          action={noop}
+          submitLabel="Crear"
+          initialSheetNames={["2026", "Notas"]}
+        />
+      );
+
+      await user.click(getGruposEnabledCheckbox(container));
+
+      const sheetNameSelect = getSheetNameField(container) as HTMLSelectElement;
+      const gruposSelect = getGruposSheetNameField(container) as HTMLSelectElement;
+
+      expect(sheetNameSelect.value).toBe("2026");
+      expect(gruposSelect.value).toBe("2026");
+      expect(screen.queryByText(/no existe en la planilla/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("hojaSeleccionada (función pura)", () => {
+    it("devuelve el valor guardado si está en la lista", () => {
+      expect(hojaSeleccionada("Notas", ["2026", "Notas"])).toBe("Notas");
+    });
+
+    it("devuelve la primera hoja si el valor guardado no está en la lista", () => {
+      expect(hojaSeleccionada("Alumnos", ["2026", "Notas"])).toBe("2026");
+    });
+
+    it("devuelve la primera hoja si no hay valor guardado", () => {
+      expect(hojaSeleccionada(undefined, ["2026", "Notas"])).toBe("2026");
+    });
+
+    it("devuelve undefined si la lista de hojas está vacía", () => {
+      expect(hojaSeleccionada("Alumnos", [])).toBeUndefined();
     });
   });
 

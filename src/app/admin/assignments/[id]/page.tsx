@@ -7,6 +7,7 @@ import {
   getRepoDeletionHistory,
   getHistorialDeMembresias,
 } from "@/infrastructure/repositories";
+import { parsePage } from "@/lib/search-params";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { EntregasTable } from "./entregas-table";
@@ -17,13 +18,8 @@ import { Alumno, transicionesDisponibles } from "@/domain/entities";
 import { RepoDeletionHistory } from "./repo-deletion-history";
 import { HistorialDeMembresias } from "./historial-membresias";
 import { EstadoAssignmentBadge } from "@/components/EstadoAssignmentBadge";
+import { EtiquetaDeComision } from "@/components/EtiquetaDeComision";
 import { EstadoPanel } from "../estado-panel";
-
-function paginaDeQuery(valor: string | string[] | undefined): number {
-  const crudo = Array.isArray(valor) ? valor[0] : valor;
-  const parseado = Number(crudo ?? 1);
-  return Number.isInteger(parseado) && parseado > 0 ? parseado : 1;
-}
 
 export default async function AssignmentDetailPage(
   props: {
@@ -48,8 +44,8 @@ export default async function AssignmentDetailPage(
   if (!assignment) redirect("/admin/assignments");
 
   const gruposPromise = assignment.cargarGruposCon(getGruposDeAssignment);
-  const historyPage = paginaDeQuery(searchParams.repoDeletionPage);
-  const membresiaPage = paginaDeQuery(searchParams.membresiaPage);
+  const historyPage = parsePage(searchParams.repoDeletionPage);
+  const membresiaPage = parsePage(searchParams.membresiaPage);
 
   const alumnosPromise = getAlumnos();
   const [entregas, alumnos, grupos, total, deletionHistory, historialMembresias] = await Promise.all([
@@ -101,6 +97,7 @@ export default async function AssignmentDetailPage(
       estaLleno: grupo.estaLleno(),
       etiquetaCupo: grupo.etiquetaCupo(),
       tieneEntrega: gruposConEntrega.has(grupo.id),
+      tipoDeIntegrantes: grupo.tipoDeIntegrantes,
       miembros: grupo.usernamesDeMiembros().map((username) => ({
         username,
         nombreCompleto:
@@ -168,6 +165,10 @@ export default async function AssignmentDetailPage(
           </Link>
           <h1 className="text-2xl font-bold">{assignment.titulo}</h1>
           <EstadoAssignmentBadge estado={assignment.estadoNombre} />
+          {/* issue #114: la barra de comisión consultada no llega hasta acá
+              (sólo vive en las tres listas) — sin esto, el detalle de un TP
+              no indicaba a qué comisión pertenece. */}
+          <EtiquetaDeComision comision={assignment.comision} />
         </div>
         <div className="flex items-center gap-3">
           <DeleteReposButton

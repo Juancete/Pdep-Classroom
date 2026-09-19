@@ -1,38 +1,40 @@
 import type { Alumno } from "./Alumno";
-import type { Assignment } from "./Assignment";
-import { AssignmentNoDisponibleError } from "./Assignment";
-import type { GrupalAssignment } from "./GrupalAssignment";
-import type { Grupo } from "./Grupo";
-import { InscripcionesCerradasError, GrupoConEntregaError } from "./Grupo";
-
-// Lanzado cuando un alumno intenta acceder a un assignment fuera de su
-// comisión (o sin estar registrado). El handler HTTP lo traduce a 403.
-// Vive acá — junto al rol que lo lanza — y no en la capa de servicios, mismo
-// criterio que el resto de los errores de dominio movidos en b986ea4.
-export class AccesoAssignmentProhibidoError extends Error {
-  constructor(public readonly assignmentId: string) {
-    super("No tenés acceso a este assignment");
-    this.name = "AccesoAssignmentProhibidoError";
-  }
-}
+import type { Comision } from "./Comision";
+import {
+  Participante,
+  ParticipanteAlumno,
+  ParticipanteDocente,
+  AccesoAssignmentProhibidoError,
+  type ActorDeMembresia,
+} from "./Participante";
 
 export type ItemDeNavegacion = { href: string; label: string };
 
-export type OrigenCambioMembresia = "alumno" | "docente";
-
-/** Contexto que necesita evaluar una autorización de cambio de membresía. */
-export interface ContextoDeMembresia {
-  assignment: GrupalAssignment;
-  grupo: Grupo;
-  grupoTieneEntrega: boolean;
+// Dependencias de lectura que `comoParticipante` puede usar según el rol —
+// mismo criterio que `FuentesDeConteo` en `Assignment.ts`: se inyectan para
+// que el dominio no importe `@/infrastructure/repositories` directamente.
+// Cada rol consulta sólo la fuente que necesita: el estudiante pide
+// `alumno`, el docente pide `comisionActiva`.
+export interface FuentesDeParticipante {
+  alumno: () => Promise<Alumno | null>;
+  comisionActiva: () => Promise<Comision | null>;
 }
+
+// Ítem de navegación compartido por docente y estudiante: "Mis TPs" siempre
+// apunta a `/dashboard`, sólo cambia su posición (home del estudiante vs.
+// último ítem del docente, después de sus secciones de admin).
+const MIS_TPS: ItemDeNavegacion = { href: "/dashboard", label: "Mis TPs" };
 
 /**
  * Rol de un usuario dentro del sistema, modelado como Strategy en vez de un
- * booleano (`isAdmin`) chequeado en 40+ lugares: cada decisión que dependía
- * de "es admin o no" (autorización de acceso, alcance de las queries, qué
- * navegación mostrar) se delega al objeto concreto. Mismo criterio que
- * `EstadoAssignment` para el ciclo de vida de un assignment.
+ * booleano (`isAdmin`) chequeado en 40+ lugares. Desde el issue #107/#112,
+ * `RolDeUsuario` queda **sólo con el alcance administrativo y la
+ * navegación**: quién puede administrar el sistema, a qué home aterriza,
+ * qué nav ve, y quién puede actuar sobre la membresía de *otro*
+ * (`actorSobreMembresiaAjena`). La autorización académica de Mis TPs
+ * (acceso por comisión, habilitación por estado, reglas de membresía sobre
+ * sí mismo) se mudó a `Participante` — un docente ahí sigue exactamente las
+ * mismas reglas que un alumno, así que esa decisión ya no depende del rol.
  *
  * Tres implementaciones: `RolEstudiante` (alumno registrado), `RolDocente`
  * (alcance administrativo global — docente dado de alta en `Docente`
@@ -45,25 +47,10 @@ export interface ContextoDeMembresia {
  */
 export abstract class RolDeUsuario {
   /**
-   * Autoriza el acceso de lectura a un assignment. Docente: alcance global,
-   * siempre pasa. Alumno: exige que tenga comisión y coincida con la del
-   * assignment. Lanza `AccesoAssignmentProhibidoError` si no.
-   */
-  abstract autorizarAccesoAssignment(alumno: Alumno | null, assignment: Assignment): void;
-
-  /**
-   * Acceso + habilitación por estado: además de `autorizarAccesoAssignment`,
-   * exige que el assignment esté en un estado que permita actuar (aceptar,
-   * crear grupo, unirse). Docente conserva el alcance global — puede operar
-   * sobre un borrador para probar el flujo antes de publicar.
-   */
-  abstract autorizarAccionSobreAssignment(alumno: Alumno | null, assignment: Assignment): void;
-
-  /**
    * `true` si este rol tiene alcance administrativo global (ve todo el
-   * padrón, todas las comisiones, bypassea el estado de un assignment).
-   * Un único predicado reusado donde antes se preguntaba `isAdmin` para
-   * decidir qué datos traer, no una regla de negocio nueva por sitio.
+   * padrón, todas las comisiones, gestiona assignments/grupos/docentes de
+   * otros). Un único predicado reusado donde antes se preguntaba `isAdmin`
+   * para decidir qué datos traer, no una regla de negocio nueva por sitio.
    */
   abstract puedeAdministrar(): boolean;
 
@@ -75,60 +62,37 @@ export abstract class RolDeUsuario {
    */
   abstract puedeGestionarDocentes(): boolean;
 
-  /** Secciones de `/admin/*` que este rol ve en la navegación. */
+  /** Ruta a la que aterriza este rol al loguearse o entrar a `/`. */
+  abstract rutaDeInicio(): string;
+
+  /** Navegación principal en orden; el primer ítem es `rutaDeInicio()`. */
   abstract itemsDeNavegacion(): ItemDeNavegacion[];
 
   /** `true` si este rol debe ver el banner de sincronización pendiente. */
   abstract veBannerDeSincronizacion(): boolean;
 
   /**
-   * Autoriza que este rol modifique la composición de un grupo (salir,
-   * cambiarse, o que el docente mueva/quite integrantes). Docente: resuelve
-   * siempre — la UI es la que advierte con un `confirm()` sobre el repo y
-   * los colaboradores. Alumno: exige inscripciones abiertas y que el grupo
-   * no tenga entrega todavía.
+   * Construye el `Participante` con el que este rol actúa en los flujos
+   * self-service de Mis TPs. Cada rol consulta sólo la fuente que necesita
+   * (mismo idioma que `FuentesDeConteo`): el estudiante pide `fuentes.alumno()`,
+   * el docente pide `fuentes.comisionActiva()`.
    */
-  abstract autorizarCambioDeMembresia(contexto: ContextoDeMembresia): void;
-
-  /** Valor a persistir en la auditoría de membresías: quién originó el cambio. */
-  abstract origenDeAuditoria(): OrigenCambioMembresia;
+  abstract comoParticipante(
+    githubUsername: string,
+    fuentes: FuentesDeParticipante
+  ): Promise<Participante>;
 
   /**
-   * Sondea `autorizarCambioDeMembresia` sin ejecutarla: devuelve el motivo
-   * del bloqueo, o `null` si el cambio está permitido. Mismo idioma que
-   * `transicionesDisponibles` para el ciclo de vida de un assignment — la UI
-   * y el servidor no pueden divergir, porque el texto que ve el alumno ES el
-   * `message` del error que el servidor tiraría si igual manda el request.
+   * `ActorDeMembresia` con el que este rol administra la membresía de *otro*
+   * (no la propia — para eso está `comoParticipante`). El docente resuelve
+   * siempre — la UI advierte con un `confirm()` sobre el repo y los
+   * colaboradores desincronizados cuando el grupo ya aceptó el TP. Un
+   * alumno nunca administra a otros: lanza `AccesoAssignmentProhibidoError`.
    */
-  motivoDeBloqueoDeMembresia(contexto: ContextoDeMembresia): string | null {
-    try {
-      this.autorizarCambioDeMembresia(contexto);
-      return null;
-    } catch (error) {
-      // Sólo los errores de dominio que `autorizarCambioDeMembresia` puede
-      // lanzar se traducen a motivo de bloqueo. Cualquier otra falla (un
-      // `TypeError` por un contexto mal armado, por ejemplo) es un bug real
-      // que tiene que romper fuerte, no disfrazarse de "grupo bloqueado".
-      if (
-        error instanceof InscripcionesCerradasError ||
-        error instanceof GrupoConEntregaError
-      ) {
-        return error.message;
-      }
-      throw error;
-    }
-  }
+  abstract actorSobreMembresiaAjena(assignmentId: string): ActorDeMembresia;
 }
 
 class RolDocente extends RolDeUsuario {
-  autorizarAccesoAssignment(): void {
-    // Alcance global: el docente accede a cualquier assignment.
-  }
-
-  autorizarAccionSobreAssignment(): void {
-    // Idem — incluso sobre un borrador, para poder probar el flujo.
-  }
-
   puedeAdministrar(): boolean {
     return true;
   }
@@ -137,27 +101,57 @@ class RolDocente extends RolDeUsuario {
     return false;
   }
 
-  itemsDeNavegacion(): ItemDeNavegacion[] {
+  rutaDeInicio(): string {
+    return "/admin/assignments";
+  }
+
+  /**
+   * Secciones de `/admin/*` propias de este rol — Template Method que
+   * `RolResponsable` extiende sumando "Docentes" sin tocar el resto de
+   * `itemsDeNavegacion()` (Mis TPs siempre va al final).
+   */
+  protected seccionesDeAdmin(): ItemDeNavegacion[] {
     return [
       { href: "/admin/assignments", label: "Assignments" },
       { href: "/admin/grupos", label: "Grupos" },
-      { href: "/admin/comisiones", label: "Comisiones" },
       { href: "/admin/alumnos", label: "Alumnos" },
+      { href: "/admin/comisiones", label: "Comisiones" },
       { href: "/admin/operaciones", label: "Diagnóstico" },
     ];
+  }
+
+  itemsDeNavegacion(): ItemDeNavegacion[] {
+    // Mis TPs al final: el primer ítem de la navegación es `rutaDeInicio()`.
+    return [...this.seccionesDeAdmin(), MIS_TPS];
   }
 
   veBannerDeSincronizacion(): boolean {
     return false;
   }
 
-  autorizarCambioDeMembresia(): void {
-    // El docente resuelve siempre; la UI advierte con confirm() sobre el
-    // repo y los colaboradores desincronizados cuando el grupo ya aceptó el TP.
+  async comoParticipante(
+    githubUsername: string,
+    fuentes: FuentesDeParticipante
+  ): Promise<Participante> {
+    return new ParticipanteDocente(githubUsername, await fuentes.comisionActiva());
   }
 
-  origenDeAuditoria(): OrigenCambioMembresia {
-    return "docente";
+  actorSobreMembresiaAjena(): ActorDeMembresia {
+    return {
+      // El docente resuelve siempre; la UI advierte con confirm() sobre el
+      // repo y los colaboradores desincronizados cuando el grupo ya aceptó el TP.
+      autorizarCambioDeMembresia: () => {},
+      origenDeAuditoria: () => "docente",
+      // Alcance administrativo global (issue #107/#112, revisión de code
+      // review): a diferencia de `Participante.autorizarAccionSobreAssignment`,
+      // acá no hay comisión propia que chequear — el docente administra
+      // cualquier assignment.
+      autorizarAccionSobreAssignment: () => {},
+      // Mueve dentro del mismo tipo que tenía en el grupo origen; un alta
+      // desde la lista "sin grupo" del panel admin siempre es de un alumno
+      // (esa lista sólo tiene alumnos).
+      tipoDeGrupoAlIngresar: (grupoOrigen) => grupoOrigen?.tipoDeIntegrantes ?? "alumnos",
+    };
   }
 }
 
@@ -172,29 +166,12 @@ class RolResponsable extends RolDocente {
     return true;
   }
 
-  override itemsDeNavegacion(): ItemDeNavegacion[] {
-    return [...super.itemsDeNavegacion(), { href: "/admin/docentes", label: "Docentes" }];
+  protected override seccionesDeAdmin(): ItemDeNavegacion[] {
+    return [...super.seccionesDeAdmin(), { href: "/admin/docentes", label: "Docentes" }];
   }
 }
 
 class RolEstudiante extends RolDeUsuario {
-  autorizarAccesoAssignment(alumno: Alumno | null, assignment: Assignment): void {
-    if (
-      !alumno ||
-      !assignment.comision ||
-      alumno.comision?.id !== assignment.comision.id
-    ) {
-      throw new AccesoAssignmentProhibidoError(assignment.id);
-    }
-  }
-
-  autorizarAccionSobreAssignment(alumno: Alumno | null, assignment: Assignment): void {
-    this.autorizarAccesoAssignment(alumno, assignment);
-    if (!assignment.permiteAccionesDeAlumno()) {
-      throw new AssignmentNoDisponibleError(assignment.id);
-    }
-  }
-
   puedeAdministrar(): boolean {
     return false;
   }
@@ -203,25 +180,31 @@ class RolEstudiante extends RolDeUsuario {
     return false;
   }
 
+  rutaDeInicio(): string {
+    return "/dashboard";
+  }
+
   itemsDeNavegacion(): ItemDeNavegacion[] {
-    return [];
+    return [MIS_TPS];
   }
 
   veBannerDeSincronizacion(): boolean {
     return true;
   }
 
-  autorizarCambioDeMembresia({ assignment, grupo, grupoTieneEntrega }: ContextoDeMembresia): void {
-    if (!assignment.aceptaNuevasInscripciones()) {
-      throw new InscripcionesCerradasError(assignment.id);
-    }
-    if (grupoTieneEntrega) {
-      throw new GrupoConEntregaError(grupo.id);
-    }
+  async comoParticipante(
+    githubUsername: string,
+    fuentes: FuentesDeParticipante
+  ): Promise<Participante> {
+    return new ParticipanteAlumno(await fuentes.alumno(), githubUsername);
   }
 
-  origenDeAuditoria(): OrigenCambioMembresia {
-    return "alumno";
+  actorSobreMembresiaAjena(assignmentId: string): ActorDeMembresia {
+    // Un alumno nunca administra la membresía de otro — sólo la propia, vía
+    // `comoParticipante`. La ruta que llama a esto ya distinguió "es propia"
+    // antes de pedir el actor; llegar hasta acá es intentar tocar a un
+    // tercero.
+    throw new AccesoAssignmentProhibidoError(assignmentId);
   }
 }
 

@@ -157,11 +157,12 @@ Ese número al final (`12345678`) es el **Installation ID**. Copiarlo en `GITHUB
 3. Darle un nombre (ej: `pdep-classroom`) → **Create**
 4. Asegurarse de que el nuevo proyecto quede seleccionado en el selector
 
-#### 4.2 Habilitar la API de Google Sheets
+#### 4.2 Habilitar las APIs de Google Sheets y Google Drive
 
 1. Ir al menú → **APIs & Services** → **Library**
 2. Buscar `Google Sheets API`
 3. Hacer click en el resultado → **Enable**
+4. Repetir con `Google Drive API`. No se usa para leer ni escribir la planilla: `/admin/operaciones` la consulta (`files.get` con `capabilities.canEdit`, scope `drive.metadata.readonly`) para verificar que la service account tenga rol **Editor** sin escribir nada. Si falta, el tablero marca "Revisar · Google Sheets: escritura" con el proyecto donde habilitarla
 
 #### 4.3 Crear Service Account
 
@@ -202,7 +203,7 @@ Pegar el resultado en `GOOGLE_SERVICE_ACCOUNT_KEY` en el `.env.local`.
 1. Abrir la planilla de Google Sheets con los alumnos
 2. Botón **Compartir** (arriba a la derecha)
 3. En el campo de email, pegar el email de la service account — tiene la forma `pdep-classroom@<project-id>.iam.gserviceaccount.com` (se ve en la pantalla de Credentials o en el JSON descargado, campo `client_email`)
-4. Rol: **Editor**. El registro de alumnos (`POST /api/registro`) y la actualización de perfil (`PATCH /api/perfil`) siempre escriben en la planilla, no sólo leen — con rol Viewer la lectura funciona (la precarga de datos anda bien) pero la escritura falla con un 403 de la API de Sheets ("The caller does not have permission"), visible como error persistido en `/admin/errores`
+4. Rol: **Editor**. El registro de alumnos (`POST /api/registro`) y la actualización de perfil (`PATCH /api/perfil`) siempre escriben en la planilla, no sólo leen — con rol Viewer la lectura funciona (la precarga de datos anda bien) pero la escritura falla con un 403 de la API de Sheets ("The caller does not have permission"), visible como error persistido en `/admin/errores`. `/admin/operaciones` lo detecta antes: el check "Google Sheets: escritura" queda en "Revisar" con el email de la service account a compartir
 5. Desmarcar "Notify people" → **Share**
 
 #### 4.7 Configurar el ID de la planilla
@@ -621,18 +622,24 @@ No importar grupos reales antes de que el canary termine correctamente.
 
 ### Para docentes
 
-1. Crear o seleccionar la comisión activa y sincronizar el padrón inicial.
-2. Crear un assignment en borrador: elegir template, paradigma y tipo individual o grupal. El tipo
+1. Entrar con GitHub → aterriza en Assignments.
+2. Crear o seleccionar la comisión activa y sincronizar el padrón inicial.
+3. Crear un assignment en borrador: elegir template, paradigma y tipo individual o grupal. El tipo
    es el discriminador persistido y no se puede convertir después de crear el assignment.
-3. Revisar su configuración y publicarlo para habilitar acciones de alumnos.
-4. Compartir el link de la app; los alumnos registrados se suscriben a los canales de comunicación
+4. Revisar su configuración y publicarlo para habilitar acciones de alumnos.
+5. Compartir el link de la app; los alumnos registrados se suscriben a los canales de comunicación
    que estén configurados (ej. Google Groups).
-5. Al finalizar, archivarlo para impedir nuevas aceptaciones y conservar sus entregas como
+6. Al finalizar, archivarlo para impedir nuevas aceptaciones y conservar sus entregas como
    histórico.
+7. Mis TPs (último ítem del menú) muestra exactamente lo que ve un alumno de la comisión activa y
+   sirve para proyectar el flujo en clase: el docente acepta TPs y arma grupos con las mismas
+   reglas que un alumno, sin registrarse ni tocar la planilla. Sus grupos son de docentes
+   (separados de los de alumnos, con la marca "Docentes" en admin). Para repetir la demo, en el
+   detalle del assignment se puede borrar una entrega puntual con su repo.
 
 ### Para alumnos
 
-1. Entrar con GitHub → ver dashboard con TPs pendientes
+1. Entrar con GitHub → ver Mis TPs (`/dashboard`) con TPs pendientes
 2. Para TPs grupales: crear un grupo o unirse a uno existente en `/assignments/[id]/grupo`. Se
    puede salir o cambiarse de grupo mientras las inscripciones sigan abiertas y el grupo no tenga
    entrega todavía; el docente puede administrar integrantes manualmente en cualquier momento desde
@@ -674,7 +681,8 @@ que tenga el mismo nombre.
 
 ### Diagnóstico y recuperación
 
-`/admin/operaciones` concentra el diagnóstico de base de datos, GitHub App, Google Sheets, Google
+`/admin/operaciones` concentra el diagnóstico de base de datos, GitHub App, Google Sheets (lectura
+y permiso de escritura de la service account sobre la planilla de la comisión activa), Google
 Groups y webhooks. También muestra deliveries recientes y permite reprocesar los que quedaron
 recibidos o fallidos. Los errores inesperados sanitizados se consultan en `/admin/errores`, con un
 badge para pendientes.
@@ -969,8 +977,12 @@ src/
 │   │   │   ├── comision-form.tsx              # Form compartido crear/editar
 │   │   │   ├── delete-button.tsx              # Eliminar comisión
 │   │   │   └── sync-button.tsx                # Sincronizar alumnos desde Sheets → DB
-│   │   ├── alumnos/page.tsx                   # Ver alumnos (desde comisión activa)
-│   │   ├── grupos/page.tsx                    # Ver grupos (DB)
+│   │   ├── alumnos/page.tsx                   # Ver alumnos de la comisión consultada (DB), con buscador y paginación de 25
+│   │   ├── grupos/page.tsx                    # Ver grupos de la comisión consultada (DB)
+│   │   ├── comision-consultada/actions.ts     # Server action: cambiar/borrar la cookie de comisión consultada
+│   │   ├── barra-de-comision.tsx              # Header con la comisión consultada, badge y selector (server); lo renderizan alumnos/grupos/assignments, no un layout
+│   │   ├── selector-de-comision.tsx           # Select que dispara cambiarComisionConsultada al elegir (client)
+│   │   ├── aviso-sin-comision.tsx             # Aviso compartido cuando no hay comisión que consultar
 │   │   ├── delete-button.tsx                  # Componente genérico de eliminar
 │   │   └── ui.tsx                             # Componentes UI compartidos del panel admin
 │   ├── assignments/[id]/grupo/                # UI del alumno: crear/unirse/salir/cambiar de grupo
@@ -1005,19 +1017,21 @@ src/
 │       ├── GrupalAssignment.ts
 │       ├── EstadoAssignment.ts                # Ciclo de vida (borrador/publicado/archivado) como Strategy
 │       ├── ResultadoCI.ts                     # Estado combinado de CI del último commit, como Strategy
-│       ├── RolDeUsuario.ts                    # Docente/alumno como Strategy (reemplaza un booleano isAdmin)
+│       ├── RolDeUsuario.ts                    # Alcance administrativo, home y navegación por rol como Strategy
+│       ├── Participante.ts                    # Alumno o docente actuando en Mis TPs; reglas de participación idénticas
 │       ├── Comision.ts                        # Incluye columnConfig para la planilla
+│       ├── ContextoDeComision.ts               # Comisión consultada en el panel admin (activa/histórica/sin comisión) como Strategy
 │       ├── Entrega.ts
 │       ├── Alumno.ts
 │       ├── SuscripcionAlumno.ts               # Estado de suscripción de un alumno a un canal (1 fila por canal)
 │       ├── Grupo.ts
+│       ├── MiembroDeGrupo.ts                  # Integrante de un grupo por username, con vínculo opcional a Alumno
 │       ├── CambioDeMembresia.ts               # Auditoría de altas/bajas/cambios de integrantes
 │       ├── RepoDeletionAttempt.ts             # Auditoría de borrado de repos
 │       ├── EstadoDelivery.ts                  # Estado de un delivery de webhook, como Strategy
 │       └── GithubWebhookDelivery.ts           # Auditoría de deliveries de webhook (dedup por delivery id)
 ├── application/                                # Casos de uso — acá vive la lógica de negocio
 │   ├── aceptarAssignment.ts                   # Aceptar un TP: crea entrega + repo
-│   ├── assignmentAuthorization.ts             # Quién puede ver/operar sobre un assignment
 │   ├── alumnoRegistro.ts                      # Alta de alumno (DB primero, después Sheets)
 │   ├── importarAlumnosDeComision.ts           # Sheets → DB, bulk por comisión
 │   ├── grupoSync.ts                           # Sheets → DB, membresía de grupos (sólo aditivo)
@@ -1028,12 +1042,15 @@ src/
 │   ├── borrarRepositoriosDeAssignment.ts      # Borrado auditado de repos de un assignment
 │   ├── sincronizarCI.ts                       # Consulta y cachea el estado de CI
 │   ├── recibirWebhookGithub.ts                # Dedup + estado de un delivery entrante, reproceso
-│   └── procesarEventoGithub.ts                # Router evento → efecto sobre la entrega correspondiente
+│   ├── procesarEventoGithub.ts                # Router evento → efecto sobre la entrega correspondiente
+│   └── comisionConsultada.ts                  # obtenerContextoDeComision(): cookie + getComisiones() → ContextoDeComision, cacheado por request
 ├── infrastructure/
 │   ├── db.ts                                  # Singleton MikroORM (getOrm / getEM)
 │   ├── auth/
 │   │   ├── auth.ts / auth.config.ts / auth.events.ts   # NextAuth: config, providers (GitHub + login de desarrollo), eventos
 │   │   └── session.ts                         # requireUser / requireAdmin
+│   ├── navegacion/
+│   │   └── comisionConsultadaCookie.ts        # Cookie httpOnly `comision_consultada` (leer/guardar/borrar)
 │   ├── repositories/                          # Acceso a datos por entidad
 │   │   ├── AlumnoRepository.ts
 │   │   ├── SuscripcionAlumnoRepository.ts     # Estado de suscripción por (alumno, canal)

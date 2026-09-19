@@ -2,11 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Alumno, Comision, SuscripcionAlumno, NOMBRES_DE_CANAL } from "@/domain/entities";
 
 const em = vi.hoisted(() => ({
-  find: vi.fn(), findOne: vi.fn(), persist: vi.fn(), flush: vi.fn(),
+  find: vi.fn(), findOne: vi.fn(), persist: vi.fn(), flush: vi.fn(), count: vi.fn(),
 }));
 vi.mock("@/infrastructure/db", () => ({ getEM: async () => em }));
 
-import { createAlumno, upsertAlumno, upsertAlumnos } from "./AlumnoRepository";
+import {
+  createAlumno,
+  filtroDeBusquedaDeAlumnos,
+  getAlumnosPage,
+  upsertAlumno,
+  upsertAlumnos,
+} from "./AlumnoRepository";
 
 const comision = new Comision(2026, "sheet");
 const datos = {
@@ -198,5 +204,158 @@ describe("persistencia de Alumno y suscripciones", () => {
     expect({ ...suscripcion }).toEqual(suscripcionAntes);
     expect(em.persist).not.toHaveBeenCalled();
     expect(em.flush).not.toHaveBeenCalled();
+  });
+});
+
+describe("filtroDeBusquedaDeAlumnos", () => {
+  it("sin búsqueda no agrega condiciones", () => {
+    expect(filtroDeBusquedaDeAlumnos(undefined)).toEqual({});
+  });
+
+  it("búsqueda de sólo espacios no agrega condiciones", () => {
+    expect(filtroDeBusquedaDeAlumnos("   ")).toEqual({});
+  });
+
+  it("un término arma un $or sobre los campos buscables", () => {
+    expect(filtroDeBusquedaDeAlumnos("perez")).toEqual({
+      $and: [
+        {
+          $or: [
+            { apellido: { $ilike: "%perez%" } },
+            { nombre: { $ilike: "%perez%" } },
+            { legajo: { $ilike: "%perez%" } },
+            { githubUsername: { $ilike: "%perez%" } },
+            { email: { $ilike: "%perez%" } },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("varios términos se combinan con $and, uno por término", () => {
+    const resultado = filtroDeBusquedaDeAlumnos("  perez   juan  ");
+    expect(resultado).toEqual({
+      $and: [
+        {
+          $or: [
+            { apellido: { $ilike: "%perez%" } },
+            { nombre: { $ilike: "%perez%" } },
+            { legajo: { $ilike: "%perez%" } },
+            { githubUsername: { $ilike: "%perez%" } },
+            { email: { $ilike: "%perez%" } },
+          ],
+        },
+        {
+          $or: [
+            { apellido: { $ilike: "%juan%" } },
+            { nombre: { $ilike: "%juan%" } },
+            { legajo: { $ilike: "%juan%" } },
+            { githubUsername: { $ilike: "%juan%" } },
+            { email: { $ilike: "%juan%" } },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("escapa %, _ y \\ del término antes de armar el patrón $ilike", () => {
+    const resultado = filtroDeBusquedaDeAlumnos("100%_ok\\");
+    expect(resultado).toEqual({
+      $and: [
+        {
+          $or: [
+            { apellido: { $ilike: "%100\\%\\_ok\\\\%" } },
+            { nombre: { $ilike: "%100\\%\\_ok\\\\%" } },
+            { legajo: { $ilike: "%100\\%\\_ok\\\\%" } },
+            { githubUsername: { $ilike: "%100\\%\\_ok\\\\%" } },
+            { email: { $ilike: "%100\\%\\_ok\\\\%" } },
+          ],
+        },
+      ],
+    });
+  });
+});
+
+describe("getAlumnosPage", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("pagina con límite y offset correctos", async () => {
+    em.count.mockResolvedValue(60);
+    em.find.mockResolvedValue([]);
+
+    const resultado = await getAlumnosPage({ comisionId: "c1", page: 3 });
+
+    expect(resultado.page).toBe(3);
+    expect(resultado.pageSize).toBe(25);
+    expect(resultado.total).toBe(60);
+    expect(resultado.totalPages).toBe(3);
+    expect(em.find).toHaveBeenCalledWith(
+      Alumno,
+      { comision: { id: "c1" } },
+      expect.objectContaining({ limit: 25, offset: 50 })
+    );
+  });
+
+  it("una página que excede el total cae en la última", async () => {
+    em.count.mockResolvedValue(10);
+    em.find.mockResolvedValue([]);
+
+    const resultado = await getAlumnosPage({ comisionId: "c1", page: 999 });
+
+    expect(resultado.page).toBe(1);
+    expect(resultado.totalPages).toBe(1);
+    expect(em.find).toHaveBeenCalledWith(
+      Alumno,
+      { comision: { id: "c1" } },
+      expect.objectContaining({ limit: 25, offset: 0 })
+    );
+  });
+
+  it("sin búsqueda el where sólo filtra por comisión", async () => {
+    em.count.mockResolvedValue(0);
+    em.find.mockResolvedValue([]);
+
+    await getAlumnosPage({ comisionId: "c1", page: 1 });
+
+    expect(em.count).toHaveBeenCalledWith(Alumno, { comision: { id: "c1" } });
+  });
+
+  it("con búsqueda combina el filtro de comisión con el de búsqueda", async () => {
+    em.count.mockResolvedValue(0);
+    em.find.mockResolvedValue([]);
+
+    await getAlumnosPage({ comisionId: "c1", page: 1, busqueda: "perez" });
+
+    expect(em.count).toHaveBeenCalledWith(Alumno, {
+      comision: { id: "c1" },
+      $and: [
+        {
+          $or: [
+            { apellido: { $ilike: "%perez%" } },
+            { nombre: { $ilike: "%perez%" } },
+            { legajo: { $ilike: "%perez%" } },
+            { githubUsername: { $ilike: "%perez%" } },
+            { email: { $ilike: "%perez%" } },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("ordena por apellido, nombre e id", async () => {
+    em.count.mockResolvedValue(1);
+    em.find.mockResolvedValue([]);
+
+    await getAlumnosPage({ comisionId: "c1", page: 1 });
+
+    expect(em.find).toHaveBeenCalledWith(
+      Alumno,
+      { comision: { id: "c1" } },
+      expect.objectContaining({
+        orderBy: { apellido: "ASC", nombre: "ASC", id: "ASC" },
+      })
+    );
   });
 });

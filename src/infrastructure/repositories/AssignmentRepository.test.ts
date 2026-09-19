@@ -121,6 +121,28 @@ describe("AssignmentRepository", () => {
         { orderBy: { createdAt: "DESC" }, populate: ["comision"] }
       );
     });
+
+    // issue #114: `comisionId` es opcional — `GET /api/assignments` sigue
+    // llamando sin filtro (test de arriba) y no cambia.
+    it("filtra por comisionId cuando se pide explícitamente", async () => {
+      await getAssignments({ comisionId: "c1" });
+
+      expect(mockEm.find).toHaveBeenCalledWith(
+        Assignment,
+        { comision: { id: "c1" } },
+        { orderBy: { createdAt: "DESC" }, populate: ["comision"] }
+      );
+    });
+
+    it("combina comisionId con estado cuando se piden los dos", async () => {
+      await getAssignments({ comisionId: "c1", estado: "publicado" });
+
+      expect(mockEm.find).toHaveBeenCalledWith(
+        Assignment,
+        { estadoNombre: "publicado", comision: { id: "c1" } },
+        { orderBy: { createdAt: "DESC" }, populate: ["comision"] }
+      );
+    });
   });
 
   describe("getAssignment", () => {

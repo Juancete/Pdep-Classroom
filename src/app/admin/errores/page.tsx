@@ -1,6 +1,7 @@
-import Link from "next/link";
 import { requireAdmin } from "@/infrastructure/auth/session";
 import { getErrorLogsPage, getUnreadErrorLogCount } from "@/infrastructure/repositories";
+import { parsePage, single } from "@/lib/search-params";
+import { Paginador } from "@/components/Paginador";
 import {
   DataBody,
   DataCell,
@@ -11,17 +12,6 @@ import {
   DataTable,
 } from "@/components/DataTable";
 import { AcknowledgeErrorButton, ErrorLogBulkActions } from "./error-log-actions";
-
-function parsePage(value: string | string[] | undefined): number {
-  const raw = Array.isArray(value) ? value[0] : value;
-  const parsed = Number(raw);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
-}
-
-function single(value: string | string[] | undefined): string | undefined {
-  const result = Array.isArray(value) ? value[0] : value;
-  return result?.trim() || undefined;
-}
 
 function formatDate(date: Date): string {
   return new Date(date).toLocaleString("es-AR");
@@ -125,13 +115,12 @@ export default async function AdminErroresPage(props: {
         </DataTable>
       )}
 
-      {result.totalPages > 1 && (
-        <nav aria-label="Paginación de errores" className="mt-4 flex items-center justify-between text-sm">
-          {result.page > 1 ? <Link className="text-pdep-600 hover:text-pdep-800" href={pageHref(result.page - 1)}>← Anterior</Link> : <span className="text-gray-300">← Anterior</span>}
-          <span className="text-gray-500">Página {result.page} de {result.totalPages}</span>
-          {result.page < result.totalPages ? <Link className="text-pdep-600 hover:text-pdep-800" href={pageHref(result.page + 1)}>Siguiente →</Link> : <span className="text-gray-300">Siguiente →</span>}
-        </nav>
-      )}
+      <Paginador
+        page={result.page}
+        totalPages={result.totalPages}
+        hrefDePagina={pageHref}
+        ariaLabel="Paginación de errores"
+      />
     </div>
   );
 }

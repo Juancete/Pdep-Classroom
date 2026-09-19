@@ -8,6 +8,7 @@ import { Grupo, Alumno, GrupalAssignment, IndividualAssignment, DOCENTE, ESTUDIA
 const mockRequireUser = vi.fn();
 const mockGetAssignment = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
+const mockGetComisionActiva = vi.fn();
 const mockGetGruposDeAssignment = vi.fn();
 const mockGetEntregaLogica = vi.fn();
 const mockNotFound = vi.fn(() => { throw new Error("NOT_FOUND"); });
@@ -19,6 +20,7 @@ vi.mock("@/infrastructure/auth/session", () => ({
 vi.mock("@/infrastructure/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
   getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
+  getComisionActiva: () => mockGetComisionActiva(),
   getGruposDeAssignment: (id: string) => mockGetGruposDeAssignment(id),
   getEntregaLogica: (data: unknown) => mockGetEntregaLogica(data),
 }));
@@ -91,10 +93,16 @@ function makeGrupalAssignment(overrides = {}): GrupalAssignment {
 }
 
 function makeAlumno(comisionId = "c1") {
+  const comision = { id: comisionId };
+  // `confirmoRegistroEn` duck-typed (issue #107, revisión de code review):
+  // `ParticipanteAlumno.comisionDeParticipacion` ahora lo llama para exigir
+  // registro confirmado, no alcanza con tener `comision`.
   return {
     id: "alumno-ana",
     githubUsername: "ana",
-    comision: { id: comisionId },
+    comision,
+    confirmoRegistroEn: (otraComision: { id: string } | null) =>
+      otraComision?.id === comision.id,
   };
 }
 
@@ -113,7 +121,7 @@ function makeGrupo(
   grupo.creadoPor = miembros[0] ?? "alguien";
   const items = miembros.map((username) => Object.assign(new Alumno(), { githubUsername: username }));
   Object.assign(grupo, {
-    alumnos: { getItems: () => items, length: items.length },
+    miembros: { getItems: () => items, length: items.length },
   });
   return grupo;
 }
@@ -126,6 +134,7 @@ describe("GrupoPage", () => {
     mockRequireUser.mockResolvedValue(makeUser());
     mockGetAssignment.mockResolvedValue(makeGrupalAssignment());
     mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
+    mockGetComisionActiva.mockResolvedValue({ id: "c1" });
     mockGetGruposDeAssignment.mockResolvedValue([]);
     mockGetEntregaLogica.mockResolvedValue(null);
   });
@@ -150,13 +159,23 @@ describe("GrupoPage", () => {
     expect(mockGetGruposDeAssignment).not.toHaveBeenCalled();
   });
 
-  it("permite acceso global al docente", async () => {
+  // issue #107/#112: el docente ya no tiene acceso global — participa
+  // desde la comisión activa, igual que un alumno participa desde la suya.
+  it("el docente accede cuando la comisión activa coincide con la del assignment", async () => {
     mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
+    mockGetComisionActiva.mockResolvedValue({ id: "c1" });
 
     const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
 
     expect(renderToStaticMarkup(element)).toContain("TP Grupal");
     expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
+  });
+
+  it("el docente rebota si la comisión activa no coincide con la del assignment", async () => {
+    mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
+    mockGetComisionActiva.mockResolvedValue({ id: "c2" });
+
+    await expect(GrupoPage({ params: Promise.resolve({ id: "a1" }) })).rejects.toThrow("NOT_FOUND");
   });
 
   it("muestra el título del assignment", async () => {
@@ -260,15 +279,18 @@ describe("GrupoPage", () => {
     expect(html).toContain("El grupo ya aceptó el TP");
   });
 
-  it("nunca bloquea al docente aunque el grupo ya aceptó el TP", async () => {
-    mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
-    mockGetGruposDeAssignment.mockResolvedValue([
-      makeGrupo("g1", ["ana"], 3, "Los Lambdas"),
-    ]);
+  // issue #107/#112: ya no hay bypass — el docente sigue exactamente las
+  // mismas reglas de membresía que un alumno.
+  it("bloquea al docente igual que a un alumno cuando el grupo ya aceptó el TP", async () => {
+    mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE, githubUsername: "ana" }));
+    mockGetComisionActiva.mockResolvedValue({ id: "c1" });
+    const grupoDeDocentes = makeGrupo("g1", ["ana"], 3, "Los Lambdas");
+    grupoDeDocentes.tipoDeIntegrantes = "docentes";
+    mockGetGruposDeAssignment.mockResolvedValue([grupoDeDocentes]);
     mockGetEntregaLogica.mockResolvedValue({ id: "e1", repoUrl: "https://github.com/x" });
     const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element);
-    expect(html).toContain('data-motivo=""');
+    expect(html).toContain("El grupo ya aceptó el TP");
   });
 
   it("marca esUltimoMiembro cuando el alumno está solo en el grupo", async () => {

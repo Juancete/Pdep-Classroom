@@ -22,223 +22,6 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
-        "route": {
-          "name": "route",
-          "type": "varchar(255)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 255,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
-        "message": {
-          "name": "message",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "text"
-        },
-        "context": {
-          "name": "context",
-          "type": "jsonb",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "json"
-        },
-        "fingerprint": {
-          "name": "fingerprint",
-          "type": "varchar(64)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": true,
-          "length": 64,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
-        "count": {
-          "name": "count",
-          "type": "int4",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": 32,
-          "scale": 0,
-          "default": "1",
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "integer"
-        },
-        "first_seen_at": {
-          "name": "first_seen_at",
-          "type": "timestamptz(6)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        },
-        "last_seen_at": {
-          "name": "last_seen_at",
-          "type": "timestamptz(6)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        },
-        "acknowledged_at": {
-          "name": "acknowledged_at",
-          "type": "timestamptz(6)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        }
-      },
-      "name": "error_log",
-      "schema": "public",
-      "indexes": [
-        {
-          "columnNames": [
-            "last_seen_at"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "error_log_acknowledged_retention_idx",
-          "unique": false,
-          "primary": false,
-          "expression": "CREATE INDEX error_log_acknowledged_retention_idx ON public.error_log USING btree (last_seen_at) WHERE (acknowledged_at IS NOT NULL)"
-        },
-        {
-          "columnNames": [
-            "fingerprint"
-          ],
-          "composite": false,
-          "constraint": true,
-          "keyName": "error_log_fingerprint_unique",
-          "unique": true,
-          "primary": false
-        },
-        {
-          "columnNames": [
-            "id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "error_log_pkey",
-          "unique": true,
-          "primary": true
-        },
-        {
-          "columnNames": [
-            "route",
-            "last_seen_at",
-            "id"
-          ],
-          "composite": true,
-          "constraint": false,
-          "keyName": "error_log_route_last_seen_idx",
-          "unique": false,
-          "primary": false
-        },
-        {
-          "columnNames": [
-            "last_seen_at",
-            "id"
-          ],
-          "composite": true,
-          "constraint": false,
-          "keyName": "error_log_unread_last_seen_idx",
-          "unique": false,
-          "primary": false,
-          "expression": "CREATE INDEX error_log_unread_last_seen_idx ON public.error_log USING btree (last_seen_at DESC, id DESC) WHERE (acknowledged_at IS NULL)"
-        }
-      ],
-      "checks": [
-        {
-          "name": "error_log_count_positive",
-          "expression": "\"count\" > 0",
-          "definition": "check ((\"count\" > 0))"
-        }
-      ],
-      "foreignKeys": {},
-      "nativeEnums": {},
-      "comment": null
-    },
-    {
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": true,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
         "legajo": {
           "name": "legajo",
           "type": "varchar(255)",
@@ -445,215 +228,6 @@
           ],
           "updateRule": "cascade",
           "deleteRule": "set null"
-        }
-      },
-      "nativeEnums": {},
-      "comment": null
-    },
-    {
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": true,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
-        "alumno_id": {
-          "name": "alumno_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "uuid"
-        },
-        "canal": {
-          "name": "canal",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [
-            "google_groups"
-          ],
-          "mappedType": "enum"
-        },
-        "estado": {
-          "name": "estado",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": "'pendiente'",
-          "comment": null,
-          "enumItems": [
-            "pendiente",
-            "sincronizada",
-            "fallida",
-            "omitida"
-          ],
-          "mappedType": "enum"
-        },
-        "destinatario_sincronizado": {
-          "name": "destinatario_sincronizado",
-          "type": "varchar(255)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": 255,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
-        "destinatarios_pendientes_baja": {
-          "name": "destinatarios_pendientes_baja",
-          "type": "text[]",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": "'{}'",
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "array"
-        },
-        "ultimo_error": {
-          "name": "ultimo_error",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "text"
-        },
-        "ultimo_intento_en": {
-          "name": "ultimo_intento_en",
-          "type": "timestamptz",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        },
-        "sincronizado_en": {
-          "name": "sincronizado_en",
-          "type": "timestamptz",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        }
-      },
-      "name": "suscripcion_alumno",
-      "schema": "public",
-      "indexes": [
-        {
-          "keyName": "suscripcion_alumno_canal_estado_idx",
-          "columnNames": [
-            "canal",
-            "estado"
-          ],
-          "composite": true,
-          "constraint": false,
-          "primary": false,
-          "unique": false
-        },
-        {
-          "keyName": "suscripcion_alumno_alumno_canal_unique",
-          "columnNames": [
-            "alumno_id",
-            "canal"
-          ],
-          "composite": true,
-          "constraint": true,
-          "primary": false,
-          "unique": true
-        },
-        {
-          "keyName": "suscripcion_alumno_pkey",
-          "columnNames": [
-            "id"
-          ],
-          "composite": false,
-          "constraint": true,
-          "primary": true,
-          "unique": true
-        }
-      ],
-      "checks": [],
-      "foreignKeys": {
-        "suscripcion_alumno_alumno_id_foreign": {
-          "constraintName": "suscripcion_alumno_alumno_id_foreign",
-          "columnNames": [
-            "alumno_id"
-          ],
-          "localTableName": "public.suscripcion_alumno",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "referencedTableName": "public.alumno",
-          "deleteRule": "cascade",
-          "updateRule": "cascade"
         }
       },
       "nativeEnums": {},
@@ -1120,7 +694,7 @@
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "unique": false,
           "length": null,
           "precision": null,
@@ -1437,6 +1011,22 @@
           "enumItems": [],
           "mappedType": "boolean"
         },
+        "column_config": {
+          "name": "column_config",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "json"
+        },
         "grupos_importados_en": {
           "name": "grupos_importados_en",
           "type": "timestamptz(6)",
@@ -1484,22 +1074,6 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
-        },
-        "column_config": {
-          "name": "column_config",
-          "type": "jsonb",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "json"
         }
       },
       "name": "comision",
@@ -1525,6 +1099,166 @@
           "unique": true,
           "primary": false,
           "expression": "CREATE UNIQUE INDEX comision_unica_activa_idx ON public.comision USING btree (activa) WHERE (activa IS TRUE)"
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {},
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "github_username": {
+          "name": "github_username",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "activo": {
+          "name": "activo",
+          "type": "bool",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "true",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "creado_en": {
+          "name": "creado_en",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "creado_por": {
+          "name": "creado_por",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "modificado_en": {
+          "name": "modificado_en",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "modificado_por": {
+          "name": "modificado_por",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        }
+      },
+      "name": "docente",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "github_username"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "docente_github_username_unique_idx",
+          "unique": true,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "docente_pkey",
+          "unique": true,
+          "primary": true
         }
       ],
       "checks": [],
@@ -1637,90 +1371,6 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        },
-        "provision_estado": {
-          "name": "provision_estado",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": "'activa'",
-          "comment": null,
-          "enumItems": [
-            "pendiente",
-            "activa",
-            "fallida"
-          ],
-          "mappedType": "enum"
-        },
-        "provision_ultimo_error": {
-          "name": "provision_ultimo_error",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "text"
-        },
-        "provision_intentos": {
-          "name": "provision_intentos",
-          "type": "int4",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": 32,
-          "scale": 0,
-          "default": "0",
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "integer"
-        },
-        "provision_creacion_iniciada_en": {
-          "name": "provision_creacion_iniciada_en",
-          "type": "timestamptz(6)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        },
-        "provision_actualizado_en": {
-          "name": "provision_actualizado_en",
-          "type": "timestamptz(6)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
           "unique": false,
           "length": 6,
           "precision": null,
@@ -1945,6 +1595,90 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
+        },
+        "provision_estado": {
+          "name": "provision_estado",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'activa'",
+          "comment": null,
+          "enumItems": [
+            "pendiente",
+            "activa",
+            "fallida"
+          ],
+          "mappedType": "enum"
+        },
+        "provision_ultimo_error": {
+          "name": "provision_ultimo_error",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "provision_intentos": {
+          "name": "provision_intentos",
+          "type": "int4",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 32,
+          "scale": 0,
+          "default": "0",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "provision_creacion_iniciada_en": {
+          "name": "provision_creacion_iniciada_en",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "provision_actualizado_en": {
+          "name": "provision_actualizado_en",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
         }
       },
       "name": "entrega",
@@ -1987,6 +1721,16 @@
         },
         {
           "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "entrega_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": [
             "provision_estado",
             "provision_actualizado_en"
           ],
@@ -1996,16 +1740,6 @@
           "unique": false,
           "primary": false,
           "expression": "CREATE INDEX entrega_provision_estado_actualizado_idx ON public.entrega USING btree (provision_estado, provision_actualizado_en) WHERE (provision_estado <> 'activa'::text)"
-        },
-        {
-          "columnNames": [
-            "id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "entrega_pkey",
-          "unique": true,
-          "primary": true
         },
         {
           "columnNames": [
@@ -2071,6 +1805,224 @@
           "deleteRule": "set null"
         }
       },
+      "nativeEnums": {},
+      "comment": null
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "route": {
+          "name": "route",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "context": {
+          "name": "context",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "json"
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "varchar(64)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": 64,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "count": {
+          "name": "count",
+          "type": "int4",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 32,
+          "scale": 0,
+          "default": "1",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "first_seen_at": {
+          "name": "first_seen_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "acknowledged_at": {
+          "name": "acknowledged_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "name": "error_log",
+      "schema": "public",
+      "indexes": [
+        {
+          "columnNames": [
+            "last_seen_at"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "error_log_acknowledged_retention_idx",
+          "unique": false,
+          "primary": false,
+          "expression": "CREATE INDEX error_log_acknowledged_retention_idx ON public.error_log USING btree (last_seen_at) WHERE (acknowledged_at IS NOT NULL)"
+        },
+        {
+          "columnNames": [
+            "fingerprint"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "error_log_fingerprint_unique",
+          "unique": true,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "error_log_pkey",
+          "unique": true,
+          "primary": true
+        },
+        {
+          "columnNames": [
+            "route",
+            "last_seen_at",
+            "id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "error_log_route_last_seen_idx",
+          "unique": false,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "last_seen_at",
+            "id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "error_log_unread_last_seen_idx",
+          "unique": false,
+          "primary": false,
+          "expression": "CREATE INDEX error_log_unread_last_seen_idx ON public.error_log USING btree (last_seen_at DESC, id DESC) WHERE (acknowledged_at IS NULL)"
+        }
+      ],
+      "checks": [
+        {
+          "name": "error_log_count_positive",
+          "columnName": "count",
+          "definition": "CHECK ((count > 0))",
+          "expression": "count > 0"
+        }
+      ],
+      "foreignKeys": {},
       "nativeEnums": {},
       "comment": null
     },
@@ -2448,6 +2400,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "string"
+        },
+        "tipo_integrantes": {
+          "name": "tipo_integrantes",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": "'alumnos'",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
         }
       },
       "name": "grupo",
@@ -2507,8 +2475,8 @@
     },
     {
       "columns": {
-        "grupo_id": {
-          "name": "grupo_id",
+        "id": {
+          "name": "id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
@@ -2523,12 +2491,12 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
-        "alumno_id": {
-          "name": "alumno_id",
+        "grupo_id": {
+          "name": "grupo_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
-          "primary": true,
+          "primary": false,
           "nullable": false,
           "unique": false,
           "length": null,
@@ -2554,42 +2522,73 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "uuid"
+        },
+        "github_username": {
+          "name": "github_username",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "alumno_id": {
+          "name": "alumno_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "uuid"
         }
       },
-      "name": "grupo_alumnos",
+      "name": "grupo_miembro",
       "schema": "public",
       "indexes": [
         {
           "columnNames": [
             "assignment_id",
-            "alumno_id"
+            "github_username"
           ],
           "composite": true,
           "constraint": false,
-          "keyName": "grupo_alumnos_assignment_alumno_unique_idx",
+          "keyName": "grupo_miembro_assignment_username_unique_idx",
           "unique": true,
           "primary": false
         },
         {
           "columnNames": [
-            "grupo_id",
-            "alumno_id"
+            "id"
           ],
-          "composite": true,
+          "composite": false,
           "constraint": false,
-          "keyName": "grupo_alumnos_pkey",
+          "keyName": "grupo_miembro_pkey",
           "unique": true,
           "primary": true
         }
       ],
       "checks": [],
       "foreignKeys": {
-        "grupo_alumnos_alumno_id_foreign": {
+        "grupo_miembro_alumno_id_foreign": {
           "columnNames": [
             "alumno_id"
           ],
-          "constraintName": "grupo_alumnos_alumno_id_foreign",
-          "localTableName": "public.grupo_alumnos",
+          "constraintName": "grupo_miembro_alumno_id_foreign",
+          "localTableName": "public.grupo_miembro",
           "referencedTableName": "public.alumno",
           "referencedColumnNames": [
             "id"
@@ -2597,30 +2596,17 @@
           "updateRule": "cascade",
           "deleteRule": "cascade"
         },
-        "grupo_alumnos_grupo_assignment_foreign": {
+        "grupo_miembro_grupo_assignment_foreign": {
           "columnNames": [
             "grupo_id",
             "assignment_id"
           ],
-          "constraintName": "grupo_alumnos_grupo_assignment_foreign",
-          "localTableName": "public.grupo_alumnos",
+          "constraintName": "grupo_miembro_grupo_assignment_foreign",
+          "localTableName": "public.grupo_miembro",
           "referencedTableName": "public.grupo",
           "referencedColumnNames": [
             "id",
             "assignment_id"
-          ],
-          "updateRule": "cascade",
-          "deleteRule": "cascade"
-        },
-        "grupo_alumnos_grupo_id_foreign": {
-          "columnNames": [
-            "grupo_id"
-          ],
-          "constraintName": "grupo_alumnos_grupo_id_foreign",
-          "localTableName": "public.grupo_alumnos",
-          "referencedTableName": "public.grupo",
-          "referencedColumnNames": [
-            "id"
           ],
           "updateRule": "cascade",
           "deleteRule": "cascade"
@@ -2866,24 +2852,63 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
-        "github_username": {
-          "name": "github_username",
-          "type": "varchar(255)",
+        "alumno_id": {
+          "name": "alumno_id",
+          "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
           "nullable": false,
           "unique": true,
-          "length": 255,
+          "length": null,
           "precision": null,
           "scale": null,
           "default": null,
           "comment": null,
           "enumItems": [],
-          "mappedType": "string"
+          "mappedType": "uuid"
         },
-        "nombre": {
-          "name": "nombre",
+        "canal": {
+          "name": "canal",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [
+            "google_groups"
+          ],
+          "mappedType": "enum"
+        },
+        "estado": {
+          "name": "estado",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'pendiente'",
+          "comment": null,
+          "enumItems": [
+            "pendiente",
+            "sincronizada",
+            "fallida",
+            "omitida"
+          ],
+          "mappedType": "enum"
+        },
+        "destinatario_sincronizado": {
+          "name": "destinatario_sincronizado",
           "type": "varchar(255)",
           "unsigned": false,
           "autoincrement": false,
@@ -2898,9 +2923,9 @@
           "enumItems": [],
           "mappedType": "string"
         },
-        "activo": {
-          "name": "activo",
-          "type": "bool",
+        "destinatarios_pendientes_baja": {
+          "name": "destinatarios_pendientes_baja",
+          "type": "text[]",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
@@ -2909,18 +2934,34 @@
           "length": null,
           "precision": null,
           "scale": null,
-          "default": "true",
+          "default": "'{}'",
           "comment": null,
           "enumItems": [],
-          "mappedType": "boolean"
+          "mappedType": "array"
         },
-        "creado_en": {
-          "name": "creado_en",
+        "ultimo_error": {
+          "name": "ultimo_error",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "ultimo_intento_en": {
+          "name": "ultimo_intento_en",
           "type": "timestamptz(6)",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "unique": false,
           "length": 6,
           "precision": null,
@@ -2930,29 +2971,13 @@
           "enumItems": [],
           "mappedType": "datetime"
         },
-        "creado_por": {
-          "name": "creado_por",
-          "type": "varchar(255)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 255,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
-        },
-        "modificado_en": {
-          "name": "modificado_en",
+        "sincronizado_en": {
+          "name": "sincronizado_en",
           "type": "timestamptz(6)",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "unique": false,
           "length": 6,
           "precision": null,
@@ -2961,35 +2986,31 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
-        },
-        "modificado_por": {
-          "name": "modificado_por",
-          "type": "varchar(255)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": 255,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "string"
         }
       },
-      "name": "docente",
+      "name": "suscripcion_alumno",
       "schema": "public",
       "indexes": [
         {
           "columnNames": [
-            "github_username"
+            "alumno_id",
+            "canal"
           ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "docente_github_username_unique_idx",
+          "composite": true,
+          "constraint": true,
+          "keyName": "suscripcion_alumno_alumno_canal_unique",
           "unique": true,
+          "primary": false
+        },
+        {
+          "columnNames": [
+            "canal",
+            "estado"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "suscripcion_alumno_canal_estado_idx",
+          "unique": false,
           "primary": false
         },
         {
@@ -2998,13 +3019,27 @@
           ],
           "composite": false,
           "constraint": false,
-          "keyName": "docente_pkey",
+          "keyName": "suscripcion_alumno_pkey",
           "unique": true,
           "primary": true
         }
       ],
       "checks": [],
-      "foreignKeys": {},
+      "foreignKeys": {
+        "suscripcion_alumno_alumno_id_foreign": {
+          "columnNames": [
+            "alumno_id"
+          ],
+          "constraintName": "suscripcion_alumno_alumno_id_foreign",
+          "localTableName": "public.suscripcion_alumno",
+          "referencedTableName": "public.alumno",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "updateRule": "cascade",
+          "deleteRule": "cascade"
+        }
+      },
       "nativeEnums": {},
       "comment": null
     }

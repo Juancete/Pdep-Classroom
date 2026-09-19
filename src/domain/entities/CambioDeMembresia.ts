@@ -6,7 +6,7 @@ import {
   Property,
 } from "@mikro-orm/core";
 import { randomUUID } from "node:crypto";
-import type { OrigenCambioMembresia } from "./RolDeUsuario";
+import type { OrigenCambioMembresia } from "./Participante";
 
 // Única fuente de verdad para los valores de cada enum: el tipo se deriva de
 // acá en vez de listarse aparte, para que no puedan desincronizarse entre el
@@ -39,10 +39,14 @@ export class CambioDeMembresia {
   @Property({ type: "uuid" })
   assignmentId!: string;
 
-  @Property({ type: "uuid" })
-  alumnoId!: string;
+  // Nullable desde el issue #107/#112: un cambio de membresía de un docente
+  // sin fila en `Alumno` (un grupo de demo) no tiene alumno que auditar —
+  // `alumnoUsername` sigue siendo obligatorio, es el único vínculo humano
+  // disponible en ese caso.
+  @Property({ type: "uuid", nullable: true })
+  alumnoId?: string;
 
-  // Snapshot: el username del alumno al momento del cambio.
+  // Snapshot: el username del alumno o docente al momento del cambio.
   @Property({ type: "string" })
   alumnoUsername!: string;
 
@@ -64,7 +68,9 @@ export class CambioDeMembresia {
   accion!: AccionCambioMembresia;
 
   // Quién originó el cambio: el propio alumno (self-service) o un docente
-  // administrando integrantes. Resuelto por `RolDeUsuario.origenDeAuditoria()`.
+  // administrando integrantes. Resuelto por `ActorDeMembresia.origenDeAuditoria()`
+  // (`Participante` sobre sí mismo, o `RolDeUsuario.actorSobreMembresiaAjena()`
+  // cuando administra a otro).
   @Enum({ items: [...ORIGENES_CAMBIO_MEMBRESIA] })
   origen!: OrigenCambioMembresia;
 

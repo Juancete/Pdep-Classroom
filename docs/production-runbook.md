@@ -38,8 +38,8 @@ production** al hacer push o mergear a `master`.
    el step "Verificar secret DATABASE_URL", recargar el secret con `gh secret set DATABASE_URL
    --env production` (el valor no está en Vercel: ahí la variable es sensitive). El deployment
    staged que generó el job `build` de ese run queda sin promover.
-4. Entrar como docente a `/admin/operaciones`. GitHub y Sheets deben estar en verde; cada canal de
-   comunicación configurado también — uno apagado a propósito aparece como "Revisar" y no bloquea.
+4. Entrar como docente a `/admin/operaciones`. GitHub y Sheets (lectura y escritura) deben estar en
+   verde; cada canal de comunicación configurado también — uno apagado a propósito aparece como "Revisar" y no bloquea.
    No debe haber deliveries fallidos sin explicar.
 5. Hacer el canary con un assignment descartable:
    - un docente lo crea y publica;
@@ -63,6 +63,15 @@ production** al hacer push o mergear a `master`.
    siguen apareciendo en `/admin/docentes` (alta, edición de nombre y cambio de estado
    siguen funcionando sobre las filas migradas). Este fue el caso que motivó que la migración
    corra en el mismo workflow y antes del deploy.
+9. Release que reemplaza el pivot `grupo_alumnos` por `grupo_miembro` (issue #107): la migración
+   borra la tabla vieja al migrar, así que hay ventana de incompatibilidad entre el código
+   anterior y el esquema nuevo — correr la migración (`release:migrate`) y el deploy en el mismo
+   workflow, con la migración primero (mismo criterio que el punto 8), y fuera del horario de
+   clase. Después del deploy, verificar que los grupos existentes siguen listándose con sus
+   integrantes en `/admin/grupos` y que un alumno ve su grupo en Mis TPs. Rollback: el `down`
+   sólo recupera los miembros con un alumno vinculado y falla si ya hubo cambios de membresía de
+   un docente (auditados sin `alumno_id`) — no hay valor razonable para completarlos en el pivot
+   viejo.
 
 Regla: las migraciones tienen que ser compatibles con el deploy anterior (expand/contract), porque
 entre `migrate` y `promote` el código anterior corre contra el schema nuevo y, si `promote` falla,

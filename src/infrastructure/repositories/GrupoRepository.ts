@@ -11,15 +11,18 @@ import {
   AlumnoYaEnGrupoDelAssignmentError,
   NombreGrupoDuplicadoError,
   AlumnoNoEsMiembroDelGrupoError,
-  type RolDeUsuario,
+  GrupoNoAdmiteParticipanteError,
+  type Participante,
+  type ActorDeMembresia,
 } from "@/domain/entities";
-import type { Paradigma, PdepUser } from "@/types";
+import type { Paradigma } from "@/types";
 import { extractDbErrorCode, UNIQUE_VIOLATION } from "./db-errors";
 import { getEntregaLogica } from "./EntregaRepository";
 import { registrarCambioDeMembresia } from "./CambioDeMembresiaRepository";
+import { getAlumnoByGithub } from "./AlumnoRepository";
 
 const INSCRIPCION_UNICA_CONSTRAINT =
-  "grupo_alumnos_assignment_alumno_unique_idx";
+  "grupo_miembro_assignment_username_unique_idx";
 const NOMBRE_GRUPO_UNICO_CONSTRAINT =
   "grupo_assignment_nombre_normalizado_unique_idx";
 
@@ -90,16 +93,30 @@ export async function getGruposDeAlumno(
   const entityManager = await getEM();
   const grupos = await entityManager.find(
     Grupo,
-    { alumnos: { githubUsername: { $ilike: githubUsername } } },
-    { populate: ["assignment", "alumnos"] }
+    { miembros: { githubUsername: { $ilike: githubUsername } } },
+    { populate: ["assignment", "miembros"] }
   );
   return new Map(grupos.map((grupo) => [grupo.assignment.id, grupo]));
 }
 
-export async function getGrupos(paradigma?: Paradigma): Promise<Grupo[]> {
+// `comisionId` obligatorio (issue #114): único llamador es la página de
+// grupos del panel admin, que ahora filtra siempre por la comisión
+// consultada (activa u histórica) en vez de traer grupos de todas las
+// comisiones a la vez.
+export async function getGrupos(filtro: {
+  comisionId: string;
+  paradigma?: Paradigma;
+}): Promise<Grupo[]> {
   const entityManager = await getEM();
-  const where = paradigma ? { paradigma } : {};
-  return entityManager.find(Grupo, where, { populate: ["assignment", "alumnos"] });
+  const { comisionId, paradigma } = filtro;
+  return entityManager.find(
+    Grupo,
+    {
+      assignment: { comision: { id: comisionId } },
+      ...(paradigma && { paradigma }),
+    },
+    { populate: ["assignment", "miembros"] }
+  );
 }
 
 export async function getGruposDeAssignment(assignmentId: string): Promise<Grupo[]> {
@@ -107,7 +124,7 @@ export async function getGruposDeAssignment(assignmentId: string): Promise<Grupo
   return entityManager.find(
     Grupo,
     { assignment: { id: assignmentId } },
-    { populate: ["alumnos"] }
+    { populate: ["miembros"] }
   );
 }
 
@@ -136,24 +153,25 @@ export async function getGrupoDeAlumnoEnAssignment(
     Grupo,
     {
       assignment: { id: assignmentId },
-      alumnos: { githubUsername: { $ilike: githubUsername } },
+      miembros: { githubUsername: { $ilike: githubUsername } },
     },
-    { populate: ["alumnos"] }
+    { populate: ["miembros"] }
   );
 }
 
-// Crea un grupo nuevo en un assignment grupal y suma al alumno creador como
-// primer miembro. Atómico: la lectura del assignment, la verificación de que
-// el alumno no esté ya en otro grupo, y la creación se hacen en una única
+// Crea un grupo nuevo en un assignment grupal y suma al participante creador
+// como primer miembro (del tipo que ese participante integra — issue
+// #107/#112: un alumno crea un grupo de alumnos, un docente uno de
+// docentes). Atómico: la lectura del assignment, la verificación de que el
+// participante no esté ya en otro grupo, y la creación se hacen en una única
 // transacción para evitar carreras (dos creaciones simultáneas, o crear
 // mientras un join concurrente está en curso).
 export async function crearGrupo(params: {
   assignmentId: string;
-  alumnoId: string;
   nombre: string;
-  rol: RolDeUsuario;
+  participante: Participante;
 }): Promise<Grupo> {
-  const { assignmentId, alumnoId, nombre, rol } = params;
+  const { assignmentId, nombre, participante } = params;
   const entityManager = await getEM();
 
   return traducirConflictoDeNombreGrupo(assignmentId, nombre, () =>
@@ -168,30 +186,25 @@ export async function crearGrupo(params: {
       }
       const grupal = assignment.exigirGrupal();
 
-      const alumno = await transaction.findOneOrFail(
-        Alumno,
-        { id: alumnoId },
-        { populate: ["comision"] }
-      );
-      rol.autorizarAccionSobreAssignment(alumno, grupal);
+      participante.autorizarAccionSobreAssignment(grupal);
 
       return traducirConflictoDeInscripcion(
         assignmentId,
-        alumno.githubUsername,
+        participante.githubUsername,
         async () => {
           // Grupo en memoria (sin persistir todavía) para poder pasarlo al
           // contexto de autorización — recién nace, así que nunca tiene
-          // entrega. Delegar acá en el rol (B3 de la auditoría de dominio)
-          // en vez de chequear `aceptaNuevasInscripciones()` directo evita
-          // que este chequeo divergiera del que ya usan `salirDeGrupo`/
-          // `moverAlumnoDeGrupo`: un docente puede crear un grupo aunque las
-          // inscripciones estén cerradas, un alumno no. La construcción del
-          // Grupo (nombre/nombreNormalizado/validación de longitud) delega
-          // en `GrupalAssignment.crearGrupo` (Fase 3 de la auditoría de
-          // dominio) — antes vivía acá duplicada con la de `upsertGrupoConMiembro`.
-          const grupo = grupal.crearGrupo(nombre, alumno.githubUsername);
+          // entrega. La construcción del Grupo (nombre/nombreNormalizado/
+          // validación de longitud) delega en `GrupalAssignment.crearGrupo`
+          // (Fase 3 de la auditoría de dominio) — antes vivía acá duplicada
+          // con la de `upsertGrupoConMiembro`.
+          const grupo = grupal.crearGrupo(
+            nombre,
+            participante.githubUsername,
+            participante.tipoDeGrupo()
+          );
 
-          rol.autorizarCambioDeMembresia({
+          participante.autorizarCambioDeMembresia({
             assignment: grupal,
             grupo,
             grupoTieneEntrega: false,
@@ -199,29 +212,29 @@ export async function crearGrupo(params: {
 
           const yaEnGrupo = await transaction.findOne(Grupo, {
             assignment: { id: assignmentId },
-            alumnos: { id: alumno.id },
+            miembros: { githubUsername: participante.githubUsername },
           });
           if (yaEnGrupo) {
             throw new AlumnoYaEnGrupoDelAssignmentError(
               assignmentId,
-              alumno.githubUsername
+              participante.githubUsername
             );
           }
 
-          grupo.alumnos.add(alumno);
+          grupo.agregarMiembro(participante.githubUsername, participante.alumno);
           transaction.persist(grupo);
 
-          // realizadoPor = el propio alumno: crearGrupo es siempre
+          // realizadoPor = el propio participante: crearGrupo es siempre
           // self-service, no hay un tercero "actuando por" otro acá.
           await registrarCambioDeMembresia(transaction, {
             assignmentId,
-            alumnoId: alumno.id,
-            alumnoUsername: alumno.githubUsername,
+            alumnoId: participante.alumnoId(),
+            alumnoUsername: participante.githubUsername,
             grupoDestinoId: grupo.id,
             grupoDestinoNombre: grupo.nombre,
             accion: "alta",
-            origen: rol.origenDeAuditoria(),
-            realizadoPor: alumno.githubUsername,
+            origen: participante.origenDeAuditoria(),
+            realizadoPor: participante.githubUsername,
             grupoOrigenTeniaEntrega: false,
             grupoOrigenEliminado: false,
           });
@@ -234,18 +247,16 @@ export async function crearGrupo(params: {
   );
 }
 
-// Suma al alumno como miembro de un grupo existente. Atómico: re-checa cupo
-// y "no está en otro grupo del mismo assignment" dentro de la transacción
-// para resolver el race del último cupo (dos joins simultáneos al mismo
-// grupo cuando queda un solo lugar).
+// Suma al participante como miembro de un grupo existente. Atómico: re-checa
+// cupo y "no está en otro grupo del mismo assignment" dentro de la
+// transacción para resolver el race del último cupo (dos joins simultáneos
+// al mismo grupo cuando queda un solo lugar).
 export async function unirseAGrupo(params: {
   assignmentId: string;
   grupoId: string;
-  alumnoId: string;
-  usuario: PdepUser;
+  participante: Participante;
 }): Promise<Grupo> {
-  const { assignmentId, grupoId, alumnoId, usuario } = params;
-  const rol = usuario.rol;
+  const { assignmentId, grupoId, participante } = params;
   const entityManager = await getEM();
 
   return entityManager.transactional(async (transaction) => {
@@ -261,32 +272,31 @@ export async function unirseAGrupo(params: {
     // el primero y vuelve a evaluar el límite con el estado vigente.
     await transaction.populate(
       grupo,
-      ["alumnos", "assignment.comision"],
+      ["miembros", "assignment.comision"],
       { refresh: true }
     );
 
     const assignment = grupo.assignment;
-    const alumno = await transaction.findOneOrFail(
-      Alumno,
-      { id: alumnoId },
-      { populate: ["comision"] }
-    );
-    rol.autorizarAccionSobreAssignment(alumno, assignment);
+    participante.autorizarAccionSobreAssignment(assignment);
+
+    // Un alumno no ve ni puede unirse a un grupo de docentes, y viceversa
+    // (issue #107/#112) — antes de tocar cupos ni membresías.
+    if (!grupo.admiteIntegrantesDe(participante.tipoDeGrupo())) {
+      throw new GrupoNoAdmiteParticipanteError(grupo.id);
+    }
 
     return traducirConflictoDeInscripcion(
       assignmentId,
-      alumno.githubUsername,
+      participante.githubUsername,
       async () => {
-        if (grupo.alumnos.contains(alumno)) {
+        if (grupo.contieneA(participante.githubUsername)) {
           return grupo;
         }
 
-        // Mismo criterio que `crearGrupo`: delega en el rol en vez de
-        // chequear `aceptaNuevasInscripciones()` directo (B3). `grupoTieneEntrega`
-        // en `false` porque acá se está sumando un integrante, no removiendo
-        // uno de un grupo que ya aceptó el TP — ese caso es el de `salirDeGrupo`/
-        // `moverAlumnoDeGrupo`.
-        rol.autorizarCambioDeMembresia({
+        // `grupoTieneEntrega` en `false` porque acá se está sumando un
+        // integrante, no removiendo uno de un grupo que ya aceptó el TP —
+        // ese caso es el de `salirDeGrupo`/`moverAlumnoDeGrupo`.
+        participante.autorizarCambioDeMembresia({
           assignment,
           grupo,
           grupoTieneEntrega: false,
@@ -294,26 +304,26 @@ export async function unirseAGrupo(params: {
 
         const enOtroGrupo = await transaction.findOne(Grupo, {
           assignment: { id: assignment.id },
-          alumnos: { id: alumno.id },
+          miembros: { githubUsername: participante.githubUsername },
         });
         if (enOtroGrupo) {
           throw new AlumnoYaEnGrupoDelAssignmentError(
             assignment.id,
-            alumno.githubUsername
+            participante.githubUsername
           );
         }
 
-        grupo.addMember(alumno);
+        grupo.agregarMiembro(participante.githubUsername, participante.alumno);
 
         await registrarCambioDeMembresia(transaction, {
           assignmentId,
-          alumnoId: alumno.id,
-          alumnoUsername: alumno.githubUsername,
+          alumnoId: participante.alumnoId(),
+          alumnoUsername: participante.githubUsername,
           grupoDestinoId: grupo.id,
           grupoDestinoNombre: grupo.nombre,
           accion: "alta",
-          origen: rol.origenDeAuditoria(),
-          realizadoPor: usuario.githubUsername,
+          origen: participante.origenDeAuditoria(),
+          realizadoPor: participante.githubUsername,
           grupoOrigenTeniaEntrega: false,
           grupoOrigenEliminado: false,
         });
@@ -325,7 +335,7 @@ export async function unirseAGrupo(params: {
   });
 }
 
-// Serializa dos cambios de membresía del mismo alumno en el mismo assignment
+// Serializa dos cambios de membresía del mismo username en el mismo assignment
 // (salir, cambiarse) sin tomar un row lock sobre `alumno`. Importante: NO usar
 // LockMode.PESSIMISTIC_WRITE sobre la fila de `alumno` acá — `unirseAGrupo`
 // toma FOR UPDATE sobre `grupo` y luego, al insertar en el pivot, la FK le
@@ -333,17 +343,21 @@ export async function unirseAGrupo(params: {
 // sobre `alumno` primero y luego sobre `grupo`, el orden de locks quedaría
 // invertido entre las dos funciones y produciría un deadlock real entre un
 // join concurrente y un cambio de grupo.
+//
+// Clave por `githubUsername` (canónico), no por `alumnoId`: desde el issue
+// #107/#112 la membresía se administra por username y no todo integrante
+// tiene una fila en `Alumno` (un docente en un grupo de demo).
 async function lockearMembresia(
   transaction: EntityManager,
   assignmentId: string,
-  alumnoId: string
+  githubUsername: string
 ): Promise<void> {
   // `transaction.execute(...)` — no `transaction.getConnection().execute(...)`:
   // este último no hereda el contexto de transacción activo y corre en una
   // conexión aparte del pool, así que el advisory lock (transaccional, se
   // libera solo) queda tomado y liberado al instante sin serializar nada.
   await transaction.execute("select pg_advisory_xact_lock(hashtextextended(?, 0))", [
-    `membresia:${assignmentId}:${alumnoId}`,
+    `membresia:${assignmentId}:${githubUsername}`,
   ]);
 }
 
@@ -358,22 +372,30 @@ async function lockearMembresia(
 //
 // Si el alumno era el último integrante y el grupo nunca tuvo entrega, el
 // grupo se borra en la misma transacción — libera su `nombreNormalizado`.
+//
+// A diferencia de `crearGrupo`/`unirseAGrupo` (que reciben un `Participante`
+// ya resuelto), acá no se resuelve un `Alumno` de antemano: el miembro se
+// busca por username dentro del propio grupo ya bloqueado — el vínculo con
+// `Alumno` (si existe) viaja con el `MiembroDeGrupo` encontrado.
+//
+// `actor`/`realizadoPor` separados de `githubUsername` (a quién se le saca
+// del grupo): quien actúa puede ser el propio interesado (`Participante`,
+// self-service) o un docente administrando a otro (`RolDeUsuario.actorSobreMembresiaAjena()`)
+// — `ActorDeMembresia` cubre ambos casos con la misma firma.
 export async function salirDeGrupo(params: {
   assignmentId: string;
   grupoId: string;
   githubUsername: string;
-  usuario: PdepUser;
+  actor: ActorDeMembresia;
+  realizadoPor: string;
   motivo?: string;
 }): Promise<{ grupo: Grupo; grupoEliminado: boolean }> {
-  const { assignmentId, grupoId, githubUsername, usuario, motivo } = params;
+  const { assignmentId, grupoId, githubUsername, actor, realizadoPor, motivo } = params;
   const entityManager = await getEM();
+  const usernameCanonico = Alumno.normalizarUsername(githubUsername);
 
   return entityManager.transactional(async (transaction) => {
-    const alumno = await transaction.findOneOrFail(Alumno, {
-      githubUsername: Alumno.normalizarUsername(githubUsername),
-    });
-
-    await lockearMembresia(transaction, assignmentId, alumno.id);
+    await lockearMembresia(transaction, assignmentId, usernameCanonico);
 
     const grupo = await transaction.findOne(
       Grupo,
@@ -384,11 +406,12 @@ export async function salirDeGrupo(params: {
 
     await transaction.populate(
       grupo,
-      ["alumnos", "assignment.comision"],
+      ["miembros", "assignment.comision"],
       { refresh: true }
     );
 
-    if (!grupo.alumnos.contains(alumno)) {
+    const miembro = grupo.miembroConUsername(usernameCanonico);
+    if (!miembro) {
       throw new AlumnoNoEsMiembroDelGrupoError(grupo.id, githubUsername);
     }
 
@@ -398,26 +421,26 @@ export async function salirDeGrupo(params: {
     );
     const grupoTieneEntrega = !!entrega;
 
-    usuario.rol.autorizarCambioDeMembresia({
+    actor.autorizarCambioDeMembresia({
       assignment: grupo.assignment,
       grupo,
       grupoTieneEntrega,
     });
 
-    grupo.removeMember(alumno);
+    grupo.quitarMiembro(usernameCanonico);
 
     const grupoEliminado = grupo.seEliminaAlSalir(grupoTieneEntrega);
     if (grupoEliminado) transaction.remove(grupo);
 
     await registrarCambioDeMembresia(transaction, {
       assignmentId,
-      alumnoId: alumno.id,
-      alumnoUsername: alumno.githubUsername,
+      alumnoId: miembro.alumno?.id,
+      alumnoUsername: miembro.githubUsername,
       grupoOrigenId: grupo.id,
       grupoOrigenNombre: grupo.nombre,
       accion: "baja",
-      origen: usuario.rol.origenDeAuditoria(),
-      realizadoPor: usuario.githubUsername,
+      origen: actor.origenDeAuditoria(),
+      realizadoPor,
       grupoOrigenTeniaEntrega: grupoTieneEntrega,
       grupoOrigenEliminado: grupoEliminado,
       motivo,
@@ -436,7 +459,7 @@ export async function salirDeGrupo(params: {
 // después de un `salir` ya confirmado, el alumno quedaría sin grupo (y si
 // era el último integrante, su grupo original ya se habría borrado) —
 // pérdida irreversible. El orden inverso es imposible: el índice único
-// `grupo_alumnos_assignment_alumno_unique_idx` rechaza la segunda inserción
+// `grupo_miembro_assignment_username_unique_idx` rechaza la segunda inserción
 // mientras la primera sigue viva. Acá, si el destino está lleno, el rollback
 // de la transacción entera devuelve al alumno a su grupo original.
 //
@@ -444,32 +467,37 @@ export async function salirDeGrupo(params: {
 // nunca por rol (origen/destino): dos llamadas concurrentes que intercambian
 // posiciones (A: G1→G2 mientras B: G2→G1) bloquean en el mismo orden global
 // y no pueden formar un ciclo de espera.
+//
+// El vínculo con `Alumno` se resuelve por username, no de antemano: si ya
+// tenía grupo en el assignment, se hereda el `alumno` del `MiembroDeGrupo`
+// origen (con o sin vínculo); si es un alta (sin grupo origen), se busca por
+// `getAlumnoByGithub` y, si no existe fila en `Alumno`, el miembro nuevo
+// queda sin vínculo (issue #107/#112: infraestructura para que un docente
+// sin registro pueda terminar acá vía las mismas rutas administrativas).
 export async function moverAlumnoDeGrupo(params: {
   assignmentId: string;
   grupoDestinoId: string;
   githubUsername: string;
-  usuario: PdepUser;
+  actor: ActorDeMembresia;
+  realizadoPor: string;
   motivo?: string;
 }): Promise<{ grupoDestino: Grupo; grupoOrigenEliminado: boolean }> {
-  const { assignmentId, grupoDestinoId, githubUsername, usuario, motivo } = params;
+  const { assignmentId, grupoDestinoId, githubUsername, actor, realizadoPor, motivo } = params;
   const entityManager = await getEM();
+  const usernameCanonico = Alumno.normalizarUsername(githubUsername);
 
   return entityManager.transactional(async (transaction) => {
-    const alumno = await transaction.findOneOrFail(Alumno, {
-      githubUsername: Alumno.normalizarUsername(githubUsername),
-    });
-
-    await lockearMembresia(transaction, assignmentId, alumno.id);
+    await lockearMembresia(transaction, assignmentId, usernameCanonico);
 
     // Lectura sin lock: solo para saber si hace falta bloquear un segundo
     // grupo y en qué orden. El advisory lock ya serializa cualquier otra
-    // llamada a salirDeGrupo/moverAlumnoDeGrupo para este mismo alumno; un
+    // llamada a salirDeGrupo/moverAlumnoDeGrupo para este mismo username; un
     // unirseAGrupo concurrente e independiente queda cubierto por el índice
-    // único de `grupo_alumnos`, que revienta el `addMember` de más abajo si
-    // el estado cambió entre esta lectura y el lock.
+    // único de `grupo_miembro`, que revienta el `agregarMiembro` de más abajo
+    // si el estado cambió entre esta lectura y el lock.
     const grupoOrigenPrevio = await transaction.findOne(Grupo, {
       assignment: { id: assignmentId },
-      alumnos: { id: alumno.id },
+      miembros: { githubUsername: usernameCanonico },
     });
 
     const idsAOrdenar =
@@ -487,7 +515,7 @@ export async function moverAlumnoDeGrupo(params: {
       if (!grupo) throw new GrupoNoEncontradoError(assignmentId, id);
       await transaction.populate(
         grupo,
-        ["alumnos", "assignment.comision"],
+        ["miembros", "assignment.comision"],
         { refresh: true }
       );
       gruposBloqueados.set(id, grupo);
@@ -502,6 +530,27 @@ export async function moverAlumnoDeGrupo(params: {
       return { grupoDestino, grupoOrigenEliminado: false };
     }
 
+    // Acceso al assignment antes de decidir el tipo requerido (revisión de
+    // code review, issue #107/#112): en self-service, `actor` es el propio
+    // `Participante` y esto repite la misma regla que ya exige
+    // `unirseAGrupo` (comisión + estado) — sin esto, un docente o un alumno
+    // sin registro podían darse de alta acá aunque `unirseAGrupo` los
+    // hubiera rechazado. Administrando a otro, el docente conserva su
+    // alcance global (no-op).
+    actor.autorizarAccionSobreAssignment(grupoDestino.assignment);
+
+    // El tipo que debe admitir el destino lo decide el actor, no el grupo
+    // origen directamente: en self-service es siempre el tipo del propio
+    // participante (issue #107/#112 — un docente nunca puede terminar en un
+    // grupo de alumnos, tenga o no grupo origen); administrando a otro, el
+    // docente sigue moviendo dentro del mismo tipo del grupo origen, o
+    // "alumnos" si es un alta sin origen (la lista "sin grupo" del panel
+    // admin sólo tiene alumnos).
+    const tipoRequerido = actor.tipoDeGrupoAlIngresar(grupoOrigen ?? null);
+    if (!grupoDestino.admiteIntegrantesDe(tipoRequerido)) {
+      throw new GrupoNoAdmiteParticipanteError(grupoDestino.id);
+    }
+
     const entregaOrigen = grupoOrigen
       ? await getEntregaLogica(
           { assignmentId, grupoId: grupoOrigen.id },
@@ -510,44 +559,57 @@ export async function moverAlumnoDeGrupo(params: {
       : null;
     const grupoOrigenTeniaEntrega = !!entregaOrigen;
 
-    usuario.rol.autorizarCambioDeMembresia({
+    actor.autorizarCambioDeMembresia({
       assignment: grupoDestino.assignment,
       grupo: grupoOrigen ?? grupoDestino,
       grupoTieneEntrega: grupoOrigenTeniaEntrega,
     });
 
+    const miembroOrigen = grupoOrigen?.miembroConUsername(usernameCanonico);
+    const alumnoVinculado =
+      miembroOrigen?.alumno ??
+      (await getAlumnoByGithub(usernameCanonico, false, transaction));
+
+    // Un grupo de alumnos no admite un miembro sin fila en `Alumno` (issue
+    // #107, revisión de code review): en self-service ya lo impide el
+    // acceso, pero un docente administrando a otro podía dar de alta
+    // cualquier username sin registro.
+    if (grupoDestino.exigeVinculoConAlumno() && !alumnoVinculado) {
+      throw new GrupoNoAdmiteParticipanteError(grupoDestino.id);
+    }
+
     let grupoOrigenEliminado = false;
     if (grupoOrigen) {
-      grupoOrigen.removeMember(alumno);
+      grupoOrigen.quitarMiembro(usernameCanonico);
       grupoOrigenEliminado = grupoOrigen.seEliminaAlSalir(grupoOrigenTeniaEntrega);
       if (grupoOrigenEliminado) transaction.remove(grupoOrigen);
       // El DELETE del pivot origen tiene que emitirse antes del INSERT del
-      // destino, o el índice único (assignment_id, alumno_id) revienta: la
-      // UnitOfWork no garantiza ese orden entre colecciones de dos entidades
-      // distintas dentro del mismo flush.
+      // destino, o el índice único (assignment_id, github_username) revienta:
+      // la UnitOfWork no garantiza ese orden entre colecciones de dos
+      // entidades distintas dentro del mismo flush.
       await transaction.flush();
     }
 
     await traducirConflictoDeInscripcion(
       assignmentId,
-      alumno.githubUsername,
+      usernameCanonico,
       async () => {
-        grupoDestino.addMember(alumno);
+        grupoDestino.agregarMiembro(usernameCanonico, alumnoVinculado ?? null);
         await transaction.flush();
       }
     );
 
     await registrarCambioDeMembresia(transaction, {
       assignmentId,
-      alumnoId: alumno.id,
-      alumnoUsername: alumno.githubUsername,
+      alumnoId: alumnoVinculado?.id,
+      alumnoUsername: usernameCanonico,
       grupoOrigenId: grupoOrigen?.id,
       grupoOrigenNombre: grupoOrigen?.nombre,
       grupoDestinoId: grupoDestino.id,
       grupoDestinoNombre: grupoDestino.nombre,
       accion: grupoOrigen ? "cambio" : "alta",
-      origen: usuario.rol.origenDeAuditoria(),
-      realizadoPor: usuario.githubUsername,
+      origen: actor.origenDeAuditoria(),
+      realizadoPor,
       grupoOrigenTeniaEntrega,
       grupoOrigenEliminado,
       motivo,
@@ -629,18 +691,23 @@ async function ejecutarUpsertGrupoConMiembro(params: {
               candidato.nombre
             );
           }
+          // La planilla sólo importa alumnos: un grupo de docentes homónimo
+          // no se reutiliza, se informa como nombre ya tomado (issue #107).
+          if (!existente.admiteIntegrantesDe("alumnos")) {
+            throw new NombreGrupoDuplicadoError(assignment.id, candidato.nombre);
+          }
           grupo = existente;
-          await transaction.populate(grupo, ["alumnos"], { refresh: true });
+          await transaction.populate(grupo, ["miembros"], { refresh: true });
         } else {
           grupo = candidato;
           transaction.persist(grupo);
         }
 
-        if (grupo.alumnos.contains(alumno)) return grupo;
+        if (grupo.contieneA(alumno.githubUsername)) return grupo;
 
         const enOtroGrupo = await transaction.findOne(Grupo, {
           assignment: { id: assignment.id },
-          alumnos: { id: alumno.id },
+          miembros: { githubUsername: alumno.githubUsername },
         });
         if (enOtroGrupo) {
           throw new AlumnoYaEnGrupoDelAssignmentError(
@@ -649,7 +716,7 @@ async function ejecutarUpsertGrupoConMiembro(params: {
           );
         }
 
-        grupo.addMember(alumno);
+        grupo.agregarMiembro(alumno.githubUsername, alumno);
         await transaction.flush();
         return grupo;
       })

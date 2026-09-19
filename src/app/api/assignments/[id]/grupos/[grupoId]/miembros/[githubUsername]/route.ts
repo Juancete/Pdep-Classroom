@@ -3,7 +3,9 @@ import { z } from "zod";
 import { getCurrentUser } from "@/infrastructure/auth/session";
 import { salirDeGrupo, moverAlumnoDeGrupo } from "@/infrastructure/repositories";
 import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
-import { Alumno } from "@/domain/entities";
+import { Alumno, type ActorDeMembresia } from "@/domain/entities";
+import type { PdepUser } from "@/types";
+import { resolverParticipante } from "@/application/participante";
 
 const CambioDeMembresiaSchema = z.object({
   motivo: z.string().trim().max(280).optional(),
@@ -11,31 +13,33 @@ const CambioDeMembresiaSchema = z.object({
 
 type Params = { id: string; grupoId: string; githubUsername: string };
 
-// Sólo el propio alumno o un docente pueden modificar una membresía. No usa
-// `guardAdmin()` de `@/lib/api-auth`: hace falta el `githubUsername` del
+// Sólo el propio interesado o un docente pueden modificar una membresía. No
+// usa `guardAdmin()` de `@/lib/api-auth`: hace falta el `githubUsername` del
 // usuario para sellar la auditoría (mismo motivo documentado en
 // `estado/route.ts`), y además la ruta también sirve al self-service del
-// alumno, no sólo al panel admin.
-async function autorizarSolicitante(params: Params) {
+// alumno o docente, no sólo al panel admin.
+//
+// `actor`: si es la propia membresía, el `Participante` resuelto (mismas
+// reglas de self-service que crear/unirse a un grupo); si es la de otro,
+// `RolDeUsuario.actorSobreMembresiaAjena()` — el docente resuelve siempre,
+// un alumno nunca administra a otro (lanza `AccesoAssignmentProhibidoError`).
+async function autorizarSolicitante(
+  params: Params
+): Promise<{ user: PdepUser; actor: ActorDeMembresia } | { error: NextResponse }> {
   const user = await getCurrentUser();
   if (!user) {
-    return { user: null, error: NextResponse.json({ error: "No autorizado" }, { status: 401 }) };
+    return { error: NextResponse.json({ error: "No autorizado" }, { status: 401 }) };
   }
 
   const esPropia =
     Alumno.normalizarUsername(params.githubUsername) ===
     Alumno.normalizarUsername(user.githubUsername);
-  if (!esPropia && !user.rol.puedeAdministrar()) {
-    return {
-      user: null,
-      error: NextResponse.json(
-        { error: "Solo podés modificar tu propia membresía" },
-        { status: 403 }
-      ),
-    };
-  }
 
-  return { user, error: null };
+  const actor = esPropia
+    ? await resolverParticipante(user)
+    : user.rol.actorSobreMembresiaAjena(params.id);
+
+  return { user, actor };
 }
 
 async function parseMotivo(req: Request): Promise<{ motivo?: string } | NextResponse> {
@@ -55,8 +59,8 @@ async function parseMotivo(req: Request): Promise<{ motivo?: string } | NextResp
 export async function PUT(req: Request, props: { params: Promise<Params> }) {
   const params = await props.params;
   try {
-    const { user, error } = await autorizarSolicitante(params);
-    if (error) return error;
+    const solicitante = await autorizarSolicitante(params);
+    if ("error" in solicitante) return solicitante.error;
 
     const parsedBody = await parseMotivo(req);
     if (parsedBody instanceof NextResponse) return parsedBody;
@@ -65,7 +69,8 @@ export async function PUT(req: Request, props: { params: Promise<Params> }) {
       assignmentId: params.id,
       grupoDestinoId: params.grupoId,
       githubUsername: params.githubUsername,
-      usuario: user!,
+      actor: solicitante.actor,
+      realizadoPor: solicitante.user.githubUsername,
       motivo: parsedBody.motivo,
     });
 
@@ -94,8 +99,8 @@ export async function PUT(req: Request, props: { params: Promise<Params> }) {
 export async function DELETE(req: Request, props: { params: Promise<Params> }) {
   const params = await props.params;
   try {
-    const { user, error } = await autorizarSolicitante(params);
-    if (error) return error;
+    const solicitante = await autorizarSolicitante(params);
+    if ("error" in solicitante) return solicitante.error;
 
     const parsedBody = await parseMotivo(req);
     if (parsedBody instanceof NextResponse) return parsedBody;
@@ -104,7 +109,8 @@ export async function DELETE(req: Request, props: { params: Promise<Params> }) {
       assignmentId: params.id,
       grupoId: params.grupoId,
       githubUsername: params.githubUsername,
-      usuario: user!,
+      actor: solicitante.actor,
+      realizadoPor: solicitante.user.githubUsername,
       motivo: parsedBody.motivo,
     });
 

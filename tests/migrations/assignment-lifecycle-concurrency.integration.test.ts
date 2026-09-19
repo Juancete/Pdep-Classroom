@@ -21,8 +21,8 @@ vi.mock("@/infrastructure/db", () => ({
 
 import { cambiarEstadoAssignment } from "../../src/infrastructure/repositories/AssignmentRepository";
 import { crearEntregaSiAssignmentDisponible } from "../../src/infrastructure/repositories/EntregaRepository";
-import { TransicionDeEstadoInvalidaError, ESTUDIANTE } from "../../src/domain/entities";
-import { AssignmentNoDisponibleError } from "../../src/application/assignmentAuthorization";
+import { TransicionDeEstadoInvalidaError } from "../../src/domain/entities";
+import { AssignmentNoDisponibleError } from "../../src/domain/entities";
 
 const LIFECYCLE_MIGRATION = "Migration20260814180000_assignment_lifecycle";
 
@@ -102,15 +102,12 @@ describe("carrera entre despublicar y aceptar un assignment", () => {
 
       const [despublicar, aceptar] = await Promise.allSettled([
         cambiarEstadoAssignment(assignmentId, "borrador", "docente1"),
-        crearEntregaSiAssignmentDisponible(
-          {
-            assignmentId,
-            repoName: `tp-concurrente-alumno`,
-            repoUrl: "https://github.com/org/tp-concurrente-alumno",
-            githubUsernames: ["alumno1"],
-          },
-          ESTUDIANTE
-        ),
+        crearEntregaSiAssignmentDisponible({
+          assignmentId,
+          repoName: `tp-concurrente-alumno`,
+          repoUrl: "https://github.com/org/tp-concurrente-alumno",
+          githubUsernames: ["alumno1"],
+        }),
       ]);
 
       // El lock pesimista compartido serializa ambas operaciones: una de las

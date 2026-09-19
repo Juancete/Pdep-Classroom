@@ -8,6 +8,7 @@ import {
   IndividualAssignment,
   DOCENTE,
   ESTUDIANTE,
+  AccesoAssignmentProhibidoError,
   type Assignment,
 } from "@/domain/entities";
 
@@ -15,6 +16,7 @@ const mockGetAssignment = vi.fn();
 const mockGetEntregaDeUsuario = vi.fn();
 const mockGetGrupoDeAlumno = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
+const mockGetComisionActiva = vi.fn();
 const mockCrearEntregaSiAssignmentDisponible = vi.fn();
 const mockCrearEntrega = vi.fn();
 const mockGetRepoInfo = vi.fn();
@@ -31,8 +33,9 @@ vi.mock("@/infrastructure/repositories", () => ({
   getGrupoDeAlumnoEnAssignment: (assignmentId: string, username: string) =>
     mockGetGrupoDeAlumno(assignmentId, username),
   getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
-  crearEntregaSiAssignmentDisponible: (data: unknown, rol: unknown) =>
-    mockCrearEntregaSiAssignmentDisponible(data, rol),
+  getComisionActiva: () => mockGetComisionActiva(),
+  crearEntregaSiAssignmentDisponible: (data: unknown) =>
+    mockCrearEntregaSiAssignmentDisponible(data),
   iniciarProvisionEntrega: (id: string) => mockIniciarProvision(id),
   marcarCreacionGithubIniciada: (id: string) => mockMarcarCreacion(id),
   completarProvisionEntrega: (id: string, data: unknown) => mockCompletarProvision(id, data),
@@ -48,12 +51,10 @@ vi.mock("@/infrastructure/github", () => ({
 
 import {
   aceptarAssignment,
-  AlumnoNoRegistradoError,
   AssignmentNoDisponibleError,
   AssignmentNoEncontradoError,
   RepositorioPreexistenteNoAdministradoError,
 } from "./aceptarAssignment";
-import { AccesoAssignmentProhibidoError } from "./assignmentAuthorization";
 import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
 function makeComision(id = "c1"): Comision {
@@ -101,6 +102,10 @@ function makeAlumno(overrides?: Partial<Alumno>): Alumno {
   alumno.apellido = "García";
   alumno.email = "juan@example.com";
   alumno.comision = makeComision();
+  // Registro confirmado en la misma comisión por defecto (issue #107,
+  // revisión de code review): `ParticipanteAlumno` sólo participa con el
+  // registro confirmado, no alcanza con tener `comision` asignada.
+  alumno.confirmarRegistroEn(alumno.comision);
   return Object.assign(alumno, overrides);
 }
 
@@ -132,6 +137,10 @@ describe("aceptarAssignment", () => {
     mockGetAssignment.mockResolvedValue(makeAssignment());
     mockGetEntregaDeUsuario.mockResolvedValue(null);
     mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
+    // Comisión activa == la del assignment por defecto: los tests de
+    // docente que no la overridean explícitamente pasan la autorización
+    // académica de `ParticipanteDocente` sin tener que declararlo cada vez.
+    mockGetComisionActiva.mockResolvedValue(makeComision());
     mockGetRepoInfo.mockResolvedValue(null);
     mockCrearEntrega.mockResolvedValue({
       repoName: "kata-funcional-juangarcia",
@@ -202,8 +211,7 @@ describe("aceptarAssignment", () => {
         grupoId: undefined,
         repoName: "kata-funcional-juangarcia",
         provisionEstado: "pendiente",
-      }),
-      ESTUDIANTE
+      })
     );
     expect(mockCompletarProvision).toHaveBeenCalledWith(
       "e1",
@@ -244,14 +252,24 @@ describe("aceptarAssignment", () => {
     expect(mockCrearEntrega).not.toHaveBeenCalled();
   });
 
-  it("mantiene el requisito funcional de alumno para un admin que acepta un TP individual", async () => {
+  // issue #107/#112: el docente nunca se registra como alumno — aceptar un
+  // TP individual ya no exige una fila en `Alumno` (antes lanzaba un error
+  // de dominio específico para este caso, retirado por completo).
+  it("docente acepta un individual sin fila en Alumno", async () => {
     mockGetAlumnoByGithub.mockResolvedValue(null);
 
-    await expect(aceptarAssignment("a1", makeUser({ rol: DOCENTE }))).rejects.toBeInstanceOf(
-      AlumnoNoRegistradoError
-    );
+    await expect(
+      aceptarAssignment("a1", makeUser({ githubUsername: "profe-docente", rol: DOCENTE }))
+    ).resolves.toBeInstanceOf(Entrega);
 
-    expect(mockCrearEntrega).not.toHaveBeenCalled();
+    expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assignmentId: "a1",
+        alumnoId: undefined,
+        grupoId: undefined,
+        githubUsernames: ["profe-docente"],
+      })
+    );
   });
 
   it("crea entrega grupal con grupoId y todos los miembros", async () => {
@@ -278,8 +296,7 @@ describe("aceptarAssignment", () => {
         grupoId: "grupo-uuid-1",
         repoName: "kata-funcional-los-lambdas",
         githubUsernames: ["juangarcia", "mariaperez"],
-      }),
-      ESTUDIANTE
+      })
     );
   });
 
@@ -403,6 +420,25 @@ describe("aceptarAssignment", () => {
     expect(mockCrearEntregaSiAssignmentDisponible).not.toHaveBeenCalled();
   });
 
+  // Issue #107, revisión de code review: tener `comision` asignada no
+  // alcanza — un alumno importado desde Sheets pero sin confirmar el
+  // registro no puede aceptar por API, aunque la UI ya lo mande a
+  // `/registro` para eso mismo.
+  it("rechaza un alumno sin registro confirmado antes de consultar entregas o GitHub", async () => {
+    mockGetAlumnoByGithub.mockResolvedValue(
+      makeAlumno({ registroConfirmadoEn: undefined })
+    );
+
+    await expect(aceptarAssignment("a1", makeUser())).rejects.toBeInstanceOf(
+      AccesoAssignmentProhibidoError
+    );
+
+    expect(mockGetEntregaDeUsuario).not.toHaveBeenCalled();
+    expect(mockGetRepoInfo).not.toHaveBeenCalled();
+    expect(mockCrearEntrega).not.toHaveBeenCalled();
+    expect(mockCrearEntregaSiAssignmentDisponible).not.toHaveBeenCalled();
+  });
+
   it("rechaza para alumnos un assignment histórico sin comisión", async () => {
     mockGetAssignment.mockResolvedValue(makeAssignment({ comision: undefined }));
 
@@ -411,14 +447,17 @@ describe("aceptarAssignment", () => {
     );
   });
 
-  it("permite acceso global al docente", async () => {
-    mockGetAlumnoByGithub.mockResolvedValue(
-      makeAlumno({ comision: makeComision("c2") })
-    );
+  // issue #107/#112: el docente ya no tiene alcance global en Mis TPs —
+  // participa desde la comisión activa, igual que un alumno participa
+  // desde la suya.
+  it("docente sólo acepta assignments de la comisión activa", async () => {
+    mockGetComisionActiva.mockResolvedValue(makeComision("c2"));
 
     await expect(
       aceptarAssignment("a1", makeUser({ rol: DOCENTE }))
-    ).resolves.toBeInstanceOf(Entrega);
+    ).rejects.toBeInstanceOf(AccesoAssignmentProhibidoError);
+
+    expect(mockCrearEntregaSiAssignmentDisponible).not.toHaveBeenCalled();
   });
 
   it("rechaza aceptar un assignment en borrador y no toca GitHub", async () => {
@@ -446,30 +485,18 @@ describe("aceptarAssignment", () => {
     expect(mockCrearEntrega).not.toHaveBeenCalled();
   });
 
-  it("permite al docente aceptar un assignment en borrador", async () => {
+  // issue #107/#112: sin bypass de estado — en Mis TPs el docente sigue las
+  // mismas reglas que un alumno (reemplaza al viejo "permite al docente
+  // aceptar un assignment en borrador").
+  it("docente no acepta un borrador", async () => {
     const borrador = makeAssignment();
     borrador.estadoNombre = "borrador";
     mockGetAssignment.mockResolvedValue(borrador);
 
     await expect(
       aceptarAssignment("a1", makeUser({ rol: DOCENTE }))
-    ).resolves.toBeInstanceOf(Entrega);
-  });
+    ).rejects.toBeInstanceOf(AssignmentNoDisponibleError);
 
-  it("pasa el rol a crearEntregaSiAssignmentDisponible para que revalide bajo lock", async () => {
-    await aceptarAssignment("a1", makeUser({ rol: ESTUDIANTE }));
-    expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalledWith(
-      expect.any(Object),
-      ESTUDIANTE
-    );
-
-    mockGetAlumnoByGithub.mockResolvedValue(
-      makeAlumno({ comision: makeComision("c2") })
-    );
-    await aceptarAssignment("a1", makeUser({ rol: DOCENTE }));
-    expect(mockCrearEntregaSiAssignmentDisponible).toHaveBeenCalledWith(
-      expect.any(Object),
-      DOCENTE
-    );
+    expect(mockCrearEntrega).not.toHaveBeenCalled();
   });
 });

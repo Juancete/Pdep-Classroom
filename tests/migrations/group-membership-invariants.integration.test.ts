@@ -30,11 +30,18 @@ import {
   unirseAGrupo,
   upsertGrupoConMiembro,
 } from "../../src/infrastructure/repositories/GrupoRepository";
-import { Alumno, GrupalAssignment, ESTUDIANTE } from "../../src/domain/entities";
-import type { PdepUser } from "../../src/types";
+import { Alumno, GrupalAssignment, ParticipanteAlumno } from "../../src/domain/entities";
 
-function fakeUsuario(githubUsername: string): PdepUser {
-  return { githubUsername, name: githubUsername, image: "", rol: ESTUDIANTE };
+// `crearGrupo`/`unirseAGrupo` piden un `Participante` ya resuelto (issue
+// #107/#112) — se construye acá desde el `Alumno` real recién sembrado,
+// mismo criterio que ya usaba `upsertGrupoConMiembro` más abajo (`sync`).
+async function participanteDeAlumno(
+  orm: MikroORM,
+  alumnoId: string
+): Promise<ParticipanteAlumno> {
+  const em = orm.em.fork();
+  const alumno = await em.findOneOrFail(Alumno, { id: alumnoId }, { populate: ["comision"] });
+  return new ParticipanteAlumno(alumno, alumno.githubUsername);
 }
 
 const PREVIOUS_MIGRATION =
@@ -78,6 +85,10 @@ type Seed = {
   comisionId: string;
   assignmentId: string;
   alumnoIds: string[];
+  // Mismo formato que el `github_username` insertado más abajo — ya
+  // canónico (minúsculas): lo necesitan las secciones que siembran
+  // membresías directo en `grupo_miembro` después de la migración completa.
+  alumnoUsernames: string[];
   grupoIds: string[];
 };
 
@@ -121,17 +132,22 @@ async function seedGroups(
     );
   }
 
+  const alumnoUsernames = alumnoIds.map((alumnoId, index) => `alumno-${index}-${alumnoId}`);
   for (const [index, alumnoId] of alumnoIds.entries()) {
+    // `registro_confirmado_en_id` = la misma comisión: issue #107, revisión
+    // de code review — `ParticipanteAlumno` sólo participa con el registro
+    // confirmado, no alcanza con tener `comision_id`.
     await connection.execute(
       `insert into "alumno"
-        ("id", "legajo", "nombre", "apellido", "github_username", "email", "comision_id")
-       values (?, ?, ?, 'Test', ?, ?, ?)`,
+        ("id", "legajo", "nombre", "apellido", "github_username", "email", "comision_id", "registro_confirmado_en_id")
+       values (?, ?, ?, 'Test', ?, ?, ?, ?)`,
       [
         alumnoId,
         `${1000 + index}`,
         `Alumno ${index}`,
-        `alumno-${index}-${alumnoId}`,
+        alumnoUsernames[index],
         `alumno-${index}-${alumnoId}@example.com`,
+        comisionId,
         comisionId,
       ]
     );
@@ -162,7 +178,7 @@ async function seedGroups(
     }
   }
 
-  return { comisionId, assignmentId, alumnoIds, grupoIds };
+  return { comisionId, assignmentId, alumnoIds, alumnoUsernames, grupoIds };
 }
 
 function expectOneConcurrentConflict(
@@ -298,21 +314,14 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
     migrationReady = true;
   });
 
-  it("el schema diff preserva los objetos manuales del pivot", async () => {
-    const { up } = await orm
-      .getSchemaGenerator()
-      .getUpdateSchemaMigrationSQL();
-
-    expect(up).not.toContain('drop table if exists "grupo_alumnos"');
-    expect(up).not.toContain('drop column "assignment_id"');
-    expect(up).not.toContain(
-      'drop index "grupo_alumnos_assignment_alumno_unique_idx"'
-    );
-    expect(up).not.toContain(
-      'drop constraint "grupo_alumnos_grupo_assignment_foreign"'
-    );
-    expect(up).not.toContain('drop constraint "grupo_id_assignment_unique"');
-  });
+  // Nota (issue #107/#112): en este punto de la historia (esquema migrado
+  // sólo hasta MEMBERSHIP_MIGRATION) el pivot viejo `grupo_alumnos` sigue
+  // vivo en la base, pero las entidades actuales ya no lo mapean — el
+  // reemplazo por `grupo_miembro` es la migración
+  // `Migration20260918120000_grupo_miembro`, no algo que el schema differ
+  // deba preservar acá. El invariante equivalente para el pivot nuevo se
+  // verifica más abajo, una vez migrado hasta el final ("el schema diff
+  // preserva los objetos manuales de `grupo_miembro`").
 
   beforeEach(async () => {
     if (!migrationReady) return;
@@ -404,6 +413,20 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
     expect(up).not.toContain('drop index "assignment_estado_nombre_index"');
   });
 
+  it("el schema diff preserva los objetos manuales de grupo_miembro", async () => {
+    const { up } = await orm
+      .getSchemaGenerator()
+      .getUpdateSchemaMigrationSQL();
+
+    expect(up).not.toContain('drop table if exists "grupo_miembro"');
+    expect(up).not.toContain(
+      'drop constraint "grupo_miembro_grupo_assignment_foreign"'
+    );
+    expect(up).not.toContain(
+      'drop index "grupo_miembro_assignment_username_unique_idx"'
+    );
+  });
+
   it("serializa dos joins que compiten por el último cupo", async () => {
     const seed = await seedGroups(orm, {
       alumnos: 3,
@@ -411,25 +434,28 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
       maxIntegrantes: 2,
     });
     const connection = orm.em.getConnection();
+    // A esta altura de la suite el esquema ya migró hasta el final
+    // (`assignmentLifecycleReady`): el pivot viejo `grupo_alumnos` no existe
+    // más, así que la membresía se siembra directo en `grupo_miembro`.
     await connection.execute(
-      `insert into "grupo_alumnos" ("grupo_id", "alumno_id") values (?, ?)`,
-      [seed.grupoIds[0], seed.alumnoIds[0]]
+      `insert into "grupo_miembro" ("id", "grupo_id", "assignment_id", "github_username", "alumno_id")
+       values (?, ?, ?, ?, ?)`,
+      [randomUUID(), seed.grupoIds[0], seed.assignmentId, seed.alumnoUsernames[0], seed.alumnoIds[0]]
     );
 
     const results = await Promise.allSettled(
-      [seed.alumnoIds[1], seed.alumnoIds[2]].map((alumnoId) =>
+      [seed.alumnoIds[1], seed.alumnoIds[2]].map(async (alumnoId) =>
         unirseAGrupo({
           assignmentId: seed.assignmentId,
           grupoId: seed.grupoIds[0]!,
-          alumnoId,
-          usuario: fakeUsuario(alumnoId),
+          participante: await participanteDeAlumno(orm, alumnoId),
         })
       )
     );
 
     expectOneConcurrentConflict(results, GrupoLlenoError);
     const count = await connection.execute<{ count: string }[]>(
-      `select count(*) from "grupo_alumnos" where "grupo_id" = ?`,
+      `select count(*) from "grupo_miembro" where "grupo_id" = ?`,
       [seed.grupoIds[0]]
     );
     expect(Number(count[0]?.count)).toBe(2);
@@ -443,19 +469,18 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
     });
 
     const results = await Promise.allSettled(
-      seed.grupoIds.map((grupoId) =>
+      seed.grupoIds.map(async (grupoId) =>
         unirseAGrupo({
           assignmentId: seed.assignmentId,
           grupoId,
-          alumnoId: seed.alumnoIds[0]!,
-          usuario: fakeUsuario(seed.alumnoIds[0]!),
+          participante: await participanteDeAlumno(orm, seed.alumnoIds[0]!),
         })
       )
     );
 
     expectOneConcurrentConflict(results, AlumnoYaEnGrupoDelAssignmentError);
     const memberships = await orm.em.getConnection().execute<{ count: string }[]>(
-      `select count(*) from "grupo_alumnos"
+      `select count(*) from "grupo_miembro"
        where "assignment_id" = ? and "alumno_id" = ?`,
       [seed.assignmentId, seed.alumnoIds[0]]
     );
@@ -470,12 +495,11 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
     });
 
     const results = await Promise.allSettled(
-      ["Grupo A", "Grupo B"].map((nombre) =>
+      ["Grupo A", "Grupo B"].map(async (nombre) =>
         crearGrupo({
           assignmentId: seed.assignmentId,
-          alumnoId: seed.alumnoIds[0]!,
           nombre,
-          rol: ESTUDIANTE,
+          participante: await participanteDeAlumno(orm, seed.alumnoIds[0]!),
         })
       )
     );
@@ -484,7 +508,7 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
     const rows = await orm.em.getConnection().execute<{ grupos: string; membresias: string }[]>(
       `select
          (select count(*) from "grupo" where "assignment_id" = ?) as grupos,
-         (select count(*) from "grupo_alumnos" where "assignment_id" = ?) as membresias`,
+         (select count(*) from "grupo_miembro" where "assignment_id" = ?) as membresias`,
       [seed.assignmentId, seed.assignmentId]
     );
     expect(rows[0]).toEqual({ grupos: "1", membresias: "1" });
@@ -515,7 +539,7 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
 
     expectOneConcurrentConflict(results, AlumnoYaEnGrupoDelAssignmentError);
     const memberships = await orm.em.getConnection().execute<{ count: string }[]>(
-      `select count(*) from "grupo_alumnos"
+      `select count(*) from "grupo_miembro"
        where "assignment_id" = ? and "alumno_id" = ?`,
       [seed.assignmentId, seed.alumnoIds[0]]
     );
@@ -553,7 +577,7 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
          (select count(*) from "grupo"
           where "assignment_id" = ? and "nombre" = 'Los Lambdas'
             and "paradigma" = 'funcional') as grupos,
-         (select count(*) from "grupo_alumnos"
+         (select count(*) from "grupo_miembro"
           where "assignment_id" = ?) as membresias`,
       [seed.assignmentId, seed.assignmentId]
     );
@@ -568,12 +592,11 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
     });
 
     const results = await Promise.allSettled(
-      ["Los Lógicos", "los-logicos!"].map((nombre, index) =>
+      ["Los Lógicos", "los-logicos!"].map(async (nombre, index) =>
         crearGrupo({
           assignmentId: seed.assignmentId,
-          alumnoId: seed.alumnoIds[index]!,
           nombre,
-          rol: ESTUDIANTE,
+          participante: await participanteDeAlumno(orm, seed.alumnoIds[index]!),
         })
       )
     );

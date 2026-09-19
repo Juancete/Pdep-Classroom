@@ -9,6 +9,7 @@ const mockEm: {
   getReference: ReturnType<typeof vi.fn>;
   getConnection: ReturnType<typeof vi.fn>;
   persist: ReturnType<typeof vi.fn>;
+  remove: ReturnType<typeof vi.fn>;
   flush: ReturnType<typeof vi.fn>;
   transactional: ReturnType<typeof vi.fn>;
 } = {
@@ -18,6 +19,7 @@ const mockEm: {
   getReference: vi.fn(),
   getConnection: vi.fn(() => mockConnection),
   persist: vi.fn(),
+  remove: vi.fn(),
   flush: vi.fn(),
   transactional: vi.fn(),
 };
@@ -35,9 +37,8 @@ import {
   Assignment,
   Entrega,
   Grupo,
-  DOCENTE,
-  ESTUDIANTE,
   AssignmentNoDisponibleError,
+  EntregaConProvisionEnCursoError,
 } from "@/domain/entities";
 import {
   createEntrega,
@@ -56,6 +57,7 @@ import {
   asegurarRepoGithubId,
   iniciarProvisionEntrega,
   marcarCreacionGithubIniciada,
+  eliminarEntrega,
 } from "./EntregaRepository";
 
 function fakeAssignmentDisponible(disponible: boolean) {
@@ -208,22 +210,19 @@ describe("EntregaRepository", () => {
   });
 
   describe("crearEntregaSiAssignmentDisponible", () => {
-    it("crea la entrega cuando el assignment está disponible para el alumno", async () => {
+    it("crea la entrega cuando el assignment está disponible", async () => {
       mockEm.findOne
         .mockResolvedValueOnce(fakeAssignmentDisponible(true)) // lock del assignment
         .mockResolvedValueOnce(null) // repo lookup
         .mockResolvedValueOnce(null); // lógica lookup
 
-      await crearEntregaSiAssignmentDisponible(
-        {
-          assignmentId: "a1",
-          repoName: "kata-juan",
-          repoUrl: "https://github.com/org/kata-juan",
-          githubUsernames: ["juan"],
-          alumnoId: "alumno-1",
-        },
-        ESTUDIANTE
-      );
+      await crearEntregaSiAssignmentDisponible({
+        assignmentId: "a1",
+        repoName: "kata-juan",
+        repoUrl: "https://github.com/org/kata-juan",
+        githubUsernames: ["juan"],
+        alumnoId: "alumno-1",
+      });
 
       expect(mockEm.transactional).toHaveBeenCalled();
       expect(mockEm.findOne).toHaveBeenNthCalledWith(
@@ -235,45 +234,22 @@ describe("EntregaRepository", () => {
       expect(mockEm.persist).toHaveBeenCalled();
     });
 
-    it("rechaza con AssignmentNoDisponibleError si el estado cambió bajo el lock y no es admin", async () => {
+    // issue #107/#112: sin bypass por rol — un docente en Mis TPs sigue las
+    // mismas reglas de estado que un alumno.
+    it("rechaza con AssignmentNoDisponibleError si el estado cambió bajo el lock, sin excepción por rol", async () => {
       mockEm.findOne.mockResolvedValueOnce(fakeAssignmentDisponible(false));
 
       await expect(
-        crearEntregaSiAssignmentDisponible(
-          {
-            assignmentId: "a1",
-            repoName: "kata-juan",
-            repoUrl: "https://github.com/org/kata-juan",
-            githubUsernames: ["juan"],
-            alumnoId: "alumno-1",
-          },
-          ESTUDIANTE
-        )
+        crearEntregaSiAssignmentDisponible({
+          assignmentId: "a1",
+          repoName: "kata-juan",
+          repoUrl: "https://github.com/org/kata-juan",
+          githubUsernames: ["juan"],
+          alumnoId: "alumno-1",
+        })
       ).rejects.toBeInstanceOf(AssignmentNoDisponibleError);
 
       expect(mockEm.persist).not.toHaveBeenCalled();
-    });
-
-    it("permite al admin crear la entrega aunque el assignment no esté disponible", async () => {
-      mockEm.findOne
-        .mockResolvedValueOnce(fakeAssignmentDisponible(false)) // lock del assignment
-        .mockResolvedValueOnce(null) // repo lookup
-        .mockResolvedValueOnce(null); // lógica lookup
-
-      await expect(
-        crearEntregaSiAssignmentDisponible(
-          {
-            assignmentId: "a1",
-            repoName: "kata-juan",
-            repoUrl: "https://github.com/org/kata-juan",
-            githubUsernames: ["juan"],
-            alumnoId: "alumno-1",
-          },
-          DOCENTE
-        )
-      ).resolves.toBeDefined();
-
-      expect(mockEm.persist).toHaveBeenCalled();
     });
   });
 
@@ -643,6 +619,54 @@ describe("EntregaRepository", () => {
 
       expect(entrega.provisionIntentos).toBe(2);
       expect(mockEm.flush).toHaveBeenCalled();
+    });
+  });
+
+  // Issue #107, revisión de code review: el chequeo de `provisionEnCurso()`
+  // que hace `borrarEntrega.ts` antes de tocar GitHub es sólo un fast-fail
+  // — acá se re-verifica bajo el mismo lock que toma `iniciarProvisionEntrega`,
+  // para que una provisión que arranque justo entre medio no pierda su fila.
+  describe("eliminarEntrega", () => {
+    it("bloquea la fila y rechaza si la provisión está en curso (no remueve)", async () => {
+      const entrega = new Entrega();
+      entrega.id = "e1";
+      entrega.provisionEstado = "pendiente";
+      entrega.provisionIntentos = 1;
+      entrega.provisionActualizadoEn = new Date();
+      mockEm.findOne.mockResolvedValueOnce(entrega);
+
+      await expect(eliminarEntrega("e1")).rejects.toBeInstanceOf(
+        EntregaConProvisionEnCursoError
+      );
+
+      expect(mockEm.findOne).toHaveBeenCalledWith(
+        Entrega,
+        { id: "e1" },
+        expect.objectContaining({ lockMode: LockMode.PESSIMISTIC_WRITE })
+      );
+      expect(mockEm.remove).not.toHaveBeenCalled();
+      expect(mockEm.flush).not.toHaveBeenCalled();
+    });
+
+    it("remueve la fila cuando no hay provisión en curso", async () => {
+      const entrega = new Entrega();
+      entrega.id = "e1";
+      entrega.provisionEstado = "activa";
+      mockEm.findOne.mockResolvedValueOnce(entrega);
+
+      await expect(eliminarEntrega("e1")).resolves.toBeUndefined();
+
+      expect(mockEm.remove).toHaveBeenCalledWith(entrega);
+      expect(mockEm.flush).toHaveBeenCalled();
+    });
+
+    it("es idempotente si la entrega ya no existe", async () => {
+      mockEm.findOne.mockResolvedValueOnce(null);
+
+      await expect(eliminarEntrega("no-existe")).resolves.toBeUndefined();
+
+      expect(mockEm.remove).not.toHaveBeenCalled();
+      expect(mockEm.flush).not.toHaveBeenCalled();
     });
   });
 

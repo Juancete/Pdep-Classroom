@@ -4,6 +4,8 @@ import {
   type Paradigma,
   TIPOS_ASSIGNMENT,
   type TipoAssignment,
+  TIPOS_DE_INTEGRANTES,
+  type TipoDeIntegrantes,
 } from "@/domain/entities/domain-constants";
 import type { RolDeUsuario } from "@/domain/entities/RolDeUsuario";
 export { normalizarGithubUsername };
@@ -13,6 +15,7 @@ export { normalizarGithubUsername };
 // dominio) — acá sólo se reexportan para no romper a los callers que ya
 // importan `Paradigma`/`PARADIGMAS`/`TipoAssignment` desde `@/types`.
 export { PARADIGMAS, type Paradigma, TIPOS_ASSIGNMENT, type TipoAssignment };
+export { TIPOS_DE_INTEGRANTES, type TipoDeIntegrantes };
 
 // ── Configuración de columnas del spreadsheet ───────────────
 

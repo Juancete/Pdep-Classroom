@@ -13,6 +13,7 @@ import { matcheaEntregaQuery } from "@/lib/entrega-query";
 import { CIBadge } from "@/components/CIBadge";
 import { CISyncButton } from "./ci-sync-button";
 import { CIRerunButton } from "./ci-rerun-button";
+import { BorrarEntregaButton } from "./borrar-entrega-button";
 import type { NombreResultadoCI } from "@/domain/entities";
 
 export type EntregaRow = {
@@ -159,6 +160,13 @@ export function EntregasTable({
                       Último push: {entrega.ultimoPush.fecha} ({entrega.ultimoPush.por})
                     </span>
                   )}
+                  <span className="block mt-1">
+                    <BorrarEntregaButton
+                      assignmentId={assignmentId}
+                      entregaId={entrega.id}
+                      repoName={entrega.repoName}
+                    />
+                  </span>
                 </DataCell>
               </DataRow>
             ))}

@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/infrastructure/auth/session";
 import { cambiarEstadoAssignment } from "@/infrastructure/repositories";
-import { AssignmentNoEncontradoError } from "@/application/assignmentAuthorization";
-import { TransicionDeEstadoInvalidaError } from "@/domain/entities";
+import { AssignmentNoEncontradoError, TransicionDeEstadoInvalidaError } from "@/domain/entities";
 import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
 
 const EstadoSchema = z.object({
