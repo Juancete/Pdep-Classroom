@@ -6,7 +6,7 @@ import { PARADIGMAS, TIPOS_ASSIGNMENT } from "@/types";
 import { GRUPAL_MIN_MAX_INTEGRANTES } from "@/domain/entities/domain-constants";
 import type { AssignmentFormState } from "@/lib/assignment-schema";
 import { slugify } from "@/lib/naming";
-import { INPUT_CLASS, INPUT_ERROR_CLASS, FieldError, SubmitButton } from "../ui";
+import { INPUT_CLASS, INPUT_ERROR_CLASS, FieldError, SubmitButton, ColSelect } from "../ui";
 
 type Template = { name: string; fullName: string; description: string };
 
@@ -20,6 +20,7 @@ type DefaultValues = {
   paradigma?: string;
   deadline?: string;
   maxIntegrantes?: number;
+  columnaGrupoEnPlanilla?: number;
 };
 
 type Props = {
@@ -324,6 +325,25 @@ export function AssignmentForm({
             <input type="hidden" name="maxIntegrantes" value={defaultValues.maxIntegrantes ?? ""} />
           )}
           <FieldError message={errors.maxIntegrantes?.[0]} />
+        </div>
+      )}
+
+      {/* Columna de la planilla para el grupo (solo grupal) — a diferencia
+          de maxIntegrantes, no se bloquea con structuralLocked: tiene que
+          poder configurarse/cambiarse con el TP ya publicado o archivado
+          (issue #109). */}
+      {tipo === "grupal" && (
+        <div>
+          <ColSelect
+            name="columnaGrupoEnPlanilla"
+            label="Columna de la planilla para el grupo"
+            defaultValue={defaultValues.columnaGrupoEnPlanilla}
+            error={errors.columnaGrupoEnPlanilla?.[0]}
+            optional
+          />
+          <p className="text-gray-400 text-xs mt-1">
+            Se escribe el nombre del grupo en la fila de cada alumno al volcar los grupos.
+          </p>
         </div>
       )}
 

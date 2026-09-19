@@ -264,6 +264,29 @@ para una comisión, la base de Classroom pasa a ser la fuente de verdad: las alt
 se hacen desde la aplicación y una sincronización posterior no vuelve a agregar miembros quitados
 manualmente. La fecha de esa importación queda visible en la edición de la comisión.
 
+**Volcar el grupo de cada alumno a la planilla (Classroom → Sheets):** el camino inverso al
+bootstrap de arriba. Cada assignment grupal puede tener configurada una **columna de la hoja de
+alumnos** (`GrupalAssignment.columnaGrupoEnPlanilla`, 0-indexed) donde escribir el nombre del grupo
+de cada alumno — se elige al crear o editar el TP grupal, con la misma grilla de columnas que usa
+`/admin/comisiones`. No hay una columna por comisión: como sólo hay un TP grupal por paradigma, en
+la práctica es "una columna por paradigma". La columna no puede coincidir con ninguna de las
+columnas de datos personales de la comisión (legajo, GitHub, email, nombre/nombre completo según
+`modoNombre`) ni tocar `ColumnConfig.grupos`, que sigue siendo exclusiva del bootstrap.
+
+Con la columna configurada, el detalle del TP grupal muestra el botón **"Volcar grupos a la
+planilla"**. Es un disparo manual (no automático) que:
+
+- Escribe el nombre del grupo de cada alumno de la comisión en su fila, sólo en esa columna —
+  nunca toca el resto de la fila (fórmulas, notas de otros bloques, etc.).
+- Es un espejo idempotente: un alumno sin grupo (o que dejó uno) queda con la celda vacía; correrlo
+  dos veces seguidas sin cambios de grupos no modifica nada.
+- Excluye los grupos de docentes (demo de "Mis TPs"): sólo se vuelcan grupos de alumnos.
+- Un alumno sin fila en la planilla (no está en la hoja de alumnos) se reporta aparte, sin
+  bloquear al resto.
+
+Requiere el mismo rol **Editor** de la service account que el registro de alumnos (§4.6) — si falta,
+el botón muestra el mismo tipo de error de permisos.
+
 ### 5. Configurar la base de datos
 
 La app usa PostgreSQL via MikroORM. El esquema se crea con migraciones.

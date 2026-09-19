@@ -7,6 +7,7 @@ import {
   type ParticipantesResueltos,
   type FuentesDeConteo,
   type BuscadorDeGrupoDelAlumno,
+  type CamposExtraDeAssignment,
 } from "./Assignment";
 import { buildRepoName } from "@/lib/naming";
 
@@ -45,11 +46,11 @@ export class IndividualAssignment extends Assignment {
     return [];
   }
 
-  extraFormDefaults(): Partial<{ maxIntegrantes: number }> {
+  extraFormDefaults(): CamposExtraDeAssignment {
     return {};
   }
 
-  aplicarCamposExtra(_data: Partial<{ maxIntegrantes: number }>): void {
+  aplicarCamposExtra(_data: CamposExtraDeAssignment): void {
     // Los assignments individuales no tienen campos extra.
   }
 

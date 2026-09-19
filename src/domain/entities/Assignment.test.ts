@@ -210,6 +210,61 @@ describe("GrupalAssignment", () => {
   it("extraFormDefaults incluye maxIntegrantes", () => {
     expect(nuevoGrupal().extraFormDefaults()).toEqual({ maxIntegrantes: 4 });
   });
+
+  it("extraFormDefaults incluye columnaGrupoEnPlanilla cuando está configurada", () => {
+    const grupal = nuevoGrupal();
+    grupal.columnaGrupoEnPlanilla = 5;
+    expect(grupal.extraFormDefaults()).toEqual({
+      maxIntegrantes: 4,
+      columnaGrupoEnPlanilla: 5,
+    });
+  });
+
+  it("extraFormDefaults deja columnaGrupoEnPlanilla en undefined si no está configurada", () => {
+    expect(nuevoGrupal().extraFormDefaults().columnaGrupoEnPlanilla).toBeUndefined();
+  });
+
+  // Regresión: el proyecto no configura `forceUndefined` en MikroORM, así
+  // que un assignment hidratado desde la DB sin columna trae
+  // `columnaGrupoEnPlanilla === null`, no `undefined` — se simula asignando
+  // `null` directo (cast, igual que haría el hydrator del ORM).
+  it("extraFormDefaults normaliza columnaGrupoEnPlanilla null (hidratado desde la DB) a undefined", () => {
+    const grupal = nuevoGrupal();
+    grupal.columnaGrupoEnPlanilla = null as unknown as number;
+    expect(grupal.extraFormDefaults().columnaGrupoEnPlanilla).toBeUndefined();
+  });
+});
+
+// Issue #109: `puedeVolcarseAPlanilla` reemplaza un `instanceof GrupalAssignment`
+// + chequeo de columna en las pages — el default vive en `Assignment` (false)
+// y sólo `GrupalAssignment` lo pisa.
+describe("Assignment.puedeVolcarseAPlanilla", () => {
+  it("individual nunca puede volcarse a la planilla", () => {
+    expect(new IndividualAssignment().puedeVolcarseAPlanilla()).toBe(false);
+  });
+
+  it("grupal sin columna configurada no puede volcarse", () => {
+    const grupal = new GrupalAssignment();
+    grupal.maxIntegrantes = 4;
+    expect(grupal.puedeVolcarseAPlanilla()).toBe(false);
+  });
+
+  it("grupal con columna configurada puede volcarse", () => {
+    const grupal = new GrupalAssignment();
+    grupal.maxIntegrantes = 4;
+    grupal.columnaGrupoEnPlanilla = 5;
+    expect(grupal.puedeVolcarseAPlanilla()).toBe(true);
+  });
+
+  // Regresión: mismo motivo que en `extraFormDefaults` — sin `forceUndefined`,
+  // un grupal existente sin columna hidrata `columnaGrupoEnPlanilla === null`.
+  // Con `!== undefined` esto daba `true` para cualquier grupal existente.
+  it("grupal con columnaGrupoEnPlanilla null (hidratado desde la DB) no puede volcarse", () => {
+    const grupal = new GrupalAssignment();
+    grupal.maxIntegrantes = 4;
+    grupal.columnaGrupoEnPlanilla = null as unknown as number;
+    expect(grupal.puedeVolcarseAPlanilla()).toBe(false);
+  });
 });
 
 // Fase 3 de la auditoría de dominio: antes vivía como una rama
@@ -328,6 +383,38 @@ describe("Assignment.aplicarCamposExtra", () => {
     grupal.maxIntegrantes = 3;
     grupal.aplicarCamposExtra({});
     expect(grupal.maxIntegrantes).toBe(3);
+  });
+
+  it("GrupalAssignment setea columnaGrupoEnPlanilla cuando viene en los datos", () => {
+    const grupal = new GrupalAssignment();
+    grupal.aplicarCamposExtra({ columnaGrupoEnPlanilla: 5 });
+    expect(grupal.columnaGrupoEnPlanilla).toBe(5);
+  });
+
+  it("GrupalAssignment no toca columnaGrupoEnPlanilla si la clave no viene en los datos", () => {
+    const grupal = new GrupalAssignment();
+    grupal.columnaGrupoEnPlanilla = 5;
+    grupal.aplicarCamposExtra({});
+    expect(grupal.columnaGrupoEnPlanilla).toBe(5);
+  });
+
+  // El form manda "" → `undefined` para limpiar la columna elegida — a
+  // diferencia de `maxIntegrantes` (obligatorio), acá `undefined` explícito
+  // sí debe aplicarse y limpiar el campo.
+  it("GrupalAssignment limpia columnaGrupoEnPlanilla cuando la clave viene con undefined explícito", () => {
+    const grupal = new GrupalAssignment();
+    grupal.columnaGrupoEnPlanilla = 5;
+    grupal.aplicarCamposExtra({ columnaGrupoEnPlanilla: undefined });
+    expect(grupal.columnaGrupoEnPlanilla).toBeUndefined();
+  });
+
+  it("limpiar columnaGrupoEnPlanilla con undefined explícito no pisa maxIntegrantes", () => {
+    const grupal = new GrupalAssignment();
+    grupal.maxIntegrantes = 3;
+    grupal.columnaGrupoEnPlanilla = 5;
+    grupal.aplicarCamposExtra({ maxIntegrantes: undefined, columnaGrupoEnPlanilla: undefined });
+    expect(grupal.maxIntegrantes).toBe(3);
+    expect(grupal.columnaGrupoEnPlanilla).toBeUndefined();
   });
 });
 
@@ -623,5 +710,58 @@ describe("Assignment.actualizarEstructura", () => {
     expect(() =>
       assignment.actualizarEstructura({ maxIntegrantes: 10 })
     ).not.toThrow();
+  });
+
+  // Issue #109: `columnaGrupoEnPlanilla` no es estructural — a diferencia de
+  // `maxIntegrantes`, tiene que poder configurarse/cambiarse con el TP ya
+  // publicado o archivado.
+  it("grupal publicado permite configurar columnaGrupoEnPlanilla", () => {
+    const grupal = new GrupalAssignment();
+    grupal.id = "a2";
+    grupal.titulo = "TP Objetos";
+    grupal.slug = "tp-objetos";
+    grupal.templateRepo = "tp-template";
+    grupal.paradigma = "objetos";
+    grupal.maxIntegrantes = 3;
+    grupal.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+
+    expect(() =>
+      grupal.actualizarEstructura({ columnaGrupoEnPlanilla: 5 })
+    ).not.toThrow();
+    expect(grupal.columnaGrupoEnPlanilla).toBe(5);
+  });
+
+  it("grupal archivado permite limpiar columnaGrupoEnPlanilla ya configurada", () => {
+    const grupal = new GrupalAssignment();
+    grupal.id = "a2";
+    grupal.titulo = "TP Objetos";
+    grupal.slug = "tp-objetos";
+    grupal.templateRepo = "tp-template";
+    grupal.paradigma = "objetos";
+    grupal.maxIntegrantes = 3;
+    grupal.columnaGrupoEnPlanilla = 5;
+    grupal.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+    grupal.transicionarA("archivado", { tieneEntregas: true }, "docente1");
+
+    grupal.actualizarEstructura({ columnaGrupoEnPlanilla: undefined });
+
+    expect(grupal.columnaGrupoEnPlanilla).toBeUndefined();
+  });
+
+  it("grupal publicado sigue rechazando maxIntegrantes aunque también mande columnaGrupoEnPlanilla", () => {
+    const grupal = new GrupalAssignment();
+    grupal.id = "a2";
+    grupal.titulo = "TP Objetos";
+    grupal.slug = "tp-objetos";
+    grupal.templateRepo = "tp-template";
+    grupal.paradigma = "objetos";
+    grupal.maxIntegrantes = 3;
+    grupal.transicionarA("publicado", { tieneEntregas: false }, "docente1");
+
+    expect(() =>
+      grupal.actualizarEstructura({ maxIntegrantes: 5, columnaGrupoEnPlanilla: 5 })
+    ).toThrow(AssignmentEstructuraInmutableError);
+    expect(grupal.maxIntegrantes).toBe(3);
+    expect(grupal.columnaGrupoEnPlanilla).toBeUndefined();
   });
 });

@@ -9,6 +9,7 @@ import { randomUUID } from "crypto";
 import type { Assignment } from "./Assignment";
 import { type ColumnConfig, type GruposColumnConfig, DEFAULT_COLUMN_CONFIG } from "@/types";
 import { COMISION_ANIO_MIN, COMISION_ANIO_MAX } from "./domain-constants";
+import { mapeoDeNombreDe } from "./MapeoDeNombre";
 
 // Ventana del lease de importación de grupos: pasado este tiempo sin un
 // heartbeat (`renovarImportacion`), un reclamo se considera abandonado y
@@ -62,6 +63,24 @@ export class Comision {
 
   gruposConfig(): GruposColumnConfig | undefined {
     return this.columnConfig?.grupos;
+  }
+
+  /**
+   * `true` si `indice` ya está ocupada por una columna de datos personales
+   * del alumno en la hoja de esta comisión (legajo, github, email o el/los
+   * nombre(s) según `modoNombre` — issue #109: la columna elegida para
+   * volcar el grupo de cada assignment grupal no puede coincidir con
+   * ninguna de éstas). No incluye `grupos` (bootstrap Sheets → DB, ajeno al
+   * volcado DB → Sheets).
+   */
+  columnaOcupadaPorDatosPersonales(indice: number): boolean {
+    const columnasDeDatosPersonales = [
+      this.columnConfig.legajo,
+      this.columnConfig.githubUsername,
+      this.columnConfig.email,
+      ...mapeoDeNombreDe(this.columnConfig).columnasUsadas(),
+    ];
+    return columnasDeDatosPersonales.includes(indice);
   }
 
   activar(): void {

@@ -47,6 +47,9 @@ import {
   getSheetNames,
   getDatosPrecargaByGithub,
   getPermisoDePlanilla,
+  leerFilasPorGithub,
+  celdasDeGrupo,
+  escribirColumnaDeGrupoEnSheets,
 } from "./sheets";
 import type { ColumnConfig, GruposColumnConfig } from "@/types";
 import { PlanillaNoDisponibleError } from "@/infrastructure/PlanillaNoDisponibleError";
@@ -692,6 +695,270 @@ describe("upsertarAlumnoEnSheets – error de la API de Sheets (PlanillaNoDispon
     }
     expect(mockValuesAppend).not.toHaveBeenCalled();
     expect(mockValuesBatchUpdate).not.toHaveBeenCalled();
+  });
+});
+
+// ── leerFilasPorGithub / celdasDeGrupo / escribirColumnaDeGrupoEnSheets ──
+// Issue #109: volcado manual del grupo de cada alumno (DB) a una columna de
+// la hoja de alumnos (Sheets) — camino inverso al bootstrap de arriba.
+
+describe("leerFilasPorGithub", () => {
+  const SA_KEY = Buffer.from(
+    JSON.stringify({
+      client_email: "sa@proyecto.iam.gserviceaccount.com",
+      private_key: "FAKE_PRIVATE_KEY",
+    })
+  ).toString("base64");
+  const ENV_BACKUP = { ...process.env };
+
+  const config: ColumnConfig = {
+    sheetName: "Alumnos",
+    headerRows: 1,
+    legajo: 0,
+    apellido: 1,
+    nombre: 2,
+    githubUsername: 3,
+    email: 4,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.GOOGLE_SERVICE_ACCOUNT_KEY = SA_KEY;
+  });
+
+  afterEach(() => {
+    process.env = { ...ENV_BACKUP };
+  });
+
+  it("lee sólo la columna de github, igual que findAlumnoRowIndex", async () => {
+    mockValuesGet.mockResolvedValueOnce({ data: { values: [["juangarcia"], ["mariaperez"]] } });
+
+    await leerFilasPorGithub("sheet-1", config);
+
+    expect(mockValuesGet).toHaveBeenCalledTimes(1);
+    expect(mockValuesGet).toHaveBeenCalledWith(
+      expect.objectContaining({ spreadsheetId: "sheet-1", range: "'Alumnos'!D2:D500" })
+    );
+  });
+
+  it("mapea username normalizado a fila 1-based (incluyendo el header)", async () => {
+    mockValuesGet.mockResolvedValueOnce({ data: { values: [["@JuanGarcia"], ["MariaPerez"]] } });
+
+    const filas = await leerFilasPorGithub("sheet-1", config);
+
+    expect(filas.get("juangarcia")).toBe(2);
+    expect(filas.get("mariaperez")).toBe(3);
+  });
+
+  it("ante duplicados, gana la primera fila", async () => {
+    mockValuesGet.mockResolvedValueOnce({
+      data: { values: [["juangarcia"], ["otro"], ["juangarcia"]] },
+    });
+
+    const filas = await leerFilasPorGithub("sheet-1", config);
+
+    expect(filas.get("juangarcia")).toBe(2);
+  });
+
+  it("ignora celdas vacías", async () => {
+    mockValuesGet.mockResolvedValueOnce({ data: { values: [[""], ["juangarcia"]] } });
+
+    const filas = await leerFilasPorGithub("sheet-1", config);
+
+    expect(filas.size).toBe(1);
+    expect(filas.get("juangarcia")).toBe(3);
+  });
+
+  it("devuelve un Map vacío cuando la hoja no tiene filas", async () => {
+    mockValuesGet.mockResolvedValueOnce({ data: { values: [] } });
+    const filas = await leerFilasPorGithub("sheet-1", config);
+    expect(filas.size).toBe(0);
+  });
+});
+
+describe("celdasDeGrupo", () => {
+  it("una celda por alumno con fila, con el rango exacto de la columna elegida", () => {
+    const filasPorGithub = new Map([["juangarcia", 2], ["mariaperez", 3]]);
+    const nombreGrupoPorUsername = new Map([["juangarcia", "Los Lambdas"]]);
+
+    const celdas = celdasDeGrupo(
+      nombreGrupoPorUsername,
+      ["juangarcia", "mariaperez"],
+      filasPorGithub,
+      5,
+      "Alumnos"
+    );
+
+    expect(celdas).toEqual([
+      { range: "'Alumnos'!F2", values: [["Los Lambdas"]] },
+      { range: "'Alumnos'!F3", values: [[""]] },
+    ]);
+  });
+
+  it("alumno sin grupo escribe celda vacía (espejo idempotente)", () => {
+    const filasPorGithub = new Map([["juangarcia", 2]]);
+    const celdas = celdasDeGrupo(new Map(), ["juangarcia"], filasPorGithub, 0, "Alumnos");
+    expect(celdas).toEqual([{ range: "'Alumnos'!A2", values: [[""]] }]);
+  });
+
+  it("alumno sin fila en la planilla se omite", () => {
+    const filasPorGithub = new Map([["juangarcia", 2]]);
+    const nombreGrupoPorUsername = new Map([["mariaperez", "Los Lambdas"]]);
+
+    const celdas = celdasDeGrupo(
+      nombreGrupoPorUsername,
+      ["juangarcia", "mariaperez"],
+      filasPorGithub,
+      0,
+      "Alumnos"
+    );
+
+    expect(celdas).toEqual([{ range: "'Alumnos'!A2", values: [[""]] }]);
+  });
+
+  it("hoja con apóstrofe: escapa duplicando la comilla", () => {
+    const filasPorGithub = new Map([["juangarcia", 2]]);
+    const celdas = celdasDeGrupo(new Map(), ["juangarcia"], filasPorGithub, 0, "1° Cuatrimestre's");
+    expect(celdas[0]!.range).toBe("'1° Cuatrimestre''s'!A2");
+  });
+
+  it("sin alumnos con fila, devuelve vacío", () => {
+    expect(celdasDeGrupo(new Map(), [], new Map(), 0, "Alumnos")).toEqual([]);
+  });
+});
+
+describe("escribirColumnaDeGrupoEnSheets", () => {
+  const SA_KEY = Buffer.from(
+    JSON.stringify({
+      client_email: "sa@proyecto.iam.gserviceaccount.com",
+      private_key: "FAKE_PRIVATE_KEY",
+    })
+  ).toString("base64");
+  const ENV_BACKUP = { ...process.env };
+
+  const config: ColumnConfig = {
+    sheetName: "Alumnos",
+    headerRows: 1,
+    legajo: 0,
+    apellido: 1,
+    nombre: 2,
+    githubUsername: 3,
+    email: 4,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.GOOGLE_SERVICE_ACCOUNT_KEY = SA_KEY;
+  });
+
+  afterEach(() => {
+    process.env = { ...ENV_BACKUP };
+  });
+
+  it("una lectura (readonly) + un único batchUpdate RAW con una celda por alumno", async () => {
+    mockValuesGet.mockResolvedValueOnce({
+      data: { values: [["juangarcia"], ["mariaperez"]] },
+    });
+    mockValuesBatchUpdate.mockResolvedValue({ data: {} });
+
+    const result = await escribirColumnaDeGrupoEnSheets(
+      "sheet-1",
+      config,
+      5,
+      new Map([["juangarcia", "Los Lambdas"]]),
+      ["juangarcia", "mariaperez"]
+    );
+
+    expect(result).toEqual({ alumnosEscritos: 2, sinFila: [] });
+    expect(mockValuesGet).toHaveBeenCalledTimes(1);
+    expect(mockValuesBatchUpdate).toHaveBeenCalledTimes(1);
+    expect(mockValuesBatchUpdate).toHaveBeenCalledWith({
+      spreadsheetId: "sheet-1",
+      requestBody: {
+        valueInputOption: "RAW",
+        data: [
+          { range: "'Alumnos'!F2", values: [["Los Lambdas"]] },
+          { range: "'Alumnos'!F3", values: [[""]] },
+        ],
+      },
+    });
+  });
+
+  it("devuelve sinFila con los usernames (sin normalizar) que no tienen fila en la planilla", async () => {
+    mockValuesGet.mockResolvedValueOnce({ data: { values: [["juangarcia"]] } });
+    mockValuesBatchUpdate.mockResolvedValue({ data: {} });
+
+    const result = await escribirColumnaDeGrupoEnSheets(
+      "sheet-1",
+      config,
+      5,
+      new Map(),
+      ["juangarcia", "@Forastero"]
+    );
+
+    expect(result).toEqual({ alumnosEscritos: 1, sinFila: ["@Forastero"] });
+  });
+
+  it("sin ningún alumno con fila, no llama a batchUpdate", async () => {
+    mockValuesGet.mockResolvedValueOnce({ data: { values: [] } });
+
+    const result = await escribirColumnaDeGrupoEnSheets(
+      "sheet-1",
+      config,
+      5,
+      new Map(),
+      ["juangarcia"]
+    );
+
+    expect(result).toEqual({ alumnosEscritos: 0, sinFila: ["juangarcia"] });
+    expect(mockValuesBatchUpdate).not.toHaveBeenCalled();
+  });
+
+  it("normaliza usernames de ambos lados (mapa de grupos y lista de alumnos)", async () => {
+    mockValuesGet.mockResolvedValueOnce({ data: { values: [["JuanGarcia"]] } });
+    mockValuesBatchUpdate.mockResolvedValue({ data: {} });
+
+    await escribirColumnaDeGrupoEnSheets(
+      "sheet-1",
+      config,
+      5,
+      new Map([["@JuanGarcia", "Los Lambdas"]]),
+      ["juangarcia"]
+    );
+
+    const [{ requestBody }] = mockValuesBatchUpdate.mock.calls[0];
+    expect(requestBody.data).toEqual([
+      { range: "'Alumnos'!F2", values: [["Los Lambdas"]] },
+    ]);
+  });
+
+  it("un error de la lectura (values.get) sale como PlanillaNoDisponibleError", async () => {
+    const errorDelSdk = new Error("The caller does not have permission");
+    mockValuesGet.mockRejectedValueOnce(errorDelSdk);
+
+    await expect(
+      escribirColumnaDeGrupoEnSheets("sheet-1", config, 5, new Map(), ["juangarcia"])
+    ).rejects.toBeInstanceOf(PlanillaNoDisponibleError);
+    expect(mockValuesBatchUpdate).not.toHaveBeenCalled();
+  });
+
+  it("un error del batchUpdate sale como PlanillaNoDisponibleError", async () => {
+    mockValuesGet.mockResolvedValueOnce({ data: { values: [["juangarcia"]] } });
+    const errorDelSdk = new Error("The caller does not have permission");
+    mockValuesBatchUpdate.mockRejectedValueOnce(errorDelSdk);
+
+    await expect(
+      escribirColumnaDeGrupoEnSheets(
+        "sheet-1",
+        config,
+        5,
+        new Map(),
+        ["juangarcia"]
+      )
+    ).rejects.toMatchObject({
+      name: "PlanillaNoDisponibleError",
+      cause: errorDelSdk,
+    });
   });
 });
 

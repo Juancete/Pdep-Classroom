@@ -5,6 +5,7 @@ import {
   type ParticipantesResueltos,
   type FuentesDeConteo,
   type DatosEstructurales,
+  type CamposExtraDeAssignment,
 } from "./Assignment";
 import type { Alumno } from "./Alumno";
 import type { Participante } from "./Participante";
@@ -52,6 +53,15 @@ export class GrupalAssignment extends Assignment {
   // este flag está prendido.
   @Property({ type: 'boolean', default: false })
   inscripcionesCerradas: boolean = false;
+
+  // Columna 0-based de la hoja de alumnos de la comisión donde se escribe
+  // el nombre del grupo de cada alumno al volcar a la planilla (issue #109,
+  // DB → Sheets). `undefined` mientras no se configuró: el assignment no
+  // puede volcarse todavía (ver `puedeVolcarseAPlanilla`). Se puede
+  // configurar/limpiar con el TP ya publicado o archivado — no es un campo
+  // estructural, ver `camposEstructuralesQueCambian`.
+  @Property({ type: 'integer', nullable: true })
+  columnaGrupoEnPlanilla?: number;
 
   @OneToMany("Grupo", "assignment")
   grupos = new Collection<Grupo>(this);
@@ -139,12 +149,39 @@ export class GrupalAssignment extends Assignment {
     return alumnos.filter((alumno) => !alumnosConGrupo.has(alumno.usernameCanonico));
   }
 
-  extraFormDefaults(): Partial<{ maxIntegrantes: number }> {
-    return { maxIntegrantes: this.maxIntegrantes };
+  extraFormDefaults(): CamposExtraDeAssignment {
+    return {
+      maxIntegrantes: this.maxIntegrantes,
+      // `?? undefined` normaliza el `null` que devuelve la hidratación del
+      // ORM (el proyecto no configura `forceUndefined`, así que una columna
+      // nullable sin valor hidrata como `null`, no `undefined`) al mismo
+      // "sin configurar" que usa el resto del dominio.
+      columnaGrupoEnPlanilla: this.columnaGrupoEnPlanilla ?? undefined,
+    };
   }
 
-  aplicarCamposExtra(data: Partial<{ maxIntegrantes: number }>): void {
+  aplicarCamposExtra(data: CamposExtraDeAssignment): void {
     if (data.maxIntegrantes !== undefined) this.maxIntegrantes = data.maxIntegrantes;
+    // A diferencia de `maxIntegrantes` (obligatorio: `undefined` sólo puede
+    // significar "no vino en el form", nunca "vaciarlo"), acá sí hace falta
+    // distinguir "no vino la clave" de "vino la clave en `undefined`": el
+    // form manda `""` → `undefined` para limpiar la columna configurada. Por
+    // eso se chequea presencia de la clave (`in`) en vez de `!== undefined`.
+    if ("columnaGrupoEnPlanilla" in data) {
+      this.columnaGrupoEnPlanilla = data.columnaGrupoEnPlanilla;
+    }
+  }
+
+  /**
+   * Grupal puede volcarse a la planilla apenas tiene columna configurada —
+   * no depende del estado del assignment (issue #109). `typeof === "number"`
+   * en vez de `!== undefined`: el proyecto no configura `forceUndefined` en
+   * MikroORM, así que un assignment hidratado desde la DB sin columna trae
+   * `columnaGrupoEnPlanilla === null`, no `undefined` — `!== undefined` daría
+   * `true` para cualquier grupal existente sin configurar.
+   */
+  puedeVolcarseAPlanilla(): boolean {
+    return typeof this.columnaGrupoEnPlanilla === "number";
   }
 
   protected camposEstructuralesQueCambian(data: DatosEstructurales): string[] {
