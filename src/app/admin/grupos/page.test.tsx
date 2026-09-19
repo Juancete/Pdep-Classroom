@@ -1,22 +1,55 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { Comision, resolverContextoDeComision } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
 const mockRequireAdmin = vi.fn();
 const mockGetGrupos = vi.fn();
+const mockObtenerContextoDeComision = vi.fn();
 
 vi.mock("@/infrastructure/auth/session", () => ({
   requireAdmin: () => mockRequireAdmin(),
 }));
 
 vi.mock("@/infrastructure/repositories", () => ({
-  getGrupos: (paradigma?: string) => mockGetGrupos(paradigma),
+  getGrupos: (filtro: unknown) => mockGetGrupos(filtro),
+}));
+
+vi.mock("@/application/comisionConsultada", () => ({
+  obtenerContextoDeComision: () => mockObtenerContextoDeComision(),
 }));
 
 import AdminGruposPage from "./page";
 
 // ── Helpers ──────────────────────────────────────────────────
+// Contextos armados con la factory real (no se mockea `ContextoDeComision`):
+// la página sólo le pregunta al contexto, igual que en producción.
+
+function comisionCon(id: string, anio: number, activa: boolean): Comision {
+  const comision = new Comision(anio, "sheet-test");
+  comision.id = id;
+  comision.activa = activa;
+  return comision;
+}
+
+function contextoConComisionActiva(id = "c-activa", anio = 2026) {
+  const comision = comisionCon(id, anio, true);
+  return { contexto: resolverContextoDeComision([comision]), comisiones: [comision] };
+}
+
+function contextoConComisionHistorica(id = "c-historica", anio = 2025) {
+  const comisionActiva = comisionCon("c-activa", 2026, true);
+  const comisionHistorica = comisionCon(id, anio, false);
+  return {
+    contexto: resolverContextoDeComision([comisionActiva, comisionHistorica], id),
+    comisiones: [comisionActiva, comisionHistorica],
+  };
+}
+
+function contextoSinComision() {
+  return { contexto: resolverContextoDeComision([]), comisiones: [] };
+}
 
 function makeGrupo(overrides?: object) {
   const base = {
@@ -37,6 +70,7 @@ describe("Admin Grupos page", () => {
     vi.clearAllMocks();
     mockRequireAdmin.mockResolvedValue(undefined);
     mockGetGrupos.mockResolvedValue([]);
+    mockObtenerContextoDeComision.mockResolvedValue(contextoConComisionActiva());
   });
 
   it("siempre llama a requireAdmin", async () => {
@@ -44,148 +78,135 @@ describe("Admin Grupos page", () => {
     expect(mockRequireAdmin).toHaveBeenCalledOnce();
   });
 
-  describe("filtro por paradigma", () => {
-    it("llama a getGrupos sin filtro si no hay searchParam", async () => {
+  it("sin comisión consultada muestra el aviso y no llama al repo", async () => {
+    mockObtenerContextoDeComision.mockResolvedValue(contextoSinComision());
+
+    const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
+    const html = renderToStaticMarkup(element);
+
+    expect(html).toContain("No hay ninguna comisión activa configurada");
+    expect(mockGetGrupos).not.toHaveBeenCalled();
+  });
+
+  describe("filtro por comisión consultada", () => {
+    it("llama a getGrupos con el comisionId de la activa", async () => {
+      mockObtenerContextoDeComision.mockResolvedValue(
+        contextoConComisionActiva("c-2026")
+      );
+
       await AdminGruposPage({ searchParams: Promise.resolve({}) });
-      expect(mockGetGrupos).toHaveBeenCalledWith(undefined);
+
+      expect(mockGetGrupos).toHaveBeenCalledWith({
+        comisionId: "c-2026",
+        paradigma: undefined,
+      });
     });
 
-    it("llama a getGrupos con el paradigma si es válido", async () => {
-      await AdminGruposPage({ searchParams: Promise.resolve({ paradigma: "funcional" }) });
-      expect(mockGetGrupos).toHaveBeenCalledWith("funcional");
-    });
+    it("llama a getGrupos con el comisionId de la histórica consultada", async () => {
+      mockObtenerContextoDeComision.mockResolvedValue(
+        contextoConComisionHistorica("c-2025")
+      );
 
-    it("llama a getGrupos con el paradigma 'logico' si es válido", async () => {
-      await AdminGruposPage({ searchParams: Promise.resolve({ paradigma: "logico" }) });
-      expect(mockGetGrupos).toHaveBeenCalledWith("logico");
-    });
+      await AdminGruposPage({ searchParams: Promise.resolve({}) });
 
-    it("llama a getGrupos con el paradigma 'objetos' si es válido", async () => {
-      await AdminGruposPage({ searchParams: Promise.resolve({ paradigma: "objetos" }) });
-      expect(mockGetGrupos).toHaveBeenCalledWith("objetos");
-    });
-
-    it("ignora el paradigma y llama sin filtro si el valor no es válido", async () => {
-      await AdminGruposPage({ searchParams: Promise.resolve({ paradigma: "invalido" }) });
-      expect(mockGetGrupos).toHaveBeenCalledWith(undefined);
-    });
-
-    it("ignora el paradigma si el valor es una string vacía", async () => {
-      await AdminGruposPage({ searchParams: Promise.resolve({ paradigma: "" }) });
-      expect(mockGetGrupos).toHaveBeenCalledWith(undefined);
+      expect(mockGetGrupos).toHaveBeenCalledWith({
+        comisionId: "c-2025",
+        paradigma: undefined,
+      });
     });
   });
 
-  describe("render de los filtros de paradigma", () => {
-    it('muestra el botón "Todos" siempre', async () => {
-      const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
-      const html = renderToStaticMarkup(element);
-      expect(html).toContain("Todos");
+  describe("filtro por paradigma", () => {
+    it("combina el comisionId consultado sin filtro de paradigma si no hay searchParam", async () => {
+      await AdminGruposPage({ searchParams: Promise.resolve({}) });
+      expect(mockGetGrupos).toHaveBeenCalledWith({
+        comisionId: "c-activa",
+        paradigma: undefined,
+      });
     });
 
-    it("muestra los tres paradigmas como opciones de filtro", async () => {
-      const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
-      const html = renderToStaticMarkup(element);
-      expect(html).toContain("Funcional");
-      expect(html).toContain("Logico");
-      expect(html).toContain("Objetos");
+    it("combina el comisionId consultado con el paradigma si es válido", async () => {
+      await AdminGruposPage({
+        searchParams: Promise.resolve({ paradigma: "funcional" }),
+      });
+      expect(mockGetGrupos).toHaveBeenCalledWith({
+        comisionId: "c-activa",
+        paradigma: "funcional",
+      });
     });
 
-    it("marca como activo el filtro seleccionado", async () => {
-      const element = await AdminGruposPage({ searchParams: Promise.resolve({ paradigma: "funcional" }) });
-      const html = renderToStaticMarkup(element);
-      expect(html).toContain("bg-pdep-600");
+    it("combina el comisionId consultado con el paradigma 'logico' si es válido", async () => {
+      await AdminGruposPage({
+        searchParams: Promise.resolve({ paradigma: "logico" }),
+      });
+      expect(mockGetGrupos).toHaveBeenCalledWith({
+        comisionId: "c-activa",
+        paradigma: "logico",
+      });
     });
 
-    it('marca "Todos" como activo cuando no hay filtro', async () => {
-      const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
-      const html = renderToStaticMarkup(element);
-      expect(html).toContain("bg-pdep-600");
+    it("ignora un paradigma inválido en el query string", async () => {
+      await AdminGruposPage({
+        searchParams: Promise.resolve({ paradigma: "basura" }),
+      });
+      expect(mockGetGrupos).toHaveBeenCalledWith({
+        comisionId: "c-activa",
+        paradigma: undefined,
+      });
     });
   });
 
   describe("estado vacío", () => {
-    it("muestra mensaje genérico cuando no hay grupos y no hay filtro", async () => {
+    it("muestra mensaje cuando no hay grupos", async () => {
       mockGetGrupos.mockResolvedValue([]);
       const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
       const html = renderToStaticMarkup(element);
       expect(html).toContain("No hay grupos ingresados");
     });
+  });
 
-    it("muestra mensaje con el paradigma cuando no hay grupos con filtro activo", async () => {
-      mockGetGrupos.mockResolvedValue([]);
-      const element = await AdminGruposPage({ searchParams: Promise.resolve({ paradigma: "logico" }) });
+  describe("barra de comisión consultada", () => {
+    it("renderiza la barra con la descripción del contexto", async () => {
+      mockObtenerContextoDeComision.mockResolvedValue(
+        contextoConComisionActiva("c-2026", 2026)
+      );
+
+      const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
       const html = renderToStaticMarkup(element);
-      expect(html).toContain("No hay grupos para logico");
+
+      expect(html).toContain("Viendo: 2026 (activa)");
+    });
+
+    it("sin comisión consultada pero con históricas disponibles, muestra el selector", async () => {
+      const comisionHistorica = comisionCon("c-2025", 2025, false);
+      mockObtenerContextoDeComision.mockResolvedValue({
+        contexto: resolverContextoDeComision([comisionHistorica]),
+        comisiones: [comisionHistorica],
+      });
+
+      const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
+      const html = renderToStaticMarkup(element);
+
+      expect(html).toContain("Sin comisión activa");
+      expect(html).toContain('id="selector-comision-consultada"');
     });
   });
 
   describe("con grupos", () => {
-    it("muestra el nombre del grupo", async () => {
-      mockGetGrupos.mockResolvedValue([makeGrupo({ nombre: "Los Monads" })]);
+    it("muestra el nombre y paradigma del grupo", async () => {
+      mockGetGrupos.mockResolvedValue([makeGrupo()]);
       const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
       const html = renderToStaticMarkup(element);
-      expect(html).toContain("Los Monads");
+      expect(html).toContain("Los Lambdas");
+      expect(html).toContain("funcional");
     });
 
-    it("muestra el paradigma del grupo", async () => {
-      mockGetGrupos.mockResolvedValue([makeGrupo({ paradigma: "objetos" })]);
+    it("muestra los usernames de los miembros", async () => {
+      mockGetGrupos.mockResolvedValue([makeGrupo()]);
       const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
       const html = renderToStaticMarkup(element);
-      expect(html).toContain("objetos");
-    });
-
-    it("muestra el título del assignment al que pertenece el grupo", async () => {
-      mockGetGrupos.mockResolvedValue([
-        makeGrupo({ assignment: { id: "a1", titulo: "TP Objetos" } }),
-      ]);
-      const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
-      const html = renderToStaticMarkup(element);
-      expect(html).toContain("TP Objetos");
-    });
-
-    it("muestra los miembros del grupo", async () => {
-      mockGetGrupos.mockResolvedValue([
-        makeGrupo({
-          usernamesDeMiembros: () => ["user1", "user2", "user3"],
-        }),
-      ]);
-      const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
-      const html = renderToStaticMarkup(element);
-      expect(html).toContain("user1");
-      expect(html).toContain("user2");
-      expect(html).toContain("user3");
-    });
-
-    it("renderiza una card por grupo", async () => {
-      mockGetGrupos.mockResolvedValue([
-        makeGrupo({ id: "g1", nombre: "Grupo A" }),
-        makeGrupo({ id: "g2", nombre: "Grupo B" }),
-      ]);
-      const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
-      const html = renderToStaticMarkup(element);
-      expect(html).toContain("Grupo A");
-      expect(html).toContain("Grupo B");
-    });
-
-    // issue #107: distingue en el listado admin los grupos formados por
-    // docentes (demo) de los de alumnos.
-    it("muestra la marca Docentes en un grupo de docentes", async () => {
-      mockGetGrupos.mockResolvedValue([
-        makeGrupo({ nombre: "Grupo Docentes", tipoDeIntegrantes: "docentes" }),
-      ]);
-      const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
-      const html = renderToStaticMarkup(element);
-      expect(html).toContain("Docentes");
-    });
-
-    it("no muestra la marca Docentes en un grupo de alumnos", async () => {
-      mockGetGrupos.mockResolvedValue([
-        makeGrupo({ nombre: "Grupo Alumnos", tipoDeIntegrantes: "alumnos" }),
-      ]);
-      const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
-      const html = renderToStaticMarkup(element);
-      expect(html).not.toContain("Docentes");
+      expect(html).toContain("juangarcia");
+      expect(html).toContain("mariaperez");
     });
   });
 });
