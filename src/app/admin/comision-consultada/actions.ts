@@ -19,7 +19,8 @@ import {
 export async function cambiarComisionConsultada(formData: FormData): Promise<void> {
   await requireAdmin();
 
-  const comisionId = ((formData.get("comisionId") as string | null) ?? "").trim();
+  const valorComisionId = formData.get("comisionId");
+  const comisionId = typeof valorComisionId === "string" ? valorComisionId.trim() : "";
   const comisionElegida = comisionId ? await getComision(comisionId) : null;
 
   // Vacío, inexistente o ya es la activa → borrar la cookie en vez de

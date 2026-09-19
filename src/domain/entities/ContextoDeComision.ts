@@ -1,6 +1,14 @@
 import type { Comision } from "./Comision";
 
 /**
+ * Texto compartido por `ContextoDeComisionHistorica` (cuando no hay activa
+ * en el sistema) y `ContextoSinComision`: en ambos casos el motivo de no
+ * poder crear assignments es el mismo — no hay ninguna comisión activa.
+ */
+const MOTIVO_SIN_COMISION_ACTIVA =
+  "No hay comisión activa: activá una para poder crear assignments.";
+
+/**
  * Contexto de comisión que un docente está consultando en el panel admin
  * (issue #114). Antes, `/admin/grupos` y `/admin/assignments` mostraban
  * datos de *todas* las comisiones a la vez y `/admin/alumnos` mostraba
@@ -33,6 +41,12 @@ export abstract class ContextoDeComision {
    */
   abstract permiteCrearAssignments(): boolean;
 
+  /**
+   * Texto a mostrar en lugar del alta de assignments cuando
+   * `permiteCrearAssignments()` es `false`. `null` si se permite crear.
+   */
+  abstract motivoSinCreacionDeAssignments(): string | null;
+
   /** Texto del header del panel («Viendo: 2026 (activa)», etc). */
   abstract descripcion(): string;
 
@@ -59,6 +73,10 @@ class ContextoDeComisionActiva extends ContextoDeComision {
 
   permiteCrearAssignments(): boolean {
     return true;
+  }
+
+  motivoSinCreacionDeAssignments(): string | null {
+    return null;
   }
 
   descripcion(): string {
@@ -94,6 +112,12 @@ class ContextoDeComisionHistorica extends ContextoDeComision {
     return false;
   }
 
+  motivoSinCreacionDeAssignments(): string | null {
+    return this.comisionActivaDelSistema
+      ? `Los assignments se crean en la comisión activa (${this.comisionActivaDelSistema.anio}).`
+      : MOTIVO_SIN_COMISION_ACTIVA;
+  }
+
   descripcion(): string {
     const infoDeActiva = this.comisionActivaDelSistema
       ? `Activa: ${this.comisionActivaDelSistema.anio}`
@@ -121,6 +145,10 @@ class ContextoSinComision extends ContextoDeComision {
 
   permiteCrearAssignments(): boolean {
     return false;
+  }
+
+  motivoSinCreacionDeAssignments(): string | null {
+    return MOTIVO_SIN_COMISION_ACTIVA;
   }
 
   descripcion(): string {

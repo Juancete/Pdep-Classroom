@@ -138,6 +138,14 @@ function contextoSinComision() {
   return { contexto: resolverContextoDeComision([]), comisiones: [] };
 }
 
+function contextoConComisionHistoricaSinActiva(id = "c-historica", anio = 2025) {
+  const comisionHistorica = comisionCon(id, anio, false);
+  return {
+    contexto: resolverContextoDeComision([comisionHistorica], id),
+    comisiones: [comisionHistorica],
+  };
+}
+
 // ── Tests ────────────────────────────────────────────────────
 
 describe("Admin Assignments page", () => {
@@ -174,7 +182,7 @@ describe("Admin Assignments page", () => {
     expect(html).toContain("Nuevo Assignment");
   });
 
-  it("oculta el link de crear y muestra el texto deshabilitado cuando la comisión consultada es histórica", async () => {
+  it("oculta el link de crear y muestra el motivo con el año de la activa cuando la comisión consultada es histórica", async () => {
     mockObtenerContextoDeComision.mockResolvedValue(contextoConComisionHistorica());
     mockGetAssignments.mockResolvedValue([]);
 
@@ -182,7 +190,20 @@ describe("Admin Assignments page", () => {
     const html = renderToStaticMarkup(element);
 
     expect(html).not.toContain("href=\"/admin/assignments/new\"");
-    expect(html).toContain("Los assignments se crean en la comisión activa");
+    expect(html).toContain("Los assignments se crean en la comisión activa (2026).");
+  });
+
+  it("oculta el link de crear y muestra que no hay comisión activa cuando la histórica consultada no tiene activa en el sistema", async () => {
+    mockObtenerContextoDeComision.mockResolvedValue(contextoConComisionHistoricaSinActiva());
+    mockGetAssignments.mockResolvedValue([]);
+
+    const element = await AdminAssignmentsPage({});
+    const html = renderToStaticMarkup(element);
+
+    expect(html).not.toContain("href=\"/admin/assignments/new\"");
+    expect(html).toContain(
+      "No hay comisión activa: activá una para poder crear assignments."
+    );
   });
 
   describe("filtro por comisión consultada", () => {
@@ -239,11 +260,11 @@ describe("Admin Assignments page", () => {
   });
 
   describe("estado vacío", () => {
-    it("muestra mensaje cuando no hay assignments", async () => {
+    it("muestra mensaje cuando no hay assignments en la comisión activa", async () => {
       mockGetAssignments.mockResolvedValue([]);
       const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
-      expect(html).toContain("No hay assignments todavía");
+      expect(html).toContain("No hay assignments todavía. Creá el primero.");
     });
 
     it("no muestra filas cuando no hay assignments", async () => {
@@ -251,6 +272,17 @@ describe("Admin Assignments page", () => {
       const element = await AdminAssignmentsPage({});
       const html = renderToStaticMarkup(element);
       expect(html).not.toContain("Kata Funcional");
+    });
+
+    it("muestra mensaje sin invitación a crear cuando no hay assignments en una comisión histórica", async () => {
+      mockObtenerContextoDeComision.mockResolvedValue(contextoConComisionHistorica());
+      mockGetAssignments.mockResolvedValue([]);
+
+      const element = await AdminAssignmentsPage({});
+      const html = renderToStaticMarkup(element);
+
+      expect(html).toContain("No hay assignments en esta comisión.");
+      expect(html).not.toContain("Creá el primero");
     });
   });
 

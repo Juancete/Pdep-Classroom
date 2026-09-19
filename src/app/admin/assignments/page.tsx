@@ -81,7 +81,7 @@ export default async function AdminAssignmentsPage(props: {
           </Link>
         ) : (
           <span className="text-sm text-gray-400">
-            Los assignments se crean en la comisión activa.
+            {contexto.motivoSinCreacionDeAssignments()}
           </span>
         )}
       </div>
@@ -117,7 +117,9 @@ export default async function AdminAssignmentsPage(props: {
         <DataEmpty>
           {estadoFilter
             ? `No hay assignments en estado ${estadoFilter}.`
-            : "No hay assignments todavía. Creá el primero."}
+            : contexto.permiteCrearAssignments()
+              ? "No hay assignments todavía. Creá el primero."
+              : "No hay assignments en esta comisión."}
         </DataEmpty>
       ) : (
         <DataTable

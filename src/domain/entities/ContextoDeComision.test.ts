@@ -124,3 +124,42 @@ describe("descripcion / permiteCrearAssignments / ofreceVolverALaActiva por subt
     expect(contexto.ofreceVolverALaActiva()).toBe(false);
   });
 });
+
+describe("motivoSinCreacionDeAssignments", () => {
+  it("contexto activo no tiene motivo (se permite crear)", () => {
+    const comisionActiva = comisionCon("c-2026", 2026, true);
+    const contexto = resolverContextoDeComision([comisionActiva]);
+
+    expect(contexto.motivoSinCreacionDeAssignments()).toBeNull();
+  });
+
+  it("contexto histórico con activa en el sistema menciona el año de la activa", () => {
+    const comisionActiva = comisionCon("c-2026", 2026, true);
+    const comisionHistorica = comisionCon("c-2025", 2025, false);
+    const contexto = resolverContextoDeComision(
+      [comisionActiva, comisionHistorica],
+      "c-2025"
+    );
+
+    expect(contexto.motivoSinCreacionDeAssignments()).toBe(
+      "Los assignments se crean en la comisión activa (2026)."
+    );
+  });
+
+  it("contexto histórico sin activa en el sistema indica que no hay comisión activa", () => {
+    const comisionHistorica = comisionCon("c-2025", 2025, false);
+    const contexto = resolverContextoDeComision([comisionHistorica], "c-2025");
+
+    expect(contexto.motivoSinCreacionDeAssignments()).toBe(
+      "No hay comisión activa: activá una para poder crear assignments."
+    );
+  });
+
+  it("contexto sin comisión indica que no hay comisión activa", () => {
+    const contexto = resolverContextoDeComision([]);
+
+    expect(contexto.motivoSinCreacionDeAssignments()).toBe(
+      "No hay comisión activa: activá una para poder crear assignments."
+    );
+  });
+});

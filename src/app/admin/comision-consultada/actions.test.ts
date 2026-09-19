@@ -96,6 +96,16 @@ describe("cambiarComisionConsultada", () => {
     expect(mockGetComision).not.toHaveBeenCalled();
   });
 
+  it("no tira y borra la cookie cuando comisionId llega como File en vez de string", async () => {
+    const formData = new FormData();
+    formData.set("comisionId", new File(["contenido"], "archivo.txt"));
+
+    await expect(cambiarComisionConsultada(formData)).resolves.not.toThrow();
+
+    expect(mockGetComision).not.toHaveBeenCalled();
+    expect(mockBorrarComisionConsultadaId).toHaveBeenCalledOnce();
+  });
+
   it("revalida /admin como layout en todos los casos", async () => {
     mockGetComision.mockResolvedValue(comisionCon("c-2025", false));
 
