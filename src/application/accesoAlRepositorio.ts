@@ -1,11 +1,17 @@
-import { ColaboradorNoInvitableError } from "@/domain/entities";
+import { ColaboradorNoInvitableError, type Entrega } from "@/domain/entities";
 import {
   actualizarColaboradoresDeEntrega,
   getEntregaLogica,
   type AccesoAlRepositorioDeGrupo,
   type ContextoDeAcceso,
 } from "@/infrastructure/repositories";
-import { addCollaborators, removeCollaborator, SIN_REINTENTOS } from "@/infrastructure/github";
+import {
+  addCollaborators,
+  getRepoInfo,
+  removeCollaborator,
+  SIN_REINTENTOS,
+  TIMEOUT_EN_TRANSACCION_MS,
+} from "@/infrastructure/github";
 import { GithubRecursoNoEncontradoError } from "@/infrastructure/github-errors";
 import type { EntityManager } from "@mikro-orm/postgresql";
 
@@ -32,12 +38,25 @@ async function otorgarA(
   await actualizarColaboradoresDeEntrega(entrega.id, { agregar: githubUsername }, transaction);
 }
 
+// Una provisión fallida a medias puede haber dejado el repo creado con algunos
+// integrantes ya invitados (issue #123). Se verifica que el repo sea propio
+// antes de revocar: un repo homónimo ajeno
+// (`RepositorioPreexistenteNoAdministradoError`) no se debe tocar.
+async function nombreDeRepoConAcceso(entrega: Entrega): Promise<string | undefined> {
+  const repoActivo = entrega.nombreDeRepoActivo();
+  if (repoActivo) return repoActivo;
+  const repoParcial = entrega.nombreDeRepoParcial();
+  if (!repoParcial) return undefined;
+  const repo = await getRepoInfo(repoParcial, { timeoutMs: TIMEOUT_EN_TRANSACCION_MS });
+  return repo && entrega.reconoceComoPropio(repo) ? repoParcial : undefined;
+}
+
 async function revocarA(
   { assignmentId, grupoId, githubUsername }: ContextoDeAcceso,
   transaction: EntityManager
 ): Promise<void> {
   const entrega = await getEntregaLogica({ assignmentId, grupoId }, transaction);
-  const repoName = entrega?.nombreDeRepoActivo();
+  const repoName = entrega && (await nombreDeRepoConAcceso(entrega));
   if (!entrega || !repoName) return;
 
   // Sin guarda de `perteneceA`: `githubUsernames` se actualiza por webhook y

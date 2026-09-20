@@ -96,7 +96,7 @@ export type PoliticaDeReintentos = {
 };
 
 // Tope de cada llamada a GitHub hecha con una transacción (y su lock) abierta.
-const TIMEOUT_EN_TRANSACCION_MS = 5_000;
+export const TIMEOUT_EN_TRANSACCION_MS = 5_000;
 
 // Los reintentos existen por la consistencia eventual de un repo recién
 // creado desde template: GitHub puede tardar en verlo y responde 404/422.
@@ -236,10 +236,19 @@ export interface RepoInfo {
 // (issue #60, camino de "repo preexistente" en aceptarAssignment.ts), hace
 // falta también su id numérico de GitHub para no depender exclusivamente del
 // self-heal del primer webhook.
-export async function getRepoInfo(repoName: string): Promise<RepoInfo | null> {
+export async function getRepoInfo(
+  repoName: string,
+  opciones?: { timeoutMs?: number }
+): Promise<RepoInfo | null> {
   const octokit = getOctokit();
   try {
-    const { data } = await octokit.repos.get({ owner: ORG, repo: repoName });
+    const { data } = await octokit.repos.get({
+      owner: ORG,
+      repo: repoName,
+      ...(opciones?.timeoutMs !== undefined && {
+        request: { signal: AbortSignal.timeout(opciones.timeoutMs) },
+      }),
+    });
     return {
       repoGithubId: String(data.id),
       repoUrl: data.html_url,

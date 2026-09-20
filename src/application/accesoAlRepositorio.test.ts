@@ -6,6 +6,7 @@ const mockGetEntregaLogica = vi.fn();
 const mockActualizarColaboradores = vi.fn();
 const mockAddCollaborators = vi.fn();
 const mockRemoveCollaborator = vi.fn();
+const mockGetRepoInfo = vi.fn();
 
 vi.mock("@/infrastructure/repositories", () => ({
   getEntregaLogica: (data: unknown, transaction: unknown) =>
@@ -20,6 +21,8 @@ vi.mock("@/infrastructure/github", () => ({
     mockAddCollaborators(repoName, usernames, permission, politica),
   removeCollaborator: (repoName: string, username: string) =>
     mockRemoveCollaborator(repoName, username),
+  getRepoInfo: (repoName: string, opciones: unknown) => mockGetRepoInfo(repoName, opciones),
+  TIMEOUT_EN_TRANSACCION_MS: 5000,
 }));
 
 import { GithubRecursoNoEncontradoError } from "@/infrastructure/github-errors";
@@ -227,5 +230,111 @@ describe("revocarA", () => {
     );
 
     expect(mockActualizarColaboradores).not.toHaveBeenCalled();
+  });
+
+  describe("con una provisión que dejó el repositorio a medias (issue #123)", () => {
+    const inicioDeCreacion = new Date("2026-08-23T12:00:00Z");
+
+    function makeEntregaParcial(provisionEstado: "fallida" | "pendiente"): Entrega {
+      return makeEntrega({
+        provisionEstado,
+        repoUrl: undefined,
+        githubUsernames: ["mariaperez", "juangarcia"],
+        provisionCreacionIniciadaEn: inicioDeCreacion,
+      });
+    }
+
+    function repoPropioDe(entrega: Entrega) {
+      return {
+        repoGithubId: "555666",
+        repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-los-lambdas",
+        description: `TP ${entrega.marcadorDeRepo()}`,
+        createdAt: new Date(inicioDeCreacion.getTime() + 1000),
+      };
+    }
+
+    it("revoca el acceso en el repositorio que una provisión fallida dejó a medias", async () => {
+      const entrega = makeEntregaParcial("fallida");
+      mockGetEntregaLogica.mockResolvedValue(entrega);
+      mockGetRepoInfo.mockResolvedValue(repoPropioDe(entrega));
+
+      await accesoAlRepositorioDeGrupo.revocarA(contexto, transaction);
+
+      expect(mockGetRepoInfo).toHaveBeenCalledWith("kata-funcional-los-lambdas", {
+        timeoutMs: 5000,
+      });
+      expect(mockRemoveCollaborator).toHaveBeenCalledWith(
+        "kata-funcional-los-lambdas",
+        "juangarcia"
+      );
+      expect(mockActualizarColaboradores).toHaveBeenCalledWith(
+        "e1",
+        { quitar: "juangarcia" },
+        transaction
+      );
+    });
+
+    it("revoca el acceso en el repositorio que una provisión pendiente dejó a medias", async () => {
+      const entrega = makeEntregaParcial("pendiente");
+      mockGetEntregaLogica.mockResolvedValue(entrega);
+      mockGetRepoInfo.mockResolvedValue(repoPropioDe(entrega));
+
+      await accesoAlRepositorioDeGrupo.revocarA(contexto, transaction);
+
+      expect(mockRemoveCollaborator).toHaveBeenCalledWith(
+        "kata-funcional-los-lambdas",
+        "juangarcia"
+      );
+      expect(mockActualizarColaboradores).toHaveBeenCalledWith(
+        "e1",
+        { quitar: "juangarcia" },
+        transaction
+      );
+    });
+
+    it("no toca un repositorio homónimo que no es de la entrega", async () => {
+      const entrega = makeEntregaParcial("fallida");
+      mockGetEntregaLogica.mockResolvedValue(entrega);
+      mockGetRepoInfo.mockResolvedValue({
+        ...repoPropioDe(entrega),
+        description: "Repo de otra persona",
+      });
+
+      await accesoAlRepositorioDeGrupo.revocarA(contexto, transaction);
+
+      expect(mockRemoveCollaborator).not.toHaveBeenCalled();
+      expect(mockActualizarColaboradores).not.toHaveBeenCalled();
+    });
+
+    it("no toca GitHub cuando el repositorio de la provisión fallida ya no existe", async () => {
+      mockGetEntregaLogica.mockResolvedValue(makeEntregaParcial("fallida"));
+      mockGetRepoInfo.mockResolvedValue(null);
+
+      await accesoAlRepositorioDeGrupo.revocarA(contexto, transaction);
+
+      expect(mockRemoveCollaborator).not.toHaveBeenCalled();
+      expect(mockActualizarColaboradores).not.toHaveBeenCalled();
+    });
+
+    it("no consulta GitHub cuando la creación del repositorio nunca llegó a iniciarse", async () => {
+      mockGetEntregaLogica.mockResolvedValue(
+        makeEntrega({ provisionEstado: "fallida", repoUrl: undefined })
+      );
+
+      await accesoAlRepositorioDeGrupo.revocarA(contexto, transaction);
+
+      expect(mockGetRepoInfo).not.toHaveBeenCalled();
+      expect(mockRemoveCollaborator).not.toHaveBeenCalled();
+    });
+
+    it("no consulta si el repositorio es propio cuando la entrega tiene el repo activo", async () => {
+      await accesoAlRepositorioDeGrupo.revocarA(contexto, transaction);
+
+      expect(mockGetRepoInfo).not.toHaveBeenCalled();
+      expect(mockRemoveCollaborator).toHaveBeenCalledWith(
+        "kata-funcional-los-lambdas",
+        "juangarcia"
+      );
+    });
   });
 });

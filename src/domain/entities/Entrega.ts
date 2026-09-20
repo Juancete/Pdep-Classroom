@@ -410,6 +410,20 @@ export class Entrega {
   }
 
   /**
+   * Una provisión pendiente o fallida no tiene repo activo, pero si la
+   * creación en GitHub llegó a iniciarse el repo puede existir con algunos
+   * colaboradores ya invitados (`crearEntrega` invita en paralelo y puede
+   * fallar a mitad; issue #123). Este nombre es sólo un candidato: hay que
+   * confirmar contra GitHub que el repo es propio (`reconoceComoPropio`)
+   * antes de tocarlo.
+   */
+  nombreDeRepoParcial(): string | undefined {
+    return !this.hasRepo() && !this.repoDeleted && !!this.provisionCreacionIniciadaEn
+      ? this.repoName
+      : undefined;
+  }
+
+  /**
    * `true` si otra request ya reclamó el aprovisionamiento y todavía está
    * dentro de la ventana en la que puede seguir corriendo (issue #107) —
    * misma lógica que antes vivía inline en

@@ -79,6 +79,62 @@ describe("Entrega.nombreDeRepoActivo", () => {
   });
 });
 
+describe("Entrega.nombreDeRepoParcial", () => {
+  const inicio = new Date("2026-08-23T12:00:00Z");
+
+  it("devuelve el nombre del repo cuando la provisión quedó fallida después de iniciar la creación", () => {
+    const entrega = nuevaEntrega({
+      provisionEstado: "fallida",
+      repoName: "org-repo",
+      repoUrl: undefined,
+      provisionCreacionIniciadaEn: inicio,
+    });
+    expect(entrega.nombreDeRepoParcial()).toBe("org-repo");
+  });
+
+  it("devuelve el nombre del repo cuando la provisión quedó pendiente después de iniciar la creación", () => {
+    const entrega = nuevaEntrega({
+      provisionEstado: "pendiente",
+      repoName: "org-repo",
+      repoUrl: undefined,
+      provisionCreacionIniciadaEn: inicio,
+    });
+    expect(entrega.nombreDeRepoParcial()).toBe("org-repo");
+  });
+
+  it("no devuelve nada cuando la creación del repo nunca llegó a iniciarse", () => {
+    const entrega = nuevaEntrega({
+      provisionEstado: "fallida",
+      repoName: "org-repo",
+      repoUrl: undefined,
+      provisionCreacionIniciadaEn: undefined,
+    });
+    expect(entrega.nombreDeRepoParcial()).toBeUndefined();
+  });
+
+  it("no devuelve nada cuando el repo fue borrado", () => {
+    const entrega = nuevaEntrega({
+      provisionEstado: "fallida",
+      repoName: "org-repo",
+      repoUrl: undefined,
+      provisionCreacionIniciadaEn: inicio,
+      repoDeleted: true,
+    });
+    expect(entrega.nombreDeRepoParcial()).toBeUndefined();
+  });
+
+  it("no devuelve nada cuando la entrega tiene el repo activo", () => {
+    const entrega = nuevaEntrega({
+      provisionEstado: "activa",
+      repoName: "org-repo",
+      repoUrl: "https://github.com/org/org-repo",
+      provisionCreacionIniciadaEn: inicio,
+    });
+    expect(entrega.nombreDeRepoParcial()).toBeUndefined();
+    expect(entrega.nombreDeRepoActivo()).toBe("org-repo");
+  });
+});
+
 // Issue #107 (revisión de code review): la ventana de "en vuelo" vivía
 // duplicada en `EntregaRepository.iniciarProvisionEntrega` — se mueve acá
 // para que `borrarEntrega.ts` la consulte sin repetirla.

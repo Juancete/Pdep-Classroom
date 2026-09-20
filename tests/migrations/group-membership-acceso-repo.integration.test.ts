@@ -17,6 +17,8 @@ vi.mock("@/infrastructure/db", () => ({
 vi.mock("@/infrastructure/github", () => ({
   addCollaborators: vi.fn(),
   removeCollaborator: vi.fn(),
+  getRepoInfo: vi.fn(),
+  TIMEOUT_EN_TRANSACCION_MS: 5000,
   SIN_REINTENTOS: { intentos: 1, esperaInicialMs: 0, esperaMaximaMs: 0, timeoutMs: 5000 },
 }));
 
@@ -35,7 +37,7 @@ import {
 } from "../../src/infrastructure/repositories/GrupoRepository";
 import type { AccesoAlRepositorioDeGrupo } from "../../src/infrastructure/repositories/AccesoAlRepositorio";
 import { accesoAlRepositorioDeGrupo } from "../../src/application/accesoAlRepositorio";
-import { addCollaborators, removeCollaborator } from "@/infrastructure/github";
+import { addCollaborators, getRepoInfo, removeCollaborator } from "@/infrastructure/github";
 import { GithubRecursoNoEncontradoError } from "@/infrastructure/github-errors";
 
 const SIN_REINTENTOS = { intentos: 1, esperaInicialMs: 0, esperaMaximaMs: 0, timeoutMs: 5000 };
@@ -180,6 +182,29 @@ async function seedEntregaActiva(
   return { entregaId, repoName };
 }
 
+async function seedEntregaFallidaConRepoParcial(
+  orm: MikroORM,
+  params: { assignmentId: string; grupoId: string; githubUsernames: string[]; inicio: Date }
+): Promise<{ entregaId: string; repoName: string }> {
+  const entregaId = randomUUID();
+  const repoName = `tp-${params.assignmentId}-grupo`;
+  await orm.em.getConnection().execute(
+    `insert into "entrega"
+      ("id", "assignment_id", "grupo_id", "github_usernames", "repo_name", "repo_url",
+       "repo_deleted", "provision_estado", "provision_creacion_iniciada_en", "created_at")
+     values (?, ?, ?, ?::text[], ?, null, false, 'fallida', ?, now())`,
+    [
+      entregaId,
+      params.assignmentId,
+      params.grupoId,
+      `{${params.githubUsernames.join(",")}}`,
+      repoName,
+      params.inicio,
+    ]
+  );
+  return { entregaId, repoName };
+}
+
 async function filasDeMiembro(orm: MikroORM, grupoId: string, githubUsername: string) {
   return orm.em.getConnection().execute<{ id: string }[]>(
     `select "id" from "grupo_miembro" where "grupo_id" = ? and "github_username" = ?`,
@@ -239,6 +264,7 @@ describe.sequential("acceso al repositorio del grupo — atomicidad con la membr
   beforeEach(async () => {
     vi.mocked(addCollaborators).mockReset().mockResolvedValue(undefined as never);
     vi.mocked(removeCollaborator).mockReset().mockResolvedValue(undefined as never);
+    vi.mocked(getRepoInfo).mockReset();
     await orm.em.getConnection().execute('truncate table "comision" cascade');
   });
 
@@ -500,6 +526,71 @@ describe.sequential("acceso al repositorio del grupo — atomicidad con la membr
       const colaboradores = await colaboradoresDeEntrega(orm, entregaId);
       expect(colaboradores).not.toContain(seed.githubUsernames[0]);
       expect(colaboradores).toContain(seed.githubUsernames[1]);
+    });
+
+    it("revoca el acceso del integrante que ya estaba invitado en el repositorio que una provisión fallida dejó a medias", async () => {
+      const seed = await seedGroups(orm, { alumnos: 2, grupos: 1, maxIntegrantes: 3 });
+      const grupoId = seed.grupoIds[0]!;
+      await seedMembership(orm, grupoId, seed.assignmentId, seed.alumnoIds[0]!, seed.githubUsernames[0]!);
+      await seedMembership(orm, grupoId, seed.assignmentId, seed.alumnoIds[1]!, seed.githubUsernames[1]!);
+      const inicio = new Date();
+      const { entregaId, repoName } = await seedEntregaFallidaConRepoParcial(orm, {
+        assignmentId: seed.assignmentId,
+        grupoId,
+        githubUsernames: [CREADOR, ...seed.githubUsernames],
+        inicio,
+      });
+      vi.mocked(getRepoInfo).mockResolvedValue({
+        repoGithubId: "987654",
+        repoUrl: `https://github.com/org/${repoName}`,
+        description: `TP [pdep-entrega:${entregaId}]`,
+        createdAt: new Date(inicio.getTime() + 1000),
+      });
+
+      await salirDeGrupo({
+        acceso: accesoAlRepositorioDeGrupo,
+        assignmentId: seed.assignmentId,
+        grupoId,
+        githubUsername: seed.githubUsernames[0]!,
+        actor: actorDocente(seed.assignmentId),
+        realizadoPor: "docente1",
+      });
+
+      expect(removeCollaborator).toHaveBeenCalledWith(repoName, seed.githubUsernames[0]);
+      expect(await filasDeMiembro(orm, grupoId, seed.githubUsernames[0]!)).toEqual([]);
+      expect(await colaboradoresDeEntrega(orm, entregaId)).not.toContain(seed.githubUsernames[0]);
+    });
+
+    it("no revoca en un repositorio homónimo que no es de la entrega", async () => {
+      const seed = await seedGroups(orm, { alumnos: 2, grupos: 1, maxIntegrantes: 3 });
+      const grupoId = seed.grupoIds[0]!;
+      await seedMembership(orm, grupoId, seed.assignmentId, seed.alumnoIds[0]!, seed.githubUsernames[0]!);
+      await seedMembership(orm, grupoId, seed.assignmentId, seed.alumnoIds[1]!, seed.githubUsernames[1]!);
+      const inicio = new Date();
+      const { repoName } = await seedEntregaFallidaConRepoParcial(orm, {
+        assignmentId: seed.assignmentId,
+        grupoId,
+        githubUsernames: [CREADOR, ...seed.githubUsernames],
+        inicio,
+      });
+      vi.mocked(getRepoInfo).mockResolvedValue({
+        repoGithubId: "987654",
+        repoUrl: `https://github.com/org/${repoName}`,
+        description: "Repo de otra persona",
+        createdAt: new Date(inicio.getTime() + 1000),
+      });
+
+      await salirDeGrupo({
+        acceso: accesoAlRepositorioDeGrupo,
+        assignmentId: seed.assignmentId,
+        grupoId,
+        githubUsername: seed.githubUsernames[0]!,
+        actor: actorDocente(seed.assignmentId),
+        realizadoPor: "docente1",
+      });
+
+      expect(removeCollaborator).not.toHaveBeenCalled();
+      expect(await filasDeMiembro(orm, grupoId, seed.githubUsernames[0]!)).toEqual([]);
     });
   });
 });

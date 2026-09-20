@@ -425,6 +425,28 @@ describe("getRepoInfo", () => {
     });
   });
 
+  it("pasa un AbortSignal a la consulta del repo cuando se pide timeout", async () => {
+    mockReposGet.mockResolvedValue({
+      data: { id: 1, html_url: "https://github.com/o/tp-ana", description: null, created_at: null },
+    });
+
+    await getRepoInfo("tp-ana", { timeoutMs: 5000 });
+
+    const [argumentos] = mockReposGet.mock.calls[0];
+    expect(argumentos.request.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("no pasa un AbortSignal a la consulta del repo por defecto", async () => {
+    mockReposGet.mockResolvedValue({
+      data: { id: 1, html_url: "https://github.com/o/tp-ana", description: null, created_at: null },
+    });
+
+    await getRepoInfo("tp-ana");
+
+    const [argumentos] = mockReposGet.mock.calls[0];
+    expect(argumentos.request).toBeUndefined();
+  });
+
   it("devuelve null cuando el repo no existe (404)", async () => {
     mockReposGet.mockRejectedValue(requestError(404, "Not Found"));
 
