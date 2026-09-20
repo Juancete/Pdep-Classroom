@@ -27,6 +27,9 @@ vi.mock("@/infrastructure/auth/session", () => ({
 vi.mock("@/infrastructure/repositories", () => ({
   getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
   getComisionActiva: () => mockGetComisionActiva(),
+}));
+
+vi.mock("@/application/membresiaDeGrupo", () => ({
   unirseAGrupo: (params: unknown) => mockUnirseAGrupo(params),
 }));
 

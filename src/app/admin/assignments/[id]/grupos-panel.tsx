@@ -46,15 +46,20 @@ const ACCIONES: Record<
 
 // Advertencias que se agregan a la confirmación según el estado del grupo
 // afectado — también dato, para no meter ifs en el render.
-const ADVERTENCIAS: { aplica: (grupo: GrupoAdminResumen) => boolean; texto: string }[] = [
+const ADVERTENCIAS: {
+  aplica: (grupo: GrupoAdminResumen) => boolean;
+  texto: (accion: "quitar" | "mover" | "agregar") => string;
+}[] = [
   {
     aplica: (grupo) => grupo.tieneEntrega,
-    texto:
-      "El grupo ya aceptó el TP: el repositorio está creado y queda con los colaboradores desincronizados; hay que ajustarlos a mano en GitHub.",
+    texto: (accion) =>
+      accion === "agregar"
+        ? "El grupo ya aceptó el TP: se le va a dar acceso al repositorio. Si GitHub falla, el cambio no se aplica."
+        : "El grupo ya aceptó el TP: se le va a revocar el acceso al repositorio. Si GitHub falla, el cambio no se aplica.",
   },
   {
     aplica: (grupo) => grupo.miembros.length === 1 && !grupo.tieneEntrega,
-    texto: "Es el último integrante: el grupo se va a eliminar y su nombre queda libre.",
+    texto: () => "Es el último integrante: el grupo se va a eliminar y su nombre queda libre.",
   },
 ];
 
@@ -63,17 +68,17 @@ function confirmacionPara(
   grupoAfectado: GrupoAdminResumen
 ): string {
   const advertencias = ADVERTENCIAS.filter((item) => item.aplica(grupoAfectado)).map(
-    (item) => item.texto
+    (item) => item.texto(accion)
   );
   return [ACCIONES[accion].confirmacion, ...advertencias].join(" ");
 }
 
 // Aparte de ADVERTENCIAS: "último integrante" no tiene sentido evaluado
 // sobre el destino de un movimiento (gana un integrante, no lo pierde), así
-// que el destino sólo suma esta advertencia puntual sobre colaboradores.
+// que el destino sólo suma esta advertencia puntual sobre el acceso al repo.
 function advertenciaEntregaDestino(grupoDestino: GrupoAdminResumen): string | null {
   return grupoDestino.tieneEntrega
-    ? "El grupo destino ya aceptó el TP: sumar a alguien también desincroniza sus colaboradores."
+    ? "El grupo destino ya aceptó el TP: se le va a dar acceso al repositorio del grupo destino. Si GitHub falla, el cambio no se aplica."
     : null;
 }
 

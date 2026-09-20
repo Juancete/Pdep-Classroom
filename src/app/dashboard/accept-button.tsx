@@ -12,7 +12,7 @@ export function AcceptButton({ assignmentId }: { assignmentId: string }) {
       });
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error ?? "Error al crear el repo");
+        throw new Error(data.error ?? "No pudimos completar la operación sobre el repositorio");
       }
       window.location.reload();
     });

@@ -30,6 +30,9 @@ vi.mock("@/infrastructure/auth/session", () => ({
 vi.mock("@/infrastructure/repositories", () => ({
   getAlumnoByGithub: (username: string) => mockGetAlumnoByGithub(username),
   getComisionActiva: () => mockGetComisionActiva(),
+}));
+
+vi.mock("@/application/membresiaDeGrupo", () => ({
   salirDeGrupo: (params: unknown) => mockSalirDeGrupo(params),
   moverAlumnoDeGrupo: (params: unknown) => mockMoverAlumnoDeGrupo(params),
 }));
@@ -138,7 +141,8 @@ describe("PUT /api/assignments/[id]/grupos/[grupoId]/miembros/[githubUsername]",
     expect(githubUsername).toBe("ana");
     expect(realizadoPor).toBe("docente1");
     expect(actor.origenDeAuditoria()).toBe("docente");
-    expect(() => actor.autorizarCambioDeMembresia({} as never)).not.toThrow();
+    expect(() => actor.autorizarAltaEnGrupo({} as never)).not.toThrow();
+    expect(() => actor.autorizarBajaDeGrupo({} as never)).not.toThrow();
   });
 
   it("acepta un motivo opcional y lo propaga", async () => {

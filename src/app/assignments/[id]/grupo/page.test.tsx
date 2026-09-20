@@ -11,6 +11,7 @@ const mockGetAlumnoByGithub = vi.fn();
 const mockGetComisionActiva = vi.fn();
 const mockGetGruposDeAssignment = vi.fn();
 const mockGetEntregaLogica = vi.fn();
+const mockGetGrupoIdsConRepoActivo = vi.fn();
 const mockNotFound = vi.fn(() => { throw new Error("NOT_FOUND"); });
 
 vi.mock("@/infrastructure/auth/session", () => ({
@@ -23,6 +24,7 @@ vi.mock("@/infrastructure/repositories", () => ({
   getComisionActiva: () => mockGetComisionActiva(),
   getGruposDeAssignment: (id: string) => mockGetGruposDeAssignment(id),
   getEntregaLogica: (data: unknown) => mockGetEntregaLogica(data),
+  getGrupoIdsConRepoActivo: (id: string) => mockGetGrupoIdsConRepoActivo(id),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -44,7 +46,8 @@ vi.mock("./grupo-selector", () => ({
 vi.mock("./mi-grupo", () => ({
   MiGrupo: (props: {
     grupo: { nombre: string };
-    tieneEntrega: boolean;
+    tieneRepo: boolean;
+    tieneAccesoAlRepo: boolean;
     githubUsername: string;
     motivoBloqueo: string | null;
     esUltimoMiembro: boolean;
@@ -53,7 +56,8 @@ vi.mock("./mi-grupo", () => ({
     <div
       data-testid="mi-grupo"
       data-nombre={props.grupo.nombre}
-      data-tiene-entrega={String(props.tieneEntrega)}
+      data-tiene-repo={String(props.tieneRepo)}
+      data-tiene-acceso={String(props.tieneAccesoAlRepo)}
       data-username={props.githubUsername}
       data-motivo={props.motivoBloqueo ?? ""}
       data-ultimo={String(props.esUltimoMiembro)}
@@ -126,6 +130,14 @@ function makeGrupo(
   return grupo;
 }
 
+function makeEntregaFake({ tieneRepo, colaboradores }: { tieneRepo: boolean; colaboradores: string[] }) {
+  return {
+    id: "e1",
+    hasRepo: () => tieneRepo,
+    perteneceA: (username: string) => colaboradores.includes(username),
+  };
+}
+
 // ── Tests ────────────────────────────────────────────────────
 
 describe("GrupoPage", () => {
@@ -137,6 +149,7 @@ describe("GrupoPage", () => {
     mockGetComisionActiva.mockResolvedValue({ id: "c1" });
     mockGetGruposDeAssignment.mockResolvedValue([]);
     mockGetEntregaLogica.mockResolvedValue(null);
+    mockGetGrupoIdsConRepoActivo.mockResolvedValue(new Set());
   });
 
   it("llama a notFound si el assignment no existe", async () => {
@@ -212,24 +225,47 @@ describe("GrupoPage", () => {
     expect(html).not.toContain("data-testid=\"grupo-selector\"");
   });
 
-  it("pasa tieneEntrega=false a MiGrupo cuando no hay entrega", async () => {
+  it("pasa tieneRepo=false y tieneAccesoAlRepo=false a MiGrupo cuando no hay entrega", async () => {
     mockGetGruposDeAssignment.mockResolvedValue([
       makeGrupo("g1", ["ana"], 3, "Los Lambdas"),
     ]);
     mockGetEntregaLogica.mockResolvedValue(null);
     const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element);
-    expect(html).toContain("data-tiene-entrega=\"false\"");
+    expect(html).toContain("data-tiene-repo=\"false\"");
+    expect(html).toContain("data-tiene-acceso=\"false\"");
   });
 
-  it("pasa tieneEntrega=true a MiGrupo cuando ya aceptó el TP", async () => {
+  it("pasa tieneRepo=true y tieneAccesoAlRepo=true cuando el repo está activo y el usuario es colaborador", async () => {
     mockGetGruposDeAssignment.mockResolvedValue([
       makeGrupo("g1", ["ana"], 3, "Los Lambdas"),
     ]);
-    mockGetEntregaLogica.mockResolvedValue({ id: "e1", repoUrl: "https://github.com/x" });
+    mockGetEntregaLogica.mockResolvedValue(makeEntregaFake({ tieneRepo: true, colaboradores: ["ana"] }));
     const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element);
-    expect(html).toContain("data-tiene-entrega=\"true\"");
+    expect(html).toContain("data-tiene-repo=\"true\"");
+    expect(html).toContain("data-tiene-acceso=\"true\"");
+  });
+
+  it("pasa tieneAccesoAlRepo=false cuando el repo está activo pero el usuario no figura como colaborador", async () => {
+    mockGetGruposDeAssignment.mockResolvedValue([
+      makeGrupo("g1", ["ana", "bob"], 3, "Los Lambdas"),
+    ]);
+    mockGetEntregaLogica.mockResolvedValue(makeEntregaFake({ tieneRepo: true, colaboradores: ["bob"] }));
+    const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
+    const html = renderToStaticMarkup(element);
+    expect(html).toContain("data-tiene-repo=\"true\"");
+    expect(html).toContain("data-tiene-acceso=\"false\"");
+  });
+
+  it("pasa tieneRepo=false cuando la entrega existe pero no tiene repo activo", async () => {
+    mockGetGruposDeAssignment.mockResolvedValue([
+      makeGrupo("g1", ["ana"], 3, "Los Lambdas"),
+    ]);
+    mockGetEntregaLogica.mockResolvedValue(makeEntregaFake({ tieneRepo: false, colaboradores: ["ana"] }));
+    const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
+    const html = renderToStaticMarkup(element);
+    expect(html).toContain("data-tiene-repo=\"false\"");
   });
 
   it("pasa inscripcionesCerradas al GrupoSelector", async () => {
@@ -273,7 +309,7 @@ describe("GrupoPage", () => {
     mockGetGruposDeAssignment.mockResolvedValue([
       makeGrupo("g1", ["ana"], 3, "Los Lambdas"),
     ]);
-    mockGetEntregaLogica.mockResolvedValue({ id: "e1", repoUrl: "https://github.com/x" });
+    mockGetEntregaLogica.mockResolvedValue(makeEntregaFake({ tieneRepo: true, colaboradores: ["ana"] }));
     const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element);
     expect(html).toContain("El grupo ya aceptó el TP");
@@ -287,7 +323,7 @@ describe("GrupoPage", () => {
     const grupoDeDocentes = makeGrupo("g1", ["ana"], 3, "Los Lambdas");
     grupoDeDocentes.tipoDeIntegrantes = "docentes";
     mockGetGruposDeAssignment.mockResolvedValue([grupoDeDocentes]);
-    mockGetEntregaLogica.mockResolvedValue({ id: "e1", repoUrl: "https://github.com/x" });
+    mockGetEntregaLogica.mockResolvedValue(makeEntregaFake({ tieneRepo: true, colaboradores: ["ana"] }));
     const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element);
     expect(html).toContain("El grupo ya aceptó el TP");

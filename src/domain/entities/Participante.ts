@@ -20,8 +20,14 @@ export class AccesoAssignmentProhibidoError extends Error {
 
 export type OrigenCambioMembresia = "alumno" | "docente";
 
-/** Contexto que necesita evaluar una autorización de cambio de membresía. */
-export interface ContextoDeMembresia {
+/** Contexto que necesita evaluar una autorización de alta en un grupo. */
+export interface ContextoDeAlta {
+  assignment: GrupalAssignment;
+  grupo: Grupo;
+}
+
+/** Contexto que necesita evaluar una autorización de baja de un grupo. */
+export interface ContextoDeBaja {
   assignment: GrupalAssignment;
   grupo: Grupo;
   grupoTieneEntrega: boolean;
@@ -36,7 +42,7 @@ export interface ContextoDeMembresia {
  * si quien actúa es el propio interesado o un tercero administrando.
  *
  * Dar de alta a alguien en un grupo (`moverAlumnoDeGrupo`) necesita, además
- * de `autorizarCambioDeMembresia`, dos cosas más que difieren entre
+ * de `autorizarAltaEnGrupo`, dos cosas más que difieren entre
  * self-service y administración: acceso al assignment
  * (`autorizarAccionSobreAssignment` — en self-service exige comisión propia
  * y estado habilitado, igual que `unirseAGrupo`; administrando a otro es
@@ -46,7 +52,8 @@ export interface ContextoDeMembresia {
  * "alumnos" si es un alta sin origen).
  */
 export interface ActorDeMembresia {
-  autorizarCambioDeMembresia(contexto: ContextoDeMembresia): void;
+  autorizarAltaEnGrupo(contexto: ContextoDeAlta): void;
+  autorizarBajaDeGrupo(contexto: ContextoDeBaja): void;
   origenDeAuditoria(): OrigenCambioMembresia;
   autorizarAccionSobreAssignment(assignment: Assignment): void;
   tipoDeGrupoAlIngresar(grupoOrigen: Grupo | null): TipoDeIntegrantes;
@@ -64,7 +71,7 @@ export interface ActorDeMembresia {
  *
  * Reemplaza la autorización académica que vivía en `RolDeUsuario`
  * (`autorizarAccesoAssignment`, `autorizarAccionSobreAssignment`,
- * `autorizarCambioDeMembresia`, `origenDeAuditoria`, `motivoDeBloqueoDeMembresia`):
+ * `autorizarAltaEnGrupo`, `autorizarBajaDeGrupo`, `origenDeAuditoria`, `motivoDeBloqueoDeBaja`):
  * ese comportamiento dependía de "con qué comisión participa este usuario",
  * no de si administra el sistema — separarlo aclara que un docente en Mis
  * TPs sigue exactamente las mismas reglas que un alumno, mientras que
@@ -123,43 +130,47 @@ export abstract class Participante implements ActorDeMembresia {
   }
 
   /**
-   * Autoriza que este participante modifique la composición de un grupo
-   * (crear, unirse, salir, cambiarse) sobre sí mismo: exige acceso al
-   * assignment (comisión — revisión de code review, issue #107/#112: antes
-   * `salirDeGrupo` en self-service no lo chequeaba, a diferencia de crear/
-   * unirse/mover, que ya lo hacían vía `autorizarAccionSobreAssignment`) e
-   * inscripciones abiertas y que el grupo no tenga entrega todavía. NO exige
-   * el chequeo de *estado* de `autorizarAccionSobreAssignment` (salir de un
-   * grupo no requiere que el assignment esté publicado, más allá de lo que
-   * ya exige `aceptaNuevasInscripciones`). Idéntica para alumno y docente —
-   * antes sólo la tenía `RolEstudiante`, el docente resolvía siempre (bypass
+   * Autoriza que este participante se sume a un grupo (crear, unirse,
+   * cambiarse): exige acceso al assignment (comisión — revisión de code
+   * review, issue #107/#112) e inscripciones abiertas. NO depende de si el
+   * grupo ya aceptó el TP (issue #123). NO exige el chequeo de *estado* de
+   * `autorizarAccionSobreAssignment`. Idéntica para alumno y docente — antes
+   * sólo la tenía `RolEstudiante`, el docente resolvía siempre (bypass
    * administrativo). Ese bypass sigue existiendo, pero sólo para administrar
    * la membresía de *otros* (`RolDeUsuario.actorSobreMembresiaAjena`).
    */
-  autorizarCambioDeMembresia({ assignment, grupo, grupoTieneEntrega }: ContextoDeMembresia): void {
+  autorizarAltaEnGrupo({ assignment }: ContextoDeAlta): void {
     this.autorizarAccesoAssignment(assignment);
     if (!assignment.aceptaNuevasInscripciones()) {
       throw new InscripcionesCerradasError(assignment.id);
     }
+  }
+
+  /**
+   * Autoriza que este participante salga de un grupo: las mismas exigencias
+   * que el alta y, además, que el grupo no tenga entrega todavía.
+   */
+  autorizarBajaDeGrupo({ assignment, grupo, grupoTieneEntrega }: ContextoDeBaja): void {
+    this.autorizarAltaEnGrupo({ assignment, grupo });
     if (grupoTieneEntrega) {
       throw new GrupoConEntregaError(grupo.id);
     }
   }
 
   /**
-   * Sondea `autorizarCambioDeMembresia` sin ejecutarla: devuelve el motivo
-   * del bloqueo, o `null` si el cambio está permitido. Mismo idioma que
+   * Sondea `autorizarBajaDeGrupo` sin ejecutarla: devuelve el motivo
+   * del bloqueo, o `null` si la baja está permitida. Mismo idioma que
    * `transicionesDisponibles` para el ciclo de vida de un assignment — la UI
    * y el servidor no pueden divergir, porque el texto que ve el participante
    * ES el `message` del error que el servidor tiraría si igual manda el
    * request.
    */
-  motivoDeBloqueoDeMembresia(contexto: ContextoDeMembresia): string | null {
+  motivoDeBloqueoDeBaja(contexto: ContextoDeBaja): string | null {
     try {
-      this.autorizarCambioDeMembresia(contexto);
+      this.autorizarBajaDeGrupo(contexto);
       return null;
     } catch (error) {
-      // Sólo los errores de dominio que `autorizarCambioDeMembresia` puede
+      // Sólo los errores de dominio que `autorizarBajaDeGrupo` puede
       // lanzar se traducen a motivo de bloqueo. Cualquier otra falla (un
       // `TypeError` por un contexto mal armado, por ejemplo) es un bug real
       // que tiene que romper fuerte, no disfrazarse de "grupo bloqueado".

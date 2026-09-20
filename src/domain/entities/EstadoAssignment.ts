@@ -102,7 +102,7 @@ export abstract class EstadoAssignment {
   /**
    * Sondea `transicionarA` sin ejecutarla: devuelve el motivo del bloqueo,
    * o `null` si la transición está permitida. Mismo idioma que
-   * `Participante.motivoDeBloqueoDeMembresia` — la UI y el servidor no
+   * `Participante.motivoDeBloqueoDeBaja` — la UI y el servidor no
    * pueden divergir, porque el texto que ve el admin ES el `message` del
    * error que el servidor tiraría si igual manda el request.
    */

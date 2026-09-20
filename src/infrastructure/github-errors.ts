@@ -4,6 +4,16 @@ export function isRequestError(error: unknown): error is RequestError {
   return error instanceof Error && "status" in error;
 }
 
+// Tipado para que un caller distinga "GitHub no encontró el recurso" (ej. un
+// username inexistente) del resto de los errores operativos; conserva el
+// mensaje genérico de siempre.
+export class GithubRecursoNoEncontradoError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "GithubRecursoNoEncontradoError";
+  }
+}
+
 export function handleOctokitError(error: unknown): never {
   if (error instanceof Error) {
     if (error.message.includes("Invalid keyData")) {
@@ -40,7 +50,7 @@ export function handleOctokitError(error: unknown): never {
       );
     }
     if (error.status === 404) {
-      throw new Error(
+      throw new GithubRecursoNoEncontradoError(
         "Recurso no encontrado en GitHub (404): verificá GITHUB_ORG y que la app tenga acceso a los repos"
       );
     }

@@ -63,6 +63,7 @@ export {
   getEntregaCountsByAssignment,
   getActiveRepoCountsByAssignment,
   getEntregasConRepoActivo,
+  getGrupoIdsConRepoActivo,
   contarEntregasDeAssignment,
   createEntrega,
   createOrGetEntrega,
@@ -115,6 +116,10 @@ export {
   ComisionActivaDuplicadaError,
   ComisionNoEliminableError,
 } from "./ComisionRepository";
+export type {
+  AccesoAlRepositorioDeGrupo,
+  ContextoDeAcceso,
+} from "./AccesoAlRepositorio";
 export type { ComisionFormData } from "./ComisionRepository";
 export type { ReclamoImportacionGrupos } from "./ComisionRepository";
 // `INTERVALO_HEARTBEAT_IMPORTACION_GRUPOS_MS` es una constante de dominio

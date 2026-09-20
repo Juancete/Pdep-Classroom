@@ -45,6 +45,7 @@ import {
   createOrGetEntrega,
   crearEntregaSiAssignmentDisponible,
   getEntregasConRepoActivo,
+  getGrupoIdsConRepoActivo,
   getActiveRepoCountsByAssignment,
   getEntregaLogica,
   actualizarCIDeEntrega,
@@ -345,6 +346,36 @@ describe("EntregaRepository", () => {
       Entrega,
       expect.objectContaining({ provisionEstado: "activa" })
     );
+  });
+
+  describe("getGrupoIdsConRepoActivo", () => {
+    function makeEntregaDeGrupo(grupoId: string, overrides: Partial<Entrega> = {}): Entrega {
+      const entrega = new Entrega();
+      entrega.grupo = { id: grupoId } as never;
+      entrega.provisionEstado = "activa";
+      entrega.repoName = `tp-${grupoId}`;
+      entrega.repoUrl = `https://github.com/org/tp-${grupoId}`;
+      entrega.repoDeleted = false;
+      return Object.assign(entrega, overrides);
+    }
+
+    it("devuelve los grupos cuya entrega tiene el repo activo", async () => {
+      mockEm.find.mockResolvedValue([makeEntregaDeGrupo("g1"), makeEntregaDeGrupo("g2")]);
+
+      await expect(getGrupoIdsConRepoActivo("a1")).resolves.toEqual(new Set(["g1", "g2"]));
+      expect(mockEm.find).toHaveBeenCalledTimes(1);
+    });
+
+    it("no incluye entregas pendientes, fallidas ni con el repo borrado", async () => {
+      mockEm.find.mockResolvedValue([
+        makeEntregaDeGrupo("g-pendiente", { provisionEstado: "pendiente" }),
+        makeEntregaDeGrupo("g-fallida", { provisionEstado: "fallida" }),
+        makeEntregaDeGrupo("g-borrado", { repoDeleted: true }),
+        makeEntregaDeGrupo("g-ok"),
+      ]);
+
+      await expect(getGrupoIdsConRepoActivo("a1")).resolves.toEqual(new Set(["g-ok"]));
+    });
   });
 
   describe("getActiveRepoCountsByAssignment", () => {

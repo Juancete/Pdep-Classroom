@@ -91,6 +91,14 @@ import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
 // ── Helpers ──────────────────────────────────────────────────
 
+// Se crea por test: `vi.clearAllMocks()` no resetea implementaciones.
+function accesoFalso() {
+  return {
+    otorgarA: vi.fn().mockResolvedValue(undefined),
+    revocarA: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
 function fakeAlumno(id: string, githubUsername: string): Alumno {
   // Instancia real para que las comparaciones por `id`/`githubUsername` (y
   // `getAlumnoByGithub`, mockeado a nivel de EM) pasen el `instanceof` check.
@@ -117,7 +125,7 @@ function fakeComision(id = "c1"): Comision {
 
 // Participantes de prueba — instancias reales de `Participante` (no fakes
 // duck-typed): así se ejercita la autorización académica real
-// (`autorizarAccionSobreAssignment`/`autorizarCambioDeMembresia`), que desde
+// (`autorizarAccionSobreAssignment`/`autorizarAltaEnGrupo`/`autorizarBajaDeGrupo`), que desde
 // el issue #107/#112 vive en `Participante`, no en `GrupoRepository`.
 function participanteAlumno(alumno: Alumno): Participante {
   return new ParticipanteAlumno(alumno, alumno.githubUsername);
@@ -364,7 +372,7 @@ describe("crearGrupo", () => {
 
   // issue #107/#112: ya no hay bypass — un docente en Mis TPs sigue las
   // mismas reglas de membresía que un alumno (antes esto lo resolvía
-  // `RolDocente.autorizarCambioDeMembresia`, que siempre resolvía).
+  // `RolDocente.autorizarBajaDeGrupo`, que siempre resolvía).
   it("un docente en Mis TPs tampoco crea un grupo con inscripciones cerradas", async () => {
     mockTx.findOne.mockResolvedValueOnce(fakeGrupal({ inscripcionesCerradas: true }));
 
@@ -504,7 +512,7 @@ describe("unirseAGrupo", () => {
     mockTx.findOne.mockResolvedValueOnce(null);
 
     await expect(
-      unirseAGrupo({
+      unirseAGrupo({ acceso: accesoFalso(),
         assignmentId: "a-otro",
         grupoId: "g1",
         participante: participanteAlumno(fakeAlumno("alumno-ana", "ana")),
@@ -522,7 +530,7 @@ describe("unirseAGrupo", () => {
       .mockResolvedValueOnce(grupo) // Grupo
       .mockResolvedValueOnce(null); // enOtroGrupo
 
-    const resultado = await unirseAGrupo({
+    const resultado = await unirseAGrupo({ acceso: accesoFalso(),
       assignmentId: "a1",
       grupoId: "g1",
       participante: participanteAlumno(ana),
@@ -559,7 +567,7 @@ describe("unirseAGrupo", () => {
     const grupo = fakeGrupo("g1", assignment, [ana]);
     mockTx.findOne.mockResolvedValueOnce(grupo);
 
-    const resultado = await unirseAGrupo({
+    const resultado = await unirseAGrupo({ acceso: accesoFalso(),
       assignmentId: "a1",
       grupoId: "g1",
       participante: participanteAlumno(ana),
@@ -576,7 +584,7 @@ describe("unirseAGrupo", () => {
     mockTx.findOne.mockResolvedValueOnce(grupo);
 
     await expect(
-      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", participante: participanteAlumno(ana) })
+      unirseAGrupo({ acceso: accesoFalso(), assignmentId: "a1", grupoId: "g1", participante: participanteAlumno(ana) })
     ).rejects.toBeInstanceOf(InscripcionesCerradasError);
   });
 
@@ -589,7 +597,7 @@ describe("unirseAGrupo", () => {
     mockTx.findOne.mockResolvedValueOnce(grupo);
 
     await expect(
-      unirseAGrupo({
+      unirseAGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoId: "g1",
         participante: participanteDocente("profe-docente"),
@@ -607,7 +615,7 @@ describe("unirseAGrupo", () => {
       .mockResolvedValueOnce(grupoOtro);
 
     await expect(
-      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", participante: participanteAlumno(ana) })
+      unirseAGrupo({ acceso: accesoFalso(), assignmentId: "a1", grupoId: "g1", participante: participanteAlumno(ana) })
     ).rejects.toBeInstanceOf(AlumnoYaEnGrupoDelAssignmentError);
     expect(mockTx.flush).not.toHaveBeenCalled();
   });
@@ -623,7 +631,7 @@ describe("unirseAGrupo", () => {
       .mockResolvedValueOnce(null);
 
     await expect(
-      unirseAGrupo({ assignmentId: "a1", grupoId: "g1", participante: participanteAlumno(cora) })
+      unirseAGrupo({ acceso: accesoFalso(), assignmentId: "a1", grupoId: "g1", participante: participanteAlumno(cora) })
     ).rejects.toBeInstanceOf(GrupoLlenoError);
   });
 
@@ -635,7 +643,7 @@ describe("unirseAGrupo", () => {
       .mockResolvedValueOnce(grupo)
       .mockResolvedValueOnce(null);
 
-    await unirseAGrupo({ assignmentId: "a1", grupoId: "g1", participante: participanteAlumno(ana) });
+    await unirseAGrupo({ acceso: accesoFalso(), assignmentId: "a1", grupoId: "g1", participante: participanteAlumno(ana) });
 
     expect(mockEm.transactional).toHaveBeenCalledTimes(1);
   });
@@ -652,7 +660,7 @@ describe("unirseAGrupo", () => {
     mockTx.findOne.mockResolvedValueOnce(grupo);
 
     await expect(
-      unirseAGrupo({
+      unirseAGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoId: "g1",
         participante: participanteAlumno(ana),
@@ -671,7 +679,7 @@ describe("unirseAGrupo", () => {
     mockTx.findOne.mockResolvedValueOnce(grupo);
 
     await expect(
-      unirseAGrupo({
+      unirseAGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoId: "g1",
         participante: participanteAlumno(ana),
@@ -689,7 +697,7 @@ describe("unirseAGrupo", () => {
       .mockResolvedValueOnce(null);
 
     await expect(
-      unirseAGrupo({
+      unirseAGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoId: "g1",
         participante: participanteDocente("profe-docente", fakeComision("c1")),
@@ -707,7 +715,7 @@ describe("unirseAGrupo", () => {
     mockTx.findOne.mockResolvedValueOnce(grupo);
 
     await expect(
-      unirseAGrupo({
+      unirseAGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoId: "g1",
         participante: participanteDocente("profe-docente", fakeComision("c1")),
@@ -727,7 +735,7 @@ describe("unirseAGrupo", () => {
     mockTx.flush.mockRejectedValueOnce(uniqueMembershipError());
 
     await expect(
-      unirseAGrupo({
+      unirseAGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoId: "g1",
         participante: participanteAlumno(ana),
@@ -736,6 +744,141 @@ describe("unirseAGrupo", () => {
       constructor: AlumnoYaEnGrupoDelAssignmentError,
       assignmentId: "a1",
       githubUsername: "ana",
+    });
+  });
+
+  describe("acceso al repositorio", () => {
+    it("otorga el acceso al repositorio del grupo al integrante que se une", async () => {
+      const acceso = accesoFalso();
+      const ana = fakeAlumno("alumno-ana", "ana");
+      mockTx.findOne
+        .mockResolvedValueOnce(fakeGrupo("g1", fakeGrupal(), []))
+        .mockResolvedValueOnce(null);
+
+      await unirseAGrupo({
+        assignmentId: "a1",
+        grupoId: "g1",
+        participante: participanteAlumno(ana),
+        acceso,
+      });
+
+      expect(acceso.otorgarA).toHaveBeenCalledWith(
+        { assignmentId: "a1", grupoId: "g1", githubUsername: "ana" },
+        mockTx
+      );
+    });
+
+    it("otorga el acceso como última operación de la transacción, después de persistir el alta", async () => {
+      const acceso = accesoFalso();
+      const ana = fakeAlumno("alumno-ana", "ana");
+      mockTx.findOne
+        .mockResolvedValueOnce(fakeGrupo("g1", fakeGrupal(), []))
+        .mockResolvedValueOnce(null);
+
+      await unirseAGrupo({
+        assignmentId: "a1",
+        grupoId: "g1",
+        participante: participanteAlumno(ana),
+        acceso,
+      });
+
+      const ordenDeOtorgar = acceso.otorgarA.mock.invocationCallOrder[0];
+      expect(Math.max(...mockTx.persist.mock.invocationCallOrder)).toBeLessThan(ordenDeOtorgar);
+      expect(Math.max(...mockTx.flush.mock.invocationCallOrder)).toBeLessThan(ordenDeOtorgar);
+    });
+
+    // El rollback real de la transacción lo prueba el test contra Postgres;
+    // acá el mock de `transactional` sólo deja propagar el rechazo.
+    it("propaga el error cuando no se puede otorgar el acceso al repositorio", async () => {
+      const acceso = accesoFalso();
+      const errorDeAcceso = new Error("GitHub caído");
+      acceso.otorgarA.mockRejectedValue(errorDeAcceso);
+      const ana = fakeAlumno("alumno-ana", "ana");
+      mockTx.findOne
+        .mockResolvedValueOnce(fakeGrupo("g1", fakeGrupal(), []))
+        .mockResolvedValueOnce(null);
+
+      await expect(
+        unirseAGrupo({
+          assignmentId: "a1",
+          grupoId: "g1",
+          participante: participanteAlumno(ana),
+          acceso,
+        })
+      ).rejects.toBe(errorDeAcceso);
+    });
+
+    it("no otorga acceso cuando el grupo está lleno", async () => {
+      const acceso = accesoFalso();
+      const assignment = fakeGrupal({ maxIntegrantes: 2 });
+      const grupoLleno = fakeGrupo("g1", assignment, [
+        fakeAlumno("alumno-ana", "ana"),
+        fakeAlumno("alumno-bob", "bob"),
+      ]);
+      mockTx.findOne.mockResolvedValueOnce(grupoLleno).mockResolvedValueOnce(null);
+
+      await expect(
+        unirseAGrupo({
+          assignmentId: "a1",
+          grupoId: "g1",
+          participante: participanteAlumno(fakeAlumno("alumno-cora", "cora")),
+          acceso,
+        })
+      ).rejects.toBeInstanceOf(GrupoLlenoError);
+
+      expect(acceso.otorgarA).not.toHaveBeenCalled();
+    });
+
+    it("no otorga acceso cuando el alumno ya es miembro del grupo", async () => {
+      const acceso = accesoFalso();
+      const ana = fakeAlumno("alumno-ana", "ana");
+      mockTx.findOne.mockResolvedValueOnce(fakeGrupo("g1", fakeGrupal(), [ana]));
+
+      await unirseAGrupo({
+        assignmentId: "a1",
+        grupoId: "g1",
+        participante: participanteAlumno(ana),
+        acceso,
+      });
+
+      expect(acceso.otorgarA).not.toHaveBeenCalled();
+    });
+
+    it("no otorga acceso cuando el alumno ya está en otro grupo del assignment", async () => {
+      const acceso = accesoFalso();
+      const assignment = fakeGrupal();
+      const ana = fakeAlumno("alumno-ana", "ana");
+      mockTx.findOne
+        .mockResolvedValueOnce(fakeGrupo("g1", assignment, []))
+        .mockResolvedValueOnce(fakeGrupo("g-otro", assignment, [ana]));
+
+      await expect(
+        unirseAGrupo({
+          assignmentId: "a1",
+          grupoId: "g1",
+          participante: participanteAlumno(ana),
+          acceso,
+        })
+      ).rejects.toBeInstanceOf(AlumnoYaEnGrupoDelAssignmentError);
+
+      expect(acceso.otorgarA).not.toHaveBeenCalled();
+    });
+
+    it("no otorga acceso cuando las inscripciones están cerradas", async () => {
+      const acceso = accesoFalso();
+      const assignment = fakeGrupal({ inscripcionesCerradas: true });
+      mockTx.findOne.mockResolvedValueOnce(fakeGrupo("g1", assignment, []));
+
+      await expect(
+        unirseAGrupo({
+          assignmentId: "a1",
+          grupoId: "g1",
+          participante: participanteAlumno(fakeAlumno("alumno-ana", "ana")),
+          acceso,
+        })
+      ).rejects.toBeInstanceOf(InscripcionesCerradasError);
+
+      expect(acceso.otorgarA).not.toHaveBeenCalled();
     });
   });
 });
@@ -972,7 +1115,7 @@ describe("salirDeGrupo", () => {
       .mockResolvedValueOnce(grupo) // lock del grupo
       .mockResolvedValueOnce(null); // sin entrega
 
-    const resultado = await salirDeGrupo({
+    const resultado = await salirDeGrupo({ acceso: accesoFalso(),
       assignmentId: "a1",
       grupoId: "g1",
       githubUsername: "ana",
@@ -1002,7 +1145,7 @@ describe("salirDeGrupo", () => {
     mockTx.findOne.mockResolvedValueOnce(null);
 
     await expect(
-      salirDeGrupo({
+      salirDeGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoId: "g1",
         githubUsername: "ana",
@@ -1019,7 +1162,7 @@ describe("salirDeGrupo", () => {
     mockTx.findOne.mockResolvedValueOnce(grupo);
 
     await expect(
-      salirDeGrupo({
+      salirDeGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoId: "g1",
         githubUsername: "ana",
@@ -1040,7 +1183,7 @@ describe("salirDeGrupo", () => {
       .mockResolvedValueOnce(null);
 
     await expect(
-      salirDeGrupo({
+      salirDeGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoId: "g1",
         githubUsername: "ana",
@@ -1054,7 +1197,7 @@ describe("salirDeGrupo", () => {
       .mockResolvedValueOnce(grupoParaDocente)
       .mockResolvedValueOnce(null);
 
-    const resultado = await salirDeGrupo({
+    const resultado = await salirDeGrupo({ acceso: accesoFalso(),
       assignmentId: "a1",
       grupoId: "g1",
       githubUsername: "ana",
@@ -1075,7 +1218,7 @@ describe("salirDeGrupo", () => {
       .mockResolvedValueOnce(entregaFake);
 
     await expect(
-      salirDeGrupo({
+      salirDeGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoId: "g1",
         githubUsername: "ana",
@@ -1090,7 +1233,7 @@ describe("salirDeGrupo", () => {
       .mockResolvedValueOnce(grupoParaDocente)
       .mockResolvedValueOnce(entregaFake);
 
-    const resultado = await salirDeGrupo({
+    const resultado = await salirDeGrupo({ acceso: accesoFalso(),
       assignmentId: "a1",
       grupoId: "g1",
       githubUsername: "ana",
@@ -1111,7 +1254,7 @@ describe("salirDeGrupo", () => {
       .mockResolvedValueOnce(grupo)
       .mockResolvedValueOnce(null);
 
-    const resultado = await salirDeGrupo({
+    const resultado = await salirDeGrupo({ acceso: accesoFalso(),
       assignmentId: "a1",
       grupoId: "g1",
       githubUsername: "ana",
@@ -1131,7 +1274,7 @@ describe("salirDeGrupo", () => {
       .mockResolvedValueOnce(grupo)
       .mockResolvedValueOnce(null);
 
-    await salirDeGrupo({
+    await salirDeGrupo({ acceso: accesoFalso(),
       assignmentId: "a1",
       grupoId: "g1",
       githubUsername: "ana",
@@ -1156,7 +1299,7 @@ describe("salirDeGrupo", () => {
       .mockResolvedValueOnce(grupo)
       .mockResolvedValueOnce(null);
 
-    await salirDeGrupo({
+    await salirDeGrupo({ acceso: accesoFalso(),
       assignmentId: "a1",
       grupoId: "g1",
       githubUsername: "ana",
@@ -1171,7 +1314,7 @@ describe("salirDeGrupo", () => {
   });
 
   // Revisión de code review (issue #107/#112): antes `salirDeGrupo` en
-  // self-service sólo pedía `autorizarCambioDeMembresia`, que no chequeaba
+  // self-service sólo pedía `autorizarBajaDeGrupo`, que no chequeaba
   // acceso al assignment — a diferencia de crear/unirse/mover, que ya lo
   // hacían vía `autorizarAccionSobreAssignment`.
   it("un participante sin acceso al assignment no puede salir del grupo por self-service", async () => {
@@ -1188,7 +1331,7 @@ describe("salirDeGrupo", () => {
       .mockResolvedValueOnce(null);
 
     await expect(
-      salirDeGrupo({
+      salirDeGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoId: "g1",
         githubUsername: "ana",
@@ -1208,7 +1351,7 @@ describe("salirDeGrupo", () => {
       .mockResolvedValueOnce(grupo)
       .mockResolvedValueOnce(null);
 
-    const resultado = await salirDeGrupo({
+    const resultado = await salirDeGrupo({ acceso: accesoFalso(),
       assignmentId: "a1",
       grupoId: "g1",
       githubUsername: "ana",
@@ -1217,6 +1360,117 @@ describe("salirDeGrupo", () => {
     });
 
     expect(resultado.grupo).toBe(grupo);
+  });
+
+  describe("acceso al repositorio", () => {
+    it("revoca el acceso al repositorio del integrante que sale, después de persistir la baja", async () => {
+      const acceso = accesoFalso();
+      const ana = fakeAlumno("alumno-ana", "ana");
+      const grupo = fakeGrupo("g1", fakeGrupal(), [ana, fakeAlumno("alumno-bob", "bob")]);
+      mockTx.findOne.mockResolvedValueOnce(grupo).mockResolvedValueOnce(null);
+
+      await salirDeGrupo({
+        assignmentId: "a1",
+        grupoId: "g1",
+        githubUsername: "ana",
+        actor: participanteAlumno(ana),
+        realizadoPor: "ana",
+        acceso,
+      });
+
+      expect(acceso.revocarA).toHaveBeenCalledWith(
+        { assignmentId: "a1", grupoId: "g1", githubUsername: "ana" },
+        mockTx
+      );
+      const ordenDeRevocar = acceso.revocarA.mock.invocationCallOrder[0];
+      expect(Math.max(...mockTx.persist.mock.invocationCallOrder)).toBeLessThan(ordenDeRevocar);
+      expect(Math.max(...mockTx.flush.mock.invocationCallOrder)).toBeLessThan(ordenDeRevocar);
+    });
+
+    // El rollback real de la transacción lo prueba el test contra Postgres.
+    it("propaga el error cuando no se puede revocar el acceso al repositorio", async () => {
+      const acceso = accesoFalso();
+      const errorDeAcceso = new Error("GitHub caído");
+      acceso.revocarA.mockRejectedValue(errorDeAcceso);
+      const ana = fakeAlumno("alumno-ana", "ana");
+      const grupo = fakeGrupo("g1", fakeGrupal(), [ana, fakeAlumno("alumno-bob", "bob")]);
+      mockTx.findOne.mockResolvedValueOnce(grupo).mockResolvedValueOnce(null);
+
+      await expect(
+        salirDeGrupo({
+          assignmentId: "a1",
+          grupoId: "g1",
+          githubUsername: "ana",
+          actor: participanteAlumno(ana),
+          realizadoPor: "ana",
+          acceso,
+        })
+      ).rejects.toBe(errorDeAcceso);
+    });
+
+    it("no revoca el acceso cuando el alumno no puede salir de un grupo que ya aceptó el TP", async () => {
+      const acceso = accesoFalso();
+      const ana = fakeAlumno("alumno-ana", "ana");
+      const entregaFake = Object.assign(new Entrega(), { id: "e1" });
+      mockTx.findOne
+        .mockResolvedValueOnce(fakeGrupo("g1", fakeGrupal(), [ana]))
+        .mockResolvedValueOnce(entregaFake);
+
+      await expect(
+        salirDeGrupo({
+          assignmentId: "a1",
+          grupoId: "g1",
+          githubUsername: "ana",
+          actor: participanteAlumno(ana),
+          realizadoPor: "ana",
+          acceso,
+        })
+      ).rejects.toBeInstanceOf(GrupoConEntregaError);
+
+      expect(acceso.revocarA).not.toHaveBeenCalled();
+    });
+
+    it("no revoca el acceso cuando el usuario no es miembro del grupo", async () => {
+      const acceso = accesoFalso();
+      const grupo = fakeGrupo("g1", fakeGrupal(), [fakeAlumno("alumno-bob", "bob")]);
+      mockTx.findOne.mockResolvedValueOnce(grupo);
+
+      await expect(
+        salirDeGrupo({
+          assignmentId: "a1",
+          grupoId: "g1",
+          githubUsername: "ana",
+          actor: actorDocente(),
+          realizadoPor: "docente1",
+          acceso,
+        })
+      ).rejects.toBeInstanceOf(AlumnoNoEsMiembroDelGrupoError);
+
+      expect(acceso.revocarA).not.toHaveBeenCalled();
+    });
+
+    it("revoca el acceso cuando un docente da de baja a un integrante de un grupo con entrega", async () => {
+      const acceso = accesoFalso();
+      const ana = fakeAlumno("alumno-ana", "ana");
+      const entregaFake = Object.assign(new Entrega(), { id: "e1" });
+      mockTx.findOne
+        .mockResolvedValueOnce(fakeGrupo("g1", fakeGrupal(), [ana]))
+        .mockResolvedValueOnce(entregaFake);
+
+      await salirDeGrupo({
+        assignmentId: "a1",
+        grupoId: "g1",
+        githubUsername: "ana",
+        actor: actorDocente(),
+        realizadoPor: "docente1",
+        acceso,
+      });
+
+      expect(acceso.revocarA).toHaveBeenCalledWith(
+        { assignmentId: "a1", grupoId: "g1", githubUsername: "ana" },
+        mockTx
+      );
+    });
   });
 });
 
@@ -1263,7 +1517,7 @@ describe("moverAlumnoDeGrupo", () => {
         orden.push("flush");
       });
 
-    await moverAlumnoDeGrupo({
+    await moverAlumnoDeGrupo({ acceso: accesoFalso(),
       assignmentId: "a1",
       grupoDestinoId: "g2",
       githubUsername: "ana",
@@ -1287,7 +1541,7 @@ describe("moverAlumnoDeGrupo", () => {
       .mockResolvedValueOnce(grupoDestino) // lock destino
       .mockResolvedValueOnce(ana); // getAlumnoByGithub
 
-    const resultado = await moverAlumnoDeGrupo({
+    const resultado = await moverAlumnoDeGrupo({ acceso: accesoFalso(),
       assignmentId: "a1",
       grupoDestinoId: "g2",
       githubUsername: "ana",
@@ -1311,7 +1565,7 @@ describe("moverAlumnoDeGrupo", () => {
       .mockResolvedValueOnce(grupo) // grupoOrigenPrevio: ya es este mismo grupo
       .mockResolvedValueOnce(grupo); // lock del único grupo a bloquear
 
-    const resultado = await moverAlumnoDeGrupo({
+    const resultado = await moverAlumnoDeGrupo({ acceso: accesoFalso(),
       assignmentId: "a1",
       grupoDestinoId: "g2",
       githubUsername: "ana",
@@ -1338,7 +1592,7 @@ describe("moverAlumnoDeGrupo", () => {
       .mockResolvedValueOnce(null);
 
     await expect(
-      moverAlumnoDeGrupo({
+      moverAlumnoDeGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoDestinoId: "g2",
         githubUsername: "ana",
@@ -1366,7 +1620,7 @@ describe("moverAlumnoDeGrupo", () => {
       .mockResolvedValueOnce(grupoDestino)
       .mockResolvedValueOnce(null);
 
-    const resultado = await moverAlumnoDeGrupo({
+    const resultado = await moverAlumnoDeGrupo({ acceso: accesoFalso(),
       assignmentId: "a1",
       grupoDestinoId: "g2",
       githubUsername: "ana",
@@ -1387,7 +1641,7 @@ describe("moverAlumnoDeGrupo", () => {
       .mockResolvedValueOnce(grupoDestino)
       .mockResolvedValueOnce(ana); // getAlumnoByGithub (alta)
 
-    await moverAlumnoDeGrupo({
+    await moverAlumnoDeGrupo({ acceso: accesoFalso(),
       assignmentId: "a1",
       grupoDestinoId: "g2",
       githubUsername: "ana",
@@ -1413,7 +1667,7 @@ describe("moverAlumnoDeGrupo", () => {
       .mockResolvedValueOnce(grupoOrigen) // "g9" después
       .mockResolvedValueOnce(null);
 
-    await moverAlumnoDeGrupo({
+    await moverAlumnoDeGrupo({ acceso: accesoFalso(),
       assignmentId: "a1",
       grupoDestinoId: "g2",
       githubUsername: "ana",
@@ -1447,7 +1701,7 @@ describe("moverAlumnoDeGrupo", () => {
     mockTx.flush.mockRejectedValueOnce(uniqueMembershipError());
 
     await expect(
-      moverAlumnoDeGrupo({
+      moverAlumnoDeGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoDestinoId: "g2",
         githubUsername: "ana",
@@ -1471,7 +1725,7 @@ describe("moverAlumnoDeGrupo", () => {
       .mockResolvedValueOnce(grupoDestino); // lock destino
 
     await expect(
-      moverAlumnoDeGrupo({
+      moverAlumnoDeGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoDestinoId: "g2",
         githubUsername: "profe-docente",
@@ -1491,7 +1745,7 @@ describe("moverAlumnoDeGrupo", () => {
       .mockResolvedValueOnce(grupoDestino);
 
     await expect(
-      moverAlumnoDeGrupo({
+      moverAlumnoDeGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoDestinoId: "g2",
         githubUsername: "sinregistro",
@@ -1517,7 +1771,7 @@ describe("moverAlumnoDeGrupo", () => {
       .mockResolvedValueOnce(grupoDestino);
 
     await expect(
-      moverAlumnoDeGrupo({
+      moverAlumnoDeGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoDestinoId: "g2",
         githubUsername: "ana",
@@ -1539,7 +1793,7 @@ describe("moverAlumnoDeGrupo", () => {
       .mockResolvedValueOnce(grupoDestino);
 
     await expect(
-      moverAlumnoDeGrupo({
+      moverAlumnoDeGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoDestinoId: "g2",
         githubUsername: "ana",
@@ -1568,7 +1822,7 @@ describe("moverAlumnoDeGrupo", () => {
       .mockResolvedValueOnce(grupoDestino) // lock g2
       .mockResolvedValueOnce(null); // sin entrega
 
-    const resultado = await moverAlumnoDeGrupo({
+    const resultado = await moverAlumnoDeGrupo({ acceso: accesoFalso(),
       assignmentId: "a1",
       grupoDestinoId: "g2",
       githubUsername: "profe1",
@@ -1594,7 +1848,7 @@ describe("moverAlumnoDeGrupo", () => {
       .mockResolvedValueOnce(null); // getAlumnoByGithub: sin fila en Alumno
 
     await expect(
-      moverAlumnoDeGrupo({
+      moverAlumnoDeGrupo({ acceso: accesoFalso(),
         assignmentId: "a1",
         grupoDestinoId: "g2",
         githubUsername: "sin-alumno",
@@ -1621,7 +1875,7 @@ describe("moverAlumnoDeGrupo", () => {
       .mockResolvedValueOnce(null) // sin entrega
       .mockResolvedValueOnce(null); // getAlumnoByGithub: sin fila en Alumno
 
-    const resultado = await moverAlumnoDeGrupo({
+    const resultado = await moverAlumnoDeGrupo({ acceso: accesoFalso(),
       assignmentId: "a1",
       grupoDestinoId: "g2",
       githubUsername: "profe-sin-alumno",
@@ -1631,5 +1885,150 @@ describe("moverAlumnoDeGrupo", () => {
 
     expect(resultado.grupoDestino).toBe(grupoDestino);
     expect(grupoDestino.contieneA("profe-sin-alumno")).toBe(true);
+  });
+
+  describe("acceso al repositorio", () => {
+    function armarCambioDeG1AG2() {
+      const assignment = fakeGrupal();
+      const ana = fakeAlumno("alumno-ana", "ana");
+      const grupoOrigen = fakeGrupo("g1", assignment, [ana]);
+      const grupoDestino = fakeGrupo("g2", assignment, []);
+      mockTx.findOne
+        .mockResolvedValueOnce(grupoOrigen) // grupoOrigenPrevio
+        .mockResolvedValueOnce(grupoOrigen) // lock de g1
+        .mockResolvedValueOnce(grupoDestino) // lock de g2
+        .mockResolvedValueOnce(null); // sin entrega
+      return ana;
+    }
+
+    it("revoca el acceso del grupo origen y otorga el del grupo destino", async () => {
+      const acceso = accesoFalso();
+      const ana = armarCambioDeG1AG2();
+
+      await moverAlumnoDeGrupo({
+        assignmentId: "a1",
+        grupoDestinoId: "g2",
+        githubUsername: "ana",
+        actor: participanteAlumno(ana),
+        realizadoPor: "ana",
+        acceso,
+      });
+
+      expect(acceso.revocarA).toHaveBeenCalledWith(
+        { assignmentId: "a1", grupoId: "g1", githubUsername: "ana" },
+        mockTx
+      );
+      expect(acceso.otorgarA).toHaveBeenCalledWith(
+        { assignmentId: "a1", grupoId: "g2", githubUsername: "ana" },
+        mockTx
+      );
+    });
+
+    it("revoca antes de otorgar", async () => {
+      const acceso = accesoFalso();
+      const ana = armarCambioDeG1AG2();
+
+      await moverAlumnoDeGrupo({
+        assignmentId: "a1",
+        grupoDestinoId: "g2",
+        githubUsername: "ana",
+        actor: participanteAlumno(ana),
+        realizadoPor: "ana",
+        acceso,
+      });
+
+      const ordenDeRevocar = acceso.revocarA.mock.invocationCallOrder[0];
+      const ordenDeOtorgar = acceso.otorgarA.mock.invocationCallOrder[0];
+      expect(ordenDeRevocar).toBeLessThan(ordenDeOtorgar);
+      expect(Math.max(...mockTx.flush.mock.invocationCallOrder)).toBeLessThan(ordenDeRevocar);
+    });
+
+    it("sólo otorga el acceso cuando es un alta sin grupo de origen", async () => {
+      const acceso = accesoFalso();
+      const ana = fakeAlumno("alumno-ana", "ana");
+      const grupoDestino = fakeGrupo("g2", fakeGrupal(), []);
+      mockTx.findOne
+        .mockResolvedValueOnce(null) // sin grupo previo
+        .mockResolvedValueOnce(grupoDestino) // lock destino
+        .mockResolvedValueOnce(ana); // getAlumnoByGithub
+
+      await moverAlumnoDeGrupo({
+        assignmentId: "a1",
+        grupoDestinoId: "g2",
+        githubUsername: "ana",
+        actor: participanteAlumno(ana),
+        realizadoPor: "ana",
+        acceso,
+      });
+
+      expect(acceso.revocarA).not.toHaveBeenCalled();
+      expect(acceso.otorgarA).toHaveBeenCalledTimes(1);
+    });
+
+    it("no toca el acceso cuando el destino es el grupo en el que ya está", async () => {
+      const acceso = accesoFalso();
+      const ana = fakeAlumno("alumno-ana", "ana");
+      const grupo = fakeGrupo("g2", fakeGrupal(), [ana]);
+      mockTx.findOne.mockResolvedValueOnce(grupo).mockResolvedValueOnce(grupo);
+
+      await moverAlumnoDeGrupo({
+        assignmentId: "a1",
+        grupoDestinoId: "g2",
+        githubUsername: "ana",
+        actor: participanteAlumno(ana),
+        realizadoPor: "ana",
+        acceso,
+      });
+
+      expect(acceso.revocarA).not.toHaveBeenCalled();
+      expect(acceso.otorgarA).not.toHaveBeenCalled();
+    });
+
+    // El rollback real de la transacción lo prueba el test contra Postgres.
+    it("propaga el error cuando no se puede otorgar el acceso al destino", async () => {
+      const acceso = accesoFalso();
+      const errorDeAcceso = new Error("GitHub caído");
+      acceso.otorgarA.mockRejectedValue(errorDeAcceso);
+      const ana = armarCambioDeG1AG2();
+
+      await expect(
+        moverAlumnoDeGrupo({
+          assignmentId: "a1",
+          grupoDestinoId: "g2",
+          githubUsername: "ana",
+          actor: participanteAlumno(ana),
+          realizadoPor: "ana",
+          acceso,
+        })
+      ).rejects.toBe(errorDeAcceso);
+    });
+
+    it("el alumno sigue sin poder cambiarse de un grupo que ya aceptó el TP", async () => {
+      const acceso = accesoFalso();
+      const assignment = fakeGrupal();
+      const ana = fakeAlumno("alumno-ana", "ana");
+      const grupoOrigen = fakeGrupo("g1", assignment, [ana]);
+      const grupoDestino = fakeGrupo("g2", assignment, []);
+      const entregaFake = Object.assign(new Entrega(), { id: "e1" });
+      mockTx.findOne
+        .mockResolvedValueOnce(grupoOrigen)
+        .mockResolvedValueOnce(grupoOrigen)
+        .mockResolvedValueOnce(grupoDestino)
+        .mockResolvedValueOnce(entregaFake);
+
+      await expect(
+        moverAlumnoDeGrupo({
+          assignmentId: "a1",
+          grupoDestinoId: "g2",
+          githubUsername: "ana",
+          actor: participanteAlumno(ana),
+          realizadoPor: "ana",
+          acceso,
+        })
+      ).rejects.toBeInstanceOf(GrupoConEntregaError);
+
+      expect(acceso.revocarA).not.toHaveBeenCalled();
+      expect(acceso.otorgarA).not.toHaveBeenCalled();
+    });
   });
 });

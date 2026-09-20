@@ -18,6 +18,7 @@ import {
 import type { Paradigma } from "@/types";
 import { extractDbErrorCode, UNIQUE_VIOLATION } from "./db-errors";
 import { getEntregaLogica } from "./EntregaRepository";
+import type { AccesoAlRepositorioDeGrupo } from "./AccesoAlRepositorio";
 import { registrarCambioDeMembresia } from "./CambioDeMembresiaRepository";
 import { getAlumnoByGithub } from "./AlumnoRepository";
 
@@ -204,11 +205,7 @@ export async function crearGrupo(params: {
             participante.tipoDeGrupo()
           );
 
-          participante.autorizarCambioDeMembresia({
-            assignment: grupal,
-            grupo,
-            grupoTieneEntrega: false,
-          });
+          participante.autorizarAltaEnGrupo({ assignment: grupal, grupo });
 
           const yaEnGrupo = await transaction.findOne(Grupo, {
             assignment: { id: assignmentId },
@@ -255,8 +252,11 @@ export async function unirseAGrupo(params: {
   assignmentId: string;
   grupoId: string;
   participante: Participante;
+  // Obligatorio y sin default a propósito: un default no-op dejaría a un
+  // caller que se olvida sin acceso al repo, en silencio (issue #123).
+  acceso: AccesoAlRepositorioDeGrupo;
 }): Promise<Grupo> {
-  const { assignmentId, grupoId, participante } = params;
+  const { assignmentId, grupoId, participante, acceso } = params;
   const entityManager = await getEM();
 
   return entityManager.transactional(async (transaction) => {
@@ -293,14 +293,8 @@ export async function unirseAGrupo(params: {
           return grupo;
         }
 
-        // `grupoTieneEntrega` en `false` porque acá se está sumando un
-        // integrante, no removiendo uno de un grupo que ya aceptó el TP —
-        // ese caso es el de `salirDeGrupo`/`moverAlumnoDeGrupo`.
-        participante.autorizarCambioDeMembresia({
-          assignment,
-          grupo,
-          grupoTieneEntrega: false,
-        });
+        // El alta no depende de si el grupo ya aceptó el TP (issue #123).
+        participante.autorizarAltaEnGrupo({ assignment, grupo });
 
         const enOtroGrupo = await transaction.findOne(Grupo, {
           assignment: { id: assignment.id },
@@ -329,6 +323,15 @@ export async function unirseAGrupo(params: {
         });
 
         await transaction.flush();
+
+        // Va al final para no pagar red por requests que iban a fallar y
+        // acotar el tiempo que se sostiene el lock del grupo a una llamada.
+        // Si lanza, `transactional` hace rollback del alta. Sobre la carrera
+        // con la creación del repo, ver la nota en `lockearMembresia`.
+        await acceso.otorgarA(
+          { assignmentId, grupoId: grupo.id, githubUsername: participante.githubUsername },
+          transaction
+        );
         return grupo;
       }
     );
@@ -347,6 +350,14 @@ export async function unirseAGrupo(params: {
 // Clave por `githubUsername` (canónico), no por `alumnoId`: desde el issue
 // #107/#112 la membresía se administra por username y no todo integrante
 // tiene una fila en `Alumno` (un docente en un grupo de demo).
+//
+// Invariante: ninguna llamada externa dentro de una transacción debería usar
+// una política con reintentos largos (ver `SIN_REINTENTOS`). Además,
+// `unirseAGrupo` lockea la fila de `grupo` y `crearEntregaSiAssignmentDisponible`
+// lockea `assignment`: NO se serializan, así que si el alta ocurre mientras
+// otro integrante está creando el repo puede no ver la entrega todavía y
+// quedar sin invitar. Ese hueco lo cubre el self-heal de `aceptarAssignment`
+// (issue #123).
 async function lockearMembresia(
   transaction: EntityManager,
   assignmentId: string,
@@ -389,8 +400,12 @@ export async function salirDeGrupo(params: {
   actor: ActorDeMembresia;
   realizadoPor: string;
   motivo?: string;
+  // Obligatorio y sin default a propósito: un default no-op dejaría a un
+  // caller que se olvida con el acceso al repo desactualizado, en silencio
+  // (issue #123).
+  acceso: AccesoAlRepositorioDeGrupo;
 }): Promise<{ grupo: Grupo; grupoEliminado: boolean }> {
-  const { assignmentId, grupoId, githubUsername, actor, realizadoPor, motivo } = params;
+  const { assignmentId, grupoId, githubUsername, actor, realizadoPor, motivo, acceso } = params;
   const entityManager = await getEM();
   const usernameCanonico = Alumno.normalizarUsername(githubUsername);
 
@@ -421,7 +436,7 @@ export async function salirDeGrupo(params: {
     );
     const grupoTieneEntrega = !!entrega;
 
-    actor.autorizarCambioDeMembresia({
+    actor.autorizarBajaDeGrupo({
       assignment: grupo.assignment,
       grupo,
       grupoTieneEntrega,
@@ -447,6 +462,13 @@ export async function salirDeGrupo(params: {
     });
 
     await transaction.flush();
+
+    // Siempre se llama: la regla "¿hay repo activo?" vive en el adapter, que
+    // hace no-op si la entrega no existe (ej. el grupo recién eliminado).
+    await acceso.revocarA(
+      { assignmentId, grupoId: grupo.id, githubUsername: miembro.githubUsername },
+      transaction
+    );
     return { grupo, grupoEliminado };
   });
 }
@@ -481,8 +503,13 @@ export async function moverAlumnoDeGrupo(params: {
   actor: ActorDeMembresia;
   realizadoPor: string;
   motivo?: string;
+  // Obligatorio y sin default a propósito: un default no-op dejaría a un
+  // caller que se olvida con el acceso al repo desactualizado, en silencio
+  // (issue #123).
+  acceso: AccesoAlRepositorioDeGrupo;
 }): Promise<{ grupoDestino: Grupo; grupoOrigenEliminado: boolean }> {
-  const { assignmentId, grupoDestinoId, githubUsername, actor, realizadoPor, motivo } = params;
+  const { assignmentId, grupoDestinoId, githubUsername, actor, realizadoPor, motivo, acceso } =
+    params;
   const entityManager = await getEM();
   const usernameCanonico = Alumno.normalizarUsername(githubUsername);
 
@@ -559,10 +586,16 @@ export async function moverAlumnoDeGrupo(params: {
       : null;
     const grupoOrigenTeniaEntrega = !!entregaOrigen;
 
-    actor.autorizarCambioDeMembresia({
+    if (grupoOrigen) {
+      actor.autorizarBajaDeGrupo({
+        assignment: grupoDestino.assignment,
+        grupo: grupoOrigen,
+        grupoTieneEntrega: grupoOrigenTeniaEntrega,
+      });
+    }
+    actor.autorizarAltaEnGrupo({
       assignment: grupoDestino.assignment,
-      grupo: grupoOrigen ?? grupoDestino,
-      grupoTieneEntrega: grupoOrigenTeniaEntrega,
+      grupo: grupoDestino,
     });
 
     const miembroOrigen = grupoOrigen?.miembroConUsername(usernameCanonico);
@@ -615,6 +648,21 @@ export async function moverAlumnoDeGrupo(params: {
       motivo,
     });
     await transaction.flush();
+
+    // Primero se revoca y después se otorga, a propósito: GitHub no es
+    // transaccional, así que si algo falla a mitad de camino el alumno queda
+    // con MENOS acceso (falla cerrada) y no con más. El docente ve el error y
+    // reintenta: ambas operaciones son idempotentes.
+    if (grupoOrigen) {
+      await acceso.revocarA(
+        { assignmentId, grupoId: grupoOrigen.id, githubUsername: usernameCanonico },
+        transaction
+      );
+    }
+    await acceso.otorgarA(
+      { assignmentId, grupoId: grupoDestino.id, githubUsername: usernameCanonico },
+      transaction
+    );
 
     return { grupoDestino, grupoOrigenEliminado };
   });

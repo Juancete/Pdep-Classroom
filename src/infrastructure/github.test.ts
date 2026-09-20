@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 
 const mockDelete = vi.fn();
 const mockCreateUsingTemplate = vi.fn();
 const mockAddCollaborator = vi.fn();
+const mockRemoveCollaborator = vi.fn();
 const mockReposGet = vi.fn();
 const mockListForOrg = vi.fn();
 const mockPaginate = vi.fn();
@@ -21,6 +22,7 @@ vi.mock("@octokit/rest", () => ({
       delete: mockDelete,
       createUsingTemplate: mockCreateUsingTemplate,
       addCollaborator: mockAddCollaborator,
+      removeCollaborator: mockRemoveCollaborator,
       get: mockReposGet,
       listForOrg: mockListForOrg,
       checkCollaborator: mockCheckCollaborator,
@@ -41,8 +43,12 @@ vi.mock("@octokit/rest", () => ({
 vi.mock("@octokit/auth-app", () => ({ createAppAuth: vi.fn() }));
 
 import {
+  addCollaborators,
   crearEntrega,
   deleteRepo,
+  removeCollaborator,
+  REINTENTOS_TRAS_CREAR_REPO,
+  SIN_REINTENTOS,
   getConfiguracionDeApp,
   getEstadoCI,
   reejecutarCI,
@@ -84,6 +90,97 @@ describe("deleteRepo", () => {
     await expect(deleteRepo("tp-prohibido")).rejects.toThrow(
       "permisos suficientes"
     );
+  });
+});
+
+describe("addCollaborators", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("reintenta ante un 404 transitorio con la política de creación de repo", async () => {
+    mockAddCollaborator
+      .mockRejectedValueOnce(requestError(404, "Not Found"))
+      .mockResolvedValueOnce(undefined);
+
+    const promesa = addCollaborators("tp-ana", ["ana"], "push", REINTENTOS_TRAS_CREAR_REPO);
+    await vi.runAllTimersAsync();
+
+    await expect(promesa).resolves.toBeUndefined();
+    expect(mockAddCollaborator).toHaveBeenCalledTimes(2);
+  });
+
+  it("no reintenta cuando el caller pide la política sin reintentos", async () => {
+    mockAddCollaborator.mockRejectedValue(requestError(404, "Not Found"));
+
+    const promesa = addCollaborators("tp-ana", ["ana"], "push", SIN_REINTENTOS);
+    const resultado = expect(promesa).rejects.toThrow();
+    await vi.runAllTimersAsync();
+
+    await resultado;
+    expect(mockAddCollaborator).toHaveBeenCalledTimes(1);
+  });
+
+  it("pasa un AbortSignal a la invitación cuando la política define timeout", async () => {
+    mockAddCollaborator.mockResolvedValue(undefined);
+
+    await addCollaborators("tp-ana", ["ana"], "push", SIN_REINTENTOS);
+
+    const [argumentos] = mockAddCollaborator.mock.calls[0];
+    expect(argumentos.request.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("no pasa un AbortSignal con la política por defecto", async () => {
+    mockAddCollaborator.mockResolvedValue(undefined);
+
+    await addCollaborators("tp-ana", ["ana"]);
+
+    const [argumentos] = mockAddCollaborator.mock.calls[0];
+    expect(argumentos.request).toBeUndefined();
+  });
+});
+
+describe("removeCollaborator", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("revoca el acceso del colaborador y lo reporta", async () => {
+    mockRemoveCollaborator.mockResolvedValue(undefined);
+
+    await expect(removeCollaborator("tp-ana", "ana")).resolves.toBe("revocado");
+    expect(mockRemoveCollaborator).toHaveBeenCalledWith({
+      owner: expect.any(String),
+      repo: "tp-ana",
+      username: "ana",
+      request: { signal: expect.any(AbortSignal) },
+    });
+  });
+
+  it("pasa un AbortSignal a la revocación", async () => {
+    mockRemoveCollaborator.mockResolvedValue(undefined);
+
+    await removeCollaborator("tp-ana", "ana");
+
+    const [argumentos] = mockRemoveCollaborator.mock.calls[0];
+    expect(argumentos.request.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("trata el 404 como que el alumno ya no tenía acceso", async () => {
+    mockRemoveCollaborator.mockRejectedValue(requestError(404, "Not Found"));
+
+    await expect(removeCollaborator("tp-ana", "ana")).resolves.toBe("ya_no_tenia_acceso");
+  });
+
+  it("traduce el 403 al mensaje operativo de permisos de la App", async () => {
+    mockRemoveCollaborator.mockRejectedValue(requestError(403, "Forbidden"));
+
+    await expect(removeCollaborator("tp-ana", "ana")).rejects.toThrow("permisos suficientes");
   });
 });
 

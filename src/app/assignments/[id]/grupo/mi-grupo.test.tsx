@@ -42,6 +42,7 @@ function makeGrupo(overrides: Partial<GrupoResumen> = {}): GrupoResumen {
     estaLleno: false,
     etiquetaCupo: "2/3 integrantes",
     miembros: ["ana", "bob"],
+    tieneRepoActivo: false,
     ...overrides,
   };
   return base;
@@ -51,7 +52,8 @@ function makeProps(overrides: Partial<React.ComponentProps<typeof MiGrupo>> = {}
   return {
     grupo: makeGrupo(),
     assignmentId: "a1",
-    tieneEntrega: false,
+    tieneRepo: false,
+    tieneAccesoAlRepo: false,
     githubUsername: "ana",
     motivoBloqueo: null,
     esUltimoMiembro: false,
@@ -94,15 +96,50 @@ describe("MiGrupo", () => {
     expect(screen.getByText("Completo (2/2)")).toBeInTheDocument();
   });
 
-  it("muestra AcceptButton cuando no tiene entrega", () => {
-    render(<MiGrupo {...makeProps({ tieneEntrega: false })} />);
+  it("muestra AcceptButton cuando no tiene repositorio", () => {
+    render(<MiGrupo {...makeProps({ tieneRepo: false })} />);
     expect(screen.getByTestId("accept-button")).toBeInTheDocument();
     expect(screen.getByTestId("accept-button")).toHaveAttribute("data-assignment", "a1");
   });
 
-  it("no muestra AcceptButton cuando ya tiene entrega", () => {
-    render(<MiGrupo {...makeProps({ tieneEntrega: true })} />);
+  // Una entrega pendiente o fallida existe pero no tiene `hasRepo()`: el
+  // grupo tiene que poder reintentar (ambas llegan como tieneRepo=false).
+  it("muestra el botón de aceptar cuando la entrega del grupo quedó fallida", () => {
+    render(<MiGrupo {...makeProps({ tieneRepo: false, tieneAccesoAlRepo: true })} />);
+    expect(screen.getByTestId("accept-button")).toBeInTheDocument();
+    expect(screen.getByText(/aceptá el TP para crear el repositorio/)).toBeInTheDocument();
+  });
+
+  it("muestra el botón de aceptar cuando la entrega quedó pendiente", () => {
+    render(<MiGrupo {...makeProps({ tieneRepo: false, tieneAccesoAlRepo: false })} />);
+    expect(screen.getByTestId("accept-button")).toBeInTheDocument();
+  });
+
+  it("ofrece pedir acceso cuando el repo existe pero el integrante no figura como colaborador", () => {
+    render(<MiGrupo {...makeProps({ tieneRepo: true, tieneAccesoAlRepo: false })} />);
+    expect(screen.getByText(/todavía no tenés acceso/)).toBeInTheDocument();
+    expect(screen.getByTestId("accept-button")).toHaveAttribute("data-assignment", "a1");
+  });
+
+  it("no muestra ningún botón de aceptar cuando el repo existe y el integrante ya tiene acceso", () => {
+    render(<MiGrupo {...makeProps({ tieneRepo: true, tieneAccesoAlRepo: true })} />);
     expect(screen.queryByTestId("accept-button")).not.toBeInTheDocument();
+  });
+
+  it("sigue bloqueando la salida del grupo cuando el grupo ya tiene entrega", () => {
+    render(
+      <MiGrupo
+        {...makeProps({
+          tieneRepo: true,
+          tieneAccesoAlRepo: true,
+          motivoBloqueo: "El grupo ya aceptó el TP",
+        })}
+      />
+    );
+    expect(screen.getByTestId("acciones-de-membresia")).toHaveAttribute(
+      "data-motivo",
+      "El grupo ya aceptó el TP"
+    );
   });
 
   it("le pasa a AccionesDeMembresia el grupo, el username y el motivo de bloqueo", () => {

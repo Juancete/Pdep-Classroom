@@ -67,7 +67,7 @@ describe("AcceptButton", () => {
     render(<AcceptButton assignmentId="a1" />);
     await user.click(screen.getByRole("button", { name: "Aceptar" }));
 
-    expect(await screen.findByText("Error al crear el repo")).toBeInTheDocument();
+    expect(await screen.findByText("No pudimos completar la operación sobre el repositorio")).toBeInTheDocument();
   });
 
   it("no llama reload cuando falla", async () => {

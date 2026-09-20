@@ -9,12 +9,16 @@ export type GrupoResumen = {
   estaLleno: boolean;
   etiquetaCupo: string;
   miembros: string[];
+  // El grupo ya aceptó el TP y su repo está activo (`Entrega.hasRepo()`):
+  // unirse ahí otorga acceso al repositorio (issue #123).
+  tieneRepoActivo: boolean;
 };
 
 export function MiGrupo({
   grupo,
   assignmentId,
-  tieneEntrega,
+  tieneRepo,
+  tieneAccesoAlRepo,
   githubUsername,
   motivoBloqueo,
   esUltimoMiembro,
@@ -22,7 +26,8 @@ export function MiGrupo({
 }: {
   grupo: GrupoResumen;
   assignmentId: string;
-  tieneEntrega: boolean;
+  tieneRepo: boolean;
+  tieneAccesoAlRepo: boolean;
   githubUsername: string;
   motivoBloqueo: string | null;
   esUltimoMiembro: boolean;
@@ -54,11 +59,21 @@ export function MiGrupo({
         </ul>
       </div>
 
-      {!tieneEntrega && (
+      {!tieneRepo && (
         <div className="pt-2 border-t border-gray-100">
           <p className="text-xs text-gray-400 mb-2">
             Ya estás en el grupo. Cuando todos estén listos, aceptá el TP para
             crear el repositorio.
+          </p>
+          <AcceptButton assignmentId={assignmentId} />
+        </div>
+      )}
+
+      {tieneRepo && !tieneAccesoAlRepo && (
+        <div className="pt-2 border-t border-gray-100">
+          <p className="text-xs text-gray-400 mb-2">
+            El repositorio del grupo ya está creado, pero todavía no tenés
+            acceso. Pedí tu acceso desde acá.
           </p>
           <AcceptButton assignmentId={assignmentId} />
         </div>

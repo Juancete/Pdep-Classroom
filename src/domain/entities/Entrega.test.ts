@@ -49,6 +49,36 @@ describe("Entrega.hasRepo", () => {
   });
 });
 
+describe("Entrega.nombreDeRepoActivo", () => {
+  it("devuelve el nombre del repo cuando la entrega está activa", () => {
+    const entrega = nuevaEntrega({
+      provisionEstado: "activa",
+      repoName: "org-repo",
+      repoUrl: "https://github.com/org/org-repo",
+    });
+    expect(entrega.nombreDeRepoActivo()).toBe("org-repo");
+  });
+
+  it("no devuelve nada cuando la provisión quedó pendiente", () => {
+    const entrega = nuevaEntrega({
+      provisionEstado: "pendiente",
+      repoName: "org-repo",
+      repoUrl: undefined,
+    });
+    expect(entrega.nombreDeRepoActivo()).toBeUndefined();
+  });
+
+  it("no devuelve nada cuando el repo fue borrado", () => {
+    const entrega = nuevaEntrega({
+      provisionEstado: "activa",
+      repoName: "org-repo",
+      repoUrl: "https://github.com/org/org-repo",
+      repoDeleted: true,
+    });
+    expect(entrega.nombreDeRepoActivo()).toBeUndefined();
+  });
+});
+
 // Issue #107 (revisión de code review): la ventana de "en vuelo" vivía
 // duplicada en `EntregaRepository.iniciarProvisionEntrega` — se mueve acá
 // para que `borrarEntrega.ts` la consulte sin repetirla.
