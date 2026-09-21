@@ -229,6 +229,18 @@ describe("columna Grupo", () => {
     expect(html).toContain("Los Pibes");
   });
 
+  it("es la primera columna, antes de Nombre completo", () => {
+    const html = renderToStaticMarkup(
+      <EntregasTable
+        assignmentId={ASSIGNMENT_ID}
+        mostrarGrupo
+        entregas={[makeRow({ grupoNombre: "Los Pibes", nombreCompleto: "García, Juan" })]}
+      />
+    );
+    expect(html.indexOf(">Grupo<")).toBeLessThan(html.indexOf(">Nombre completo<"));
+    expect(html.indexOf("Los Pibes")).toBeLessThan(html.indexOf("García, Juan"));
+  });
+
   it("no muestra la columna sin mostrarGrupo", () => {
     const html = renderToStaticMarkup(
       <EntregasTable

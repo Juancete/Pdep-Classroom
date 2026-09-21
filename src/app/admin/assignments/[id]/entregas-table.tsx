@@ -11,6 +11,7 @@ import {
 } from "@/components/DataTable";
 import { matcheaEntregaQuery } from "@/lib/entrega-query";
 import { CIBadge } from "@/components/CIBadge";
+import { RepoDeEntrega } from "@/components/RepoDeEntrega";
 import { CISyncButton } from "./ci-sync-button";
 import { CIRerunButton } from "./ci-rerun-button";
 import { BorrarEntregaButton } from "./borrar-entrega-button";
@@ -85,12 +86,12 @@ export function EntregasTable({
         </div>
       ) : (
         <DataTable
-          columns={mostrarGrupo ? "1.4fr 0.9fr 1fr 1.3fr 1fr 120px" : "1.4fr 1fr 1.3fr 1fr 120px"}
+          columns={mostrarGrupo ? "0.9fr 1.4fr 1fr 1.3fr 1fr 120px" : "1.4fr 1fr 1.3fr 1fr 120px"}
           bare
         >
           <DataHeader>
-            <DataHeaderCell>Nombre completo</DataHeaderCell>
             {mostrarGrupo && <DataHeaderCell>Grupo</DataHeaderCell>}
+            <DataHeaderCell>Nombre completo</DataHeaderCell>
             <DataHeaderCell>Usuario(s)</DataHeaderCell>
             <DataHeaderCell>Repositorio</DataHeaderCell>
             <DataHeaderCell>CI</DataHeaderCell>
@@ -99,12 +100,12 @@ export function EntregasTable({
           <DataBody>
             {filtradas.map((entrega) => (
               <DataRow key={entrega.id}>
-                <DataCell label="Nombre completo" heading>
-                  {entrega.nombreCompleto}
-                </DataCell>
                 {mostrarGrupo && (
                   <DataCell label="Grupo">{entrega.grupoNombre ?? "—"}</DataCell>
                 )}
+                <DataCell label="Nombre completo" heading>
+                  {entrega.nombreCompleto}
+                </DataCell>
                 <DataCell label="Usuario(s)">
                   <span className="font-mono text-xs break-all">
                     {entrega.githubUsernames.join(", ")}
@@ -120,35 +121,7 @@ export function EntregasTable({
                       )}
                     </div>
                   )}
-                  {entrega.estadoRepo === "borrado" && (
-                    <span className="text-red-400 text-xs">Repositorio borrado</span>
-                  )}
-                  {entrega.estadoRepo === "activo" && (
-                    <a
-                      href={entrega.repoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-sm bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg font-medium hover:bg-green-100 transition-colors"
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                        />
-                      </svg>
-                      Ir al repo
-                    </a>
-                  )}
-                  {entrega.estadoRepo === "sin-repo" && (
-                    <span className="text-gray-400 text-xs">Sin repo</span>
-                  )}
+                  <RepoDeEntrega estadoRepo={entrega.estadoRepo} repoUrl={entrega.repoUrl} />
                 </DataCell>
                 <DataCell label="CI">
                   <span className="inline-flex items-center gap-1.5">
