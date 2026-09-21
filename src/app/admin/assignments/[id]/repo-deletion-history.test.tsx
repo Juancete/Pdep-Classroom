@@ -61,7 +61,7 @@ describe("RepoDeletionHistory", () => {
     );
 
     expect(html).toContain("Página 2 de 3");
-    expect(html).toContain("repoDeletionPage=1");
-    expect(html).toContain("repoDeletionPage=3");
+    expect(html).toContain('href="/admin/assignments/a1/historial-repos?page=1"');
+    expect(html).toContain('href="/admin/assignments/a1/historial-repos?page=3"');
   });
 });

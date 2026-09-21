@@ -28,6 +28,7 @@ export type EntregaRow = {
   estadoRepo: "borrado" | "activo" | "sin-repo";
   createdAt: string;
   nombreCompleto: string;
+  grupoNombre?: string;
   ci: {
     resultadoNombre: NombreResultadoCI;
     detalleUrl?: string;
@@ -48,9 +49,11 @@ export function filterEntregas(entregas: EntregaRow[], rawQuery: string): Entreg
 export function EntregasTable({
   assignmentId,
   entregas,
+  mostrarGrupo,
 }: {
   assignmentId: string;
   entregas: EntregaRow[];
+  mostrarGrupo: boolean;
 }) {
   const [query, setQuery] = useState("");
   const filtradas = filterEntregas(entregas, query);
@@ -68,7 +71,7 @@ export function EntregasTable({
             autoComplete="new-password"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Buscar por usuario o repo..."
+            placeholder="Buscar por usuario, grupo o repo..."
             className="border border-gray-300 rounded-md px-3 py-1 text-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-pdep-400"
           />
         </div>
@@ -81,9 +84,13 @@ export function EntregasTable({
             : "No hay entregas todavía."}
         </div>
       ) : (
-        <DataTable columns="1.4fr 1fr 1.3fr 1fr 120px" bare>
+        <DataTable
+          columns={mostrarGrupo ? "1.4fr 0.9fr 1fr 1.3fr 1fr 120px" : "1.4fr 1fr 1.3fr 1fr 120px"}
+          bare
+        >
           <DataHeader>
             <DataHeaderCell>Nombre completo</DataHeaderCell>
+            {mostrarGrupo && <DataHeaderCell>Grupo</DataHeaderCell>}
             <DataHeaderCell>Usuario(s)</DataHeaderCell>
             <DataHeaderCell>Repositorio</DataHeaderCell>
             <DataHeaderCell>CI</DataHeaderCell>
@@ -95,6 +102,9 @@ export function EntregasTable({
                 <DataCell label="Nombre completo" heading>
                   {entrega.nombreCompleto}
                 </DataCell>
+                {mostrarGrupo && (
+                  <DataCell label="Grupo">{entrega.grupoNombre ?? "—"}</DataCell>
+                )}
                 <DataCell label="Usuario(s)">
                   <span className="font-mono text-xs break-all">
                     {entrega.githubUsernames.join(", ")}

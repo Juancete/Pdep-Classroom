@@ -12,8 +12,6 @@ const mockGetAssignment = vi.fn();
 const mockGetEntregas = vi.fn();
 const mockGetAlumnos = vi.fn();
 const mockGetGruposDeAssignment = vi.fn();
-const mockGetRepoDeletionHistory = vi.fn();
-const mockGetHistorialDeMembresias = vi.fn();
 const mockRedirect = vi.fn();
 
 vi.mock("@/infrastructure/auth/session", () => ({
@@ -25,10 +23,6 @@ vi.mock("@/infrastructure/repositories", () => ({
   getEntregas: (id: string) => mockGetEntregas(id),
   getAlumnos: () => mockGetAlumnos(),
   getGruposDeAssignment: (id: string) => mockGetGruposDeAssignment(id),
-  getRepoDeletionHistory: (id: string, page: number) =>
-    mockGetRepoDeletionHistory(id, page),
-  getHistorialDeMembresias: (id: string, page: number) =>
-    mockGetHistorialDeMembresias(id, page),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -43,81 +37,32 @@ vi.mock("next/link", () => ({
     href,
     children,
     className,
+    "aria-current": ariaCurrent,
   }: {
     href: string;
     children: React.ReactNode;
     className?: string;
+    "aria-current"?: "page";
   }) => (
-    <a href={href} className={className}>
+    <a href={href} className={className} aria-current={ariaCurrent}>
       {children}
     </a>
   ),
 }));
 
 vi.mock("./entregas-table", () => ({
-  EntregasTable: ({ entregas }: { entregas: { id: string }[] }) => (
-    <div data-testid="entregas-table" data-count={entregas.length} />
-  ),
-}));
-
-vi.mock("../delete-repos-button", () => ({
-  DeleteReposButton: ({ activeRepoCount }: { activeRepoCount: number }) => (
-    <button data-testid="delete-repos-button" data-count={activeRepoCount} />
-  ),
-}));
-
-vi.mock("./grupos-panel", () => ({
-  GruposPanel: ({
-    assignmentId,
-    inscripcionesCerradas,
-    grupos,
-    alumnosSinGrupo,
+  EntregasTable: ({
+    entregas,
+    mostrarGrupo,
   }: {
-    assignmentId: string;
-    inscripcionesCerradas: boolean;
-    grupos: { id: string; tieneEntrega: boolean; tipoDeIntegrantes: string }[];
-    alumnosSinGrupo: { username: string }[];
+    entregas: { id: string; grupoNombre?: string }[];
+    mostrarGrupo: boolean;
   }) => (
     <div
-      data-testid="grupos-panel"
-      data-assignment={assignmentId}
-      data-cerradas={String(inscripcionesCerradas)}
-      data-grupos={grupos.length}
-      data-sin-grupo={alumnosSinGrupo.length}
-      data-grupos-con-entrega={grupos.filter((grupo) => grupo.tieneEntrega).map((grupo) => grupo.id).join(",")}
-      data-grupos-docentes={grupos.filter((grupo) => grupo.tipoDeIntegrantes === "docentes").map((grupo) => grupo.id).join(",")}
-    />
-  ),
-}));
-
-vi.mock("./volcar-grupos-button", () => ({
-  VolcarGruposButton: ({
-    assignmentId,
-    columna,
-  }: {
-    assignmentId: string;
-    columna: number;
-  }) => (
-    <div
-      data-testid="volcar-grupos-button"
-      data-assignment={assignmentId}
-      data-columna={columna}
-    />
-  ),
-}));
-
-vi.mock("./historial-membresias", () => ({
-  HistorialDeMembresias: ({
-    assignmentId,
-    historial,
-  }: {
-    assignmentId: string;
-    historial: { total: number };
-  }) => (
-    <div
-      data-testid="historial-membresias"
-      data-assignment={assignmentId}
-      data-total={historial.total}
+      data-testid="entregas-table"
+      data-count={entregas.length}
+      data-mostrar-grupo={String(mostrarGrupo)}
+      data-grupos-nombres={entregas.map((entrega) => entrega.grupoNombre ?? "").join(",")}
     />
   ),
 }));
@@ -126,20 +71,23 @@ vi.mock("../estado-panel", () => ({
   EstadoPanel: ({
     assignmentId,
     estado,
-    accionesDisponibles,
-    motivoBloqueoBorrador,
+    acciones,
+    inscripciones,
   }: {
     assignmentId: string;
     estado: string;
-    accionesDisponibles: string[];
-    motivoBloqueoBorrador: string | null;
+    acciones: { destino: string; motivoDeBloqueo: string | null }[];
+    inscripciones?: { cerradas: boolean };
   }) => (
     <div
       data-testid="estado-panel"
       data-assignment={assignmentId}
       data-estado={estado}
-      data-acciones={accionesDisponibles.join(",")}
-      data-motivo={motivoBloqueoBorrador ?? ""}
+      data-acciones={acciones.map((accion) => accion.destino).join(",")}
+      data-motivo={
+        acciones.find((accion) => accion.destino === "borrador")?.motivoDeBloqueo ?? ""
+      }
+      data-inscripciones={inscripciones ? String(inscripciones.cerradas) : "ausente"}
     />
   ),
 }));
@@ -231,42 +179,6 @@ describe("Admin Assignment Detail Page", () => {
     mockGetEntregas.mockResolvedValue([]);
     mockGetAlumnos.mockResolvedValue([]);
     mockGetGruposDeAssignment.mockResolvedValue([]);
-    mockGetRepoDeletionHistory.mockResolvedValue({
-      items: [],
-      page: 1,
-      pageSize: 25,
-      total: 0,
-      totalPages: 1,
-    });
-    mockGetHistorialDeMembresias.mockResolvedValue({
-      items: [],
-      page: 1,
-      pageSize: 25,
-      total: 0,
-      totalPages: 1,
-    });
-  });
-
-  it("normaliza y consulta la página solicitada del historial", async () => {
-    mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
-
-    await AssignmentDetailPage({
-      params: Promise.resolve({ id: "a1" }),
-      searchParams: Promise.resolve({ repoDeletionPage: "3" }),
-    });
-
-    expect(mockGetRepoDeletionHistory).toHaveBeenCalledWith("a1", 3);
-  });
-
-  it("normaliza una página inválida a la primera", async () => {
-    mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
-
-    await AssignmentDetailPage({
-      params: Promise.resolve({ id: "a1" }),
-      searchParams: Promise.resolve({ repoDeletionPage: "3-invalida" }),
-    });
-
-    expect(mockGetRepoDeletionHistory).toHaveBeenCalledWith("a1", 1);
   });
 
   it("siempre llama a requireAdmin", async () => {
@@ -517,14 +429,14 @@ describe("Admin Assignment Detail Page", () => {
       expect(markup).toContain('data-motivo=""');
     });
 
-    it("no ofrece volver a borrador cuando el publicado ya tiene entregas", async () => {
+    it("ofrece volver a borrador (bloqueado) y archivar cuando el publicado ya tiene entregas", async () => {
       mockGetAssignment.mockResolvedValue(
         makeIndividualAssignment({ estadoNombre: "publicado" })
       );
       mockGetEntregas.mockResolvedValue([makeEntrega()]);
       const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       const markup = renderToStaticMarkup(element);
-      expect(markup).toContain('data-acciones="archivado"');
+      expect(markup).toContain('data-acciones="borrador,archivado"');
     });
   });
 
@@ -552,187 +464,69 @@ describe("Admin Assignment Detail Page", () => {
     });
   });
 
-  describe("panel de grupos (assignments grupales)", () => {
-    it("no muestra GruposPanel para assignments individuales", async () => {
-      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
-      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
-      expect(renderToStaticMarkup(element)).not.toContain("grupos-panel");
-    });
-
-    it("muestra GruposPanel para assignments grupales", async () => {
+  describe("columna Grupo de EntregasTable", () => {
+    it("serializa grupoNombre de cada entrega y activa mostrarGrupo en un TP grupal", async () => {
       mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
-      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
-      expect(renderToStaticMarkup(element)).toContain('data-testid="grupos-panel"');
-    });
-
-    it("pasa inscripcionesCerradas=true cuando el assignment las tiene cerradas", async () => {
-      mockGetAssignment.mockResolvedValue(
-        makeGrupalAssignment({ id: "a2", inscripcionesCerradas: true })
-      );
-      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
-      expect(renderToStaticMarkup(element)).toContain('data-cerradas="true"');
-    });
-
-    it("pasa inscripcionesCerradas=false cuando están abiertas", async () => {
-      mockGetAssignment.mockResolvedValue(
-        makeGrupalAssignment({ id: "a2", inscripcionesCerradas: false })
-      );
-      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
-      expect(renderToStaticMarkup(element)).toContain('data-cerradas="false"');
-    });
-
-    it("pasa los grupos al panel", async () => {
-      mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
-      mockGetGruposDeAssignment.mockResolvedValue([
-        makeGrupo({ id: "g1" }),
-        makeGrupo({ id: "g2" }),
-      ]);
-      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
-      expect(renderToStaticMarkup(element)).toContain('data-grupos="2"');
-    });
-
-    it("calcula correctamente los alumnos sin grupo", async () => {
-      mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
-      mockGetAlumnos.mockResolvedValue([
-        makeAlumno({ id: "al1", githubUsername: "usuario1" }),
-        makeAlumno({ id: "al2", githubUsername: "usuario2" }),
-        makeAlumno({ id: "al3", githubUsername: "usuario3" }),
-      ]);
-      const miembros = ["usuario1"];
-      const grupoConMiembro = {
-        id: "g1",
-        nombre: "Grupo 1",
-        paradigma: "objetos",
-        maxIntegrantes: 3,
-        creadoPor: "usuario1",
-        isOpen: () => true,
-        estaLleno: () => false,
-        etiquetaCupo: () => `${miembros.length}/3 integrantes`,
-        usernamesDeMiembros: () => miembros,
-        usernamesCanonicos: () => miembros.map((username) => username.toLowerCase()),
-        alumnos: {
-          getItems: () => miembros.map((username) => makeAlumno({ githubUsername: username })),
-        },
-      };
-      mockGetGruposDeAssignment.mockResolvedValue([grupoConMiembro]);
-
-      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
-      expect(renderToStaticMarkup(element)).toContain('data-sin-grupo="2"');
-    });
-
-    it("no llama a getGruposDeAssignment para assignments individuales", async () => {
-      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
-      await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
-      expect(mockGetGruposDeAssignment).not.toHaveBeenCalled();
-    });
-
-    it("marca tieneEntrega=true para el grupo con una entrega registrada, reusando getEntregas sin queries extra", async () => {
-      mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
-      mockGetGruposDeAssignment.mockResolvedValue([
-        makeGrupo({ id: "g1" }),
-        makeGrupo({ id: "g2" }),
-      ]);
       mockGetEntregas.mockResolvedValue([
-        makeEntrega({ grupo: makeGrupo({ id: "g1" }) }),
+        makeEntrega({ id: "e1", grupo: makeGrupo({ nombre: "Los Pibes" }) }),
+        makeEntrega({ id: "e2" }),
       ]);
-
-      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
-
-      expect(renderToStaticMarkup(element)).toContain('data-grupos-con-entrega="g1"');
-    });
-
-    // issue #107: la serialización a GrupoAdminResumen propaga
-    // `tipoDeIntegrantes` — sin esto el panel no puede distinguir un grupo
-    // de docentes al filtrar destinos de "Mover a…"/"Agregar a…".
-    it("propaga tipoDeIntegrantes en la serialización de cada grupo", async () => {
-      mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
-      mockGetGruposDeAssignment.mockResolvedValue([
-        makeGrupo({ id: "g1", tipoDeIntegrantes: "alumnos" }),
-        makeGrupo({ id: "g2", tipoDeIntegrantes: "docentes" }),
-      ]);
-
-      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
-
-      expect(renderToStaticMarkup(element)).toContain('data-grupos-docentes="g2"');
-    });
-  });
-
-  // Issue #109
-  describe("botón de volcar grupos a la planilla", () => {
-    it("no lo muestra para assignments individuales", async () => {
-      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
-      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
-      expect(renderToStaticMarkup(element)).not.toContain("volcar-grupos-button");
-    });
-
-    it("no lo muestra para un grupal sin columna configurada", async () => {
-      mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
-      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
-      expect(renderToStaticMarkup(element)).not.toContain("volcar-grupos-button");
-    });
-
-    it("lo muestra para un grupal con columna configurada, pasando assignmentId y columna", async () => {
-      mockGetAssignment.mockResolvedValue(
-        makeGrupalAssignment({ id: "a2", columnaGrupoEnPlanilla: 5 })
-      );
       const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
       const markup = renderToStaticMarkup(element);
-      expect(markup).toContain('data-testid="volcar-grupos-button"');
-      expect(markup).toContain('data-assignment="a2"');
-      expect(markup).toContain('data-columna="5"');
+      expect(markup).toContain('data-mostrar-grupo="true"');
+      expect(markup).toContain('data-grupos-nombres="Los Pibes,"');
     });
 
-    it("lo muestra aunque la columna configurada sea 0 (columna A)", async () => {
-      mockGetAssignment.mockResolvedValue(
-        makeGrupalAssignment({ id: "a2", columnaGrupoEnPlanilla: 0 })
-      );
-      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
-      expect(renderToStaticMarkup(element)).toContain('data-columna="0"');
+    it("no activa mostrarGrupo en un TP individual", async () => {
+      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
+      mockGetEntregas.mockResolvedValue([makeEntrega()]);
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      expect(renderToStaticMarkup(element)).toContain('data-mostrar-grupo="false"');
     });
   });
 
-  describe("historial de cambios de integrantes", () => {
-    it("no muestra el historial para assignments individuales", async () => {
-      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
-      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
-      expect(renderToStaticMarkup(element)).not.toContain("historial-membresias");
-    });
-
-    it("muestra el historial para assignments grupales", async () => {
-      mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
-      mockGetHistorialDeMembresias.mockResolvedValue({
-        items: [],
-        page: 1,
-        pageSize: 25,
-        total: 4,
-        totalPages: 1,
-      });
+  describe("inscripciones en el panel de estado", () => {
+    it("pasa cerradas=true al panel cuando el grupal publicado las tiene cerradas", async () => {
+      mockGetAssignment.mockResolvedValue(
+        makeGrupalAssignment({
+          id: "a2",
+          estadoNombre: "publicado",
+          inscripcionesCerradas: true,
+        })
+      );
       const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
-      const html = renderToStaticMarkup(element);
-      expect(html).toContain('data-testid="historial-membresias"');
-      expect(html).toContain('data-total="4"');
+      expect(renderToStaticMarkup(element)).toContain('data-inscripciones="true"');
     });
 
-    it("normaliza y consulta la página solicitada del historial de membresías", async () => {
-      mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
-
-      await AssignmentDetailPage({
-        params: Promise.resolve({ id: "a2" }),
-        searchParams: Promise.resolve({ membresiaPage: "2" }),
-      });
-
-      expect(mockGetHistorialDeMembresias).toHaveBeenCalledWith("a2", 2);
+    it("pasa cerradas=false al panel cuando están abiertas", async () => {
+      mockGetAssignment.mockResolvedValue(
+        makeGrupalAssignment({
+          id: "a2",
+          estadoNombre: "publicado",
+          inscripcionesCerradas: false,
+        })
+      );
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
+      expect(renderToStaticMarkup(element)).toContain('data-inscripciones="false"');
     });
 
-    it("normaliza una página inválida a la primera", async () => {
-      mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
-
-      await AssignmentDetailPage({
-        params: Promise.resolve({ id: "a2" }),
-        searchParams: Promise.resolve({ membresiaPage: "no-numero" }),
-      });
-
-      expect(mockGetHistorialDeMembresias).toHaveBeenCalledWith("a2", 1);
+    it("no pasa inscripciones para un assignment individual publicado", async () => {
+      mockGetAssignment.mockResolvedValue(
+        makeIndividualAssignment({ estadoNombre: "publicado" })
+      );
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      expect(renderToStaticMarkup(element)).toContain('data-inscripciones="ausente"');
     });
+
+    it.each(["borrador", "archivado"] as const)(
+      "no pasa inscripciones para un grupal en %s",
+      async (estadoNombre) => {
+        mockGetAssignment.mockResolvedValue(
+          makeGrupalAssignment({ id: "a2", estadoNombre })
+        );
+        const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a2" }) });
+        expect(renderToStaticMarkup(element)).toContain('data-inscripciones="ausente"');
+      }
+    );
   });
 });

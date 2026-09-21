@@ -297,24 +297,46 @@ const ESTADOS_POR_NOMBRE: Record<NombreEstadoAssignment, EstadoAssignment> = {
   archivado: new Archivado(),
 };
 
+export type AccionDeEstado = {
+  destino: NombreEstadoAssignment;
+  motivoDeBloqueo: string | null;
+};
+
+const CONTEXTO_SIN_RESTRICCIONES: ContextoTransicionEstado = { tieneEntregas: false };
+
+/**
+ * Transiciones que `estado` ofrece (las válidas bajo un contexto sin
+ * restricciones) junto con el motivo por el que el contexto real las bloquea,
+ * o `null` si están permitidas. Distingue "bloqueada por este assignment" de
+ * "imposible en este estado" (esa no se ofrece).
+ */
+export function accionesDeEstado(
+  estado: EstadoAssignment,
+  assignmentId: string,
+  contexto: ContextoTransicionEstado
+): AccionDeEstado[] {
+  return NOMBRES_ESTADO_ASSIGNMENT.filter(
+    (destino) =>
+      destino !== estado.nombre &&
+      estado.motivoDeBloqueo(assignmentId, destino, CONTEXTO_SIN_RESTRICCIONES) === null
+  ).map((destino) => ({
+    destino,
+    motivoDeBloqueo: estado.motivoDeBloqueo(assignmentId, destino, contexto),
+  }));
+}
+
 /**
  * Estados a los que `estado` puede transicionar dado el contexto — reusa
  * `transicionarA` en modo de sondeo (no muta nada: los estados son
  * singletons sin datos propios) para no duplicar las reglas de transición en
- * la UI. Usado por el panel admin para decidir qué botones ofrecer.
+ * la UI.
  */
 export function transicionesDisponibles(
   estado: EstadoAssignment,
   assignmentId: string,
   contexto: ContextoTransicionEstado
 ): NombreEstadoAssignment[] {
-  return NOMBRES_ESTADO_ASSIGNMENT.filter((destino) => {
-    if (destino === estado.nombre) return false;
-    try {
-      estado.transicionarA(assignmentId, destino, contexto);
-      return true;
-    } catch {
-      return false;
-    }
-  });
+  return accionesDeEstado(estado, assignmentId, contexto)
+    .filter((accion) => accion.motivoDeBloqueo === null)
+    .map((accion) => accion.destino);
 }

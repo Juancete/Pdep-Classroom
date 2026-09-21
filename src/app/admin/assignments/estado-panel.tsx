@@ -6,7 +6,9 @@ import { EstadoAssignmentBadge } from "@/components/EstadoAssignmentBadge";
 import { SpinnerIcon } from "@/components/icons";
 import { ACCIONES_ESTADO } from "./estado-acciones";
 import { useTransicionDeEstado } from "./useTransicionDeEstado";
+import { InscripcionesToggle } from "./[id]/inscripciones-toggle";
 import type { NombreEstadoAssignment } from "@/types";
+import type { AccionDeEstado } from "@/domain/entities";
 
 function formatearFechaAuditoria(fecha: string): string {
   return new Date(fecha).toLocaleDateString("es-AR", {
@@ -17,25 +19,21 @@ function formatearFechaAuditoria(fecha: string): string {
 export function EstadoPanel({
   assignmentId,
   estado: initialEstado,
-  accionesDisponibles,
-  motivoBloqueoBorrador,
+  acciones: accionesIniciales,
   publicadoEn,
   publicadoPor,
   archivadoEn,
   archivadoPor,
+  inscripciones,
 }: {
   assignmentId: string;
   estado: NombreEstadoAssignment;
-  accionesDisponibles: NombreEstadoAssignment[];
-  // Calculado en el server page con `EstadoAssignment.motivoDeBloqueo` — el
-  // panel es cliente y no puede tirar el error de dominio él mismo para
-  // leer el mensaje (Fase 3 de la auditoría de dominio). `null` si volver a
-  // borrador está permitido (o no aplica, ej. ya está en borrador).
-  motivoBloqueoBorrador: string | null;
+  acciones: AccionDeEstado[];
   publicadoEn: string | null;
   publicadoPor: string | null;
   archivadoEn: string | null;
   archivadoPor: string | null;
+  inscripciones?: { cerradas: boolean };
 }) {
   const router = useRouter();
   const { transicionar, loading, error } = useTransicionDeEstado(assignmentId);
@@ -46,7 +44,7 @@ export function EstadoPanel({
   // estado real cambia, React lo remonta con las props frescas del servidor
   // en vez de arrastrar el estado local viejo.
   const [estado, setEstado] = useState(initialEstado);
-  const [acciones, setAcciones] = useState(accionesDisponibles);
+  const [acciones, setAcciones] = useState(accionesIniciales);
 
   async function handleTransicion(destino: NombreEstadoAssignment) {
     if (!confirm(ACCIONES_ESTADO[destino].confirmacion)) return;
@@ -70,13 +68,15 @@ export function EstadoPanel({
           <EstadoAssignmentBadge estado={estado} />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {acciones.map((destino) => {
+          {acciones.map((accion) => {
+            const { destino, motivoDeBloqueo } = accion;
             const { etiquetaBoton, className, Icon } = ACCIONES_ESTADO[destino];
             return (
               <button
                 key={destino}
                 onClick={() => handleTransicion(destino)}
-                disabled={loading}
+                disabled={loading || Boolean(motivoDeBloqueo)}
+                title={motivoDeBloqueo ?? undefined}
                 data-testid={`accion-${destino}`}
                 className={`inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
               >
@@ -85,9 +85,6 @@ export function EstadoPanel({
               </button>
             );
           })}
-          {motivoBloqueoBorrador && (
-            <span className="text-xs text-gray-500">{motivoBloqueoBorrador}</span>
-          )}
         </div>
       </div>
       {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
@@ -107,6 +104,9 @@ export function EstadoPanel({
             </>
           )}
         </p>
+      )}
+      {inscripciones && (
+        <InscripcionesToggle assignmentId={assignmentId} cerradas={inscripciones.cerradas} />
       )}
     </div>
   );
