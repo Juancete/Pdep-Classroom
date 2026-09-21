@@ -207,6 +207,18 @@ export async function getEntregasConRepoActivo(
   });
 }
 
+// Ids de los grupos de un assignment cuya entrega tiene el repo activo (mismo
+// criterio que `Entrega.hasRepo()`), en una sola query — lo usa el selector de
+// grupo para avisar que unirse ahí da acceso al repositorio (issue #123).
+export async function getGrupoIdsConRepoActivo(assignmentId: string): Promise<Set<string>> {
+  const entregas = await getEntregasConRepoActivo(assignmentId);
+  const grupoIds = new Set<string>();
+  for (const entrega of entregas) {
+    if (entrega.grupo && entrega.hasRepo()) grupoIds.add(entrega.grupo.id);
+  }
+  return grupoIds;
+}
+
 // Persiste el resultado de la última consulta de CI (issue #58) — delega en
 // `Entrega.registrarResultadoCI` (Fase 2 de la auditoría de dominio): acá
 // sólo queda cargar, delegar y flushear.

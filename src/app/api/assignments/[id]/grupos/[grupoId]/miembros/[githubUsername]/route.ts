@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/infrastructure/auth/session";
-import { salirDeGrupo, moverAlumnoDeGrupo } from "@/infrastructure/repositories";
 import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
 import { Alumno, type ActorDeMembresia } from "@/domain/entities";
 import type { PdepUser } from "@/types";
 import { resolverParticipante } from "@/application/participante";
+import { salirDeGrupo, moverAlumnoDeGrupo } from "@/application/membresiaDeGrupo";
 
 const CambioDeMembresiaSchema = z.object({
   motivo: z.string().trim().max(280).optional(),

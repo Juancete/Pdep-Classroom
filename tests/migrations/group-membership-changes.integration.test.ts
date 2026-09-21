@@ -28,6 +28,12 @@ import {
 } from "../../src/infrastructure/repositories/GrupoRepository";
 import { crearEntregaSiAssignmentDisponible } from "../../src/infrastructure/repositories/EntregaRepository";
 
+// Estos tests ejercitan las invariantes de membresía en Postgres, no GitHub.
+const accesoSinGithub = {
+  otorgarA: async () => {},
+  revocarA: async () => {},
+};
+
 function getSafeTestDatabaseUrl(): string {
   const value = process.env.MIGRATION_TEST_DATABASE_URL;
   if (!value) {
@@ -207,7 +213,7 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
     );
 
     await expect(
-      salirDeGrupo({
+      salirDeGrupo({ acceso: accesoSinGithub,
         assignmentId: seed.assignmentId,
         grupoId: seed.grupoIds[0]!,
         githubUsername: seed.githubUsernames[0]!,
@@ -217,7 +223,7 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
     ).rejects.toBeInstanceOf(InscripcionesCerradasError);
 
     await expect(
-      salirDeGrupo({
+      salirDeGrupo({ acceso: accesoSinGithub,
         assignmentId: seed.assignmentId,
         grupoId: seed.grupoIds[0]!,
         githubUsername: seed.githubUsernames[0]!,
@@ -233,7 +239,7 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
     await seedMembership(orm, seed.grupoIds[1]!, seed.assignmentId, seed.alumnoIds[1]!, seed.githubUsernames[1]!);
 
     await expect(
-      moverAlumnoDeGrupo({
+      moverAlumnoDeGrupo({ acceso: accesoSinGithub,
         assignmentId: seed.assignmentId,
         grupoDestinoId: seed.grupoIds[1]!,
         githubUsername: seed.githubUsernames[0]!,
@@ -255,7 +261,7 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
     await seedEntrega(orm, { assignmentId: seed.assignmentId, grupoId: seed.grupoIds[0]! });
 
     await expect(
-      salirDeGrupo({
+      salirDeGrupo({ acceso: accesoSinGithub,
         assignmentId: seed.assignmentId,
         grupoId: seed.grupoIds[0]!,
         githubUsername: seed.githubUsernames[0]!,
@@ -264,7 +270,7 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
       })
     ).rejects.toBeInstanceOf(GrupoConEntregaError);
 
-    const resultado = await salirDeGrupo({
+    const resultado = await salirDeGrupo({ acceso: accesoSinGithub,
       assignmentId: seed.assignmentId,
       grupoId: seed.grupoIds[0]!,
       githubUsername: seed.githubUsernames[0]!,
@@ -288,7 +294,7 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
     );
     await seedMembership(orm, seed.grupoIds[0]!, seed.assignmentId, seed.alumnoIds[0]!, seed.githubUsernames[0]!);
 
-    const resultado = await salirDeGrupo({
+    const resultado = await salirDeGrupo({ acceso: accesoSinGithub,
       assignmentId: seed.assignmentId,
       grupoId: seed.grupoIds[0]!,
       githubUsername: seed.githubUsernames[0]!,
@@ -318,7 +324,7 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
 
     const results = await Promise.allSettled(
       [0, 1].map(async (index) =>
-        salirDeGrupo({
+        salirDeGrupo({ acceso: accesoSinGithub,
           assignmentId: seed.assignmentId,
           grupoId: seed.grupoIds[0]!,
           githubUsername: seed.githubUsernames[index]!,
@@ -342,7 +348,7 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
 
     const results = await Promise.allSettled(
       [seed.grupoIds[1]!, seed.grupoIds[2]!].map(async (grupoDestinoId) =>
-        moverAlumnoDeGrupo({
+        moverAlumnoDeGrupo({ acceso: accesoSinGithub,
           assignmentId: seed.assignmentId,
           grupoDestinoId,
           githubUsername: seed.githubUsernames[0]!,
@@ -372,7 +378,7 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
 
     const results = await Promise.allSettled(
       [0, 1].map(async (index) =>
-        moverAlumnoDeGrupo({
+        moverAlumnoDeGrupo({ acceso: accesoSinGithub,
           assignmentId: seed.assignmentId,
           grupoDestinoId: destino!,
           githubUsername: seed.githubUsernames[index]!,
@@ -401,7 +407,7 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
     await seedMembership(orm, seed.grupoIds[0]!, seed.assignmentId, seed.alumnoIds[0]!, seed.githubUsernames[0]!);
 
     await Promise.allSettled([
-      salirDeGrupo({
+      salirDeGrupo({ acceso: accesoSinGithub,
         assignmentId: seed.assignmentId,
         grupoId: seed.grupoIds[0]!,
         githubUsername: seed.githubUsernames[0]!,
@@ -456,14 +462,14 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
     await seedMembership(orm, seed.grupoIds[1]!, seed.assignmentId, seed.alumnoIds[3]!, seed.githubUsernames[3]!);
 
     const results = await Promise.allSettled([
-      moverAlumnoDeGrupo({
+      moverAlumnoDeGrupo({ acceso: accesoSinGithub,
         assignmentId: seed.assignmentId,
         grupoDestinoId: seed.grupoIds[1]!,
         githubUsername: seed.githubUsernames[0]!,
         actor: await participanteDeAlumno(orm, seed.alumnoIds[0]!),
         realizadoPor: seed.githubUsernames[0]!,
       }),
-      moverAlumnoDeGrupo({
+      moverAlumnoDeGrupo({ acceso: accesoSinGithub,
         assignmentId: seed.assignmentId,
         grupoDestinoId: seed.grupoIds[0]!,
         githubUsername: seed.githubUsernames[1]!,
@@ -502,7 +508,7 @@ describe.sequential("salir y cambiarse de grupo — invariantes concurrentes", (
     const seed = await seedGroups(orm, { alumnos: 1, grupos: 1, maxIntegrantes: 3 });
     await seedMembership(orm, seed.grupoIds[0]!, seed.assignmentId, seed.alumnoIds[0]!, seed.githubUsernames[0]!);
 
-    await salirDeGrupo({
+    await salirDeGrupo({ acceso: accesoSinGithub,
       assignmentId: seed.assignmentId,
       grupoId: seed.grupoIds[0]!,
       githubUsername: seed.githubUsernames[0]!,

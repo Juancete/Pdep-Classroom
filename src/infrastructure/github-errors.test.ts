@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handleOctokitError } from "./github-errors";
+import { GithubRecursoNoEncontradoError, handleOctokitError } from "./github-errors";
 
 function makeRequestError(status: number, message: string): Error & { status: number } {
   const error = new Error(message) as Error & { status: number };
@@ -45,6 +45,24 @@ describe("handleOctokitError", () => {
       expect(() =>
         handleOctokitError(makeRequestError(404, "Not Found - /app/installations/123/access_tokens"))
       ).toThrow("GITHUB_APP_INSTALLATION_ID incorrecto (404)");
+    });
+
+    it("lanza un error tipado con el mismo mensaje operativo ante un 404 genérico", () => {
+      const lanzar = () => handleOctokitError(makeRequestError(404, "Not Found"));
+
+      expect(lanzar).toThrow(GithubRecursoNoEncontradoError);
+      expect(lanzar).toThrow(
+        "Recurso no encontrado en GitHub (404): verificá GITHUB_ORG y que la app tenga acceso a los repos"
+      );
+    });
+
+    it("el 404 de access_tokens no es el error tipado", () => {
+      try {
+        handleOctokitError(makeRequestError(404, "Not Found - /app/installations/123/access_tokens"));
+        expect.unreachable();
+      } catch (error) {
+        expect(error).not.toBeInstanceOf(GithubRecursoNoEncontradoError);
+      }
     });
 
     it("404 genérico → org o repo no encontrado", () => {

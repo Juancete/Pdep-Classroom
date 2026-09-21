@@ -46,15 +46,20 @@ const ACCIONES: Record<
 
 // Advertencias que se agregan a la confirmación según el estado del grupo
 // afectado — también dato, para no meter ifs en el render.
-const ADVERTENCIAS: { aplica: (grupo: GrupoAdminResumen) => boolean; texto: string }[] = [
+const ADVERTENCIAS: {
+  aplica: (grupo: GrupoAdminResumen) => boolean;
+  texto: (accion: "quitar" | "mover" | "agregar") => string;
+}[] = [
   {
     aplica: (grupo) => grupo.tieneEntrega,
-    texto:
-      "El grupo ya aceptó el TP: el repositorio está creado y queda con los colaboradores desincronizados; hay que ajustarlos a mano en GitHub.",
+    texto: (accion) =>
+      accion === "agregar"
+        ? "El grupo ya aceptó el TP: se le va a dar acceso al repositorio. Si GitHub falla, el cambio no se aplica."
+        : "El grupo ya aceptó el TP: se le va a revocar el acceso al repositorio. Si GitHub falla, el cambio no se aplica.",
   },
   {
     aplica: (grupo) => grupo.miembros.length === 1 && !grupo.tieneEntrega,
-    texto: "Es el último integrante: el grupo se va a eliminar y su nombre queda libre.",
+    texto: () => "Es el último integrante: el grupo se va a eliminar y su nombre queda libre.",
   },
 ];
 
@@ -63,52 +68,33 @@ function confirmacionPara(
   grupoAfectado: GrupoAdminResumen
 ): string {
   const advertencias = ADVERTENCIAS.filter((item) => item.aplica(grupoAfectado)).map(
-    (item) => item.texto
+    (item) => item.texto(accion)
   );
   return [ACCIONES[accion].confirmacion, ...advertencias].join(" ");
 }
 
 // Aparte de ADVERTENCIAS: "último integrante" no tiene sentido evaluado
 // sobre el destino de un movimiento (gana un integrante, no lo pierde), así
-// que el destino sólo suma esta advertencia puntual sobre colaboradores.
+// que el destino sólo suma esta advertencia puntual sobre el acceso al repo.
 function advertenciaEntregaDestino(grupoDestino: GrupoAdminResumen): string | null {
   return grupoDestino.tieneEntrega
-    ? "El grupo destino ya aceptó el TP: sumar a alguien también desincroniza sus colaboradores."
+    ? "El grupo destino ya aceptó el TP: se le va a dar acceso al repositorio del grupo destino. Si GitHub falla, el cambio no se aplica."
     : null;
 }
 
 export function GruposPanel({
   assignmentId,
-  inscripcionesCerradas: initialCerradas,
   grupos,
   alumnosSinGrupo,
 }: {
   assignmentId: string;
-  inscripcionesCerradas: boolean;
   grupos: GrupoAdminResumen[];
   alumnosSinGrupo: AlumnoSinGrupoResumen[];
 }) {
   const router = useRouter();
   const { loading, error, call } = useApiCall();
-  const [cerradas, setCerradas] = useState(initialCerradas);
   const [destinoPorMiembro, setDestinoPorMiembro] = useState<Record<string, string>>({});
   const [destinoPorAlumno, setDestinoPorAlumno] = useState<Record<string, string>>({});
-
-  async function handleToggle() {
-    await call(async () => {
-      const response = await fetch(`/api/assignments/${assignmentId}/inscripciones`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cerrada: !cerradas }),
-      });
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error ?? "Error al cambiar el estado");
-      }
-      setCerradas((current) => !current);
-      router.refresh();
-    });
-  }
 
   async function handleQuitar(grupo: GrupoAdminResumen, username: string) {
     if (!confirm(confirmacionPara("quitar", grupo))) return;
@@ -170,33 +156,7 @@ export function GruposPanel({
 
   return (
     <div className="space-y-6 mt-6">
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-base font-semibold">Inscripciones a grupos</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              {cerradas
-                ? "Cerradas — los alumnos no pueden crear ni unirse a grupos."
-                : "Abiertas — los alumnos pueden crear y unirse a grupos."}
-            </p>
-          </div>
-          <button
-            onClick={handleToggle}
-            disabled={loading}
-            data-testid="toggle-inscripciones"
-            className={`text-sm px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-              cerradas
-                ? "bg-green-600 text-white hover:bg-green-700"
-                : "bg-amber-600 text-white hover:bg-amber-700"
-            }`}
-          >
-            {cerradas ? "Abrir inscripciones" : "Cerrar inscripciones"}
-          </button>
-        </div>
-        {error && (
-          <p className="text-sm text-red-600 mt-3">{error}</p>
-        )}
-      </div>
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200">

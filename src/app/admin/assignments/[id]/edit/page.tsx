@@ -4,7 +4,7 @@ import { listarTemplates } from "@/infrastructure/github";
 import { redirect } from "next/navigation";
 import { AssignmentForm } from "../../assignment-form";
 import { actualizarAssignment } from "../../actions";
-import { transicionesDisponibles } from "@/domain/entities";
+import { accionesDeEstado } from "@/domain/entities";
 import { EstadoPanel } from "../../estado-panel";
 export default async function EditAssignmentPage(
   props: {
@@ -23,16 +23,7 @@ export default async function EditAssignmentPage(
   ]);
   const aceptadas = entregasCounts.get(assignment.id) ?? 0;
   const contextoTransicion = { tieneEntregas: aceptadas > 0 };
-  const accionesDeEstado = transicionesDisponibles(
-    assignment.estado,
-    assignment.id,
-    contextoTransicion
-  );
-  const motivoBloqueoBorrador = assignment.estado.motivoDeBloqueo(
-    assignment.id,
-    "borrador",
-    contextoTransicion
-  );
+  const acciones = accionesDeEstado(assignment.estado, assignment.id, contextoTransicion);
 
   return (
     <div className="max-w-xl">
@@ -43,8 +34,7 @@ export default async function EditAssignmentPage(
         key={assignment.estadoNombre}
         assignmentId={assignment.id}
         estado={assignment.estadoNombre}
-        accionesDisponibles={accionesDeEstado}
-        motivoBloqueoBorrador={motivoBloqueoBorrador}
+        acciones={acciones}
         publicadoEn={assignment.publicadoEn?.toISOString() ?? null}
         publicadoPor={assignment.publicadoPor ?? null}
         archivadoEn={assignment.archivadoEn?.toISOString() ?? null}

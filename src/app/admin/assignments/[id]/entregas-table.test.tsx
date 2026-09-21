@@ -102,22 +102,22 @@ describe("filterEntregas", () => {
 
 describe("EntregasTable", () => {
   it("muestra mensaje cuando no hay entregas", () => {
-    const html = renderToStaticMarkup(<EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[]} />);
+    const html = renderToStaticMarkup(<EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[]} />);
     expect(html).toContain("No hay entregas todavía");
   });
 
   it("no muestra filas cuando no hay entregas", () => {
-    const html = renderToStaticMarkup(<EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[]} />);
+    const html = renderToStaticMarkup(<EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[]} />);
     expect(html).not.toContain("data-cols");
   });
 
   it("muestra filas cuando hay entregas", () => {
-    const html = renderToStaticMarkup(<EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow()]} />);
+    const html = renderToStaticMarkup(<EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow()]} />);
     expect(html).toContain("García, Juan");
   });
 
   it("muestra las cabeceras de la tabla", () => {
-    const html = renderToStaticMarkup(<EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow()]} />);
+    const html = renderToStaticMarkup(<EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow()]} />);
     expect(html).toContain("Usuario(s)");
     expect(html).toContain("Nombre completo");
     expect(html).toContain("Repositorio");
@@ -127,7 +127,7 @@ describe("EntregasTable", () => {
 
   it("muestra los githubUsernames", () => {
     const html = renderToStaticMarkup(
-      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow({ githubUsernames: ["juancito", "mariela"] })]} />
+      <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow({ githubUsernames: ["juancito", "mariela"] })]} />
     );
     expect(html).toContain("juancito");
     expect(html).toContain("mariela");
@@ -135,14 +135,14 @@ describe("EntregasTable", () => {
 
   it("muestra el nombre completo del alumno", () => {
     const html = renderToStaticMarkup(
-      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow({ nombreCompleto: "Pérez, Ana" })]} />
+      <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow({ nombreCompleto: "Pérez, Ana" })]} />
     );
     expect(html).toContain("Pérez, Ana");
   });
 
   it("muestra el botón 'Ir al repo' cuando hay repoUrl", () => {
     const html = renderToStaticMarkup(
-      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow({ repoUrl: "https://github.com/org/repo" })]}
+      <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow({ repoUrl: "https://github.com/org/repo" })]}
       />
     );
     expect(html).toContain("Ir al repo");
@@ -151,28 +151,28 @@ describe("EntregasTable", () => {
 
   it("el link al repo abre en ventana nueva", () => {
     const html = renderToStaticMarkup(
-      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow({ repoUrl: "https://github.com/org/repo" })]} />
+      <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow({ repoUrl: "https://github.com/org/repo" })]} />
     );
     expect(html).toContain('target="_blank"');
   });
 
   it('muestra "Sin repo" cuando estadoRepo es "sin-repo"', () => {
     const html = renderToStaticMarkup(
-      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow({ estadoRepo: "sin-repo", repoUrl: undefined })]} />
+      <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow({ estadoRepo: "sin-repo", repoUrl: undefined })]} />
     );
     expect(html).toContain("Sin repo");
   });
 
   it('muestra "Repositorio borrado" cuando estadoRepo es "borrado"', () => {
     const html = renderToStaticMarkup(
-      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow({ estadoRepo: "borrado" })]} />
+      <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow({ estadoRepo: "borrado" })]} />
     );
     expect(html).toContain("Repositorio borrado");
   });
 
   it("muestra la fecha de la entrega", () => {
     const html = renderToStaticMarkup(
-      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow({ createdAt: "15/3/2026" })]} />
+      <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow({ createdAt: "15/3/2026" })]} />
     );
     expect(html).toContain("15/3/2026");
   });
@@ -180,7 +180,7 @@ describe("EntregasTable", () => {
   it("muestra el último push cuando está disponible", () => {
     const html = renderToStaticMarkup(
       <EntregasTable
-        assignmentId={ASSIGNMENT_ID}
+        assignmentId={ASSIGNMENT_ID} mostrarGrupo={false}
         entregas={[makeRow({ ultimoPush: { fecha: "18/8/2026", por: "juancito" } })]}
       />
     );
@@ -189,19 +189,19 @@ describe("EntregasTable", () => {
 
   it("no muestra la línea de último push cuando no hay ninguno registrado", () => {
     const html = renderToStaticMarkup(
-      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow({ ultimoPush: undefined })]} />
+      <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow({ ultimoPush: undefined })]} />
     );
     expect(html).not.toContain("Último push");
   });
 
   it("muestra el campo de búsqueda", () => {
-    const html = renderToStaticMarkup(<EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow()]} />);
+    const html = renderToStaticMarkup(<EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow()]} />);
     expect(html).toContain('type="search"');
   });
 
   it("muestra todas las entregas en el render inicial (sin filtro activo)", () => {
     const html = renderToStaticMarkup(
-      <EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[
+      <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[
           makeRow({ id: "e1", githubUsernames: ["alumno1"] }),
           makeRow({ id: "e2", githubUsernames: ["alumno2"] }),
           makeRow({ id: "e3", githubUsernames: ["alumno3"] }),
@@ -216,6 +216,51 @@ describe("EntregasTable", () => {
 
 // ── botón Borrar ──────────────────────────────────────────────
 
+describe("columna Grupo", () => {
+  it("muestra la columna y el nombre del grupo con mostrarGrupo", () => {
+    const html = renderToStaticMarkup(
+      <EntregasTable
+        assignmentId={ASSIGNMENT_ID}
+        mostrarGrupo
+        entregas={[makeRow({ grupoNombre: "Los Pibes" })]}
+      />
+    );
+    expect(html).toContain("Grupo");
+    expect(html).toContain("Los Pibes");
+  });
+
+  it("no muestra la columna sin mostrarGrupo", () => {
+    const html = renderToStaticMarkup(
+      <EntregasTable
+        assignmentId={ASSIGNMENT_ID}
+        mostrarGrupo={false}
+        entregas={[makeRow({ grupoNombre: "Los Pibes" })]}
+      />
+    );
+    expect(html).not.toContain("Los Pibes");
+    expect(html).not.toContain(">Grupo<");
+  });
+
+  it("muestra un guion cuando la entrega no tiene grupo", () => {
+    const html = renderToStaticMarkup(
+      <EntregasTable
+        assignmentId={ASSIGNMENT_ID}
+        mostrarGrupo
+        entregas={[makeRow({ grupoNombre: undefined })]}
+      />
+    );
+    expect(html).toMatch(/Grupo[\s\S]*—/);
+  });
+
+  it("filtra por nombre de grupo", () => {
+    const rows = [
+      makeRow({ id: "e1", grupoNombre: "Los Pibes" }),
+      makeRow({ id: "e2", grupoNombre: "Las Pibas" }),
+    ];
+    expect(filterEntregas(rows, "las piba").map((row) => row.id)).toEqual(["e2"]);
+  });
+});
+
 describe("botón Borrar", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -227,7 +272,7 @@ describe("botón Borrar", () => {
   });
 
   it("muestra el botón Borrar en cada fila", () => {
-    render(<EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow()]} />);
+    render(<EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow()]} />);
     expect(screen.getByRole("button", { name: /^borrar$/i })).toBeInTheDocument();
   });
 
@@ -235,7 +280,7 @@ describe("botón Borrar", () => {
     const user = userEvent.setup();
     vi.spyOn(window, "confirm").mockReturnValue(false);
     mockFetch(true);
-    render(<EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow()]} />);
+    render(<EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow()]} />);
 
     await user.click(screen.getByRole("button", { name: /^borrar$/i }));
 
@@ -248,7 +293,7 @@ describe("botón Borrar", () => {
     mockFetch(true);
     render(
       <EntregasTable
-        assignmentId={ASSIGNMENT_ID}
+        assignmentId={ASSIGNMENT_ID} mostrarGrupo={false}
         entregas={[makeRow({ id: "e1", repoName: "kata-funcional-usuario1" })]}
       />
     );
@@ -269,7 +314,7 @@ describe("botón Borrar", () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     render(
       <EntregasTable
-        assignmentId={ASSIGNMENT_ID}
+        assignmentId={ASSIGNMENT_ID} mostrarGrupo={false}
         entregas={[makeRow({ repoName: "kata-funcional-usuario1" })]}
       />
     );
@@ -286,7 +331,7 @@ describe("botón Borrar", () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     render(
       <EntregasTable
-        assignmentId={ASSIGNMENT_ID}
+        assignmentId={ASSIGNMENT_ID} mostrarGrupo={false}
         entregas={[makeRow({ repoName: undefined, estadoRepo: "sin-repo" })]}
       />
     );
@@ -302,7 +347,7 @@ describe("botón Borrar", () => {
     const user = userEvent.setup();
     vi.spyOn(window, "confirm").mockReturnValue(true);
     mockFetch(false, { error: "No se pudo borrar el repositorio" });
-    render(<EntregasTable assignmentId={ASSIGNMENT_ID} entregas={[makeRow()]} />);
+    render(<EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow()]} />);
 
     await user.click(screen.getByRole("button", { name: /^borrar$/i }));
 

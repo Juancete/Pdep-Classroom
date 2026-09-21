@@ -181,6 +181,12 @@ async function seedGroups(
   return { comisionId, assignmentId, alumnoIds, alumnoUsernames, grupoIds };
 }
 
+// Estos tests ejercitan las invariantes de membresía en Postgres, no GitHub.
+const accesoSinGithub = {
+  otorgarA: async () => {},
+  revocarA: async () => {},
+};
+
 function expectOneConcurrentConflict(
   results: PromiseSettledResult<unknown>[],
   ErrorType:
@@ -449,6 +455,7 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
           assignmentId: seed.assignmentId,
           grupoId: seed.grupoIds[0]!,
           participante: await participanteDeAlumno(orm, alumnoId),
+          acceso: accesoSinGithub,
         })
       )
     );
@@ -474,6 +481,7 @@ describe.sequential("invariantes concurrentes de membresías de grupos", () => {
           assignmentId: seed.assignmentId,
           grupoId,
           participante: await participanteDeAlumno(orm, seed.alumnoIds[0]!),
+          acceso: accesoSinGithub,
         })
       )
     );

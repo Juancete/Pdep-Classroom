@@ -59,6 +59,18 @@ export class EntregaConProvisionEnCursoError extends Error {
   }
 }
 
+// Issue #123: GitHub respondió 404 al invitar a un integrante — el 404 no
+// distingue "el usuario no existe" de "el repo no existe", así que el mensaje
+// cubre ambos casos.
+export class ColaboradorNoInvitableError extends Error {
+  constructor(public readonly githubUsername: string) {
+    super(
+      `No pudimos dar acceso al repositorio a @${githubUsername}: GitHub no encontró al usuario o al repositorio. Verificá el usuario de GitHub o avisale a un docente.`
+    );
+    this.name = "ColaboradorNoInvitableError";
+  }
+}
+
 @Entity()
 export class Entrega {
   @PrimaryKey({ type: "uuid" })
@@ -387,6 +399,28 @@ export class Entrega {
   // `admin/assignments/[id]/page.tsx` — B2 de la auditoría de dominio).
   hasRepo(): boolean {
     return this.provisionEstado === "activa" && !!this.repoUrl && !this.repoDeleted;
+  }
+
+  /**
+   * `hasRepo()` mira `repoUrl`, pero quien invita o revoca colaboradores
+   * necesita `repoName`: centraliza "¿este repo está activo y cuál es su nombre?".
+   */
+  nombreDeRepoActivo(): string | undefined {
+    return this.hasRepo() ? this.repoName : undefined;
+  }
+
+  /**
+   * Una provisión pendiente o fallida no tiene repo activo, pero si la
+   * creación en GitHub llegó a iniciarse el repo puede existir con algunos
+   * colaboradores ya invitados (`crearEntrega` invita en paralelo y puede
+   * fallar a mitad; issue #123). Este nombre es sólo un candidato: hay que
+   * confirmar contra GitHub que el repo es propio (`reconoceComoPropio`)
+   * antes de tocarlo.
+   */
+  nombreDeRepoParcial(): string | undefined {
+    return !this.hasRepo() && !this.repoDeleted && !!this.provisionCreacionIniciadaEn
+      ? this.repoName
+      : undefined;
   }
 
   /**
