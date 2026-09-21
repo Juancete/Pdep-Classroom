@@ -24,7 +24,7 @@ export function RepoDeletionHistory({
   history: RepoDeletionHistoryPage;
 }) {
   const pageHref = (page: number) =>
-    `/admin/assignments/${assignmentId}?repoDeletionPage=${page}#repo-deletion-history`;
+    `/admin/assignments/${assignmentId}/historial-repos?page=${page}`;
 
   return (
     <section

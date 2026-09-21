@@ -39,20 +39,22 @@ vi.mock("../../estado-panel", () => ({
   EstadoPanel: ({
     assignmentId,
     estado,
-    accionesDisponibles,
-    motivoBloqueoBorrador,
+    acciones,
+    inscripciones,
   }: {
     assignmentId: string;
     estado: string;
-    accionesDisponibles: string[];
-    motivoBloqueoBorrador: string | null;
+    acciones: { destino: string; motivoDeBloqueo: string | null }[];
+    inscripciones?: { cerradas: boolean };
   }) =>
     React.createElement("div", {
       "data-testid": "estado-panel",
       "data-assignment": assignmentId,
       "data-estado": estado,
-      "data-acciones": accionesDisponibles.join(","),
-      "data-motivo": motivoBloqueoBorrador ?? "",
+      "data-inscripciones": inscripciones ? String(inscripciones.cerradas) : "ausente",
+      "data-acciones": acciones.map((accion) => accion.destino).join(","),
+      "data-motivo":
+        acciones.find((accion) => accion.destino === "borrador")?.motivoDeBloqueo ?? "",
     }),
 }));
 
@@ -226,14 +228,24 @@ describe("Edit Assignment page", () => {
       );
     });
 
-    it("no ofrece volver a borrador cuando el publicado ya tiene entregas", async () => {
+    it("ofrece volver a borrador (con motivo) y archivar cuando el publicado ya tiene entregas", async () => {
       mockGetAssignment.mockResolvedValue(makeAssignment({ estadoNombre: "publicado" }));
       mockGetEntregaCountsByAssignment.mockResolvedValue(new Map([["a1", 1]]));
 
       const element = await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
       const html = renderToStaticMarkup(element as React.ReactElement);
 
-      expect(html).toContain('data-acciones="archivado"');
+      expect(html).toContain('data-acciones="borrador,archivado"');
+    });
+
+    it("no le pasa inscripciones al panel", async () => {
+      mockGetAssignment.mockResolvedValue(makeAssignment({ estadoNombre: "publicado" }));
+      mockGetEntregaCountsByAssignment.mockResolvedValue(new Map());
+
+      const element = await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
+      const html = renderToStaticMarkup(element as React.ReactElement);
+
+      expect(html).toContain('data-inscripciones="ausente"');
     });
   });
 

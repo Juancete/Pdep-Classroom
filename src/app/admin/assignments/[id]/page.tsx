@@ -4,52 +4,28 @@ import {
   getEntregas,
   getAlumnos,
   getGruposDeAssignment,
-  getRepoDeletionHistory,
-  getHistorialDeMembresias,
 } from "@/infrastructure/repositories";
-import { parsePage } from "@/lib/search-params";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { EntregasTable } from "./entregas-table";
-import { DeleteReposButton } from "../delete-repos-button";
-import { GruposPanel } from "./grupos-panel";
-import type { GrupoAdminResumen, AlumnoSinGrupoResumen } from "./grupos-panel";
-import { VolcarGruposButton } from "./volcar-grupos-button";
-import { Alumno, transicionesDisponibles } from "@/domain/entities";
-import { RepoDeletionHistory } from "./repo-deletion-history";
-import { HistorialDeMembresias } from "./historial-membresias";
-import { EstadoAssignmentBadge } from "@/components/EstadoAssignmentBadge";
-import { EtiquetaDeComision } from "@/components/EtiquetaDeComision";
+import { Alumno, accionesDeEstado } from "@/domain/entities";
+import { AssignmentHeader } from "./assignment-header";
 import { EstadoPanel } from "../estado-panel";
 
 export default async function AssignmentDetailPage(
   props: {
     params: Promise<{ id: string }>;
-    searchParams?: Promise<{
-      repoDeletionPage?: string | string[];
-      membresiaPage?: string | string[];
-    }>;
   }
 ) {
-  const emptySearchParams: {
-    repoDeletionPage?: string | string[];
-    membresiaPage?: string | string[];
-  } = {};
-  const [params, searchParams] = await Promise.all([
-    props.params,
-    props.searchParams ?? Promise.resolve(emptySearchParams),
-  ]);
+  const params = await props.params;
   await requireAdmin();
 
   const assignment = await getAssignment(params.id);
   if (!assignment) redirect("/admin/assignments");
 
   const gruposPromise = assignment.cargarGruposCon(getGruposDeAssignment);
-  const historyPage = parsePage(searchParams.repoDeletionPage);
-  const membresiaPage = parsePage(searchParams.membresiaPage);
 
   const alumnosPromise = getAlumnos();
-  const [entregas, alumnos, grupos, total, deletionHistory, historialMembresias] = await Promise.all([
+  const [entregas, alumnos, , total] = await Promise.all([
     getEntregas(params.id),
     alumnosPromise,
     gruposPromise,
@@ -57,76 +33,23 @@ export default async function AssignmentDetailPage(
       getAlumnosDelCurso: () => alumnosPromise,
       getGruposDeAssignment: (_assignmentId: string) => gruposPromise,
     }),
-    getRepoDeletionHistory(params.id, historyPage),
-    getHistorialDeMembresias(params.id, membresiaPage),
   ]);
 
   const aceptadas = entregas.length;
   const pendientes = Math.max(0, total - aceptadas);
 
   const contextoTransicion = { tieneEntregas: aceptadas > 0 };
-  const accionesDeEstado = transicionesDisponibles(
-    assignment.estado,
-    assignment.id,
-    contextoTransicion
-  );
-  const motivoBloqueoBorrador = assignment.estado.motivoDeBloqueo(
-    assignment.id,
-    "borrador",
-    contextoTransicion
-  );
+  const acciones = accionesDeEstado(assignment.estado, assignment.id, contextoTransicion);
 
   const alumnosPorUsername = new Map<string, Alumno>(
     alumnos.map((alumno) => [alumno.usernameCanonico, alumno])
   );
 
-  // Reusa las entregas ya cargadas (con `grupo` populado) en vez de una
-  // query nueva: qué grupos ya tienen entrega es la razón que justifica
-  // bloquear o advertir sobre un cambio de integrantes.
-  const gruposConEntrega = new Set(
-    entregas.map((entrega) => entrega.grupo?.id).filter((id): id is string => Boolean(id))
-  );
-
   const grupal = assignment.comoGrupal();
-  // Sin `instanceof`/ifs de tipo: `puedeVolcarseAPlanilla()` es polimórfico
-  // (default `false` en `Assignment`, `GrupalAssignment` lo pisa) y la
-  // columna sale del mismo `extraFormDefaults()` que ya usa el form de
-  // edición — ninguno de los dos necesita el narrowing a `GrupalAssignment`.
-  const columnaGrupoEnPlanilla = assignment.extraFormDefaults().columnaGrupoEnPlanilla;
-
-  let gruposPanel: React.ReactNode = null;
-  if (grupal) {
-    const gruposSerializados: GrupoAdminResumen[] = grupos.map((grupo) => ({
-      id: grupo.id,
-      nombre: grupo.nombre,
-      maxIntegrantes: grupo.maxIntegrantes,
-      estaLleno: grupo.estaLleno(),
-      etiquetaCupo: grupo.etiquetaCupo(),
-      tieneEntrega: gruposConEntrega.has(grupo.id),
-      tipoDeIntegrantes: grupo.tipoDeIntegrantes,
-      miembros: grupo.usernamesDeMiembros().map((username) => ({
-        username,
-        nombreCompleto:
-          alumnosPorUsername.get(Alumno.normalizarUsername(username))?.nombreCompleto ?? username,
-      })),
-    }));
-
-    const alumnosSinGrupoSerializados: AlumnoSinGrupoResumen[] = grupal
-      .alumnosSinGrupo(alumnos, grupos)
-      .map((alumno) => ({
-        username: alumno.githubUsername,
-        nombreCompleto: alumno.nombreCompleto,
-      }));
-
-    gruposPanel = (
-      <GruposPanel
-        assignmentId={params.id}
-        inscripcionesCerradas={grupal.inscripcionesCerradas}
-        grupos={gruposSerializados}
-        alumnosSinGrupo={alumnosSinGrupoSerializados}
-      />
-    );
-  }
+  const inscripciones =
+    grupal && assignment.permiteAccionesDeAlumno()
+      ? { cerradas: grupal.inscripcionesCerradas }
+      : undefined;
 
   const entregaRows = entregas.map((entrega) => ({
     id: entrega.id,
@@ -139,6 +62,7 @@ export default async function AssignmentDetailPage(
     provisionIntentos: entrega.provisionIntentos,
     estadoRepo: entrega.estadoRepo(),
     createdAt: new Date(entrega.createdAt).toLocaleDateString("es-AR"),
+    grupoNombre: entrega.grupo?.nombre,
     nombreCompleto: entrega.githubUsernames
       .map((username) => {
         const alumno = alumnosPorUsername.get(Alumno.normalizarUsername(username));
@@ -160,37 +84,7 @@ export default async function AssignmentDetailPage(
 
   return (
     <div>
-      {/* Encabezado */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <Link
-            href="/admin/assignments"
-            className="text-gray-500 hover:text-gray-700 text-sm"
-          >
-            ← Volver
-          </Link>
-          <h1 className="text-2xl font-bold">{assignment.titulo}</h1>
-          <EstadoAssignmentBadge estado={assignment.estadoNombre} />
-          {/* issue #114: la barra de comisión consultada no llega hasta acá
-              (sólo vive en las tres listas) — sin esto, el detalle de un TP
-              no indicaba a qué comisión pertenece. */}
-          <EtiquetaDeComision comision={assignment.comision} />
-        </div>
-        <div className="flex items-center gap-3">
-          <DeleteReposButton
-            assignmentId={assignment.id}
-            assignmentSlug={assignment.slug}
-            deletionEnabled={assignment.permiteBorrarRepos()}
-            activeRepoCount={entregas.filter((entrega) => entrega.hasRepo()).length}
-          />
-          <Link
-            href={`/admin/assignments/${assignment.id}/edit`}
-            className="bg-pdep-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-pdep-700 transition-colors"
-          >
-            Editar
-          </Link>
-        </div>
-      </div>
+      <AssignmentHeader assignment={assignment} activa="detalle" />
 
       <EstadoPanel
         // El estado real es la key: cuando cambia (post router.refresh()),
@@ -199,8 +93,8 @@ export default async function AssignmentDetailPage(
         key={assignment.estadoNombre}
         assignmentId={assignment.id}
         estado={assignment.estadoNombre}
-        accionesDisponibles={accionesDeEstado}
-        motivoBloqueoBorrador={motivoBloqueoBorrador}
+        acciones={acciones}
+        inscripciones={inscripciones}
         publicadoEn={assignment.publicadoEn?.toISOString() ?? null}
         publicadoPor={assignment.publicadoPor ?? null}
         archivadoEn={assignment.archivadoEn?.toISOString() ?? null}
@@ -258,32 +152,12 @@ export default async function AssignmentDetailPage(
 
       {/* Tabla de entregas (componente cliente con filtro) */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <EntregasTable assignmentId={assignment.id} entregas={entregaRows} />
-      </div>
-
-      <RepoDeletionHistory
-        assignmentId={assignment.id}
-        history={deletionHistory}
-      />
-
-      {grupal && (
-        <HistorialDeMembresias
+        <EntregasTable
           assignmentId={assignment.id}
-          historial={historialMembresias}
-          repoDeletionPage={historyPage}
+          entregas={entregaRows}
+          mostrarGrupo={grupal !== null}
         />
-      )}
-
-      {assignment.puedeVolcarseAPlanilla() && columnaGrupoEnPlanilla !== undefined && (
-        <div className="mb-4">
-          <VolcarGruposButton
-            assignmentId={assignment.id}
-            columna={columnaGrupoEnPlanilla}
-          />
-        </div>
-      )}
-
-      {gruposPanel}
+      </div>
     </div>
   );
 }

@@ -52,8 +52,10 @@ export {
   EstadoAssignment,
   TransicionDeEstadoInvalidaError,
   transicionesDisponibles,
+  accionesDeEstado,
   NOMBRES_ESTADO_ASSIGNMENT,
   type NombreEstadoAssignment,
+  type AccionDeEstado,
   type ContextoTransicionEstado,
 } from "./EstadoAssignment";
 export { IndividualAssignment } from "./IndividualAssignment";

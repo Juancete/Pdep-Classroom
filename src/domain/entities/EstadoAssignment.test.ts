@@ -3,6 +3,7 @@ import {
   EstadoAssignment,
   TransicionDeEstadoInvalidaError,
   transicionesDisponibles,
+  accionesDeEstado,
   type NombreEstadoAssignment,
 } from "./EstadoAssignment";
 
@@ -206,6 +207,54 @@ describe("EstadoAssignment.transicionarA — matriz de transiciones", () => {
       { tieneEntregas: false }
     );
     expect(disponibles).toEqual(["publicado"]);
+  });
+
+  it("accionesDeEstado: publicado con entregas ofrece borrador con motivo y archivado sin motivo", () => {
+    const acciones = accionesDeEstado(
+      EstadoAssignment.desdeNombre("publicado"),
+      ASSIGNMENT_ID,
+      { tieneEntregas: true }
+    );
+    expect(acciones).toEqual([
+      {
+        destino: "borrador",
+        motivoDeBloqueo: expect.stringContaining("tiene entregas"),
+      },
+      { destino: "archivado", motivoDeBloqueo: null },
+    ]);
+  });
+
+  it("accionesDeEstado: publicado sin entregas ofrece ambas sin motivo", () => {
+    const acciones = accionesDeEstado(
+      EstadoAssignment.desdeNombre("publicado"),
+      ASSIGNMENT_ID,
+      { tieneEntregas: false }
+    );
+    expect(acciones).toEqual([
+      { destino: "borrador", motivoDeBloqueo: null },
+      { destino: "archivado", motivoDeBloqueo: null },
+    ]);
+  });
+
+  it("accionesDeEstado: archivado no ofrece borrador (imposible en ese estado)", () => {
+    const acciones = accionesDeEstado(
+      EstadoAssignment.desdeNombre("archivado"),
+      ASSIGNMENT_ID,
+      { tieneEntregas: true }
+    );
+    expect(acciones).toEqual([{ destino: "publicado", motivoDeBloqueo: null }]);
+  });
+
+  it("accionesDeEstado: borrador ofrece publicado y archivado sin motivo", () => {
+    const acciones = accionesDeEstado(
+      EstadoAssignment.desdeNombre("borrador"),
+      ASSIGNMENT_ID,
+      { tieneEntregas: true }
+    );
+    expect(acciones).toEqual([
+      { destino: "publicado", motivoDeBloqueo: null },
+      { destino: "archivado", motivoDeBloqueo: null },
+    ]);
   });
 
   it("el error de transición inválida incluye assignmentId, desde y hacia", () => {

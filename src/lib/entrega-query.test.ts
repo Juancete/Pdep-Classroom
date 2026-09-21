@@ -20,6 +20,17 @@ describe("matcheaEntregaQuery", () => {
     expect(matcheaEntregaQuery(row, "FUNCIONAL")).toBe(true);
   });
 
+  it("matchea por nombre de grupo (case-insensitive)", () => {
+    const row = { githubUsernames: ["ana"], repoName: null, grupoNombre: "Los Pibes" };
+    expect(matcheaEntregaQuery(row, "pibes")).toBe(true);
+    expect(matcheaEntregaQuery(row, "LOS")).toBe(true);
+  });
+
+  it("trata grupoNombre ausente o null como string vacío", () => {
+    expect(matcheaEntregaQuery({ githubUsernames: ["ana"], grupoNombre: null }, "pibes")).toBe(false);
+    expect(matcheaEntregaQuery({ githubUsernames: ["ana"] }, "pibes")).toBe(false);
+  });
+
   it("no matchea cuando no hay coincidencia", () => {
     const row = { githubUsernames: ["ana"], repoName: "tp-logico" };
     expect(matcheaEntregaQuery(row, "juan")).toBe(false);

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EstadoPanel } from "./estado-panel";
-import type { NombreEstadoAssignment } from "@/types";
+import type { AccionDeEstado } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -19,12 +19,18 @@ function mockFetch(ok: boolean, data: object = {}) {
   );
 }
 
+function libres(...destinos: AccionDeEstado["destino"][]): AccionDeEstado[] {
+  return destinos.map((destino) => ({ destino, motivoDeBloqueo: null }));
+}
+
+const MOTIVO_CON_ENTREGAS =
+  'No se puede pasar de "publicado" a "borrador": tiene entregas — archivalo en vez de despublicarlo';
+
 function makeProps(overrides = {}) {
   return {
     assignmentId: "a1",
     estado: "borrador" as const,
-    accionesDisponibles: ["publicado", "archivado"] as NombreEstadoAssignment[],
-    motivoBloqueoBorrador: null as string | null,
+    acciones: libres("publicado", "archivado"),
     publicadoEn: null,
     publicadoPor: null,
     archivadoEn: null,
@@ -52,39 +58,82 @@ describe("EstadoPanel", () => {
   it("renderiza un botón por cada acción disponible", () => {
     render(
       <EstadoPanel
-        {...makeProps({ accionesDisponibles: ["publicado", "archivado"] })}
+        {...makeProps({ acciones: libres("publicado", "archivado") })}
       />
     );
     expect(screen.getByTestId("accion-publicado")).toHaveTextContent("Publicar");
     expect(screen.getByTestId("accion-archivado")).toHaveTextContent("Archivar");
   });
 
-  it("no muestra el botón de volver a borrador cuando hay entregas", () => {
+  it("muestra volver a borrador deshabilitado con el motivo como tooltip", () => {
     render(
       <EstadoPanel
         {...makeProps({
           estado: "publicado",
-          accionesDisponibles: ["archivado"],
-          motivoBloqueoBorrador:
-            'No se puede pasar de "publicado" a "borrador": tiene entregas — archivalo en vez de despublicarlo',
+          acciones: [
+            { destino: "borrador", motivoDeBloqueo: MOTIVO_CON_ENTREGAS },
+            { destino: "archivado", motivoDeBloqueo: null },
+          ],
         })}
       />
     );
-    expect(screen.queryByTestId("accion-borrador")).not.toBeInTheDocument();
-    expect(screen.getByText(/tiene entregas/i)).toBeInTheDocument();
+    const boton = screen.getByTestId("accion-borrador");
+    expect(boton).toBeDisabled();
+    expect(boton).toHaveAttribute("title", MOTIVO_CON_ENTREGAS);
   });
 
-  it("no muestra ningún motivo de bloqueo cuando volver a borrador está permitido", () => {
+  it("un botón sin motivo de bloqueo está habilitado y no tiene title", () => {
     render(
       <EstadoPanel
         {...makeProps({
           estado: "publicado",
-          accionesDisponibles: ["borrador", "archivado"],
-          motivoBloqueoBorrador: null,
+          acciones: [
+            { destino: "borrador", motivoDeBloqueo: MOTIVO_CON_ENTREGAS },
+            { destino: "archivado", motivoDeBloqueo: null },
+          ],
         })}
       />
     );
-    expect(screen.queryByText(/no se puede pasar/i)).not.toBeInTheDocument();
+    const boton = screen.getByTestId("accion-archivado");
+    expect(boton).toBeEnabled();
+    expect(boton).not.toHaveAttribute("title");
+  });
+
+  it("no llama al endpoint al clickear un botón bloqueado", async () => {
+    const user = userEvent.setup();
+    vi.mocked(confirm).mockReturnValue(true);
+    mockFetch(true);
+    render(
+      <EstadoPanel
+        {...makeProps({
+          estado: "publicado",
+          acciones: [{ destino: "borrador", motivoDeBloqueo: MOTIVO_CON_ENTREGAS }],
+        })}
+      />
+    );
+
+    await user.click(screen.getByTestId("accion-borrador"));
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("muestra el toggle de inscripciones cuando recibe la prop inscripciones", () => {
+    render(<EstadoPanel {...makeProps({ inscripciones: { cerradas: false } })} />);
+    expect(screen.getByTestId("toggle-inscripciones")).toHaveTextContent(
+      "Cerrar inscripciones"
+    );
+  });
+
+  it("refleja inscripciones cerradas en el toggle", () => {
+    render(<EstadoPanel {...makeProps({ inscripciones: { cerradas: true } })} />);
+    expect(screen.getByTestId("toggle-inscripciones")).toHaveTextContent(
+      "Abrir inscripciones"
+    );
+  });
+
+  it("no muestra el toggle de inscripciones sin la prop inscripciones", () => {
+    render(<EstadoPanel {...makeProps()} />);
+    expect(screen.queryByTestId("toggle-inscripciones")).not.toBeInTheDocument();
   });
 
   it("no llama al endpoint si se cancela la confirmación", async () => {
@@ -120,7 +169,7 @@ describe("EstadoPanel", () => {
     mockFetch(false, { error: "Ya tiene entregas — archivalo en vez de despublicarlo" });
     render(
       <EstadoPanel
-        {...makeProps({ estado: "publicado", accionesDisponibles: ["borrador"] })}
+        {...makeProps({ estado: "publicado", acciones: libres("borrador") })}
       />
     );
 
@@ -136,7 +185,7 @@ describe("EstadoPanel", () => {
       <EstadoPanel
         {...makeProps({
           estado: "archivado",
-          accionesDisponibles: ["publicado"],
+          acciones: libres("publicado"),
           publicadoEn: "2026-03-12T00:00:00.000Z",
           publicadoPor: "juancete",
           archivadoEn: "2026-08-01T00:00:00.000Z",
@@ -176,7 +225,7 @@ describe("EstadoPanel", () => {
     const { rerender } = render(
       <EstadoPanel
         key="borrador"
-        {...makeProps({ estado: "borrador", accionesDisponibles: ["publicado"] })}
+        {...makeProps({ estado: "borrador", acciones: libres("publicado") })}
       />
     );
     expect(screen.getByTestId("accion-publicado")).toBeInTheDocument();
@@ -184,7 +233,7 @@ describe("EstadoPanel", () => {
     rerender(
       <EstadoPanel
         key="publicado"
-        {...makeProps({ estado: "publicado", accionesDisponibles: ["borrador", "archivado"] })}
+        {...makeProps({ estado: "publicado", acciones: libres("borrador", "archivado") })}
       />
     );
 
@@ -198,7 +247,7 @@ describe("EstadoPanel", () => {
     const { rerender } = render(
       <EstadoPanel
         key="publicado"
-        {...makeProps({ estado: "publicado", accionesDisponibles: ["archivado"] })}
+        {...makeProps({ estado: "publicado", acciones: libres("archivado") })}
       />
     );
 
@@ -209,7 +258,7 @@ describe("EstadoPanel", () => {
     rerender(
       <EstadoPanel
         key="publicado"
-        {...makeProps({ estado: "publicado", accionesDisponibles: ["borrador"] })}
+        {...makeProps({ estado: "publicado", acciones: libres("borrador") })}
       />
     );
 
