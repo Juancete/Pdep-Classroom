@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { MikroORM } from "@mikro-orm/postgresql";
+import { MikroORM, type EntityManager } from "@mikro-orm/postgresql";
 import ormConfig from "../../mikro-orm.config";
 
 const ormHolder = vi.hoisted(() => ({ orm: undefined as MikroORM | undefined }));
@@ -12,12 +12,28 @@ vi.mock("@/infrastructure/db", () => ({
   },
 }));
 
-import { Entrega } from "../../src/domain/entities";
+// Sólo se mockea la red de GitHub y el logger; la persistencia es la real.
+const githubHolder = vi.hoisted(() => ({ deleteRepo: vi.fn() }));
+
+vi.mock("@/infrastructure/github", () => ({
+  deleteRepo: (repoName: string) => githubHolder.deleteRepo(repoName),
+}));
+
+vi.mock("@/lib/logger", () => ({
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+}));
+
+import { borrarRepositoriosDeAssignment } from "../../src/application/borrarRepositoriosDeAssignment";
+import { BorradoDeReposEnCursoError, Entrega } from "../../src/domain/entities";
 import {
   actualizarColaboradoresDeEntrega,
   conLockDeEntrega,
 } from "../../src/infrastructure/repositories/EntregaRepository";
-import { conLockBorradoReposAssignment } from "../../src/infrastructure/repositories/RepoDeletionAttemptRepository";
+import {
+  conLockBorradoReposAssignment,
+  iniciarIntentoBorradoRepo,
+} from "../../src/infrastructure/repositories/RepoDeletionAttemptRepository";
+import { extractDbErrorCode } from "../../src/infrastructure/repositories/db-errors";
 
 // Espera máxima de cada paso de sincronización. El timeout de Vitest corta el
 // test pero NO cancela las promesas pendientes: cada espera lleva su propia
@@ -168,16 +184,13 @@ async function pidsEsperando(orm: MikroORM, clave: string): Promise<number[]> {
 
 // ── Seeds ────────────────────────────────────────────────────
 
-async function seedEntregaActiva(
+async function seedAssignmentGrupal(
   orm: MikroORM,
-  githubUsernames: string[]
-): Promise<{ entregaId: string }> {
+  estado: "publicado" | "archivado"
+): Promise<{ assignmentId: string }> {
   const connection = orm.em.getConnection();
   const comisionId = randomUUID();
   const assignmentId = randomUUID();
-  const grupoId = randomUUID();
-  const entregaId = randomUUID();
-  const repoName = `tp-${assignmentId}-grupo`;
 
   await connection.execute(
     `insert into "comision" ("id", "anio", "spreadsheet_id", "activa", "column_config")
@@ -188,17 +201,38 @@ async function seedEntregaActiva(
     `insert into "assignment"
       ("id", "titulo", "slug", "template_repo", "paradigma", "tipo",
        "created_at", "comision_id", "max_integrantes", "inscripciones_cerradas",
-       "estado_nombre")
+       "estado_nombre", "archivado_en", "archivado_por")
      values (?, 'TP con repo', ?, 'org/template', 'funcional', 'grupal',
-       now(), ?, 5, false, 'publicado')`,
-    [assignmentId, `tp-${assignmentId}`, comisionId]
+       now(), ?, 5, false, ?, ?, ?)`,
+    [
+      assignmentId,
+      `tp-${assignmentId}`,
+      comisionId,
+      estado,
+      estado === "archivado" ? new Date() : null,
+      estado === "archivado" ? "docente" : null,
+    ]
   );
+  return { assignmentId };
+}
+
+async function seedEntregaActivaEn(
+  orm: MikroORM,
+  assignmentId: string,
+  githubUsernames: string[],
+  sufijo: string
+): Promise<{ entregaId: string; repoName: string }> {
+  const connection = orm.em.getConnection();
+  const grupoId = randomUUID();
+  const entregaId = randomUUID();
+  const repoName = `tp-${assignmentId}-${sufijo}`;
+
   await connection.execute(
     `insert into "grupo"
       ("id", "nombre", "nombre_normalizado", "paradigma",
        "max_integrantes", "creado_por", "assignment_id")
-     values (?, 'Grupo lock', 'grupo-lock', 'funcional', 5, 'test', ?)`,
-    [grupoId, assignmentId]
+     values (?, ?, ?, 'funcional', 5, 'test', ?)`,
+    [grupoId, `Grupo ${sufijo}`, `grupo-${sufijo}`, assignmentId]
   );
   await connection.execute(
     `insert into "entrega"
@@ -214,7 +248,36 @@ async function seedEntregaActiva(
       `https://github.com/org/${repoName}`,
     ]
   );
+  return { entregaId, repoName };
+}
+
+async function seedEntregaActiva(
+  orm: MikroORM,
+  githubUsernames: string[]
+): Promise<{ entregaId: string }> {
+  const { assignmentId } = await seedAssignmentGrupal(orm, "publicado");
+  const { entregaId } = await seedEntregaActivaEn(orm, assignmentId, githubUsernames, "unico");
   return { entregaId };
+}
+
+type FilaDeAuditoria = { entrega_id: string; status: string; error: string | null };
+
+async function auditoriasDe(orm: MikroORM, assignmentId: string): Promise<FilaDeAuditoria[]> {
+  return orm.em.getConnection().execute<FilaDeAuditoria[]>(
+    `select "entrega_id", "status", "error" from "repo_deletion_attempt"
+      where "assignment_id" = ? order by "entrega_id"`,
+    [assignmentId]
+  );
+}
+
+async function repoMarcadoBorrado(orm: MikroORM, entregaId: string): Promise<boolean> {
+  const filas = await orm.em
+    .getConnection()
+    .execute<{ repo_deleted: boolean }[]>(
+      `select "repo_deleted" from "entrega" where "id" = ?`,
+      [entregaId]
+    );
+  return filas[0]!.repo_deleted;
 }
 
 async function usernamesEnBase(orm: MikroORM, entregaId: string): Promise<string[]> {
@@ -436,6 +499,119 @@ describe.sequential("advisory locks de conLockDeEntrega y conLockBorradoReposAss
     );
   });
 
+  describe("conLockDeEntrega bajo contención", () => {
+    it(
+      "serializa tres eventos sobre la misma entrega y ninguno pisa a otro",
+      async () => {
+        const { entregaId } = await seedEntregaActiva(orm, ["ana"]);
+        const clave = `ci:${entregaId}`;
+        const primeraAdentro = diferido();
+        const soltarPrimera = diferido();
+        const agregar = (username: string) => (transaction: EntityManager) =>
+          actualizarColaboradoresDeEntrega(entregaId, { agregar: username }, transaction);
+        let primera: Seguimiento<void> | undefined;
+        let segunda: Seguimiento<void> | undefined;
+        let tercera: Seguimiento<void> | undefined;
+
+        try {
+          primera = seguir(
+            conLockDeEntrega(entregaId, async (transaction) => {
+              primeraAdentro.resolver();
+              await soltarPrimera.promesa;
+              await agregar("beto")(transaction);
+            })
+          );
+          await conLimite(primeraAdentro.promesa, LIMITE_MS, "la primera nunca entró al lock");
+
+          segunda = seguir(conLockDeEntrega(entregaId, agregar("caro")));
+          tercera = seguir(conLockDeEntrega(entregaId, agregar("dani")));
+          await esperarHasta(
+            async () => (await pidsEsperando(orm, clave)).length === 2,
+            LIMITE_MS,
+            "la segunda y la tercera no quedaron esperando el lock"
+          );
+
+          soltarPrimera.resolver();
+          await conLimite(
+            Promise.all([primera.promesa, segunda.promesa, tercera.promesa]),
+            LIMITE_MS,
+            "los tres eventos no terminaron"
+          );
+
+          expect(await usernamesEnBase(orm, entregaId)).toEqual(["ana", "beto", "caro", "dani"]);
+          expect(await lockTomado(orm, clave)).toBe(false);
+        } finally {
+          soltarPrimera.resolver();
+          await Promise.allSettled([primera?.promesa, segunda?.promesa, tercera?.promesa]);
+        }
+      },
+      TIMEOUT_TEST_MS
+    );
+
+    it(
+      "si la espera del lock vence, aborta sin ejecutar la operación ni escribir, y el resto sigue",
+      async () => {
+        const { entregaId } = await seedEntregaActiva(orm, ["ana"]);
+        const clave = `ci:${entregaId}`;
+        const primeraAdentro = diferido();
+        const soltarPrimera = diferido();
+        const operacionDelTercero = vi.fn();
+        let primera: Seguimiento<void> | undefined;
+        let segunda: Seguimiento<void> | undefined;
+        let tercera: Seguimiento<void> | undefined;
+
+        try {
+          primera = seguir(
+            conLockDeEntrega(entregaId, async (transaction) => {
+              primeraAdentro.resolver();
+              await soltarPrimera.promesa;
+              await actualizarColaboradoresDeEntrega(entregaId, { agregar: "beto" }, transaction);
+            })
+          );
+          await conLimite(primeraAdentro.promesa, LIMITE_MS, "la primera nunca entró al lock");
+
+          segunda = seguir(
+            conLockDeEntrega(entregaId, (transaction) =>
+              actualizarColaboradoresDeEntrega(entregaId, { agregar: "caro" }, transaction)
+            )
+          );
+          // El tiempo de espera lo mide Postgres (`lock_timeout`), no el test:
+          // lo único que se asierta es que la tercera terminó rechazada.
+          tercera = seguir(
+            conLockDeEntrega(
+              entregaId,
+              async (transaction) => {
+                operacionDelTercero();
+                await actualizarColaboradoresDeEntrega(entregaId, { agregar: "dani" }, transaction);
+              },
+              { esperaMaximaMs: 200 }
+            )
+          );
+
+          await expect(
+            conLimite(tercera.promesa, LIMITE_MS, "la tercera nunca abortó por su espera")
+          ).rejects.toSatisfy((error: unknown) => extractDbErrorCode(error) === "55P03");
+          expect(operacionDelTercero).not.toHaveBeenCalled();
+
+          // La primera y la segunda no se vieron afectadas por el aborto.
+          soltarPrimera.resolver();
+          await conLimite(
+            Promise.all([primera.promesa, segunda.promesa]),
+            LIMITE_MS,
+            "la primera y la segunda no terminaron"
+          );
+
+          expect(await usernamesEnBase(orm, entregaId)).toEqual(["ana", "beto", "caro"]);
+          expect(await lockTomado(orm, clave)).toBe(false);
+        } finally {
+          soltarPrimera.resolver();
+          await Promise.allSettled([primera?.promesa, segunda?.promesa, tercera?.promesa]);
+        }
+      },
+      TIMEOUT_TEST_MS
+    );
+  });
+
   describe("conLockBorradoReposAssignment", () => {
     it(
       "sostiene el lock del assignment mientras la operación corre",
@@ -500,6 +676,170 @@ describe.sequential("advisory locks de conLockDeEntrega y conLockBorradoReposAss
           soltar.resolver();
           await Promise.allSettled([primera?.promesa, segunda?.promesa]);
         }
+      },
+      TIMEOUT_TEST_MS
+    );
+
+    it(
+      "rechaza al instante con BorradoDeReposEnCursoError si ya hay un borrado en curso",
+      async () => {
+        const assignmentId = randomUUID();
+        const clave = `repo-deletion:${assignmentId}`;
+        const adentro = diferido();
+        const soltar = diferido();
+        const operacionDeLaSegunda = vi.fn();
+        let primera: Seguimiento<void> | undefined;
+
+        try {
+          primera = seguir(
+            conLockBorradoReposAssignment(assignmentId, async () => {
+              adentro.resolver();
+              await soltar.promesa;
+            })
+          );
+          await conLimite(adentro.promesa, LIMITE_MS, "la primera nunca entró al lock");
+
+          await expect(
+            conLimite(
+              conLockBorradoReposAssignment(assignmentId, async () => operacionDeLaSegunda()),
+              LIMITE_MS,
+              "la segunda esperó el lock en vez de rechazar"
+            )
+          ).rejects.toBeInstanceOf(BorradoDeReposEnCursoError);
+
+          expect(operacionDeLaSegunda).not.toHaveBeenCalled();
+          expect(await pidsEsperando(orm, clave)).toEqual([]);
+        } finally {
+          soltar.resolver();
+          await Promise.allSettled([primera?.promesa]);
+        }
+      },
+      TIMEOUT_TEST_MS
+    );
+
+    it(
+      "bajo saturación rechaza sin ocupar el pool y el borrado en curso consigue conexiones y termina",
+      async () => {
+        const { assignmentId } = await seedAssignmentGrupal(orm, "archivado");
+        const clave = `repo-deletion:${assignmentId}`;
+        const adentro = diferido();
+        const rechazosTerminados = diferido();
+        // Más solicitudes que el máximo del pool (10 por defecto): si esperaran
+        // el lock, se comerían todas las conexiones.
+        const SOLICITUDES = 25;
+        let primera: Seguimiento<string> | undefined;
+
+        try {
+          primera = seguir(
+            conLockBorradoReposAssignment(assignmentId, async () => {
+              adentro.resolver();
+              await rechazosTerminados.promesa;
+              // Necesita una conexión NUEVA (otro EntityManager) mientras sostiene
+              // el lock: es lo que se traba si el pool está agotado por waiters.
+              const intento = await iniciarIntentoBorradoRepo({
+                operationId: randomUUID(),
+                assignmentId,
+                entregaId: randomUUID(),
+                repoName: "tp-saturacion",
+                requestedBy: "docente",
+              });
+              return intento.id;
+            })
+          );
+          await conLimite(adentro.promesa, LIMITE_MS, "la primera nunca entró al lock");
+
+          const rechazos = Array.from({ length: SOLICITUDES }, () =>
+            seguir(conLockBorradoReposAssignment(assignmentId, async () => "no debería correr"))
+          );
+          const resultados = await conLimite(
+            Promise.allSettled(rechazos.map((rechazo) => rechazo.promesa)),
+            LIMITE_MS,
+            "las solicitudes concurrentes quedaron esperando en vez de rechazar"
+          );
+          for (const resultado of resultados) {
+            expect(resultado.status).toBe("rejected");
+            expect((resultado as PromiseRejectedResult).reason).toBeInstanceOf(
+              BorradoDeReposEnCursoError
+            );
+          }
+          expect(await pidsEsperando(orm, clave)).toEqual([]);
+
+          rechazosTerminados.resolver();
+          const intentoId = await conLimite(
+            primera.promesa,
+            LIMITE_MS,
+            "el borrado en curso no consiguió conexión para auditar"
+          );
+          expect(intentoId).toEqual(expect.any(String));
+          expect(await auditoriasDe(orm, assignmentId)).toHaveLength(1);
+        } finally {
+          rechazosTerminados.resolver();
+          await Promise.allSettled([primera?.promesa]);
+        }
+      },
+      TIMEOUT_TEST_MS
+    );
+
+    it(
+      "conserva la auditoría y el resultado de un repo ya borrado aunque después falle otra operación",
+      async () => {
+        const { assignmentId } = await seedAssignmentGrupal(orm, "archivado");
+        const borrado = await seedEntregaActivaEn(orm, assignmentId, ["ana"], "a");
+        const fallido = await seedEntregaActivaEn(orm, assignmentId, ["beto"], "b");
+        githubHolder.deleteRepo.mockReset();
+        githubHolder.deleteRepo.mockImplementation(async (repoName: string) => {
+          if (repoName === borrado.repoName) return "deleted";
+          throw new Error("GitHub no respondió");
+        });
+
+        // GitHub borra un repo, falla otro, y después falla la propia operación
+        // dentro del lock: la transacción del lock hace rollback, pero lo ya
+        // auditado tiene que sobrevivir porque corre fuera de ella.
+        await expect(
+          conLockBorradoReposAssignment(assignmentId, async (transaction) => {
+            await borrarRepositoriosDeAssignment({
+              assignmentId,
+              requestedBy: "docente",
+              em: transaction,
+            });
+            throw new Error("falla posterior al borrado");
+          })
+        ).rejects.toThrow("falla posterior al borrado");
+
+        const auditorias = await auditoriasDe(orm, assignmentId);
+        const deEntrega = (entregaId: string) =>
+          auditorias.find((auditoria) => auditoria.entrega_id === entregaId);
+        expect(deEntrega(borrado.entregaId)).toMatchObject({ status: "deleted", error: null });
+        expect(deEntrega(fallido.entregaId)).toMatchObject({
+          status: "failed",
+          error: expect.stringContaining("GitHub no respondió"),
+        });
+        expect(await repoMarcadoBorrado(orm, borrado.entregaId)).toBe(true);
+        expect(await repoMarcadoBorrado(orm, fallido.entregaId)).toBe(false);
+      },
+      TIMEOUT_TEST_MS
+    );
+
+    it(
+      "no borra nada si el assignment ya no está archivado al adquirir el lock",
+      async () => {
+        const { assignmentId } = await seedAssignmentGrupal(orm, "publicado");
+        const { entregaId } = await seedEntregaActivaEn(orm, assignmentId, ["ana"], "a");
+        githubHolder.deleteRepo.mockReset();
+
+        await expect(
+          conLockBorradoReposAssignment(assignmentId, (transaction) =>
+            borrarRepositoriosDeAssignment({
+              assignmentId,
+              requestedBy: "docente",
+              em: transaction,
+            })
+          )
+        ).rejects.toMatchObject({ name: "AssignmentNoArchivadoError" });
+
+        expect(githubHolder.deleteRepo).not.toHaveBeenCalled();
+        expect(await repoMarcadoBorrado(orm, entregaId)).toBe(false);
+        expect(await auditoriasDe(orm, assignmentId)).toEqual([]);
       },
       TIMEOUT_TEST_MS
     );

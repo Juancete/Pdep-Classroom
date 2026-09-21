@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockConnection = { execute: vi.fn() };
-
 const mockEm: {
   find: ReturnType<typeof vi.fn>;
   findOne: ReturnType<typeof vi.fn>;
   findOneOrFail: ReturnType<typeof vi.fn>;
   getReference: ReturnType<typeof vi.fn>;
-  getConnection: ReturnType<typeof vi.fn>;
+  // `execute`, no `getConnection().execute`: este último no hereda el
+  // contexto de transacción activo en MikroORM (ver `lockearMembresia` en
+  // GrupoRepository) — el mock imita la API que el código real usa, así que
+  // volver al patrón roto rompe el test en vez de pasar verde (issue #125).
+  execute: ReturnType<typeof vi.fn>;
   persist: ReturnType<typeof vi.fn>;
   remove: ReturnType<typeof vi.fn>;
   flush: ReturnType<typeof vi.fn>;
@@ -17,7 +19,7 @@ const mockEm: {
   findOne: vi.fn(),
   findOneOrFail: vi.fn(),
   getReference: vi.fn(),
-  getConnection: vi.fn(() => mockConnection),
+  execute: vi.fn(),
   persist: vi.fn(),
   remove: vi.fn(),
   flush: vi.fn(),
@@ -444,19 +446,46 @@ describe("EntregaRepository", () => {
   });
 
   describe("conLockDeEntrega", () => {
-    it("toma el advisory lock con la clave prefijada por 'ci:' y ejecuta la operación bajo la transacción", async () => {
-      mockConnection.execute.mockResolvedValue(undefined);
+    it("toma el advisory lock con la clave 'ci:' sobre la transacción y recién ahí ejecuta la operación", async () => {
+      mockEm.execute.mockResolvedValue(undefined);
       const operation = vi.fn().mockResolvedValue("resultado");
 
       await expect(conLockDeEntrega("e1", operation)).resolves.toBe("resultado");
 
       expect(mockEm.transactional).toHaveBeenCalled();
-      expect(mockConnection.execute).toHaveBeenCalledWith(
-        "select pg_advisory_xact_lock(hashtextextended(?, 0))",
-        ["ci:e1"]
-      );
-      expect(operation).toHaveBeenCalled();
+      // Orden: la espera del lock se acota ANTES de pedirlo, y el tope de SQL se
+      // fija DESPUÉS (antes cortaría la propia espera del lock).
+      expect(mockEm.execute.mock.calls).toEqual([
+        ["set local lock_timeout = '10000ms'"],
+        ["select pg_advisory_xact_lock(hashtextextended(?, 0))", ["ci:e1"]],
+        ["set local statement_timeout = '5000ms'"],
+      ]);
       expect(operation).toHaveBeenCalledWith(mockEm);
+      expect(mockEm.execute.mock.invocationCallOrder[2]).toBeLessThan(
+        operation.mock.invocationCallOrder[0]!
+      );
+    });
+
+    it("permite acotar la espera del lock", async () => {
+      mockEm.execute.mockResolvedValue(undefined);
+
+      await conLockDeEntrega("e1", async () => undefined, { esperaMaximaMs: 250 });
+
+      expect(mockEm.execute).toHaveBeenNthCalledWith(1, "set local lock_timeout = '250ms'");
+    });
+
+    it("no ejecuta la operación si no consigue el lock", async () => {
+      const lockTimeout = Object.assign(new Error("canceling statement due to lock timeout"), {
+        code: "55P03",
+      });
+      mockEm.execute
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(lockTimeout);
+      const operation = vi.fn();
+
+      await expect(conLockDeEntrega("e1", operation)).rejects.toBe(lockTimeout);
+
+      expect(operation).not.toHaveBeenCalled();
     });
   });
 

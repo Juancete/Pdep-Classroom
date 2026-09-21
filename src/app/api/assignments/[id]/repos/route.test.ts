@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PdepUser } from "@/types";
-import { DOCENTE, ESTUDIANTE } from "@/domain/entities";
+import {
+  AssignmentNoArchivadoError,
+  BorradoDeReposEnCursoError,
+  DOCENTE,
+  ESTUDIANTE,
+} from "@/domain/entities";
 
 const mockGetCurrentUser = vi.fn();
 const mockGetAssignment = vi.fn();
@@ -17,7 +22,7 @@ vi.mock("@/infrastructure/repositories", () => ({
   getEntregasConRepoActivo: (id: string) => mockGetEntregasConRepoActivo(id),
   conLockBorradoReposAssignment: (
     assignmentId: string,
-    operation: () => Promise<unknown>
+    operation: (transaction: unknown) => Promise<unknown>
   ) => mockConLock(assignmentId, operation),
 }));
 
@@ -26,6 +31,8 @@ vi.mock("@/application/borrarRepositoriosDeAssignment", () => ({
 }));
 
 import { DELETE, GET } from "./route";
+
+const TRANSACCION_DEL_LOCK = { esLaTransaccionDelLock: true };
 
 function admin(): PdepUser {
   return {
@@ -78,8 +85,8 @@ describe("DELETE /api/assignments/[id]/repos", () => {
     mockGetEntregasConRepoActivo.mockResolvedValue([]);
     mockBorrarRepositorios.mockResolvedValue(result());
     mockConLock.mockImplementation(
-      async (_assignmentId: string, operation: () => Promise<unknown>) =>
-        operation()
+      async (_assignmentId: string, operation: (transaction: unknown) => Promise<unknown>) =>
+        operation(TRANSACCION_DEL_LOCK)
     );
   });
 
@@ -134,14 +141,38 @@ describe("DELETE /api/assignments/[id]/repos", () => {
     expect(mockBorrarRepositorios).not.toHaveBeenCalled();
   });
 
-  it("propaga el actor autenticado al servicio", async () => {
+  it("propaga el actor autenticado y la transacción del lock al servicio", async () => {
     await DELETE(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
 
     expect(mockBorrarRepositorios).toHaveBeenCalledWith({
       assignmentId: "a1",
       requestedBy: "docente",
+      em: TRANSACCION_DEL_LOCK,
     });
     expect(mockConLock).toHaveBeenCalledWith("a1", expect.any(Function));
+  });
+
+  it("devuelve 409 si ya hay un borrado en curso para el assignment", async () => {
+    mockConLock.mockRejectedValue(new BorradoDeReposEnCursoError("a1"));
+
+    const response = await DELETE(makeRequest(), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toMatch(/borrado de repositorios en curso/i);
+    expect(mockBorrarRepositorios).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 409 si el assignment dejó de estar archivado al adquirir el lock", async () => {
+    mockBorrarRepositorios.mockRejectedValue(new AssignmentNoArchivadoError("a1"));
+
+    const response = await DELETE(makeRequest(), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+
+    expect(response.status).toBe(409);
   });
 
   it("devuelve 200 con el resumen de éxito", async () => {

@@ -116,6 +116,8 @@ export {
 } from "./ResultadoCI";
 export {
   RepoDeletionAttempt,
+  BorradoDeReposEnCursoError,
+  AssignmentNoArchivadoError,
   type RepoDeletionStatus,
 } from "./RepoDeletionAttempt";
 export {

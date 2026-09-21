@@ -1,5 +1,6 @@
 import { getEM } from "@/infrastructure/db";
 import { LockMode } from "@mikro-orm/core";
+import type { EntityManager } from "@mikro-orm/postgresql";
 import {
   Assignment,
   AssignmentNoEliminableError,
@@ -74,8 +75,11 @@ export async function getGrupalAssignmentsDeComisionYParadigma(
   });
 }
 
-export async function getAssignment(id: string): Promise<Assignment | null> {
-  const entityManager = await getEM();
+export async function getAssignment(
+  id: string,
+  em?: EntityManager
+): Promise<Assignment | null> {
+  const entityManager = em ?? (await getEM());
   return entityManager.findOne(Assignment, { id }, { populate: ["comision"] });
 }
 
