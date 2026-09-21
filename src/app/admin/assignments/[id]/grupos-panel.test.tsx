@@ -321,7 +321,7 @@ describe("GruposPanel", () => {
       expect(fetch).not.toHaveBeenCalled();
     });
 
-    it("la confirmación advierte sobre los colaboradores cuando el grupo ya aceptó el TP", async () => {
+    it("advierte que quitar al alumno le revoca el acceso al repositorio", async () => {
       const user = userEvent.setup();
       const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
       render(
@@ -336,7 +336,7 @@ describe("GruposPanel", () => {
       await user.click(screen.getAllByRole("button", { name: /^quitar$/i })[0]);
 
       expect(confirmSpy).toHaveBeenCalledWith(
-        expect.stringContaining("colaboradores desincronizados")
+        expect.stringContaining("se le va a revocar el acceso al repositorio")
       );
     });
 
@@ -435,6 +435,29 @@ describe("GruposPanel", () => {
 
       expect(confirmSpy).toHaveBeenCalledWith(
         expect.stringContaining("grupo destino ya aceptó el TP")
+      );
+    });
+
+    it("advierte que agregarlo al grupo destino le da acceso al repositorio", async () => {
+      const user = userEvent.setup();
+      const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+      render(
+        <GruposPanel
+          assignmentId="a1"
+          inscripcionesCerradas={false}
+          grupos={[
+            makeGrupo({ id: "g1" }),
+            makeGrupo({ id: "g2", nombre: "Los Monoides", miembros: [], tieneEntrega: true }),
+          ]}
+          alumnosSinGrupo={[]}
+        />
+      );
+
+      await user.selectOptions(screen.getAllByRole("combobox")[0], "g2");
+      await user.click(screen.getAllByRole("button", { name: /^mover$/i })[0]);
+
+      expect(confirmSpy).toHaveBeenCalledWith(
+        expect.stringContaining("se le va a dar acceso al repositorio del grupo destino")
       );
     });
 

@@ -25,6 +25,7 @@ const mockIniciarProvision = vi.fn();
 const mockMarcarCreacion = vi.fn();
 const mockCompletarProvision = vi.fn();
 const mockFallarProvision = vi.fn();
+const mockActualizarColaboradores = vi.fn();
 
 vi.mock("@/infrastructure/repositories", () => ({
   getAssignment: (id: string) => mockGetAssignment(id),
@@ -40,6 +41,8 @@ vi.mock("@/infrastructure/repositories", () => ({
   marcarCreacionGithubIniciada: (id: string) => mockMarcarCreacion(id),
   completarProvisionEntrega: (id: string, data: unknown) => mockCompletarProvision(id, data),
   fallarProvisionEntrega: (id: string, error: string) => mockFallarProvision(id, error),
+  actualizarColaboradoresDeEntrega: (id: string, data: unknown) =>
+    mockActualizarColaboradores(id, data),
 }));
 
 vi.mock("@/infrastructure/github", () => ({
@@ -161,6 +164,7 @@ describe("aceptarAssignment", () => {
       makeEntrega({ provisionCreacionIniciadaEn: new Date("2026-08-23T12:00:00Z") })
     );
     mockFallarProvision.mockResolvedValue(undefined);
+    mockActualizarColaboradores.mockResolvedValue(undefined);
   });
 
   it("devuelve la entrega existente sin tocar GitHub", async () => {
@@ -498,5 +502,77 @@ describe("aceptarAssignment", () => {
     ).rejects.toBeInstanceOf(AssignmentNoDisponibleError);
 
     expect(mockCrearEntrega).not.toHaveBeenCalled();
+  });
+
+  // Issue #123: el alumno que se une al grupo después de creado el repo no
+  // figura en `githubUsernames`; aceptar debe invitarlo, no devolver en seco.
+  describe("integrante que se une con el repo ya creado", () => {
+    beforeEach(() => {
+      mockGetAssignment.mockResolvedValue(makeAssignment({ tipo: "grupal" }));
+      mockGetGrupoDeAlumno.mockResolvedValue(
+        makeGrupo(["mariaperez", "juangarcia"], "grupo-uuid-1", "los-lambdas")
+      );
+      mockCrearEntregaSiAssignmentDisponible.mockResolvedValue(
+        makeEntrega({
+          repoName: "kata-funcional-los-lambdas",
+          repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-los-lambdas",
+          githubUsernames: ["mariaperez"],
+          provisionEstado: "activa",
+        })
+      );
+    });
+
+    it("invita al integrante que se sumó después de creado el repo y lo suma a los colaboradores", async () => {
+      const resultado = await aceptarAssignment("a1", makeUser());
+
+      expect(mockAddCollaborators).toHaveBeenCalledWith("kata-funcional-los-lambdas", ["juangarcia"]);
+      expect(mockActualizarColaboradores).toHaveBeenCalledWith("e1", { agregar: "juangarcia" });
+      expect(mockCrearEntrega).not.toHaveBeenCalled();
+      expect(mockIniciarProvision).not.toHaveBeenCalled();
+      expect(resultado.perteneceA("juangarcia")).toBe(true);
+    });
+
+    it("invita sólo al que acepta, no al resto del grupo", async () => {
+      mockGetGrupoDeAlumno.mockResolvedValue(
+        makeGrupo(["mariaperez", "juangarcia", "pedrolopez"])
+      );
+
+      await aceptarAssignment("a1", makeUser());
+
+      expect(mockAddCollaborators).toHaveBeenCalledTimes(1);
+      expect(mockAddCollaborators).toHaveBeenCalledWith("kata-funcional-los-lambdas", ["juangarcia"]);
+    });
+
+    it("no llama a GitHub cuando el que acepta ya figura como colaborador", async () => {
+      mockCrearEntregaSiAssignmentDisponible.mockResolvedValue(
+        makeEntrega({
+          repoName: "kata-funcional-los-lambdas",
+          repoUrl: "https://github.com/pdep-mn-utn/kata-funcional-los-lambdas",
+          githubUsernames: ["mariaperez", "juangarcia"],
+          provisionEstado: "activa",
+        })
+      );
+
+      await aceptarAssignment("a1", makeUser());
+
+      expect(mockAddCollaborators).not.toHaveBeenCalled();
+      expect(mockActualizarColaboradores).not.toHaveBeenCalled();
+    });
+
+    it("no marca la entrega como fallida cuando la invitación tardía falla", async () => {
+      const errorDeGithub = new Error("GitHub caído");
+      mockAddCollaborators.mockRejectedValueOnce(errorDeGithub);
+
+      await expect(aceptarAssignment("a1", makeUser())).rejects.toBe(errorDeGithub);
+
+      expect(mockFallarProvision).not.toHaveBeenCalled();
+      expect(mockActualizarColaboradores).not.toHaveBeenCalled();
+    });
+
+    it("no reclama el aprovisionamiento cuando sólo hace falta dar acceso", async () => {
+      await aceptarAssignment("a1", makeUser());
+
+      expect(mockIniciarProvision).not.toHaveBeenCalled();
+    });
   });
 });

@@ -155,15 +155,26 @@ describe("comoParticipante", () => {
 describe("actorSobreMembresiaAjena", () => {
   it("el Docente resuelve siempre y se audita como 'docente'", () => {
     const actor = DOCENTE.actorSobreMembresiaAjena("a1");
-    expect(() =>
-      actor.autorizarCambioDeMembresia({} as never)
-    ).not.toThrow();
+    expect(() => actor.autorizarAltaEnGrupo({} as never)).not.toThrow();
+    expect(() => actor.autorizarBajaDeGrupo({} as never)).not.toThrow();
     expect(actor.origenDeAuditoria()).toBe("docente");
+  });
+
+  it("el actor docente autoriza el alta en un grupo que ya aceptó el TP", () => {
+    const actor = DOCENTE.actorSobreMembresiaAjena("a1");
+    expect(() => actor.autorizarAltaEnGrupo({} as never)).not.toThrow();
+  });
+
+  it("el actor docente autoriza la baja en un grupo que ya aceptó el TP", () => {
+    const actor = DOCENTE.actorSobreMembresiaAjena("a1");
+    expect(() =>
+      actor.autorizarBajaDeGrupo({ grupoTieneEntrega: true } as never)
+    ).not.toThrow();
   });
 
   it("el Responsable hereda el mismo comportamiento que el Docente", () => {
     const actor = RESPONSABLE.actorSobreMembresiaAjena("a1");
-    expect(() => actor.autorizarCambioDeMembresia({} as never)).not.toThrow();
+    expect(() => actor.autorizarBajaDeGrupo({} as never)).not.toThrow();
     expect(actor.origenDeAuditoria()).toBe("docente");
   });
 

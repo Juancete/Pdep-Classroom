@@ -206,23 +206,23 @@ describe("Participante.autorizarAccionSobreAssignment", () => {
 describe.each([
   ["alumno", () => participanteAlumno() as Participante],
   ["docente", () => participanteDocente() as Participante],
-] as const)("%s.autorizarCambioDeMembresia", (_nombre, crearParticipante) => {
-  it("autoriza con inscripciones abiertas y sin entrega", () => {
+] as const)("%s.autorizarAltaEnGrupo", (_nombre, crearParticipante) => {
+  it("permite sumarse a un grupo que ya aceptó el TP", () => {
+    // El contexto de alta no lleva `grupoTieneEntrega`: la entrega del grupo
+    // no interviene en el alta (issue #123).
     expect(() =>
-      crearParticipante().autorizarCambioDeMembresia({
+      crearParticipante().autorizarAltaEnGrupo({
         assignment: fakeGrupal(),
         grupo: fakeGrupo(),
-        grupoTieneEntrega: false,
       })
     ).not.toThrow();
   });
 
-  it("rechaza con InscripcionesCerradasError cuando el docente cerró las inscripciones", () => {
+  it("rechaza el alta con las inscripciones cerradas", () => {
     expect(() =>
-      crearParticipante().autorizarCambioDeMembresia({
+      crearParticipante().autorizarAltaEnGrupo({
         assignment: fakeGrupal({ inscripcionesCerradas: true }),
         grupo: fakeGrupo(),
-        grupoTieneEntrega: false,
       })
     ).toThrow(InscripcionesCerradasError);
   });
@@ -232,23 +232,51 @@ describe.each([
     grupal.id = "a1";
     grupal.maxIntegrantes = 3;
     // Comisión igual a la del participante (issue #107, revisión de code
-    // review): `autorizarCambioDeMembresia` ahora exige acceso al
-    // assignment antes de mirar el estado — sin esto, este fixture sin
-    // comisión rechazaría antes por `AccesoAssignmentProhibidoError`, no
-    // por las inscripciones cerradas que este test quiere ejercitar.
+    // review): el alta exige acceso al assignment antes de mirar el estado —
+    // sin esto, este fixture sin comisión rechazaría antes por
+    // `AccesoAssignmentProhibidoError`, no por las inscripciones cerradas.
     grupal.comision = fakeComision();
     expect(() =>
-      crearParticipante().autorizarCambioDeMembresia({
-        assignment: grupal,
+      crearParticipante().autorizarAltaEnGrupo({ assignment: grupal, grupo: fakeGrupo() })
+    ).toThrow(InscripcionesCerradasError);
+  });
+});
+
+describe("autorizarAltaEnGrupo", () => {
+  it("rechaza el alta de un participante de otra comisión", () => {
+    expect(() =>
+      participanteAlumno("c2").autorizarAltaEnGrupo({
+        assignment: fakeGrupal(), // comisión "c1"
+        grupo: fakeGrupo(),
+      })
+    ).toThrow(AccesoAssignmentProhibidoError);
+  });
+
+  it("rechaza el alta de un alumno sin registro", () => {
+    const participante = new ParticipanteAlumno(null, "forastero");
+    expect(() =>
+      participante.autorizarAltaEnGrupo({ assignment: fakeGrupal(), grupo: fakeGrupo() })
+    ).toThrow(AccesoAssignmentProhibidoError);
+  });
+});
+
+describe.each([
+  ["alumno", () => participanteAlumno() as Participante],
+  ["docente", () => participanteDocente() as Participante],
+] as const)("%s.autorizarBajaDeGrupo", (_nombre, crearParticipante) => {
+  it("permite la baja cuando el grupo todavía no aceptó el TP", () => {
+    expect(() =>
+      crearParticipante().autorizarBajaDeGrupo({
+        assignment: fakeGrupal(),
         grupo: fakeGrupo(),
         grupoTieneEntrega: false,
       })
-    ).toThrow(InscripcionesCerradasError);
+    ).not.toThrow();
   });
 
-  it("rechaza con GrupoConEntregaError cuando el grupo ya aceptó el TP", () => {
+  it("sigue bloqueando la salida de un grupo que ya aceptó el TP", () => {
     expect(() =>
-      crearParticipante().autorizarCambioDeMembresia({
+      crearParticipante().autorizarBajaDeGrupo({
         assignment: fakeGrupal(),
         grupo: fakeGrupo(),
         grupoTieneEntrega: true,
@@ -256,9 +284,19 @@ describe.each([
     ).toThrow(GrupoConEntregaError);
   });
 
+  it("rechaza con InscripcionesCerradasError cuando el docente cerró las inscripciones", () => {
+    expect(() =>
+      crearParticipante().autorizarBajaDeGrupo({
+        assignment: fakeGrupal({ inscripcionesCerradas: true }),
+        grupo: fakeGrupo(),
+        grupoTieneEntrega: false,
+      })
+    ).toThrow(InscripcionesCerradasError);
+  });
+
   it("prioriza inscripciones cerradas sobre grupo con entrega", () => {
     expect(() =>
-      crearParticipante().autorizarCambioDeMembresia({
+      crearParticipante().autorizarBajaDeGrupo({
         assignment: fakeGrupal({ inscripcionesCerradas: true }),
         grupo: fakeGrupo(),
         grupoTieneEntrega: true,
@@ -267,14 +305,13 @@ describe.each([
   });
 });
 
-// Revisión de code review (issue #107/#112): antes `autorizarCambioDeMembresia`
-// no chequeaba acceso al assignment en self-service — a diferencia de
-// crear/unirse/mover, que ya pasaban por `autorizarAccionSobreAssignment`,
-// `salirDeGrupo` podía dejar salir a alguien sin acceso real al assignment.
-describe("Participante.autorizarCambioDeMembresia exige acceso al assignment", () => {
+// Revisión de code review (issue #107/#112): antes la autorización no
+// chequeaba acceso al assignment en self-service — `salirDeGrupo` podía dejar
+// salir a alguien sin acceso real al assignment.
+describe("autorizarBajaDeGrupo exige acceso al assignment", () => {
   it("rechaza a un alumno de otra comisión con AccesoAssignmentProhibidoError", () => {
     expect(() =>
-      participanteAlumno("c2").autorizarCambioDeMembresia({
+      participanteAlumno("c2").autorizarBajaDeGrupo({
         assignment: fakeGrupal(), // comisión "c1"
         grupo: fakeGrupo(),
         grupoTieneEntrega: false,
@@ -285,7 +322,7 @@ describe("Participante.autorizarCambioDeMembresia exige acceso al assignment", (
   it("rechaza a un alumno sin registro", () => {
     const participante = new ParticipanteAlumno(null, "forastero");
     expect(() =>
-      participante.autorizarCambioDeMembresia({
+      participante.autorizarBajaDeGrupo({
         assignment: fakeGrupal(),
         grupo: fakeGrupo(),
         grupoTieneEntrega: false,
@@ -359,10 +396,10 @@ describe("necesitaRegistro", () => {
   });
 });
 
-describe("motivoDeBloqueoDeMembresia", () => {
+describe("motivoDeBloqueoDeBaja", () => {
   it("devuelve null cuando el cambio está autorizado", () => {
     expect(
-      participanteAlumno().motivoDeBloqueoDeMembresia({
+      participanteAlumno().motivoDeBloqueoDeBaja({
         assignment: fakeGrupal(),
         grupo: fakeGrupo(),
         grupoTieneEntrega: false,
@@ -370,13 +407,23 @@ describe("motivoDeBloqueoDeMembresia", () => {
     ).toBeNull();
   });
 
-  it("devuelve el mensaje del error que el servidor tiraría", () => {
+  it("devuelve null cuando el grupo todavía no aceptó el TP", () => {
+    expect(
+      participanteDocente().motivoDeBloqueoDeBaja({
+        assignment: fakeGrupal(),
+        grupo: fakeGrupo(),
+        grupoTieneEntrega: false,
+      })
+    ).toBeNull();
+  });
+
+  it("devuelve el mensaje de GrupoConEntregaError cuando el grupo ya aceptó el TP", () => {
     const contexto = {
       assignment: fakeGrupal(),
       grupo: fakeGrupo(),
       grupoTieneEntrega: true,
     };
-    const motivo = participanteAlumno().motivoDeBloqueoDeMembresia(contexto);
+    const motivo = participanteAlumno().motivoDeBloqueoDeBaja(contexto);
     const error = new GrupoConEntregaError("g1");
     expect(motivo).toBe(error.message);
   });
@@ -387,7 +434,7 @@ describe("motivoDeBloqueoDeMembresia", () => {
       grupo: fakeGrupo(),
       grupoTieneEntrega: false,
     };
-    const motivo = participanteAlumno().motivoDeBloqueoDeMembresia(contexto);
+    const motivo = participanteAlumno().motivoDeBloqueoDeBaja(contexto);
     const error = new InscripcionesCerradasError(contexto.assignment.id);
     expect(motivo).toBe(error.message);
   });
@@ -398,7 +445,7 @@ describe("motivoDeBloqueoDeMembresia", () => {
       grupo: fakeGrupo(),
       grupoTieneEntrega: false,
     };
-    const motivo = participanteAlumno("c2").motivoDeBloqueoDeMembresia(contexto);
+    const motivo = participanteAlumno("c2").motivoDeBloqueoDeBaja(contexto);
     const error = new AccesoAssignmentProhibidoError(contexto.assignment.id);
     expect(motivo).toBe(error.message);
   });
@@ -409,17 +456,17 @@ describe("motivoDeBloqueoDeMembresia", () => {
       grupo: fakeGrupo(),
       grupoTieneEntrega: true,
     };
-    expect(participanteDocente().motivoDeBloqueoDeMembresia(contexto)).not.toBeNull();
+    expect(participanteDocente().motivoDeBloqueoDeBaja(contexto)).not.toBeNull();
   });
 
   it("relanza un error inesperado en vez de mostrarlo como bloqueo", () => {
     const participante = participanteAlumno();
-    participante.autorizarCambioDeMembresia = () => {
+    participante.autorizarBajaDeGrupo = () => {
       throw new TypeError("contexto mal armado");
     };
 
     expect(() =>
-      participante.motivoDeBloqueoDeMembresia({
+      participante.motivoDeBloqueoDeBaja({
         assignment: fakeGrupal(),
         grupo: fakeGrupo(),
         grupoTieneEntrega: false,

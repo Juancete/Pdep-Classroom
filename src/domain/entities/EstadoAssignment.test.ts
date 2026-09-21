@@ -94,7 +94,7 @@ describe("EstadoAssignment.esperaEntregas", () => {
 });
 
 // Fase 3 de la auditoría de dominio — mismo idioma que
-// `RolDeUsuario.motivoDeBloqueoDeMembresia`: el texto que ve el admin en
+// `RolDeUsuario.motivoDeBloqueoDeBaja`: el texto que ve el admin en
 // `estado-panel.tsx` ES el `message` del error que tiraría el servidor.
 describe("EstadoAssignment.motivoDeBloqueo", () => {
   it("devuelve null cuando la transición está permitida", () => {

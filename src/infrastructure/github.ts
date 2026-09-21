@@ -86,18 +86,45 @@ export async function createRepoFromTemplate(
 
 // ── Agregar collaborator(s) a un repo ───────────────────────
 
+export type PoliticaDeReintentos = {
+  intentos: number;
+  esperaInicialMs: number;
+  esperaMaximaMs: number;
+  // Si se define, cada request se aborta a los `timeoutMs`; un abort NO es
+  // transitorio: cae en `handleOctokitError` sin reintentar.
+  timeoutMs?: number;
+};
+
+// Tope de cada llamada a GitHub hecha con una transacción (y su lock) abierta.
+export const TIMEOUT_EN_TRANSACCION_MS = 5_000;
+
+// Los reintentos existen por la consistencia eventual de un repo recién
+// creado desde template: GitHub puede tardar en verlo y responde 404/422.
+export const REINTENTOS_TRAS_CREAR_REPO: PoliticaDeReintentos = {
+  intentos: 4,
+  esperaInicialMs: 500,
+  esperaMaximaMs: 8000,
+};
+
+// Invitar a un repo ya establecido no tiene esa consistencia eventual: ahí un
+// 404 es un username inexistente, no algo transitorio.
+export const SIN_REINTENTOS: PoliticaDeReintentos = {
+  intentos: 1,
+  esperaInicialMs: 0,
+  esperaMaximaMs: 0,
+  timeoutMs: TIMEOUT_EN_TRANSACCION_MS,
+};
+
 export async function addCollaborators(
   repoName: string,
   usernames: string[],
-  permission: "push" | "admin" = "push"
+  permission: "push" | "admin" = "push",
+  politica: PoliticaDeReintentos = REINTENTOS_TRAS_CREAR_REPO
 ): Promise<void> {
   const octokit = getOctokit();
-  const MAX_ATTEMPTS = 4;
-  const INITIAL_DELAY_MS = 500;
-  const MAX_DELAY_MS = 8000;
   let lastError: unknown;
 
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < politica.intentos; attempt++) {
     try {
       await Promise.all(
         usernames.map((username) =>
@@ -106,6 +133,9 @@ export async function addCollaborators(
             repo: repoName,
             username,
             permission,
+            ...(politica.timeoutMs !== undefined && {
+              request: { signal: AbortSignal.timeout(politica.timeoutMs) },
+            }),
           })
         )
       );
@@ -113,15 +143,41 @@ export async function addCollaborators(
     } catch (error) {
       lastError = error;
       const isTransient = isRequestError(error) && (error.status === 404 || error.status === 422);
-      if (!isTransient || attempt >= MAX_ATTEMPTS - 1) break;
+      if (!isTransient || attempt >= politica.intentos - 1) break;
       const delay = Math.min(
-        INITIAL_DELAY_MS * 2 ** attempt + Math.random() * INITIAL_DELAY_MS,
-        MAX_DELAY_MS
+        politica.esperaInicialMs * 2 ** attempt + Math.random() * politica.esperaInicialMs,
+        politica.esperaMaximaMs
       );
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
   handleOctokitError(lastError);
+}
+
+// ── Revocar el acceso de un collaborator ────────────────────
+
+export type RemoveCollaboratorResult = "revocado" | "ya_no_tenia_acceso";
+
+export async function removeCollaborator(
+  repoName: string,
+  username: string
+): Promise<RemoveCollaboratorResult> {
+  const octokit = getOctokit();
+  try {
+    await octokit.repos.removeCollaborator({
+      owner: ORG,
+      repo: repoName,
+      username,
+      // Corre dentro de una transacción con lock: no puede colgarse.
+      request: { signal: AbortSignal.timeout(TIMEOUT_EN_TRANSACCION_MS) },
+    });
+    return "revocado";
+  } catch (error) {
+    // El 404 no distingue "no era colaborador" de "el repo no existe": en
+    // ambos casos el post-estado deseado (sin acceso) ya se cumple.
+    if (isRequestError(error) && error.status === 404) return "ya_no_tenia_acceso";
+    handleOctokitError(error);
+  }
 }
 
 // ── Crear repo + dar acceso en una sola operación ───────────
@@ -180,10 +236,19 @@ export interface RepoInfo {
 // (issue #60, camino de "repo preexistente" en aceptarAssignment.ts), hace
 // falta también su id numérico de GitHub para no depender exclusivamente del
 // self-heal del primer webhook.
-export async function getRepoInfo(repoName: string): Promise<RepoInfo | null> {
+export async function getRepoInfo(
+  repoName: string,
+  opciones?: { timeoutMs?: number }
+): Promise<RepoInfo | null> {
   const octokit = getOctokit();
   try {
-    const { data } = await octokit.repos.get({ owner: ORG, repo: repoName });
+    const { data } = await octokit.repos.get({
+      owner: ORG,
+      repo: repoName,
+      ...(opciones?.timeoutMs !== undefined && {
+        request: { signal: AbortSignal.timeout(opciones.timeoutMs) },
+      }),
+    });
     return {
       repoGithubId: String(data.id),
       repoUrl: data.html_url,

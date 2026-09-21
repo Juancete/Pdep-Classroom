@@ -21,6 +21,36 @@ describe("AcceptButton", () => {
     expect(screen.getByRole("button", { name: "Aceptar" })).toBeInTheDocument();
   });
 
+  it("muestra las etiquetas por defecto", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetch).mockReturnValue(new Promise(() => {}));
+
+    render(<AcceptButton assignmentId="a1" />);
+    expect(screen.getByRole("button", { name: "Aceptar" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Aceptar" }));
+    expect(await screen.findByRole("button", { name: "Creando repo…" })).toBeDisabled();
+  });
+
+  it("muestra la etiqueta indicada cuando se la pasa", () => {
+    render(<AcceptButton assignmentId="a1" etiqueta="Pedir acceso" />);
+    expect(screen.getByRole("button", { name: "Pedir acceso" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Aceptar" })).not.toBeInTheDocument();
+  });
+
+  it("muestra la etiqueta de carga indicada mientras espera la respuesta", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetch).mockReturnValue(new Promise(() => {}));
+
+    render(
+      <AcceptButton assignmentId="a1" etiqueta="Pedir acceso" etiquetaCargando="Pidiendo acceso…" />
+    );
+    await user.click(screen.getByRole("button", { name: "Pedir acceso" }));
+
+    expect(await screen.findByRole("button", { name: "Pidiendo acceso…" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Creando repo…" })).not.toBeInTheDocument();
+  });
+
   it("el botón no está deshabilitado inicialmente", () => {
     render(<AcceptButton assignmentId="a1" />);
     expect(screen.getByRole("button")).not.toBeDisabled();
@@ -67,7 +97,7 @@ describe("AcceptButton", () => {
     render(<AcceptButton assignmentId="a1" />);
     await user.click(screen.getByRole("button", { name: "Aceptar" }));
 
-    expect(await screen.findByText("Error al crear el repo")).toBeInTheDocument();
+    expect(await screen.findByText("No pudimos completar la operación sobre el repositorio")).toBeInTheDocument();
   });
 
   it("no llama reload cuando falla", async () => {

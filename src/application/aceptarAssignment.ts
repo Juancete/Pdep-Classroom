@@ -2,6 +2,7 @@ import {
   Entrega,
   AssignmentNoEncontradoError,
   AssignmentNoDisponibleError,
+  type Participante,
   type ParticipantesResueltos,
 } from "@/domain/entities";
 import type { PdepUser } from "@/types";
@@ -14,6 +15,7 @@ import {
   marcarCreacionGithubIniciada,
   completarProvisionEntrega,
   fallarProvisionEntrega,
+  actualizarColaboradoresDeEntrega,
 } from "@/infrastructure/repositories";
 import { addCollaborators, crearEntrega, getRepoInfo, type RepoInfo } from "@/infrastructure/github";
 import { resolverParticipante } from "./participante";
@@ -32,6 +34,26 @@ export class RepositorioPreexistenteNoAdministradoError extends Error {
     );
     this.name = "RepositorioPreexistenteNoAdministradoError";
   }
+}
+
+// Issue #123: el alumno que se une al grupo después de creado el repo no
+// figura en `githubUsernames`, así que "aceptar" debe invitarlo. Si GitHub
+// falla NO se marca la provisión como fallida: la entrega sigue activa con su
+// repo real y `fallida` dejaría a todo el grupo sin `hasRepo()`.
+async function asegurarAccesoDelParticipante(
+  entrega: Entrega,
+  participante: Participante
+): Promise<Entrega> {
+  if (entrega.perteneceA(participante.githubUsername)) return entrega;
+  const repoName = entrega.nombreDeRepoActivo();
+  if (!repoName) return entrega;
+
+  await addCollaborators(repoName, [participante.githubUsername]);
+  await actualizarColaboradoresDeEntrega(entrega.id, { agregar: participante.githubUsername });
+  // La función del repo devuelve void y carga su propia instancia: se refleja
+  // el cambio en la entidad que se devuelve al caller.
+  entrega.agregarColaborador(participante.githubUsername);
+  return entrega;
 }
 
 export async function aceptarAssignment(
@@ -68,11 +90,11 @@ export async function aceptarAssignment(
     provisionEstado: "pendiente",
   });
   const descripcionRepo = `${assignment.titulo} — PdeP ${entrega.marcadorDeRepo()}`;
-  if (entrega.hasRepo()) return entrega;
+  if (entrega.hasRepo()) return asegurarAccesoDelParticipante(entrega, participante);
 
   const intento = await iniciarProvisionEntrega(entrega.id);
   if (!intento) return entrega;
-  if (intento.hasRepo()) return intento;
+  if (intento.hasRepo()) return asegurarAccesoDelParticipante(intento, participante);
 
   let repoPreexistente: RepoInfo | null;
   try {

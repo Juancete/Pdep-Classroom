@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/infrastructure/auth/session";
-import { getAssignment, getGruposDeAssignment, getEntregaLogica } from "@/infrastructure/repositories";
+import { getAssignment, getGruposDeAssignment, getEntregaLogica, getGrupoIdsConRepoActivo } from "@/infrastructure/repositories";
 import type { GrupalAssignment } from "@/domain/entities";
 import { GrupoSelector } from "./grupo-selector";
 import { MiGrupo } from "./mi-grupo";
@@ -49,14 +49,23 @@ export default async function GrupoPage(
     ? await getEntregaLogica({ assignmentId: assignment.id, grupoId: miGrupo.id })
     : null;
 
+  // Una única consulta para todos los grupos, no una por grupo.
+  const gruposConRepoActivo = await getGrupoIdsConRepoActivo(assignment.id);
+
   function serializar(grupo: (typeof gruposVisibles)[number]): GrupoResumen {
     // `toResumen()` cubre los campos comunes con las routes de grupos —
-    // acá se agrega `etiquetaCupo`, específico de esta pantalla.
-    return { ...grupo.toResumen(), etiquetaCupo: grupo.etiquetaCupo() };
+    // acá se agregan `etiquetaCupo` y `tieneRepoActivo`, específicos de esta
+    // pantalla. `tieneRepoActivo` (`hasRepo()`, predicado del ACCESO) no es
+    // `tieneEntrega` del panel admin (existe fila, predicado del BLOQUEO).
+    return {
+      ...grupo.toResumen(),
+      etiquetaCupo: grupo.etiquetaCupo(),
+      tieneRepoActivo: gruposConRepoActivo.has(grupo.id),
+    };
   }
 
   const motivoBloqueo = miGrupo
-    ? participante.motivoDeBloqueoDeMembresia({
+    ? participante.motivoDeBloqueoDeBaja({
         assignment: grupal,
         grupo: miGrupo,
         grupoTieneEntrega: !!entrega,
@@ -89,7 +98,8 @@ export default async function GrupoPage(
         <MiGrupo
           grupo={serializar(miGrupo)}
           assignmentId={params.id}
-          tieneEntrega={!!entrega}
+          tieneRepo={entrega?.hasRepo() ?? false}
+          tieneAccesoAlRepo={!!entrega && entrega.perteneceA(participante.githubUsername)}
           githubUsername={participante.githubUsername}
           motivoBloqueo={motivoBloqueo}
           esUltimoMiembro={miGrupo.quedaraVacioSiSale(participante.githubUsername)}

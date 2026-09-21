@@ -138,9 +138,11 @@ class RolDocente extends RolDeUsuario {
 
   actorSobreMembresiaAjena(): ActorDeMembresia {
     return {
-      // El docente resuelve siempre; la UI advierte con confirm() sobre el
-      // repo y los colaboradores desincronizados cuando el grupo ya aceptó el TP.
-      autorizarCambioDeMembresia: () => {},
+      // El docente resuelve siempre; el acceso al repo se otorga/revoca en la
+      // misma operación (`AccesoAlRepositorioDeGrupo`) y la UI advierte con
+      // confirm() cuando el grupo ya aceptó el TP.
+      autorizarAltaEnGrupo: () => {},
+      autorizarBajaDeGrupo: () => {},
       origenDeAuditoria: () => "docente",
       // Alcance administrativo global (issue #107/#112, revisión de code
       // review): a diferencia de `Participante.autorizarAccionSobreAssignment`,

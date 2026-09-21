@@ -23,6 +23,7 @@ function makeGrupo(overrides: Partial<GrupoResumen> = {}): GrupoResumen {
     estaLleno: false,
     etiquetaCupo: "1/3 integrantes",
     miembros: ["bob"],
+    tieneRepoActivo: false,
     ...overrides,
   };
 }
@@ -107,6 +108,31 @@ describe("GrupoSelector", () => {
       );
       expect(screen.getByText("Los Lambdas")).toBeInTheDocument();
       expect(screen.getByText("Los Monads")).toBeInTheDocument();
+    });
+
+    it("avisa que el grupo ya tiene repositorio y que al unirse va a recibir acceso", () => {
+      render(
+        <GrupoSelector
+          assignmentId="a1"
+          grupos={[makeGrupo({ tieneRepoActivo: true })]}
+          inscripcionesCerradas={false}
+        />
+      );
+      expect(screen.getByText(/Ya aceptó el TP/)).toBeInTheDocument();
+      expect(screen.getByText(/vas a recibir acceso al repositorio/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Unirme y recibir acceso" })).toBeInTheDocument();
+    });
+
+    it("no muestra el aviso cuando el grupo todavía no aceptó el TP", () => {
+      render(
+        <GrupoSelector
+          assignmentId="a1"
+          grupos={[makeGrupo({ tieneRepoActivo: false })]}
+          inscripcionesCerradas={false}
+        />
+      );
+      expect(screen.queryByText(/Ya aceptó el TP/)).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Unirme" })).toBeInTheDocument();
     });
 
     it("no muestra grupos llenos", () => {

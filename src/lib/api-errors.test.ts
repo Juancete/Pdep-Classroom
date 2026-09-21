@@ -29,6 +29,7 @@ import {
   InscripcionesCerradasError,
   AssignmentNoGrupalError,
   NombreGrupoInvalidoError,
+  ColaboradorNoInvitableError,
 } from "@/domain/entities";
 import { PermisosNoVerificablesError } from "@/infrastructure/auth/PermisosNoVerificablesError";
 import { PlanillaNoDisponibleError } from "@/infrastructure/PlanillaNoDisponibleError";
@@ -159,6 +160,15 @@ describe("respuestaDeErrorDeDominio", () => {
       new NombreGrupoInvalidoError("+++")
     );
     expect(response!.status).toBe(400);
+  });
+
+  it("mapea ColaboradorNoInvitableError a 409 usando su propio mensaje", async () => {
+    const error = new ColaboradorNoInvitableError("juangarcia");
+    const response = respuestaDeErrorDeDominio(error);
+    expect(response!.status).toBe(409);
+    const json = await response!.json();
+    expect(json.error).toBe(error.message);
+    expect(json.error).toContain("@juangarcia");
   });
 
   it("mapea PermisosNoVerificablesError a 503 con el mensaje amigable", async () => {

@@ -102,6 +102,7 @@ export {
   EntregaNoEncontradaError,
   VENTANA_PROVISION_EN_VUELO_MS,
   EntregaConProvisionEnCursoError,
+  ColaboradorNoInvitableError,
 } from "./Entrega";
 export {
   ResultadoCI,
@@ -144,7 +145,8 @@ export {
   ParticipanteDocente,
   AccesoAssignmentProhibidoError,
   type ActorDeMembresia,
-  type ContextoDeMembresia,
+  type ContextoDeAlta,
+  type ContextoDeBaja,
   type OrigenCambioMembresia,
 } from "./Participante";
 export {

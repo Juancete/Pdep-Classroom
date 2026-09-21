@@ -117,13 +117,24 @@ export function GrupoSelector({
                     {grupo.miembros.join(", ")} —{" "}
                     {grupo.miembros.length}/{grupo.maxIntegrantes} integrantes
                   </p>
+                  {grupo.tieneRepoActivo && (
+                    <p
+                      className="text-xs text-green-700 mt-1"
+                      data-testid={`grupo-con-repo-${grupo.id}`}
+                    >
+                      Ya aceptó el TP — al unirte vas a recibir acceso al repositorio
+                    </p>
+                  )}
                 </div>
                 <button
                   onClick={() => handleUnirse(grupo.id)}
                   disabled={loading}
                   className="text-sm bg-white border border-pdep-600 text-pdep-600 px-4 py-1.5 rounded-lg font-medium hover:bg-pdep-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                 >
-                  {grupoJoiningId === grupo.id ? "Uniéndose…" : "Unirme"}
+                  {grupoJoiningId === grupo.id ? "Uniéndose…"
+                    : grupo.tieneRepoActivo
+                      ? "Unirme y recibir acceso"
+                      : "Unirme"}
                 </button>
               </li>
             ))}

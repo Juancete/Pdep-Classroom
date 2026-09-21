@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/infrastructure/auth/session";
-import { unirseAGrupo } from "@/infrastructure/repositories";
 import { internalServerError, respuestaDeErrorDeDominio } from "@/lib/api-errors";
 import { resolverParticipante } from "@/application/participante";
+import { unirseAGrupo } from "@/application/membresiaDeGrupo";
 
 export async function POST(_req: Request, props: { params: Promise<{ id: string; grupoId: string }> }) {
   const params = await props.params;
