@@ -13,17 +13,52 @@ vi.mock("@/infrastructure/db", () => ({
 }));
 
 // Sólo se mockea la red de GitHub y el logger; la persistencia es la real.
-const githubHolder = vi.hoisted(() => ({ deleteRepo: vi.fn() }));
+const githubHolder = vi.hoisted(() => ({
+  deleteRepo: vi.fn(),
+  esColaborador: vi.fn(),
+  // Signal del "presupuesto" que arma el webhook al entrar al lock: el test lo
+  // controla para simular que vence.
+  presupuesto: undefined as AbortController | undefined,
+}));
 
 vi.mock("@/infrastructure/github", () => ({
+  ORG: "pdep-mn-utn",
   deleteRepo: (repoName: string) => githubHolder.deleteRepo(repoName),
+  esColaborador: (...args: unknown[]) => githubHolder.esColaborador(...args),
+  getRepoInfoPorId: async () => null,
+  getEstadoCI: vi.fn(),
+  reejecutarCI: vi.fn(),
+  obtenerCredencialDeGithub: async () => ({ token: "token-de-prueba" }),
+  clienteAcotadoDeGithub: () => ({ signal: githubHolder.presupuesto?.signal }),
 }));
+
+// Acorta la espera del lock de entrega SÓLO en los tests que lo necesitan: la
+// constante de producción (10 s) haría lento el test. El código de producción
+// no cambia.
+const esperaDelLock = vi.hoisted(() => ({ esperaMaximaMs: undefined as number | undefined }));
+
+vi.mock("@/infrastructure/repositories", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/infrastructure/repositories")>();
+  return {
+    ...real,
+    conLockDeEntrega: (
+      entregaId: string,
+      operation: Parameters<typeof real.conLockDeEntrega>[1],
+      opciones?: Parameters<typeof real.conLockDeEntrega>[2]
+    ) =>
+      real.conLockDeEntrega(entregaId, operation, {
+        esperaMaximaMs: esperaDelLock.esperaMaximaMs,
+        ...opciones,
+      }),
+  };
+});
 
 vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
 }));
 
 import { borrarRepositoriosDeAssignment } from "../../src/application/borrarRepositoriosDeAssignment";
+import { procesarEventoGithub } from "../../src/application/procesarEventoGithub";
 import { BorradoDeReposEnCursoError, Entrega } from "../../src/domain/entities";
 import {
   actualizarColaboradoresDeEntrega,
@@ -254,10 +289,41 @@ async function seedEntregaActivaEn(
 async function seedEntregaActiva(
   orm: MikroORM,
   githubUsernames: string[]
-): Promise<{ entregaId: string }> {
+): Promise<{ entregaId: string; repoName: string }> {
   const { assignmentId } = await seedAssignmentGrupal(orm, "publicado");
-  const { entregaId } = await seedEntregaActivaEn(orm, assignmentId, githubUsernames, "unico");
-  return { entregaId };
+  return seedEntregaActivaEn(orm, assignmentId, githubUsernames, "unico");
+}
+
+// El webhook sólo agrega como colaborador a un alumno conocido.
+async function seedAlumno(orm: MikroORM, githubUsername: string): Promise<void> {
+  const connection = orm.em.getConnection();
+  const comisionId = randomUUID();
+  await connection.execute(
+    `insert into "comision" ("id", "anio", "spreadsheet_id", "activa", "column_config")
+     values (?, 2026, ?, false, '{}'::jsonb)`,
+    [comisionId, `sheet-${comisionId}`]
+  );
+  await connection.execute(
+    `insert into "alumno"
+      ("id", "legajo", "nombre", "apellido", "github_username", "email", "comision_id", "registro_confirmado_en_id")
+     values (?, ?, 'Alumno', 'Test', ?, ?, ?, ?)`,
+    [
+      randomUUID(),
+      `${Math.floor(Math.random() * 1_000_000)}`,
+      githubUsername,
+      `${githubUsername}@example.com`,
+      comisionId,
+      comisionId,
+    ]
+  );
+}
+
+function eventoMember(repoName: string, login: string) {
+  return {
+    action: "added",
+    member: { login },
+    repository: { name: repoName, owner: { login: "pdep-mn-utn" } },
+  };
 }
 
 type FilaDeAuditoria = { entrega_id: string; status: string; error: string | null };
@@ -606,6 +672,124 @@ describe.sequential("advisory locks de conLockDeEntrega y conLockBorradoReposAss
         } finally {
           soltarPrimera.resolver();
           await Promise.allSettled([primera?.promesa, segunda?.promesa, tercera?.promesa]);
+        }
+      },
+      TIMEOUT_TEST_MS
+    );
+  });
+
+  describe("webhook de member bajo el lock de la entrega", () => {
+    it(
+      "si el presupuesto de GitHub vence bajo el lock, aborta sin escribir y libera el lock",
+      async () => {
+        const { entregaId, repoName } = await seedEntregaActiva(orm, ["ana"]);
+        const caro = `caro-${randomUUID()}`;
+        await seedAlumno(orm, caro);
+        const clave = `ci:${entregaId}`;
+        const enConsulta = diferido();
+        githubHolder.presupuesto = new AbortController();
+        // Una solicitud en vuelo que, como el `fetch` real, se rechaza cuando el
+        // signal del presupuesto se aborta. No hay ningún Promise.race: lo que
+        // corta el trabajo es la cancelación misma.
+        githubHolder.esColaborador.mockImplementation(
+          (_repo: string, _login: string, cliente: { signal: AbortSignal }) =>
+            new Promise((_, reject) => {
+              cliente.signal.addEventListener("abort", () => reject(cliente.signal.reason), {
+                once: true,
+              });
+              enConsulta.resolver();
+            })
+        );
+        let evento: Seguimiento<unknown> | undefined;
+
+        try {
+          evento = seguir(procesarEventoGithub("member", eventoMember(repoName, caro)));
+          await conLimite(enConsulta.promesa, LIMITE_MS, "el webhook nunca consultó a GitHub");
+
+          // Mientras espera a GitHub el lock sigue tomado: es lo que hay que
+          // acotar, y por eso el presupuesto existe.
+          expect(await lockTomado(orm, clave)).toBe(true);
+
+          githubHolder.presupuesto.abort(new Error("presupuesto de GitHub agotado"));
+          await expect(
+            conLimite(evento.promesa, LIMITE_MS, "el webhook no abortó al vencer el presupuesto")
+          ).rejects.toThrow("presupuesto de GitHub agotado");
+
+          // Sin escrituras: no se pisó el array ni se agregó a nadie.
+          expect(await usernamesEnBase(orm, entregaId)).toEqual(["ana"]);
+          // El rollback libera el lock y nadie queda esperándolo.
+          await esperarHasta(
+            async () => !(await lockTomado(orm, clave)),
+            LIMITE_MS,
+            "el lock de la entrega no se liberó tras abortar"
+          );
+          expect(await pidsEsperando(orm, clave)).toEqual([]);
+        } finally {
+          githubHolder.presupuesto?.abort();
+          await Promise.allSettled([evento?.promesa]);
+          githubHolder.presupuesto = undefined;
+          githubHolder.esColaborador.mockReset();
+        }
+      },
+      TIMEOUT_TEST_MS
+    );
+
+    it(
+      "un evento que venció su espera queda sin aplicar y al reprocesarlo termina y conserva las demás actualizaciones",
+      async () => {
+        const { entregaId, repoName } = await seedEntregaActiva(orm, ["ana"]);
+        const caro = `caro-${randomUUID()}`;
+        await seedAlumno(orm, caro);
+        githubHolder.presupuesto = new AbortController();
+        githubHolder.esColaborador.mockResolvedValue(true);
+        const holderAdentro = diferido();
+        const soltarHolder = diferido();
+        let holder: Seguimiento<void> | undefined;
+
+        try {
+          // Otro evento sostiene el lock y, antes de soltarlo, agrega a "beto".
+          holder = seguir(
+            conLockDeEntrega(entregaId, async (transaction) => {
+              holderAdentro.resolver();
+              await soltarHolder.promesa;
+              await actualizarColaboradoresDeEntrega(entregaId, { agregar: "beto" }, transaction);
+            })
+          );
+          await conLimite(holderAdentro.promesa, LIMITE_MS, "el holder nunca entró al lock");
+
+          // Primer intento: vence su espera (acortada sólo para el test).
+          esperaDelLock.esperaMaximaMs = 200;
+          await expect(
+            conLimite(
+              procesarEventoGithub("member", eventoMember(repoName, caro)),
+              LIMITE_MS,
+              "el evento no abortó al vencer su espera"
+            )
+          ).rejects.toSatisfy((error: unknown) => extractDbErrorCode(error) === "55P03");
+          esperaDelLock.esperaMaximaMs = undefined;
+
+          // No se aplicó nada del evento vencido y el holder no se vio afectado.
+          expect(await usernamesEnBase(orm, entregaId)).toEqual(["ana"]);
+          soltarHolder.resolver();
+          await conLimite(holder.promesa, LIMITE_MS, "el holder no terminó");
+          expect(await usernamesEnBase(orm, entregaId)).toEqual(["ana", "beto"]);
+
+          // Reproceso del MISMO evento, ya con la entrega libre: termina bien y
+          // conserva lo que había escrito el otro evento.
+          await expect(
+            conLimite(
+              procesarEventoGithub("member", eventoMember(repoName, caro)),
+              LIMITE_MS,
+              "el reproceso no terminó"
+            )
+          ).resolves.toMatchObject({ estado: "procesado", entregaId });
+          expect(await usernamesEnBase(orm, entregaId)).toEqual([caro, "ana", "beto"].sort());
+        } finally {
+          esperaDelLock.esperaMaximaMs = undefined;
+          soltarHolder.resolver();
+          await Promise.allSettled([holder?.promesa]);
+          githubHolder.presupuesto = undefined;
+          githubHolder.esColaborador.mockReset();
         }
       },
       TIMEOUT_TEST_MS

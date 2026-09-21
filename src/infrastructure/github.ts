@@ -115,6 +115,91 @@ export const SIN_REINTENTOS: PoliticaDeReintentos = {
   timeoutMs: TIMEOUT_EN_TRANSACCION_MS,
 };
 
+// ── Llamadas acotadas por un presupuesto compartido (issue #125) ─
+// El webhook llama a GitHub con el lock de la entrega tomado. Un `timeoutMs`
+// POR solicitud no alcanza: `getEstadoCI` hace `repos.get` más una paginación,
+// así que N solicitudes de 5 s suman N * 5 s con el lock retenido. Y un signal
+// pasado por llamada tampoco: `octokit.paginate` sólo reenvía `{ method, url,
+// headers }` (plugin-paginate-rest, iterator.js) y descarta `request.signal`,
+// incluso en la primera página.
+//
+// Por eso el signal va a nivel de INSTANCIA (`new Octokit({ request: { signal }
+// })`), y todas las solicitudes del cliente lo llevan: cada llamada y cada
+// página. La credencial se resuelve ANTES, fuera del lock, para que el cliente
+// use un token fijo y no pase por el hook de `createAppAuth` (que pediría el
+// token por su cuenta y, tras un 401 con un token recién emitido, duerme con un
+// `setTimeout` que ningún signal interrumpe).
+//
+// Qué NO cubre, para no describirlo como más de lo que es: el SQL (lo acota
+// `statement_timeout` en `conLockDeEntrega`) ni el commit, y una solicitud que
+// ya salió sólo se corta si `fetch` respeta el signal.
+
+// Tope de la obtención de la credencial. Corre fuera de todo lock: si vence, no
+// hay lock retenido ni escrituras pendientes.
+export const TIMEOUT_CREDENCIAL_MS = 5_000;
+
+// Presupuesto compartido de TODAS las solicitudes a GitHub hechas bajo el lock
+// de una entrega. Corre desde que se adquiere el lock (se crea el cliente
+// adentro), no desde que se pidió.
+export const PRESUPUESTO_GITHUB_BAJO_LOCK_MS = 8_000;
+
+export type CredencialDeGithub = { readonly token: string };
+
+// Cliente de GitHub con un único `AbortSignal` en todas sus solicitudes. Opaco
+// para las capas superiores: sólo lo reenvían a `esColaborador`/`getEstadoCI`.
+export type ClienteAcotadoDeGithub = { readonly octokit: Octokit };
+
+// Resuelve el token de instalación (o el PAT del fallback de desarrollo). El
+// cache de `createAppAuth` lo retiene 59 de sus 60 minutos, así que un token
+// devuelto tiene al menos un minuto de vida: mucho más que el presupuesto.
+//
+// El `Promise.race` acá es aceptable sólo porque corre ANTES de tomar ningún
+// lock: si vence, la solicitud del token queda en vuelo sin retener nada y sin
+// escribir (a lo sumo completa el cache para el próximo evento).
+export async function obtenerCredencialDeGithub(
+  timeoutMs: number = TIMEOUT_CREDENCIAL_MS
+): Promise<CredencialDeGithub> {
+  let temporizador: ReturnType<typeof setTimeout> | undefined;
+  const vencimiento = new Promise<never>((_, reject) => {
+    temporizador = setTimeout(
+      () => reject(new Error(`GitHub no entregó la credencial en ${timeoutMs} ms`)),
+      timeoutMs
+    );
+  });
+  try {
+    const autenticacion = await Promise.race([
+      getOctokit().auth({ type: "installation" }),
+      vencimiento,
+    ]);
+    const token = (autenticacion as { token?: unknown } | undefined)?.token;
+    if (typeof token !== "string" || token === "") {
+      throw new Error("GitHub no devolvió un token de autenticación");
+    }
+    return { token };
+  } catch (error) {
+    handleOctokitError(error);
+  } finally {
+    clearTimeout(temporizador);
+  }
+}
+
+// Cliente cuyas solicitudes comparten `signal`. Separado de
+// `clienteAcotadoDeGithub` para poder ejercitarlo con un signal controlable.
+export function clienteDeGithubConSignal(
+  credencial: CredencialDeGithub,
+  signal: AbortSignal
+): ClienteAcotadoDeGithub {
+  return { octokit: new Octokit({ auth: credencial.token, request: { signal } }) };
+}
+
+// Crea el cliente con el reloj corriendo desde YA: llamarlo al entrar al lock.
+export function clienteAcotadoDeGithub(
+  credencial: CredencialDeGithub,
+  presupuestoMs: number = PRESUPUESTO_GITHUB_BAJO_LOCK_MS
+): ClienteAcotadoDeGithub {
+  return clienteDeGithubConSignal(credencial, AbortSignal.timeout(presupuestoMs));
+}
+
 export async function addCollaborators(
   repoName: string,
   usernames: string[],
@@ -367,8 +452,11 @@ function ejecutadoEnDesdeCheckRuns(
   return timestamps.at(-1) ?? new Date().toISOString();
 }
 
-export async function getEstadoCI(repoName: string): Promise<EstadoCI> {
-  const octokit = getOctokit();
+export async function getEstadoCI(
+  repoName: string,
+  cliente?: ClienteAcotadoDeGithub
+): Promise<EstadoCI> {
+  const octokit = cliente?.octokit ?? getOctokit();
 
   let defaultBranch;
   try {
@@ -444,8 +532,12 @@ export async function reejecutarCI(
 // `getEstadoCI` con `check_suite`: invalidar y refrescar, no confiar en el
 // delta. Así el resultado converge a la verdad sin importar el orden.
 
-export async function esColaborador(repoName: string, username: string): Promise<boolean> {
-  const octokit = getOctokit();
+export async function esColaborador(
+  repoName: string,
+  username: string,
+  cliente?: ClienteAcotadoDeGithub
+): Promise<boolean> {
+  const octokit = cliente?.octokit ?? getOctokit();
   try {
     await octokit.repos.checkCollaborator({ owner: ORG, repo: repoName, username });
     return true;
