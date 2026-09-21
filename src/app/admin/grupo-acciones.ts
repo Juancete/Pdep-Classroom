@@ -26,7 +26,7 @@ export const ACCIONES: Record<
 // Advertencias que se agregan a la confirmación según el estado del grupo
 // afectado — también dato, para no meter ifs en el render.
 export const ADVERTENCIAS: {
-  aplica: (grupo: GrupoAdminResumen) => boolean;
+  aplica: (grupo: GrupoAdminResumen, accion: "quitar" | "mover" | "agregar") => boolean;
   texto: (accion: "quitar" | "mover" | "agregar") => string;
 }[] = [
   {
@@ -37,7 +37,8 @@ export const ADVERTENCIAS: {
         : "El grupo ya aceptó el TP: se le va a revocar el acceso al repositorio. Si GitHub falla, el cambio no se aplica.",
   },
   {
-    aplica: (grupo) => grupo.miembros.length === 1 && grupo.entrega === undefined,
+    aplica: (grupo, accion) =>
+      accion !== "agregar" && grupo.miembros.length === 1 && grupo.entrega === undefined,
     texto: () => "Es el último integrante: el grupo se va a eliminar y su nombre queda libre.",
   },
 ];
@@ -46,7 +47,7 @@ export function confirmacionPara(
   accion: "quitar" | "mover" | "agregar",
   grupoAfectado: GrupoAdminResumen
 ): string {
-  const advertencias = ADVERTENCIAS.filter((item) => item.aplica(grupoAfectado)).map(
+  const advertencias = ADVERTENCIAS.filter((item) => item.aplica(grupoAfectado, accion)).map(
     (item) => item.texto(accion)
   );
   return [ACCIONES[accion].confirmacion, ...advertencias].join(" ");

@@ -56,6 +56,13 @@ describe("confirmacionPara", () => {
     });
     expect(confirmacionPara("quitar", grupo)).not.toContain("Es el último integrante");
   });
+
+  it("agregar a un grupo con un solo integrante y sin entrega no advierte que el grupo se elimina", () => {
+    const grupo = makeGrupo({ miembros: [{ username: "ana", nombreCompleto: "Ana García" }] });
+    const texto = confirmacionPara("agregar", grupo);
+    expect(texto).not.toContain("Es el último integrante");
+    expect(texto).toBe(ACCIONES.agregar.confirmacion);
+  });
 });
 
 describe("advertenciaEntregaDestino", () => {
