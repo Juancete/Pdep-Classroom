@@ -119,6 +119,24 @@ describe("borrarRepositoriosDeAssignment", () => {
     expect(mockComplete).not.toHaveBeenCalled();
   });
 
+  it("conserva el error de GitHub si también falla guardar la auditoría del fallo", async () => {
+    mockGetActive.mockResolvedValue([entrega(1)]);
+    mockDeleteRepo.mockRejectedValue(new Error("GitHub no disponible"));
+    mockFail.mockRejectedValue(new Error("DB caída"));
+
+    const result = await borrarRepositoriosDeAssignment({
+      assignmentId: "a1", requestedBy: "docente",
+    });
+
+    expect(result).toMatchObject({ ok: false, failed: 1, deleted: 0 });
+    expect(result.results[0]).toMatchObject({ status: "failed", error: "GitHub no disponible" });
+    expect(mockComplete).not.toHaveBeenCalled();
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      expect.objectContaining({ err: "DB caída" }),
+      "No se pudo persistir el fallo del borrado"
+    );
+  });
+
   it("redacta credenciales antes de persistirlas o devolverlas", async () => {
     mockGetActive.mockResolvedValue([entrega(1)]);
     mockDeleteRepo.mockRejectedValue(

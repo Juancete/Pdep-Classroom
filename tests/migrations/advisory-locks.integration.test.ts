@@ -59,7 +59,12 @@ vi.mock("@/lib/logger", () => ({
 
 import { borrarRepositoriosDeAssignment } from "../../src/application/borrarRepositoriosDeAssignment";
 import { procesarEventoGithub } from "../../src/application/procesarEventoGithub";
-import { BorradoDeReposEnCursoError, Entrega } from "../../src/domain/entities";
+import {
+  procesarDeliveryReclamado,
+  reclamarDeliveryEntrante,
+  reprocesarDeliveries,
+} from "../../src/application/recibirWebhookGithub";
+import { BorradoDeReposEnCursoError, Entrega, GithubWebhookDelivery } from "../../src/domain/entities";
 import {
   actualizarColaboradoresDeEntrega,
   conLockDeEntrega,
@@ -680,6 +685,31 @@ describe.sequential("advisory locks de conLockDeEntrega y conLockBorradoReposAss
 
   describe("webhook de member bajo el lock de la entrega", () => {
     it(
+      "el timeout de SQL revierte escrituras previas y libera el lock para un nuevo intento",
+      async () => {
+        const { entregaId } = await seedEntregaActiva(orm, ["ana"]);
+        const clave = `ci:${entregaId}`;
+
+        await expect(
+          conLockDeEntrega(entregaId, async (transaction) => {
+            await actualizarColaboradoresDeEntrega(entregaId, { agregar: "beto" }, transaction);
+            // Usa el límite real de producción: si se elimina statement_timeout,
+            // la sentencia termina y el test falla porque la operación no rechaza.
+            await transaction.execute("select pg_sleep(6)");
+          })
+        ).rejects.toSatisfy((error: unknown) => extractDbErrorCode(error) === "57014");
+
+        expect(await usernamesEnBase(orm, entregaId)).toEqual(["ana"]);
+        expect(await lockTomado(orm, clave)).toBe(false);
+        await conLockDeEntrega(entregaId, (transaction) =>
+          actualizarColaboradoresDeEntrega(entregaId, { agregar: "caro" }, transaction)
+        );
+        expect(await usernamesEnBase(orm, entregaId)).toEqual(["ana", "caro"]);
+      },
+      TIMEOUT_TEST_MS
+    );
+
+    it(
       "si el presupuesto de GitHub vence bajo el lock, aborta sin escribir y libera el lock",
       async () => {
         const { entregaId, repoName } = await seedEntregaActiva(orm, ["ana"]);
@@ -735,7 +765,7 @@ describe.sequential("advisory locks de conLockDeEntrega y conLockBorradoReposAss
     );
 
     it(
-      "un evento que venció su espera queda sin aplicar y al reprocesarlo termina y conserva las demás actualizaciones",
+      "un delivery que vence queda fallido con su payload y se reclama, reprocesa y cierra sin duplicarlo",
       async () => {
         const { entregaId, repoName } = await seedEntregaActiva(orm, ["ana"]);
         const caro = `caro-${randomUUID()}`;
@@ -745,6 +775,8 @@ describe.sequential("advisory locks de conLockDeEntrega y conLockBorradoReposAss
         const holderAdentro = diferido();
         const soltarHolder = diferido();
         let holder: Seguimiento<void> | undefined;
+        const deliveryId = randomUUID();
+        const payload = eventoMember(repoName, caro);
 
         try {
           // Otro evento sostiene el lock y, antes de soltarlo, agrega a "beto".
@@ -759,13 +791,22 @@ describe.sequential("advisory locks de conLockDeEntrega y conLockBorradoReposAss
 
           // Primer intento: vence su espera (acortada sólo para el test).
           esperaDelLock.esperaMaximaMs = 200;
+          const reclamo = await reclamarDeliveryEntrante({ deliveryId, evento: "member", payload });
+          expect(reclamo.tipo).toBe("aceptado");
+          if (reclamo.tipo !== "aceptado") throw new Error("El delivery nuevo no fue reclamado");
           await expect(
             conLimite(
-              procesarEventoGithub("member", eventoMember(repoName, caro)),
+              procesarDeliveryReclamado(reclamo.delivery),
               LIMITE_MS,
               "el evento no abortó al vencer su espera"
             )
-          ).rejects.toSatisfy((error: unknown) => extractDbErrorCode(error) === "55P03");
+          ).resolves.toMatchObject({ tipo: "fallido" });
+          const fallido = await orm.em.fork().findOneOrFail(GithubWebhookDelivery, { deliveryId });
+          expect(fallido.estadoProcesamiento).toBe("fallido");
+          expect(fallido.intentos).toBe(1);
+          expect(fallido.payload).toEqual(payload);
+          expect(fallido.error).toMatch(/lock timeout/i);
+          expect(githubHolder.esColaborador).not.toHaveBeenCalled();
           esperaDelLock.esperaMaximaMs = undefined;
 
           // No se aplicó nada del evento vencido y el holder no se vio afectado.
@@ -778,12 +819,24 @@ describe.sequential("advisory locks de conLockDeEntrega y conLockBorradoReposAss
           // conserva lo que había escrito el otro evento.
           await expect(
             conLimite(
-              procesarEventoGithub("member", eventoMember(repoName, caro)),
+              reprocesarDeliveries(deliveryId),
               LIMITE_MS,
               "el reproceso no terminó"
             )
-          ).resolves.toMatchObject({ estado: "procesado", entregaId });
+          ).resolves.toEqual({ reprocesados: 1, cerrados: 1, fallidos: 0 });
           expect(await usernamesEnBase(orm, entregaId)).toEqual([caro, "ana", "beto"].sort());
+          const cerrado = await orm.em.fork().findOneOrFail(GithubWebhookDelivery, { deliveryId });
+          expect(cerrado.estadoProcesamiento).toBe("procesado");
+          expect(cerrado.intentos).toBe(2);
+          expect(cerrado.entregaId).toBe(entregaId);
+          expect(cerrado.payload).toBeNull();
+          expect(cerrado.error).toBeNull();
+          await expect(reprocesarDeliveries(deliveryId)).resolves.toEqual({
+            reprocesados: 0, cerrados: 0, fallidos: 0,
+          });
+          await expect(reclamarDeliveryEntrante({ deliveryId, evento: "member", payload }))
+            .resolves.toEqual({ tipo: "duplicado" });
+          expect(githubHolder.esColaborador).toHaveBeenCalledTimes(1);
         } finally {
           esperaDelLock.esperaMaximaMs = undefined;
           soltarHolder.resolver();

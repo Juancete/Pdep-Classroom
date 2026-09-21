@@ -34,6 +34,8 @@ vi.mock("@/infrastructure/db", () => ({
 }));
 
 import { LockMode } from "@mikro-orm/core";
+import type { EntityManager } from "@mikro-orm/postgresql";
+import { getEM } from "@/infrastructure/db";
 import {
   Alumno,
   Assignment,
@@ -51,6 +53,9 @@ import {
   getGrupoIdsConRepoActivo,
   getActiveRepoCountsByAssignment,
   getEntregaLogica,
+  getEntregaPorId,
+  completarProvisionEntrega,
+  fallarProvisionEntrega,
   actualizarCIDeEntrega,
   conLockDeEntrega,
   actualizarActividadDeEntrega,
@@ -112,6 +117,91 @@ describe("EntregaRepository", () => {
       expect(entregasPorGrupo.get("g1")).toBe(entregaUno);
       expect(entregasPorGrupo.get("g2")).toBe(entregaDos);
       expect(entregasPorGrupo.size).toBe(2);
+    });
+  });
+
+  describe("lecturas dentro del lock", () => {
+    it("lee la entrega desde la transacción recibida, sin abrir otro EM", async () => {
+      const actual = new Entrega();
+      actual.repoName = "repo-renombrado";
+      const transaction = { findOne: vi.fn().mockResolvedValue(actual) };
+
+      await expect(getEntregaPorId(actual.id, transaction as unknown as EntityManager))
+        .resolves.toBe(actual);
+
+      expect(getEM).not.toHaveBeenCalled();
+      expect(transaction.findOne).toHaveBeenCalledWith(
+        Entrega, { id: actual.id }, { populate: ["assignment"] }
+      );
+    });
+
+    it("devuelve null si la entrega se eliminó antes de la relectura", async () => {
+      await expect(getEntregaPorId("eliminada")).resolves.toBeNull();
+      expect(getEM).toHaveBeenCalledOnce();
+    });
+
+    it("lee los repos candidatos desde el EM del lock, sin otra conexión", async () => {
+      const transaction = { find: vi.fn().mockResolvedValue([]) };
+
+      await expect(getEntregasConRepoActivo("a1", transaction as unknown as EntityManager))
+        .resolves.toEqual([]);
+
+      expect(getEM).not.toHaveBeenCalled();
+      expect(transaction.find).toHaveBeenCalledWith(Entrega, {
+        assignment: { id: "a1" }, repoDeleted: false,
+        provisionEstado: "activa", repoName: { $ne: null },
+      });
+    });
+  });
+
+  describe("recuperación del aprovisionamiento", () => {
+    it("no reclama ni altera una entrega cuyo repo ya está activo", async () => {
+      const entrega = new Entrega();
+      entrega.repoUrl = "https://github.com/org/tp";
+      entrega.provisionIntentos = 2;
+      mockEm.findOneOrFail.mockResolvedValue(entrega);
+
+      await expect(iniciarProvisionEntrega(entrega.id)).resolves.toBe(entrega);
+
+      expect(entrega.provisionIntentos).toBe(2);
+      expect(entrega.hasRepo()).toBe(true);
+      expect(mockEm.flush).not.toHaveBeenCalled();
+    });
+
+    it("completa un reintento fallido y persiste el repo recuperado", async () => {
+      const entrega = new Entrega();
+      entrega.provisionEstado = "fallida";
+      entrega.provisionUltimoError = "timeout anterior";
+      entrega.repoDeleted = true;
+      mockEm.findOneOrFail.mockResolvedValue(entrega);
+
+      await expect(completarProvisionEntrega(entrega.id, {
+        repoName: "tp-recuperado", repoUrl: "https://github.com/org/tp-recuperado",
+        repoGithubId: "12345",
+      })).resolves.toBe(entrega);
+
+      expect(entrega.hasRepo()).toBe(true);
+      expect(entrega.repoGithubId).toBe("12345");
+      expect(entrega.provisionUltimoError).toBeUndefined();
+      expect(entrega.repoDeleted).toBe(false);
+      expect(mockEm.flush).toHaveBeenCalledOnce();
+    });
+
+    it("conserva la identidad del repo parcial y limita el error persistido al fallar", async () => {
+      const entrega = new Entrega();
+      entrega.repoName = "repo-parcial";
+      entrega.repoGithubId = "12345";
+      entrega.provisionEstado = "pendiente";
+      mockEm.findOneOrFail.mockResolvedValue(entrega);
+
+      await fallarProvisionEntrega(entrega.id, "x".repeat(2500));
+
+      expect(entrega.provisionEstado).toBe("fallida");
+      expect(entrega.provisionUltimoError).toHaveLength(2000);
+      expect(entrega.repoName).toBe("repo-parcial");
+      expect(entrega.repoGithubId).toBe("12345");
+      expect(entrega.provisionActualizadoEn).toBeInstanceOf(Date);
+      expect(mockEm.flush).toHaveBeenCalledOnce();
     });
   });
 
