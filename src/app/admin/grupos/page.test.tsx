@@ -1,11 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Comision, resolverContextoDeComision } from "@/domain/entities";
+import { Collection } from "@mikro-orm/core";
+import {
+  Alumno,
+  Comision,
+  Entrega,
+  GrupalAssignment,
+  Grupo,
+  MiembroDeGrupo,
+  resolverContextoDeComision,
+} from "@/domain/entities";
+import type { GrupoAdminResumen } from "../grupo-resumen";
 
 // ── Mocks ────────────────────────────────────────────────────
 
 const mockRequireAdmin = vi.fn();
 const mockGetGrupos = vi.fn();
+const mockGetAlumnosByComision = vi.fn();
+const mockGetEntregasDeGrupos = vi.fn();
 const mockObtenerContextoDeComision = vi.fn();
 
 vi.mock("@/infrastructure/auth/session", () => ({
@@ -14,6 +26,39 @@ vi.mock("@/infrastructure/auth/session", () => ({
 
 vi.mock("@/infrastructure/repositories", () => ({
   getGrupos: (filtro: unknown) => mockGetGrupos(filtro),
+  getAlumnosByComision: (comisionId: string) => mockGetAlumnosByComision(comisionId),
+  getEntregasDeGrupos: (filtro: unknown) => mockGetEntregasDeGrupos(filtro),
+}));
+
+// La card es un client component con router; acá sólo importa qué recibe.
+vi.mock("../grupo-card", () => ({
+  GrupoCard: ({
+    assignmentId,
+    grupo,
+    conAcciones,
+  }: {
+    assignmentId: string;
+    grupo: GrupoAdminResumen;
+    conAcciones: boolean;
+  }) => (
+    <div
+      data-testid="grupo-card"
+      data-assignment={assignmentId}
+      data-grupo={grupo.id}
+      data-con-acciones={String(conAcciones)}
+      data-destinos={grupo.destinos.map((destino) => destino.id).join(",")}
+      data-entrega={grupo.entrega ? "si" : "no"}
+      data-ci={grupo.entrega?.ci ? "si" : "no"}
+      data-ultimo-push={grupo.entrega?.ultimoPush ? "si" : "no"}
+      data-titulo={grupo.assignmentTitulo}
+      data-paradigma={grupo.paradigma}
+    >
+      {grupo.nombre}
+      {grupo.miembros.map((miembro) => (
+        <span key={miembro.username}>{miembro.nombreCompleto}</span>
+      ))}
+    </div>
+  ),
 }));
 
 vi.mock("@/application/comisionConsultada", () => ({
@@ -51,16 +96,41 @@ function contextoSinComision() {
   return { contexto: resolverContextoDeComision([]), comisiones: [] };
 }
 
-function makeGrupo(overrides?: object) {
-  const base = {
-    id: "los-lambdas",
-    nombre: "Los Lambdas",
-    paradigma: "funcional",
-    tipoDeIntegrantes: "alumnos",
-    usernamesDeMiembros: () => ["juangarcia", "mariaperez"],
-    assignment: { id: "a1", titulo: "Kata Funcional" },
-  };
-  return { ...base, ...overrides };
+function makeGrupo(
+  id: string,
+  overrides: { assignmentId?: string; usernames?: string[]; maxIntegrantes?: number } = {}
+): Grupo {
+  const grupo = new Grupo();
+  grupo.id = id;
+  grupo.nombre = `Grupo ${id}`;
+  grupo.paradigma = "funcional";
+  grupo.maxIntegrantes = overrides.maxIntegrantes ?? 3;
+  grupo.assignment = Object.assign(new GrupalAssignment(), {
+    id: overrides.assignmentId ?? "a1",
+    titulo: "Kata Funcional",
+  });
+  const items = (overrides.usernames ?? ["juangarcia"]).map((githubUsername) =>
+    Object.assign(new MiembroDeGrupo(), { githubUsername })
+  );
+  grupo.miembros = {
+    getItems: () => items,
+    get length() {
+      return items.length;
+    },
+  } as unknown as Collection<MiembroDeGrupo>;
+  return grupo;
+}
+
+function makeEntrega(): Entrega {
+  return Object.assign(new Entrega(), {
+    repoUrl: "https://github.com/org/repo",
+    repoName: "repo",
+    provisionEstado: "activa",
+    repoDeleted: false,
+    ciResultadoNombre: "passing",
+    ultimoPushEn: new Date("2026-03-15T12:00:00Z"),
+    ultimoPushPor: "ana",
+  });
 }
 
 // ── Tests ────────────────────────────────────────────────────
@@ -70,6 +140,8 @@ describe("Admin Grupos page", () => {
     vi.clearAllMocks();
     mockRequireAdmin.mockResolvedValue(undefined);
     mockGetGrupos.mockResolvedValue([]);
+    mockGetAlumnosByComision.mockResolvedValue([]);
+    mockGetEntregasDeGrupos.mockResolvedValue(new Map());
     mockObtenerContextoDeComision.mockResolvedValue(contextoConComisionActiva());
   });
 
@@ -193,20 +265,71 @@ describe("Admin Grupos page", () => {
   });
 
   describe("con grupos", () => {
-    it("muestra el nombre y paradigma del grupo", async () => {
-      mockGetGrupos.mockResolvedValue([makeGrupo()]);
+    it("muestra el nombre del grupo", async () => {
+      mockGetGrupos.mockResolvedValue([makeGrupo("g1", { usernames: ["juangarcia", "mariaperez"] })]);
       const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
-      const html = renderToStaticMarkup(element);
-      expect(html).toContain("Los Lambdas");
-      expect(html).toContain("funcional");
+      expect(renderToStaticMarkup(element)).toContain("Grupo g1");
     });
 
-    it("muestra los usernames de los miembros", async () => {
-      mockGetGrupos.mockResolvedValue([makeGrupo()]);
+    it("muestra el nombre completo de los miembros, con fallback al username", async () => {
+      mockGetGrupos.mockResolvedValue([makeGrupo("g1", { usernames: ["JuanGarcia", "mariaperez"] })]);
+      mockGetAlumnosByComision.mockResolvedValue([
+        Object.assign(new Alumno(), { githubUsername: "JuanGarcia", apellido: "García", nombre: "Juan" }),
+      ]);
       const element = await AdminGruposPage({ searchParams: Promise.resolve({}) });
       const html = renderToStaticMarkup(element);
-      expect(html).toContain("juangarcia");
+      expect(html).toContain("García, Juan");
       expect(html).toContain("mariaperez");
+    });
+
+    it("monta la card sin acciones, una por grupo, con el assignment del grupo y su contexto", async () => {
+      mockGetGrupos.mockResolvedValue([
+        makeGrupo("g1", { assignmentId: "a1" }),
+        makeGrupo("g2", { assignmentId: "a2" }),
+      ]);
+      const html = renderToStaticMarkup(
+        await AdminGruposPage({ searchParams: Promise.resolve({}) })
+      );
+      expect(html).toContain('data-assignment="a1"');
+      expect(html).toContain('data-assignment="a2"');
+      expect(html.match(/data-testid="grupo-card"/g)).toHaveLength(2);
+      expect(html.match(/data-con-acciones="false"/g)).toHaveLength(2);
+      expect(html).toContain('data-titulo="Kata Funcional"');
+      expect(html).toContain('data-paradigma="funcional"');
+    });
+
+    it("los destinos de un grupo son sólo los de su mismo TP, aunque otro TP tenga el mismo paradigma", async () => {
+      mockGetGrupos.mockResolvedValue([
+        makeGrupo("g1", { assignmentId: "a1" }),
+        makeGrupo("g2", { assignmentId: "a1" }),
+        makeGrupo("g3", { assignmentId: "a2" }),
+      ]);
+      const html = renderToStaticMarkup(
+        await AdminGruposPage({ searchParams: Promise.resolve({}) })
+      );
+      expect(html).toContain('data-grupo="g1" data-con-acciones="false" data-destinos="g2"');
+      expect(html).toContain('data-grupo="g3" data-con-acciones="false" data-destinos=""');
+    });
+
+    it("la entrega llega al resumen sin CI ni último push", async () => {
+      mockGetGrupos.mockResolvedValue([makeGrupo("g1"), makeGrupo("g2")]);
+      mockGetEntregasDeGrupos.mockResolvedValue(new Map([["g1", makeEntrega()]]));
+      const html = renderToStaticMarkup(
+        await AdminGruposPage({ searchParams: Promise.resolve({}) })
+      );
+      expect(html).toContain('data-grupo="g1" data-con-acciones="false" data-destinos="g2" data-entrega="si" data-ci="no" data-ultimo-push="no"');
+      expect(html).toContain('data-grupo="g2" data-con-acciones="false" data-destinos="g1" data-entrega="no"');
+    });
+
+    it("pide las entregas con el mismo comisionId y paradigma que los grupos, y los alumnos de la comisión", async () => {
+      await AdminGruposPage({ searchParams: Promise.resolve({ paradigma: "funcional" }) });
+
+      expect(mockGetGrupos).toHaveBeenCalledWith({ comisionId: "c-activa", paradigma: "funcional" });
+      expect(mockGetEntregasDeGrupos).toHaveBeenCalledWith({
+        comisionId: "c-activa",
+        paradigma: "funcional",
+      });
+      expect(mockGetAlumnosByComision).toHaveBeenCalledWith("c-activa");
     });
   });
 });

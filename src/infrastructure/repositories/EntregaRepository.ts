@@ -11,11 +11,38 @@ import {
   EntregaConProvisionEnCursoError,
   type NombreResultadoCI,
 } from "@/domain/entities";
+import type { Paradigma } from "@/types";
 
 export async function getEntregas(assignmentId?: string): Promise<Entrega[]> {
   const entityManager = await getEM();
   const where = assignmentId ? { assignment: { id: assignmentId } } : {};
   return entityManager.find(Entrega, where, { populate: ["assignment", "grupo"] });
+}
+
+// Entrega de cada grupo (grupoId → Entrega) de una comisión en una sola query,
+// con el mismo filtro que `getGrupos`. El paradigma vive en el assignment.
+export async function getEntregasDeGrupos(filtro: {
+  comisionId: string;
+  paradigma?: Paradigma;
+}): Promise<Map<string, Entrega>> {
+  const entityManager = await getEM();
+  const { comisionId, paradigma } = filtro;
+  const entregas = await entityManager.find(
+    Entrega,
+    {
+      grupo: { $ne: null },
+      assignment: {
+        comision: { id: comisionId },
+        ...(paradigma && { paradigma }),
+      },
+    },
+    { populate: ["grupo"] }
+  );
+  const entregasPorGrupo = new Map<string, Entrega>();
+  for (const entrega of entregas) {
+    if (entrega.grupo) entregasPorGrupo.set(entrega.grupo.id, entrega);
+  }
+  return entregasPorGrupo;
 }
 
 // Conteo puntual vía agregación SQL — a diferencia de getEntregaCountsByAssignment()

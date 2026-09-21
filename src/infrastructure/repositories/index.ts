@@ -52,6 +52,7 @@ export {
 
 export {
   getEntregas,
+  getEntregasDeGrupos,
   getEntregasDeUsuario,
   getEntregaDeUsuario,
   getEntregaPorId,

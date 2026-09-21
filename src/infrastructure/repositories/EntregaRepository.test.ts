@@ -45,6 +45,7 @@ import {
   createOrGetEntrega,
   crearEntregaSiAssignmentDisponible,
   getEntregasConRepoActivo,
+  getEntregasDeGrupos,
   getGrupoIdsConRepoActivo,
   getActiveRepoCountsByAssignment,
   getEntregaLogica,
@@ -73,6 +74,43 @@ describe("EntregaRepository", () => {
     mockEm.findOneOrFail.mockResolvedValue({ id: "a1" });
     mockEm.getReference.mockImplementation((Entity: unknown, id: string) => ({ Entity, id }));
     mockEm.flush.mockResolvedValue(undefined);
+  });
+
+  describe("getEntregasDeGrupos", () => {
+    it("filtra por comisión y entregas con grupo, sin paradigma si no viene", async () => {
+      await getEntregasDeGrupos({ comisionId: "c1" });
+
+      expect(mockEm.find).toHaveBeenCalledWith(
+        Entrega,
+        { grupo: { $ne: null }, assignment: { comision: { id: "c1" } } },
+        { populate: ["grupo"] }
+      );
+    });
+
+    it("suma el paradigma del assignment cuando viene", async () => {
+      await getEntregasDeGrupos({ comisionId: "c1", paradigma: "funcional" });
+
+      expect(mockEm.find).toHaveBeenCalledWith(
+        Entrega,
+        {
+          grupo: { $ne: null },
+          assignment: { comision: { id: "c1" }, paradigma: "funcional" },
+        },
+        { populate: ["grupo"] }
+      );
+    });
+
+    it("indexa la entrega por id de grupo", async () => {
+      const entregaUno = Object.assign(new Entrega(), { id: "e1", grupo: { id: "g1" } });
+      const entregaDos = Object.assign(new Entrega(), { id: "e2", grupo: { id: "g2" } });
+      mockEm.find.mockResolvedValue([entregaUno, entregaDos]);
+
+      const entregasPorGrupo = await getEntregasDeGrupos({ comisionId: "c1" });
+
+      expect(entregasPorGrupo.get("g1")).toBe(entregaUno);
+      expect(entregasPorGrupo.get("g2")).toBe(entregaDos);
+      expect(entregasPorGrupo.size).toBe(2);
+    });
   });
 
   it("crea una entrega individual asociando alumnoId", async () => {

@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { IndividualAssignment, GrupalAssignment, Entrega, Alumno, Grupo } from "@/domain/entities";
+import { Collection } from "@mikro-orm/core";
+import {
+  IndividualAssignment,
+  GrupalAssignment,
+  Entrega,
+  Alumno,
+  Grupo,
+  MiembroDeGrupo,
+} from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -54,7 +62,12 @@ vi.mock("../grupos-panel", () => ({
     alumnosSinGrupo,
   }: {
     assignmentId: string;
-    grupos: { id: string; tieneEntrega: boolean; tipoDeIntegrantes: string }[];
+    grupos: {
+      id: string;
+      tipoDeIntegrantes: string;
+      destinos: { id: string; conEntrega: boolean }[];
+      entrega?: { estadoRepo: string; ci?: { resultadoNombre: string }; ultimoPush?: { por: string } };
+    }[];
     alumnosSinGrupo: { username: string }[];
   }) => (
     <div
@@ -62,7 +75,10 @@ vi.mock("../grupos-panel", () => ({
       data-assignment={assignmentId}
       data-grupos={grupos.length}
       data-sin-grupo={alumnosSinGrupo.length}
-      data-grupos-con-entrega={grupos.filter((grupo) => grupo.tieneEntrega).map((grupo) => grupo.id).join(",")}
+      data-grupos-con-entrega={grupos.filter((grupo) => grupo.entrega).map((grupo) => grupo.id).join(",")}
+      data-ci={grupos.map((grupo) => grupo.entrega?.ci?.resultadoNombre ?? "-").join(",")}
+      data-ultimo-push={grupos.map((grupo) => grupo.entrega?.ultimoPush?.por ?? "-").join(",")}
+      data-destinos={grupos.map((grupo) => `${grupo.id}:${grupo.destinos.map((destino) => `${destino.id}${destino.conEntrega ? "*" : ""}`).join("+")}`).join(",")}
       data-grupos-docentes={grupos.filter((grupo) => grupo.tipoDeIntegrantes === "docentes").map((grupo) => grupo.id).join(",")}
     />
   ),
@@ -148,18 +164,15 @@ function makeGrupo(overrides?: Partial<Grupo>): Grupo {
   grupo.paradigma = "objetos";
   grupo.maxIntegrantes = 3;
   grupo.creadoPor = "usuario1";
-  const miembros: string[] = [];
-  const fakeMethods = {
-    isOpen: () => true,
-    estaLleno: () => false,
-    etiquetaCupo: () => `${miembros.length}/${grupo.maxIntegrantes} integrantes`,
-    usernamesDeMiembros: () => miembros,
-    usernamesCanonicos: () => miembros.map((username) => username.toLowerCase()),
-    alumnos: {
-      getItems: () => [] as ReturnType<typeof makeAlumno>[],
+  grupo.assignment = makeGrupalAssignment({ id: "a2" });
+  const miembrosItems: MiembroDeGrupo[] = [];
+  grupo.miembros = {
+    getItems: () => miembrosItems,
+    get length() {
+      return miembrosItems.length;
     },
-  };
-  return Object.assign(grupo, fakeMethods, overrides);
+  } as unknown as Collection<MiembroDeGrupo>;
+  return Object.assign(grupo, overrides);
 }
 
 // ── Tests ────────────────────────────────────────────────────
@@ -225,22 +238,14 @@ describe("Admin Assignment Grupos Page", () => {
         makeAlumno({ id: "al2", githubUsername: "usuario2" }),
         makeAlumno({ id: "al3", githubUsername: "usuario3" }),
       ]);
-      const miembros = ["usuario1"];
-      const grupoConMiembro = {
-        id: "g1",
-        nombre: "Grupo 1",
-        paradigma: "objetos",
-        maxIntegrantes: 3,
-        creadoPor: "usuario1",
-        isOpen: () => true,
-        estaLleno: () => false,
-        etiquetaCupo: () => `${miembros.length}/3 integrantes`,
-        usernamesDeMiembros: () => miembros,
-        usernamesCanonicos: () => miembros.map((username) => username.toLowerCase()),
-        alumnos: {
-          getItems: () => miembros.map((username) => makeAlumno({ githubUsername: username })),
+      const grupoConMiembro = makeGrupo({ id: "g1" });
+      const miembro = Object.assign(new MiembroDeGrupo(), { githubUsername: "usuario1" });
+      grupoConMiembro.miembros = {
+        getItems: () => [miembro],
+        get length() {
+          return 1;
         },
-      };
+      } as unknown as Collection<MiembroDeGrupo>;
       mockGetGruposDeAssignment.mockResolvedValue([grupoConMiembro]);
 
       const element = await GruposAssignmentPage({ params: Promise.resolve({ id: "a2" }) });
@@ -255,7 +260,7 @@ describe("Admin Assignment Grupos Page", () => {
       expect(mockGetGruposDeAssignment).not.toHaveBeenCalled();
     });
 
-    it("marca tieneEntrega=true para el grupo con una entrega registrada, reusando getEntregas sin queries extra", async () => {
+    it("arma el resumen con entrega sólo para el grupo con una entrega registrada, reusando getEntregas sin queries extra", async () => {
       mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
       mockGetGruposDeAssignment.mockResolvedValue([
         makeGrupo({ id: "g1" }),
@@ -268,6 +273,38 @@ describe("Admin Assignment Grupos Page", () => {
       const element = await GruposAssignmentPage({ params: Promise.resolve({ id: "a2" }) });
 
       expect(renderToStaticMarkup(element)).toContain('data-grupos-con-entrega="g1"');
+    });
+
+    it("la entrega del grupo llega al resumen con CI y último push", async () => {
+      mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
+      mockGetGruposDeAssignment.mockResolvedValue([makeGrupo({ id: "g1" }), makeGrupo({ id: "g2" })]);
+      mockGetEntregas.mockResolvedValue([
+        makeEntrega({
+          grupo: makeGrupo({ id: "g1" }),
+          ciResultadoNombre: "passing",
+          ultimoPushEn: new Date("2026-03-15T12:00:00Z"),
+          ultimoPushPor: "ana",
+        }),
+      ]);
+
+      const markup = renderToStaticMarkup(
+        await GruposAssignmentPage({ params: Promise.resolve({ id: "a2" }) })
+      );
+
+      expect(markup).toContain('data-ci="passing,-"');
+      expect(markup).toContain('data-ultimo-push="ana,-"');
+    });
+
+    it("los destinos de cada grupo son los otros del TP e indican cuáles ya tienen entrega", async () => {
+      mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
+      mockGetGruposDeAssignment.mockResolvedValue([makeGrupo({ id: "g1" }), makeGrupo({ id: "g2" })]);
+      mockGetEntregas.mockResolvedValue([makeEntrega({ grupo: makeGrupo({ id: "g2" }) })]);
+
+      const markup = renderToStaticMarkup(
+        await GruposAssignmentPage({ params: Promise.resolve({ id: "a2" }) })
+      );
+
+      expect(markup).toContain('data-destinos="g1:g2*,g2:g1"');
     });
 
     // issue #107: la serialización a GrupoAdminResumen propaga
