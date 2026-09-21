@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockConnection = { execute: vi.fn() };
-
 const mockEm: {
   find: ReturnType<typeof vi.fn>;
   findOne: ReturnType<typeof vi.fn>;
   findOneOrFail: ReturnType<typeof vi.fn>;
   getReference: ReturnType<typeof vi.fn>;
-  getConnection: ReturnType<typeof vi.fn>;
+  // `execute`, no `getConnection().execute`: este último no hereda el
+  // contexto de transacción activo en MikroORM (ver `lockearMembresia` en
+  // GrupoRepository) — el mock imita la API que el código real usa, así que
+  // volver al patrón roto rompe el test en vez de pasar verde (issue #125).
+  execute: ReturnType<typeof vi.fn>;
   persist: ReturnType<typeof vi.fn>;
   remove: ReturnType<typeof vi.fn>;
   flush: ReturnType<typeof vi.fn>;
@@ -17,7 +19,7 @@ const mockEm: {
   findOne: vi.fn(),
   findOneOrFail: vi.fn(),
   getReference: vi.fn(),
-  getConnection: vi.fn(() => mockConnection),
+  execute: vi.fn(),
   persist: vi.fn(),
   remove: vi.fn(),
   flush: vi.fn(),
@@ -32,6 +34,8 @@ vi.mock("@/infrastructure/db", () => ({
 }));
 
 import { LockMode } from "@mikro-orm/core";
+import type { EntityManager } from "@mikro-orm/postgresql";
+import { getEM } from "@/infrastructure/db";
 import {
   Alumno,
   Assignment,
@@ -49,6 +53,9 @@ import {
   getGrupoIdsConRepoActivo,
   getActiveRepoCountsByAssignment,
   getEntregaLogica,
+  getEntregaPorId,
+  completarProvisionEntrega,
+  fallarProvisionEntrega,
   actualizarCIDeEntrega,
   conLockDeEntrega,
   actualizarActividadDeEntrega,
@@ -110,6 +117,91 @@ describe("EntregaRepository", () => {
       expect(entregasPorGrupo.get("g1")).toBe(entregaUno);
       expect(entregasPorGrupo.get("g2")).toBe(entregaDos);
       expect(entregasPorGrupo.size).toBe(2);
+    });
+  });
+
+  describe("lecturas dentro del lock", () => {
+    it("lee la entrega desde la transacción recibida, sin abrir otro EM", async () => {
+      const actual = new Entrega();
+      actual.repoName = "repo-renombrado";
+      const transaction = { findOne: vi.fn().mockResolvedValue(actual) };
+
+      await expect(getEntregaPorId(actual.id, transaction as unknown as EntityManager))
+        .resolves.toBe(actual);
+
+      expect(getEM).not.toHaveBeenCalled();
+      expect(transaction.findOne).toHaveBeenCalledWith(
+        Entrega, { id: actual.id }, { populate: ["assignment"] }
+      );
+    });
+
+    it("devuelve null si la entrega se eliminó antes de la relectura", async () => {
+      await expect(getEntregaPorId("eliminada")).resolves.toBeNull();
+      expect(getEM).toHaveBeenCalledOnce();
+    });
+
+    it("lee los repos candidatos desde el EM del lock, sin otra conexión", async () => {
+      const transaction = { find: vi.fn().mockResolvedValue([]) };
+
+      await expect(getEntregasConRepoActivo("a1", transaction as unknown as EntityManager))
+        .resolves.toEqual([]);
+
+      expect(getEM).not.toHaveBeenCalled();
+      expect(transaction.find).toHaveBeenCalledWith(Entrega, {
+        assignment: { id: "a1" }, repoDeleted: false,
+        provisionEstado: "activa", repoName: { $ne: null },
+      });
+    });
+  });
+
+  describe("recuperación del aprovisionamiento", () => {
+    it("no reclama ni altera una entrega cuyo repo ya está activo", async () => {
+      const entrega = new Entrega();
+      entrega.repoUrl = "https://github.com/org/tp";
+      entrega.provisionIntentos = 2;
+      mockEm.findOneOrFail.mockResolvedValue(entrega);
+
+      await expect(iniciarProvisionEntrega(entrega.id)).resolves.toBe(entrega);
+
+      expect(entrega.provisionIntentos).toBe(2);
+      expect(entrega.hasRepo()).toBe(true);
+      expect(mockEm.flush).not.toHaveBeenCalled();
+    });
+
+    it("completa un reintento fallido y persiste el repo recuperado", async () => {
+      const entrega = new Entrega();
+      entrega.provisionEstado = "fallida";
+      entrega.provisionUltimoError = "timeout anterior";
+      entrega.repoDeleted = true;
+      mockEm.findOneOrFail.mockResolvedValue(entrega);
+
+      await expect(completarProvisionEntrega(entrega.id, {
+        repoName: "tp-recuperado", repoUrl: "https://github.com/org/tp-recuperado",
+        repoGithubId: "12345",
+      })).resolves.toBe(entrega);
+
+      expect(entrega.hasRepo()).toBe(true);
+      expect(entrega.repoGithubId).toBe("12345");
+      expect(entrega.provisionUltimoError).toBeUndefined();
+      expect(entrega.repoDeleted).toBe(false);
+      expect(mockEm.flush).toHaveBeenCalledOnce();
+    });
+
+    it("conserva la identidad del repo parcial y limita el error persistido al fallar", async () => {
+      const entrega = new Entrega();
+      entrega.repoName = "repo-parcial";
+      entrega.repoGithubId = "12345";
+      entrega.provisionEstado = "pendiente";
+      mockEm.findOneOrFail.mockResolvedValue(entrega);
+
+      await fallarProvisionEntrega(entrega.id, "x".repeat(2500));
+
+      expect(entrega.provisionEstado).toBe("fallida");
+      expect(entrega.provisionUltimoError).toHaveLength(2000);
+      expect(entrega.repoName).toBe("repo-parcial");
+      expect(entrega.repoGithubId).toBe("12345");
+      expect(entrega.provisionActualizadoEn).toBeInstanceOf(Date);
+      expect(mockEm.flush).toHaveBeenCalledOnce();
     });
   });
 
@@ -444,19 +536,46 @@ describe("EntregaRepository", () => {
   });
 
   describe("conLockDeEntrega", () => {
-    it("toma el advisory lock con la clave prefijada por 'ci:' y ejecuta la operación bajo la transacción", async () => {
-      mockConnection.execute.mockResolvedValue(undefined);
+    it("toma el advisory lock con la clave 'ci:' sobre la transacción y recién ahí ejecuta la operación", async () => {
+      mockEm.execute.mockResolvedValue(undefined);
       const operation = vi.fn().mockResolvedValue("resultado");
 
       await expect(conLockDeEntrega("e1", operation)).resolves.toBe("resultado");
 
       expect(mockEm.transactional).toHaveBeenCalled();
-      expect(mockConnection.execute).toHaveBeenCalledWith(
-        "select pg_advisory_xact_lock(hashtextextended(?, 0))",
-        ["ci:e1"]
-      );
-      expect(operation).toHaveBeenCalled();
+      // Orden: la espera del lock se acota ANTES de pedirlo, y el tope de SQL se
+      // fija DESPUÉS (antes cortaría la propia espera del lock).
+      expect(mockEm.execute.mock.calls).toEqual([
+        ["set local lock_timeout = '10000ms'"],
+        ["select pg_advisory_xact_lock(hashtextextended(?, 0))", ["ci:e1"]],
+        ["set local statement_timeout = '5000ms'"],
+      ]);
       expect(operation).toHaveBeenCalledWith(mockEm);
+      expect(mockEm.execute.mock.invocationCallOrder[2]).toBeLessThan(
+        operation.mock.invocationCallOrder[0]!
+      );
+    });
+
+    it("permite acotar la espera del lock", async () => {
+      mockEm.execute.mockResolvedValue(undefined);
+
+      await conLockDeEntrega("e1", async () => undefined, { esperaMaximaMs: 250 });
+
+      expect(mockEm.execute).toHaveBeenNthCalledWith(1, "set local lock_timeout = '250ms'");
+    });
+
+    it("no ejecuta la operación si no consigue el lock", async () => {
+      const lockTimeout = Object.assign(new Error("canceling statement due to lock timeout"), {
+        code: "55P03",
+      });
+      mockEm.execute
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(lockTimeout);
+      const operation = vi.fn();
+
+      await expect(conLockDeEntrega("e1", operation)).rejects.toBe(lockTimeout);
+
+      expect(operation).not.toHaveBeenCalled();
     });
   });
 

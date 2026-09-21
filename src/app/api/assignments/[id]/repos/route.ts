@@ -71,10 +71,11 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
       );
     }
 
-    const result = await conLockBorradoReposAssignment(params.id, () =>
+    const result = await conLockBorradoReposAssignment(params.id, (transaction) =>
       borrarRepositoriosDeAssignment({
         assignmentId: params.id,
         requestedBy: user.githubUsername,
+        em: transaction,
       })
     );
 

@@ -4,9 +4,13 @@ import { QueryOrder } from "@mikro-orm/core";
 const mockTx = {
   findOneOrFail: vi.fn(),
   flush: vi.fn(),
-  getConnection: vi.fn(),
+  // `execute`, no `getConnection().execute`: este último no hereda el contexto
+  // de transacción activo en MikroORM (ver `lockearMembresia` en
+  // GrupoRepository) — el mock imita la API que el código real usa, así que
+  // volver al patrón roto rompe el test en vez de pasar verde (issue #125).
+  execute: vi.fn(),
 };
-const mockExecute = vi.fn();
+const mockExecute = mockTx.execute;
 
 const mockEm = {
   persist: vi.fn(),
@@ -23,7 +27,7 @@ vi.mock("@/infrastructure/db", () => ({
   getEM: vi.fn(async () => mockEm),
 }));
 
-import { Entrega, RepoDeletionAttempt } from "@/domain/entities";
+import { BorradoDeReposEnCursoError, Entrega, RepoDeletionAttempt } from "@/domain/entities";
 import {
   conLockBorradoReposAssignment,
   completarIntentoBorradoRepo,
@@ -37,31 +41,41 @@ describe("RepoDeletionAttemptRepository", () => {
     vi.clearAllMocks();
     mockEm.flush.mockResolvedValue(undefined);
     mockTx.flush.mockResolvedValue(undefined);
-    mockTx.getConnection.mockReturnValue({ execute: mockExecute });
     mockEm.transactional.mockImplementation(
       async (callback: (transaction: typeof mockTx) => unknown) => callback(mockTx)
     );
   });
 
-  it("mantiene un lock transaccional durante la operación de un assignment", async () => {
-    mockExecute.mockResolvedValue(undefined);
+  it("toma el lock del assignment sobre la transacción y recién ahí corre la operación", async () => {
+    mockExecute.mockResolvedValue([{ tomado: true }]);
     const operation = vi.fn(async () => "resultado");
 
-    await expect(
-      conLockBorradoReposAssignment("a1", operation)
-    ).resolves.toBe("resultado");
+    await expect(conLockBorradoReposAssignment("a1", operation)).resolves.toBe("resultado");
 
     expect(mockExecute).toHaveBeenCalledWith(
-      "select pg_advisory_xact_lock(hashtextextended(?, 0))",
+      "select pg_try_advisory_xact_lock(hashtextextended(?, 0)) as tomado",
       ["repo-deletion:a1"]
     );
     expect(mockExecute.mock.invocationCallOrder[0]).toBeLessThan(
       operation.mock.invocationCallOrder[0]!
     );
+    // La operación recibe la transacción que sostiene el lock.
+    expect(operation).toHaveBeenCalledWith(mockTx);
+  });
+
+  it("rechaza sin esperar ni ejecutar la operación si ya hay un borrado en curso", async () => {
+    mockExecute.mockResolvedValue([{ tomado: false }]);
+    const operation = vi.fn();
+
+    await expect(conLockBorradoReposAssignment("a1", operation)).rejects.toBeInstanceOf(
+      BorradoDeReposEnCursoError
+    );
+
+    expect(operation).not.toHaveBeenCalled();
   });
 
   it("usa una clave distinta para cada assignment", async () => {
-    mockExecute.mockResolvedValue(undefined);
+    mockExecute.mockResolvedValue([{ tomado: true }]);
 
     await conLockBorradoReposAssignment("a1", async () => undefined);
     await conLockBorradoReposAssignment("a2", async () => undefined);

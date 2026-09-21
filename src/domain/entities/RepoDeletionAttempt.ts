@@ -13,6 +13,28 @@ export type RepoDeletionStatus =
   | "already_absent"
   | "failed";
 
+// Issue #125: ya hay un borrado masivo de repos de este assignment corriendo.
+// El lock del assignment se toma SIN esperar (`pg_try_advisory_xact_lock`): una
+// segunda solicitud se rechaza en vez de encolarse, porque encolarla ocuparía
+// conexiones del pool esperando un lock que sostiene quien necesita conexiones
+// nuevas para auditar cada repo.
+export class BorradoDeReposEnCursoError extends Error {
+  constructor(public readonly assignmentId: string) {
+    super("Ya hay un borrado de repositorios en curso para este TP. Esperá a que termine.");
+    this.name = "BorradoDeReposEnCursoError";
+  }
+}
+
+// Issue #125: el assignment dejó de estar archivado entre la validación de la
+// route y la adquisición del lock. Se revalida ya adentro del lock para no
+// actuar con una validación anterior a la adquisición.
+export class AssignmentNoArchivadoError extends Error {
+  constructor(public readonly assignmentId: string) {
+    super("Archivá el assignment antes de eliminar sus repositorios.");
+    this.name = "AssignmentNoArchivadoError";
+  }
+}
+
 @Entity({ tableName: "repo_deletion_attempt" })
 @Index({
   name: "repo_deletion_attempt_assignment_started_idx",

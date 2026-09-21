@@ -1,4 +1,8 @@
-import { getEstadoCI, reejecutarCI as reejecutarCIEnGitHub } from "@/infrastructure/github";
+import {
+  getEstadoCI,
+  reejecutarCI as reejecutarCIEnGitHub,
+  type ClienteAcotadoDeGithub,
+} from "@/infrastructure/github";
 import { logger } from "@/lib/logger";
 import { mapConConcurrenciaLimitada } from "@/lib/concurrencia";
 import { mensajeOperativo } from "@/lib/mensaje-operativo";
@@ -20,11 +24,12 @@ export type SincronizarCIResult = {
 
 async function sincronizarUnaEntrega(
   entrega: Entrega,
-  em?: EntityManager
+  em?: EntityManager,
+  github?: ClienteAcotadoDeGithub
 ): Promise<"actualizada" | { error: string }> {
   const repoName = entrega.repoName!;
   try {
-    const estado = await getEstadoCI(repoName);
+    const estado = await getEstadoCI(repoName, github);
 
     if (estado.tipo === "sin_ci") {
       // Limpia explícitamente lo que hubiera de una consulta anterior — acá
@@ -72,10 +77,14 @@ async function sincronizarUnaEntrega(
  * activo y lo cachea en la propia `Entrega`. Un fallo puntual (timeout, rate
  * limit) no aborta el lote ni pisa el resultado previo de esa entrega —
  * queda registrado en `fallidas` y las demás entregas siguen su curso.
+ *
+ * `github` es el cliente con presupuesto compartido que arma el webhook cuando
+ * corre bajo el lock de la entrega (issue #125): todas las solicitudes del lote
+ * llevan su mismo `AbortSignal`. Sin él, se usa el cliente global sin tope.
  */
 export async function sincronizarCIDeEntregas(
   entregas: Entrega[],
-  opts?: { forzar?: boolean; em?: EntityManager }
+  opts?: { forzar?: boolean; em?: EntityManager; github?: ClienteAcotadoDeGithub }
 ): Promise<SincronizarCIResult> {
   const forzar = opts?.forzar ?? false;
   const ahora = new Date();
@@ -87,7 +96,7 @@ export async function sincronizarCIDeEntregas(
   const resultados = await mapConConcurrenciaLimitada(
     pendientes,
     MAX_CONCURRENT_CI_CHECKS,
-    (entrega) => sincronizarUnaEntrega(entrega, opts?.em)
+    (entrega) => sincronizarUnaEntrega(entrega, opts?.em, opts?.github)
   );
 
   const fallidas: { repoName: string; error: string }[] = [];

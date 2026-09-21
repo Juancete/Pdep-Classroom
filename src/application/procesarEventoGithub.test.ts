@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Entrega } from "@/domain/entities";
 
 const mockGetEntregaByRepoName = vi.fn();
+const mockGetEntregaPorId = vi.fn();
 const mockGetEntregaPorRepoGithubId = vi.fn();
 const mockAsegurarRepoGithubId = vi.fn();
 const mockGetAlumnoByGithub = vi.fn();
@@ -13,12 +14,18 @@ const mockActualizarColaboradores = vi.fn();
 const mockSincronizarCI = vi.fn();
 const mockEsColaborador = vi.fn();
 const mockGetRepoInfoPorId = vi.fn();
+const mockObtenerCredencial = vi.fn();
+const mockClienteAcotado = vi.fn();
 const mockTransaction = { nombre: "transaction-em" };
+const CREDENCIAL = { token: "token-de-instalacion" };
+const CLIENTE_ACOTADO = { nombre: "cliente-acotado" };
 
 vi.mock("@/infrastructure/github", () => ({
   ORG: "pdep-mn-utn",
   esColaborador: (...args: unknown[]) => mockEsColaborador(...args),
   getRepoInfoPorId: (...args: unknown[]) => mockGetRepoInfoPorId(...args),
+  obtenerCredencialDeGithub: (...args: unknown[]) => mockObtenerCredencial(...args),
+  clienteAcotadoDeGithub: (...args: unknown[]) => mockClienteAcotado(...args),
 }));
 
 vi.mock("./sincronizarCI", () => ({
@@ -27,6 +34,7 @@ vi.mock("./sincronizarCI", () => ({
 
 vi.mock("@/infrastructure/repositories", () => ({
   getEntregaByRepoName: (...args: unknown[]) => mockGetEntregaByRepoName(...args),
+  getEntregaPorId: (...args: unknown[]) => mockGetEntregaPorId(...args),
   getEntregaPorRepoGithubId: (...args: unknown[]) => mockGetEntregaPorRepoGithubId(...args),
   asegurarRepoGithubId: (...args: unknown[]) => mockAsegurarRepoGithubId(...args),
   getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
@@ -45,6 +53,16 @@ function entregaConId(id: string): Entrega {
   return entrega;
 }
 
+// Entrega con repo activo (`hasRepo()`): la copia que el webhook relee ya
+// adentro del lock.
+function entregaConRepoActivo(id: string, repoName = "kata-juan"): Entrega {
+  const entrega = entregaConId(id);
+  entrega.repoName = repoName;
+  entrega.repoUrl = `https://github.com/pdep-mn-utn/${repoName}`;
+  entrega.provisionEstado = "activa";
+  return entrega;
+}
+
 const REPO_BASE = { name: "kata-juan", owner: { login: "pdep-mn-utn" } };
 
 describe("procesarEventoGithub", () => {
@@ -55,6 +73,9 @@ describe("procesarEventoGithub", () => {
     );
     mockGetEntregaPorRepoGithubId.mockResolvedValue(null);
     mockGetRepoInfoPorId.mockResolvedValue(null);
+    mockObtenerCredencial.mockResolvedValue(CREDENCIAL);
+    mockClienteAcotado.mockReturnValue(CLIENTE_ACOTADO);
+    mockGetEntregaPorId.mockImplementation(async (id: string) => entregaConRepoActivo(id));
   });
 
   it("ignora un evento sin manejador registrado", async () => {
@@ -100,10 +121,73 @@ describe("procesarEventoGithub", () => {
 
       expect(resultado).toEqual({ estado: "procesado", entregaId: "e1" });
       expect(mockConLockDeEntrega).toHaveBeenCalledWith("e1", expect.any(Function));
-      expect(mockSincronizarCI).toHaveBeenCalledWith([entrega], {
+      expect(mockSincronizarCI).toHaveBeenCalledWith([expect.objectContaining({ id: "e1" })], {
         forzar: true,
         em: mockTransaction,
+        github: CLIENTE_ACOTADO,
       });
+    });
+
+    it("relee la entrega con la transacción del lock y sincroniza esa copia, no la de antes del lock", async () => {
+      const entregaPrevia = entregaConRepoActivo("e1", "nombre-viejo");
+      const entregaFresca = entregaConRepoActivo("e1", "nombre-nuevo");
+      mockGetEntregaByRepoName.mockResolvedValue(entregaPrevia);
+      mockGetEntregaPorId.mockResolvedValue(entregaFresca);
+      mockSincronizarCI.mockResolvedValue({ actualizadas: 1, omitidas: 0, fallidas: [] });
+
+      await procesarEventoGithub("check_suite", { action: "completed", repository: REPO_BASE });
+
+      expect(mockGetEntregaPorId).toHaveBeenCalledWith("e1", mockTransaction);
+      const [entregasSincronizadas] = mockSincronizarCI.mock.calls[0]!;
+      expect(entregasSincronizadas).toEqual([entregaFresca]);
+      expect(entregasSincronizadas[0]).not.toBe(entregaPrevia);
+    });
+
+    it.each([
+      ["desapareció mientras esperaba el lock", null],
+      ["ya no tiene repo activo", (() => {
+        const borrada = entregaConRepoActivo("e1");
+        borrada.repoDeleted = true;
+        return borrada;
+      })()],
+    ])("ignora el evento si la entrega %s", async (_caso, entregaActual) => {
+      mockGetEntregaByRepoName.mockResolvedValue(entregaConRepoActivo("e1"));
+      mockGetEntregaPorId.mockResolvedValue(entregaActual);
+
+      const resultado = await procesarEventoGithub("check_suite", {
+        action: "completed",
+        repository: REPO_BASE,
+      });
+
+      expect(resultado).toEqual({ estado: "ignorado", entregaId: "e1" });
+      expect(mockSincronizarCI).not.toHaveBeenCalled();
+    });
+
+    it("resuelve la credencial ANTES de tomar el lock y arma el cliente acotado ya adentro", async () => {
+      mockGetEntregaByRepoName.mockResolvedValue(entregaConRepoActivo("e1"));
+      mockSincronizarCI.mockResolvedValue({ actualizadas: 1, omitidas: 0, fallidas: [] });
+
+      await procesarEventoGithub("check_suite", { action: "completed", repository: REPO_BASE });
+
+      const ordenCredencial = mockObtenerCredencial.mock.invocationCallOrder[0]!;
+      const ordenLock = mockConLockDeEntrega.mock.invocationCallOrder[0]!;
+      const ordenCliente = mockClienteAcotado.mock.invocationCallOrder[0]!;
+      // El reloj del presupuesto corre desde que se adquiere el lock.
+      expect(ordenCredencial).toBeLessThan(ordenLock);
+      expect(ordenLock).toBeLessThan(ordenCliente);
+      expect(mockClienteAcotado).toHaveBeenCalledWith(CREDENCIAL);
+    });
+
+    it("no toma el lock ni escribe si no consigue la credencial", async () => {
+      mockGetEntregaByRepoName.mockResolvedValue(entregaConRepoActivo("e1"));
+      mockObtenerCredencial.mockRejectedValue(new Error("GitHub no entregó la credencial en 5000 ms"));
+
+      await expect(
+        procesarEventoGithub("check_suite", { action: "completed", repository: REPO_BASE })
+      ).rejects.toThrow("no entregó la credencial");
+
+      expect(mockConLockDeEntrega).not.toHaveBeenCalled();
+      expect(mockSincronizarCI).not.toHaveBeenCalled();
     });
 
     it.each(["requested", "rerequested", "completed"])(
@@ -551,7 +635,7 @@ describe("procesarEventoGithub", () => {
         repository: REPO_BASE,
       });
 
-      expect(mockEsColaborador).toHaveBeenCalledWith("kata-juan", "juancito");
+      expect(mockEsColaborador).toHaveBeenCalledWith("kata-juan", "juancito", CLIENTE_ACOTADO);
       expect(mockActualizarColaboradores).toHaveBeenCalledWith(
         "e1",
         { agregar: "juancito" },
@@ -669,6 +753,60 @@ describe("procesarEventoGithub", () => {
       });
 
       expect(mockConLockDeEntrega).toHaveBeenCalledWith("e1", expect.any(Function));
+    });
+
+    it("consulta a GitHub con la credencial previa al lock y el cliente armado adentro", async () => {
+      mockGetEntregaByRepoName.mockResolvedValue(entregaConId("e1"));
+      mockEsColaborador.mockResolvedValue(false);
+
+      await procesarEventoGithub("member", {
+        action: "removed",
+        member: { login: "juancito" },
+        repository: REPO_BASE,
+      });
+
+      expect(mockObtenerCredencial.mock.invocationCallOrder[0]).toBeLessThan(
+        mockConLockDeEntrega.mock.invocationCallOrder[0]!
+      );
+      expect(mockConLockDeEntrega.mock.invocationCallOrder[0]).toBeLessThan(
+        mockClienteAcotado.mock.invocationCallOrder[0]!
+      );
+      expect(mockClienteAcotado.mock.invocationCallOrder[0]).toBeLessThan(
+        mockEsColaborador.mock.invocationCallOrder[0]!
+      );
+    });
+
+    it("no toma el lock si no consigue la credencial", async () => {
+      mockGetEntregaByRepoName.mockResolvedValue(entregaConId("e1"));
+      mockObtenerCredencial.mockRejectedValue(new Error("sin credencial"));
+
+      await expect(
+        procesarEventoGithub("member", {
+          action: "added",
+          member: { login: "juancito" },
+          repository: REPO_BASE,
+        })
+      ).rejects.toThrow("sin credencial");
+
+      expect(mockConLockDeEntrega).not.toHaveBeenCalled();
+      expect(mockActualizarColaboradores).not.toHaveBeenCalled();
+    });
+
+    it("no escribe si la consulta a GitHub bajo el lock se aborta", async () => {
+      mockGetEntregaByRepoName.mockResolvedValue(entregaConId("e1"));
+      mockEsColaborador.mockRejectedValue(
+        Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" })
+      );
+
+      await expect(
+        procesarEventoGithub("member", {
+          action: "added",
+          member: { login: "juancito" },
+          repository: REPO_BASE,
+        })
+      ).rejects.toThrow("aborted due to timeout");
+
+      expect(mockActualizarColaboradores).not.toHaveBeenCalled();
     });
   });
 });

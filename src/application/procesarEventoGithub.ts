@@ -1,8 +1,15 @@
 import { z } from "zod";
-import { ORG, esColaborador, getRepoInfoPorId } from "@/infrastructure/github";
+import {
+  ORG,
+  clienteAcotadoDeGithub,
+  esColaborador,
+  getRepoInfoPorId,
+  obtenerCredencialDeGithub,
+} from "@/infrastructure/github";
 import { sincronizarCIDeEntregas } from "./sincronizarCI";
 import {
   getEntregaByRepoName,
+  getEntregaPorId,
   getEntregaPorRepoGithubId,
   asegurarRepoGithubId,
   getAlumnoByGithub,
@@ -166,17 +173,29 @@ async function manejarCheckSuite(payload: unknown): Promise<ResultadoProceso> {
 
   return conEntregaDelRepo(
     { repoName: repository.name, repoGithubId: idComoString(repository.id) },
-    (entrega) =>
-      conLockDeEntrega(entrega.id, async (transaction) => {
-        const resultado = await sincronizarCIDeEntregas([entrega], {
+    async (entrega) => {
+      // La credencial se resuelve ANTES de tomar el lock (ver
+      // `obtenerCredencialDeGithub`): bajo el lock sólo corren solicitudes con
+      // token fijo y un presupuesto compartido.
+      const credencial = await obtenerCredencialDeGithub();
+      return conLockDeEntrega(entrega.id, async (transaction) => {
+        const github = clienteAcotadoDeGithub(credencial);
+        // `entrega` se resolvió ANTES del lock, en otro EntityManager: mientras
+        // esperaba, el repo pudo renombrarse o borrarse. Se relee ya adentro y
+        // se decide sobre esa copia fresca.
+        const actual = await getEntregaPorId(entrega.id, transaction);
+        if (!actual?.hasRepo()) return "ignorado" as const;
+        const resultado = await sincronizarCIDeEntregas([actual], {
           forzar: true,
           em: transaction,
+          github,
         });
         if (resultado.fallidas.length > 0) {
           throw new Error(resultado.fallidas[0]!.error);
         }
         return "procesado" as const;
-      })
+      });
+    }
   );
 }
 
@@ -308,9 +327,13 @@ async function manejarMember(payload: unknown): Promise<ResultadoProceso> {
   // simultáneos podrían leer el mismo array viejo y pisarse entre sí.
   return conEntregaDelRepo(
     { repoName: repository.name, repoGithubId: idComoString(repository.id) },
-    (entrega) =>
-      conLockDeEntrega(entrega.id, async (transaction) => {
-        const esColaboradorAhora = await esColaborador(repository.name, member.login);
+    async (entrega) => {
+      // Credencial antes del lock; bajo el lock, un cliente con presupuesto
+      // compartido (ver `obtenerCredencialDeGithub`).
+      const credencial = await obtenerCredencialDeGithub();
+      return conLockDeEntrega(entrega.id, async (transaction) => {
+        const github = clienteAcotadoDeGithub(credencial);
+        const esColaboradorAhora = await esColaborador(repository.name, member.login, github);
 
         if (esColaboradorAhora) {
           // Sólo se agrega si GitHub reporta a un alumno conocido — sin este
@@ -332,7 +355,8 @@ async function manejarMember(payload: unknown): Promise<ResultadoProceso> {
           transaction
         );
         return "procesado" as const;
-      })
+      });
+    }
   );
 }
 

@@ -6,10 +6,16 @@ import { mensajeOperativo } from "@/lib/mensaje-operativo";
 import {
   completarIntentoBorradoRepo,
   fallarIntentoBorradoRepo,
+  getAssignment,
   getEntregasConRepoActivo,
   iniciarIntentoBorradoRepo,
 } from "@/infrastructure/repositories";
-import type { Entrega } from "@/domain/entities";
+import {
+  AssignmentNoArchivadoError,
+  AssignmentNoEncontradoError,
+  type Entrega,
+} from "@/domain/entities";
+import type { EntityManager } from "@mikro-orm/postgresql";
 
 const MAX_CONCURRENT_DELETIONS = 5;
 
@@ -133,11 +139,31 @@ export async function borrarRepositorio(data: {
   return { entregaId: entrega.id, repoName, status: githubResult };
 }
 
+/**
+ * `em` es la transacción que sostiene `conLockBorradoReposAssignment` y se usa
+ * SÓLO para lo que hay que leer bajo el lock: el estado del assignment y el
+ * listado de repos a borrar. El borrado de cada repo y su auditoría usan sus
+ * propios `EntityManager` (ver el docblock del lock: van de a
+ * `MAX_CONCURRENT_DELETIONS` en paralelo y la auditoría se commitea aparte a
+ * propósito), por eso `em` no se reenvía a `borrarRepositorio`.
+ */
 export async function borrarRepositoriosDeAssignment(data: {
   assignmentId: string;
   requestedBy: string;
+  em?: EntityManager;
 }): Promise<DeleteAssignmentReposResult> {
-  const entregas = await getEntregasConRepoActivo(data.assignmentId);
+  const { em, ...datosDeBorrado } = data;
+
+  // La route valida el estado ANTES de adquirir el lock; se revalida acá, ya
+  // adentro, para no actuar con una validación anterior a la adquisición. No
+  // serializa por sí sola cambios posteriores del ciclo de vida del assignment.
+  const assignment = await getAssignment(datosDeBorrado.assignmentId, em);
+  if (!assignment) throw new AssignmentNoEncontradoError(datosDeBorrado.assignmentId);
+  if (!assignment.permiteBorrarRepos()) {
+    throw new AssignmentNoArchivadoError(datosDeBorrado.assignmentId);
+  }
+
+  const entregas = await getEntregasConRepoActivo(datosDeBorrado.assignmentId, em);
   if (entregas.length === 0) {
     return {
       ok: true,
@@ -154,7 +180,7 @@ export async function borrarRepositoriosDeAssignment(data: {
   const results = await mapConConcurrenciaLimitada(
     entregas,
     MAX_CONCURRENT_DELETIONS,
-    (entrega) => borrarRepositorio({ ...data, entrega, operationId })
+    (entrega) => borrarRepositorio({ ...datosDeBorrado, entrega, operationId })
   );
   const deleted = results.filter((result) => result.status === "deleted").length;
   const alreadyAbsent = results.filter(

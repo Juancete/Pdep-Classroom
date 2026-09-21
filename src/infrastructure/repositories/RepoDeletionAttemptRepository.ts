@@ -1,6 +1,8 @@
 import { QueryOrder } from "@mikro-orm/core";
+import type { EntityManager } from "@mikro-orm/postgresql";
 import { getEM } from "@/infrastructure/db";
 import {
+  BorradoDeReposEnCursoError,
   Entrega,
   RepoDeletionAttempt,
   type RepoDeletionStatus,
@@ -14,17 +16,42 @@ export type RepoDeletionHistoryPage = {
   totalPages: number;
 };
 
+/**
+ * Exclusión mutua del borrado masivo de repos de un assignment bajo un advisory
+ * lock transaccional (clave `repo-deletion:<assignmentId>`). Si ya hay un
+ * borrado en curso, RECHAZA con `BorradoDeReposEnCursoError` en vez de esperar:
+ * encolar solicitudes ocuparía conexiones del pool esperando un lock que
+ * sostiene quien necesita conexiones nuevas para auditar cada repo.
+ *
+ * La operación recibe el `EntityManager` de la transacción que sostiene el lock
+ * y debe usarlo sólo para lo que tiene que leerse bajo el lock (el listado de
+ * repos a borrar). El borrado por repo y su auditoría corren FUERA de esta
+ * transacción, con sus propios `EntityManager`: un `EntityManager` no soporta
+ * queries concurrentes (el borrado va de a 5 en paralelo) y
+ * `iniciarIntentoBorradoRepo` commitea la fila `pending` a propósito — dentro de
+ * una única transacción, un fallo borraría la auditoría de repos que GitHub sí
+ * borró. Por eso es exclusión mutua entre ejecuciones concurrentes, no una
+ * frontera atómica.
+ *
+ * Sólo serializa contra otros que toman esta misma clave, no contra cambios de
+ * ciclo de vida del assignment ni contra el borrado individual de una entrega.
+ */
 export async function conLockBorradoReposAssignment<T>(
   assignmentId: string,
-  operation: () => Promise<T>
+  operation: (transaction: EntityManager) => Promise<T>
 ): Promise<T> {
   const entityManager = await getEM();
   return entityManager.transactional(async (transaction) => {
-    await transaction.getConnection().execute(
-      "select pg_advisory_xact_lock(hashtextextended(?, 0))",
+    // `transaction.execute(...)` — no `transaction.getConnection().execute(...)`:
+    // este último no hereda el contexto de transacción activo y corre en una
+    // conexión aparte del pool, así que el lock se tomaría y liberaría al
+    // instante sin serializar nada (ver `lockearMembresia` en GrupoRepository).
+    const filas = await transaction.execute<{ tomado: boolean }[]>(
+      "select pg_try_advisory_xact_lock(hashtextextended(?, 0)) as tomado",
       [`repo-deletion:${assignmentId}`]
     );
-    return operation();
+    if (!filas[0]!.tomado) throw new BorradoDeReposEnCursoError(assignmentId);
+    return operation(transaction);
   });
 }
 
