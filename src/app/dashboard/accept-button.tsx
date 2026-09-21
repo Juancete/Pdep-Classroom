@@ -2,7 +2,15 @@
 
 import { useApiCall } from "@/hooks/useApiCall";
 
-export function AcceptButton({ assignmentId }: { assignmentId: string }) {
+export function AcceptButton({
+  assignmentId,
+  etiqueta = "Aceptar",
+  etiquetaCargando = "Creando repo…",
+}: {
+  assignmentId: string;
+  etiqueta?: string;
+  etiquetaCargando?: string;
+}) {
   const { loading, error, call } = useApiCall();
 
   async function handleAccept() {
@@ -31,10 +39,10 @@ export function AcceptButton({ assignmentId }: { assignmentId: string }) {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            Creando repo…
+            {etiquetaCargando}
           </>
         ) : (
-          "Aceptar"
+          etiqueta
         )}
       </button>
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}

@@ -5,9 +5,15 @@ import type { GrupoResumen } from "./mi-grupo";
 import type { GrupoDisponible } from "./acciones-de-membresia";
 
 vi.mock("@/app/dashboard/accept-button", () => ({
-  AcceptButton: ({ assignmentId }: { assignmentId: string }) => (
+  AcceptButton: ({
+    assignmentId,
+    etiqueta = "Aceptar",
+  }: {
+    assignmentId: string;
+    etiqueta?: string;
+  }) => (
     <button data-testid="accept-button" data-assignment={assignmentId}>
-      Aceptar TP
+      {etiqueta}
     </button>
   ),
 }));
@@ -119,6 +125,8 @@ describe("MiGrupo", () => {
     render(<MiGrupo {...makeProps({ tieneRepo: true, tieneAccesoAlRepo: false })} />);
     expect(screen.getByText(/todavía no tenés acceso/)).toBeInTheDocument();
     expect(screen.getByTestId("accept-button")).toHaveAttribute("data-assignment", "a1");
+    expect(screen.getByRole("button", { name: "Pedir acceso" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Aceptar" })).not.toBeInTheDocument();
   });
 
   it("no muestra ningún botón de aceptar cuando el repo existe y el integrante ya tiene acceso", () => {

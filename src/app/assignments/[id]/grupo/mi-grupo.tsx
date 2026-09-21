@@ -75,7 +75,11 @@ export function MiGrupo({
             El repositorio del grupo ya está creado, pero todavía no tenés
             acceso. Pedí tu acceso desde acá.
           </p>
-          <AcceptButton assignmentId={assignmentId} />
+          <AcceptButton
+            assignmentId={assignmentId}
+            etiqueta="Pedir acceso"
+            etiquetaCargando="Pidiendo acceso…"
+          />
         </div>
       )}
 
