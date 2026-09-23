@@ -1,24 +1,40 @@
 import type { GrupoAdminResumen } from "./grupo-resumen";
 
+export type AlumnoAfectado = { username: string; nombreCompleto: string };
+
+// La confirmación nombra al alumno y al grupo para que el docente vea sobre
+// quién está actuando: en una card con varios integrantes "este alumno" no
+// alcanza para distinguir a cuál le tocó el botón.
+export function etiquetaDeAlumno(alumno: AlumnoAfectado): string {
+  return `${alumno.nombreCompleto} (@${alumno.username})`;
+}
+
 // Config por acción: texto del botón, confirmación base y estilo — dato, no
 // rama de lógica. Mismo idioma que `estado-panel.tsx`.
 export const ACCIONES: Record<
   "quitar" | "mover" | "agregar",
-  { etiquetaBoton: string; confirmacion: string; className: string }
+  {
+    etiquetaBoton: string;
+    confirmacion: (alumno: string, grupo: string, grupoDestino?: string) => string;
+    className: string;
+  }
 > = {
   quitar: {
     etiquetaBoton: "Quitar",
-    confirmacion: "¿Seguro que querés quitar a este alumno del grupo?",
+    confirmacion: (alumno, grupo) =>
+      `¿Seguro que querés quitar a ${alumno} del grupo "${grupo}"?`,
     className: "text-red-600 hover:text-red-800",
   },
   mover: {
     etiquetaBoton: "Mover",
-    confirmacion: "¿Seguro que querés mover a este alumno de grupo?",
+    confirmacion: (alumno, grupo, grupoDestino) =>
+      `¿Seguro que querés mover a ${alumno} del grupo "${grupo}" al grupo "${grupoDestino}"?`,
     className: "text-pdep-600 hover:text-pdep-800",
   },
   agregar: {
     etiquetaBoton: "Agregar",
-    confirmacion: "¿Seguro que querés agregar a este alumno al grupo?",
+    confirmacion: (alumno, grupo) =>
+      `¿Seguro que querés agregar a ${alumno} al grupo "${grupo}"?`,
     className: "text-pdep-600 hover:text-pdep-800",
   },
 };
@@ -43,14 +59,23 @@ export const ADVERTENCIAS: {
   },
 ];
 
+// `grupoAfectado` es el que pierde o gana al alumno y del que salen las
+// advertencias; `grupoDestino` sólo aplica a "mover" y se usa en el texto.
 export function confirmacionPara(
   accion: "quitar" | "mover" | "agregar",
-  grupoAfectado: GrupoAdminResumen
+  grupoAfectado: GrupoAdminResumen,
+  alumno: AlumnoAfectado,
+  grupoDestino?: { nombre: string }
 ): string {
   const advertencias = ADVERTENCIAS.filter((item) => item.aplica(grupoAfectado, accion)).map(
     (item) => item.texto(accion)
   );
-  return [ACCIONES[accion].confirmacion, ...advertencias].join(" ");
+  const base = ACCIONES[accion].confirmacion(
+    etiquetaDeAlumno(alumno),
+    grupoAfectado.nombre,
+    grupoDestino?.nombre
+  );
+  return [base, ...advertencias].join(" ");
 }
 
 // Aparte de ADVERTENCIAS: "último integrante" no tiene sentido evaluado

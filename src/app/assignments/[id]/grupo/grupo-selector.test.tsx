@@ -41,6 +41,7 @@ describe("GrupoSelector", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRouterRefresh.mockImplementation(() => {});
+    vi.spyOn(window, "confirm").mockReturnValue(true);
   });
 
   afterEach(() => {
@@ -161,6 +162,37 @@ describe("GrupoSelector", () => {
   });
 
   describe("crear grupo", () => {
+    it("pide confirmación mencionando el nombre del grupo a crear", async () => {
+      const user = userEvent.setup();
+      const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+      mockFetch(true);
+      render(
+        <GrupoSelector assignmentId="a1" grupos={[]} inscripcionesCerradas={false} />
+      );
+
+      await user.type(screen.getByRole("textbox"), "Los Lambdas");
+      await user.click(screen.getByRole("button", { name: /crear/i }));
+
+      expect(confirmSpy).toHaveBeenCalledWith(
+        expect.stringContaining('crear el grupo "Los Lambdas"')
+      );
+    });
+
+    it("no llama a fetch si se cancela la confirmación al crear", async () => {
+      const user = userEvent.setup();
+      vi.spyOn(window, "confirm").mockReturnValue(false);
+      mockFetch(true);
+      render(
+        <GrupoSelector assignmentId="a1" grupos={[]} inscripcionesCerradas={false} />
+      );
+
+      await user.type(screen.getByRole("textbox"), "Los Lambdas");
+      await user.click(screen.getByRole("button", { name: /crear/i }));
+
+      expect(fetch).not.toHaveBeenCalled();
+      expect(mockRouterRefresh).not.toHaveBeenCalled();
+    });
+
     it("llama al endpoint correcto con el nombre ingresado", async () => {
       const user = userEvent.setup();
       mockFetch(true);
@@ -210,6 +242,43 @@ describe("GrupoSelector", () => {
   });
 
   describe("unirse a grupo", () => {
+    it("pide confirmación mencionando el nombre del grupo al que se une", async () => {
+      const user = userEvent.setup();
+      const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+      mockFetch(true);
+      render(
+        <GrupoSelector
+          assignmentId="a1"
+          grupos={[makeGrupo({ nombre: "Los Monads" })]}
+          inscripcionesCerradas={false}
+        />
+      );
+
+      await user.click(screen.getByRole("button", { name: /unirme/i }));
+
+      expect(confirmSpy).toHaveBeenCalledWith(
+        expect.stringContaining('unirte al grupo "Los Monads"')
+      );
+    });
+
+    it("no llama a fetch si se cancela la confirmación al unirse", async () => {
+      const user = userEvent.setup();
+      vi.spyOn(window, "confirm").mockReturnValue(false);
+      mockFetch(true);
+      render(
+        <GrupoSelector
+          assignmentId="a1"
+          grupos={[makeGrupo()]}
+          inscripcionesCerradas={false}
+        />
+      );
+
+      await user.click(screen.getByRole("button", { name: /unirme/i }));
+
+      expect(fetch).not.toHaveBeenCalled();
+      expect(mockRouterRefresh).not.toHaveBeenCalled();
+    });
+
     it("llama al endpoint de join con el grupoId correcto", async () => {
       const user = userEvent.setup();
       mockFetch(true);
