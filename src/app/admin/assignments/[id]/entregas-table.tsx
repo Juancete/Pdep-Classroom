@@ -11,6 +11,7 @@ import {
 } from "@/components/DataTable";
 import { matcheaEntregaQuery } from "@/lib/entrega-query";
 import { CIBadge } from "@/components/CIBadge";
+import { ParticipacionBadge, etiquetaDeCommits } from "@/components/ParticipacionBadge";
 import { RepoDeEntrega } from "@/components/RepoDeEntrega";
 import { CISyncButton } from "./ci-sync-button";
 import { CIRerunButton } from "./ci-rerun-button";
@@ -40,6 +41,11 @@ export type EntregaRow = {
   ultimoPush?: {
     fecha: string;
     por: string;
+  };
+  // Issue #122: sólo presente si ya se sincronizó contra GitHub.
+  participacion?: {
+    totalCommits: number;
+    integrantes: { username: string; commits: number; porcentaje: number }[];
   };
 };
 
@@ -142,6 +148,25 @@ export function EntregasTable({
                     <span className="text-gray-400 text-[11px] block">
                       Último push: {entrega.ultimoPush.fecha} ({entrega.ultimoPush.por})
                     </span>
+                  )}
+                  {entrega.participacion && (
+                    <>
+                      <span className="text-gray-400 text-[11px] block">
+                        {entrega.participacion.totalCommits === 0
+                          ? "El repo todavía no tiene commits"
+                          : `${etiquetaDeCommits(entrega.participacion.totalCommits)} en el repo`}
+                      </span>
+                      <span className="flex flex-wrap gap-1 mt-0.5">
+                        {entrega.participacion.integrantes.map((integrante) => (
+                          <ParticipacionBadge
+                            key={integrante.username}
+                            username={integrante.username}
+                            commits={integrante.commits}
+                            porcentaje={integrante.porcentaje}
+                          />
+                        ))}
+                      </span>
+                    </>
                   )}
                   <span className="block mt-1">
                     <BorrarEntregaButton

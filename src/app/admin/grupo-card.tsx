@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApiCall } from "@/hooks/useApiCall";
 import { CIBadge } from "@/components/CIBadge";
+import { ParticipacionBadge, etiquetaDeCommits } from "@/components/ParticipacionBadge";
 import { RepoDeEntrega } from "@/components/RepoDeEntrega";
 import {
   ACCIONES,
@@ -114,6 +115,13 @@ export function GrupoCard({
               Último push: {grupo.entrega.ultimoPush.fecha} ({grupo.entrega.ultimoPush.por})
             </span>
           )}
+          {grupo.entrega.totalCommits !== undefined && (
+            <span className="text-gray-400 text-[11px]">
+              {grupo.entrega.totalCommits === 0
+                ? "Sin commits"
+                : etiquetaDeCommits(grupo.entrega.totalCommits)}
+            </span>
+          )}
         </div>
       )}
       <ul className="space-y-1.5">
@@ -124,7 +132,13 @@ export function GrupoCard({
           >
             <span>
               {miembro.nombreCompleto}{" "}
-              <span className="text-gray-400">@{miembro.username}</span>
+              <span className="text-gray-400">@{miembro.username}</span>{" "}
+              {miembro.participacion && (
+                <ParticipacionBadge
+                  commits={miembro.participacion.commits}
+                  porcentaje={miembro.participacion.porcentaje}
+                />
+              )}
             </span>
             {conAcciones && (
             <div className="flex items-center gap-1.5">

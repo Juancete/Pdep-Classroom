@@ -194,6 +194,64 @@ describe("EntregasTable", () => {
     expect(html).not.toContain("Último push");
   });
 
+  // Issue #122: participación por integrante en la celda "Actividad".
+  it("muestra un badge de participación por integrante y el total de commits del repo", () => {
+    const html = renderToStaticMarkup(
+      <EntregasTable
+        assignmentId={ASSIGNMENT_ID} mostrarGrupo={false}
+        entregas={[
+          makeRow({
+            githubUsernames: ["ana", "bob"],
+            participacion: {
+              totalCommits: 10,
+              integrantes: [
+                { username: "ana", commits: 6, porcentaje: 60 },
+                { username: "bob", commits: 4, porcentaje: 40 },
+              ],
+            },
+          }),
+        ]}
+      />
+    );
+    expect(html).toContain("10 commits en el repo");
+    expect(html).toContain("@ana");
+    expect(html).toContain("60% · 6 commits");
+    expect(html).toContain("@bob");
+    expect(html).toContain("40% · 4 commits");
+  });
+
+  it("usa el singular cuando el repo tiene un solo commit", () => {
+    const html = renderToStaticMarkup(
+      <EntregasTable
+        assignmentId={ASSIGNMENT_ID} mostrarGrupo={false}
+        entregas={[
+          makeRow({
+            participacion: { totalCommits: 1, integrantes: [{ username: "ana", commits: 1, porcentaje: 100 }] },
+          }),
+        ]}
+      />
+    );
+    expect(html).toContain("1 commit en el repo");
+  });
+
+  it("muestra el aviso de repo sin commits cuando el total es 0", () => {
+    const html = renderToStaticMarkup(
+      <EntregasTable
+        assignmentId={ASSIGNMENT_ID} mostrarGrupo={false}
+        entregas={[makeRow({ participacion: { totalCommits: 0, integrantes: [] } })]}
+      />
+    );
+    expect(html).toContain("El repo todavía no tiene commits");
+  });
+
+  it("no muestra nada de participación cuando la entrega no la trae", () => {
+    const html = renderToStaticMarkup(
+      <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow({ participacion: undefined })]} />
+    );
+    expect(html).not.toContain("commits en el repo");
+    expect(html).not.toContain("El repo todavía no tiene commits");
+  });
+
   it("muestra el campo de búsqueda", () => {
     const html = renderToStaticMarkup(<EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow()]} />);
     expect(html).toContain('type="search"');
