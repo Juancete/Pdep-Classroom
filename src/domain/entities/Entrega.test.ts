@@ -434,7 +434,7 @@ describe("Entrega.tieneContribucionesSincronizadas", () => {
     expect(entrega.tieneContribucionesSincronizadas()).toBe(false);
     expect(entrega.tieneContribucionesFrescas(new Date())).toBe(false);
     expect(entrega.participacionDe(["ana"])).toEqual([]);
-    expect(entrega.totalDeCommits()).toBe(0);
+    expect(entrega.totalDeCommitsDe(["ana"])).toBe(0);
   });
 });
 
@@ -451,25 +451,56 @@ describe("Entrega.registrarContribuciones", () => {
   });
 });
 
-describe("Entrega.totalDeCommits", () => {
-  it("suma los commits de todos los logins, incluyendo no integrantes", () => {
+describe("Entrega.totalDeCommitsDe", () => {
+  it("suma sólo los commits de los usernames pedidos", () => {
+    const entrega = nuevaEntrega({
+      contribuciones: [
+        { login: "ana-garcia", commits: 5 },
+        { login: "bob", commits: 3 },
+      ],
+    });
+    expect(entrega.totalDeCommitsDe(["ana-garcia"])).toBe(5);
+  });
+
+  it("ignora los logins que no fueron pedidos, aunque tengan commits", () => {
     const entrega = nuevaEntrega({
       contribuciones: [
         { login: "ana-garcia", commits: 5 },
         { login: "dependabot[bot]", commits: 3 },
       ],
     });
-    expect(entrega.totalDeCommits()).toBe(8);
+    expect(entrega.totalDeCommitsDe(["ana-garcia"])).toBe(5);
+  });
+
+  it("ignora las contribuciones anónimas (sin login)", () => {
+    const entrega = nuevaEntrega({
+      contribuciones: [{ login: "ana-garcia", commits: 5 }, { commits: 3 }],
+    });
+    expect(entrega.totalDeCommitsDe(["ana-garcia"])).toBe(5);
   });
 
   it("es 0 cuando nunca se sincronizó", () => {
     const entrega = nuevaEntrega({ contribuciones: undefined });
-    expect(entrega.totalDeCommits()).toBe(0);
+    expect(entrega.totalDeCommitsDe(["ana-garcia"])).toBe(0);
+  });
+});
+
+describe("Entrega.totalDeCommitsDeColaboradores", () => {
+  it("usa githubUsernames como lista de integrantes", () => {
+    const entrega = nuevaEntrega({
+      githubUsernames: ["ana", "bob"],
+      contribuciones: [
+        { login: "ana", commits: 3 },
+        { login: "bob", commits: 1 },
+        { login: "dependabot[bot]", commits: 10 },
+      ],
+    });
+    expect(entrega.totalDeCommitsDeColaboradores()).toBe(4);
   });
 });
 
 describe("Entrega.participacionDe", () => {
-  it("redondea el porcentaje sobre el total del repo", () => {
+  it("redondea el porcentaje sobre la suma de commits de los integrantes consultados", () => {
     const entrega = nuevaEntrega({
       contribuciones: [
         { login: "ana", commits: 1 },
@@ -503,7 +534,7 @@ describe("Entrega.participacionDe", () => {
     ]);
   });
 
-  it("los logins que no son integrantes bajan el porcentaje pero no aparecen", () => {
+  it("los logins que no son integrantes no afectan el porcentaje", () => {
     const entrega = nuevaEntrega({
       contribuciones: [
         { login: "ana", commits: 5 },
@@ -512,7 +543,56 @@ describe("Entrega.participacionDe", () => {
     });
 
     expect(entrega.participacionDe(["ana"])).toEqual([
-      { username: "ana", commits: 5, porcentaje: 50 },
+      { username: "ana", commits: 5, porcentaje: 100 },
+    ]);
+  });
+
+  it("una contribución anónima no afecta el porcentaje", () => {
+    const entrega = nuevaEntrega({
+      contribuciones: [{ login: "ana", commits: 5 }, { commits: 5 }],
+    });
+
+    expect(entrega.participacionDe(["ana"])).toEqual([
+      { username: "ana", commits: 5, porcentaje: 100 },
+    ]);
+  });
+
+  it("dos integrantes suman 100 (salvo redondeo)", () => {
+    const entrega = nuevaEntrega({
+      contribuciones: [
+        { login: "ana", commits: 1 },
+        { login: "bob", commits: 2 },
+      ],
+    });
+
+    const participacion = entrega.participacionDe(["ana", "bob"]);
+    expect(participacion).toEqual([
+      { username: "ana", commits: 1, porcentaje: 33 },
+      { username: "bob", commits: 2, porcentaje: 67 },
+    ]);
+    const sumaDePorcentajes = participacion.reduce(
+      (acumulado, integrante) => acumulado + integrante.porcentaje,
+      0
+    );
+    expect(sumaDePorcentajes).toBe(100);
+  });
+
+  it("un integrante sin commits junto a otro con commits da 100/0", () => {
+    const entrega = nuevaEntrega({
+      contribuciones: [{ login: "ana", commits: 5 }],
+    });
+
+    expect(entrega.participacionDe(["ana", "bob"])).toEqual([
+      { username: "ana", commits: 5, porcentaje: 100 },
+      { username: "bob", commits: 0, porcentaje: 0 },
+    ]);
+  });
+
+  it("con todos los integrantes en 0 commits devuelve 0% sin NaN", () => {
+    const entrega = nuevaEntrega({ contribuciones: [] });
+    expect(entrega.participacionDe(["ana", "bob"])).toEqual([
+      { username: "ana", commits: 0, porcentaje: 0 },
+      { username: "bob", commits: 0, porcentaje: 0 },
     ]);
   });
 
@@ -542,15 +622,15 @@ describe("Entrega.participacionDe", () => {
     expect(entrega.participacionDe(["ana"])).toEqual([]);
   });
 
-  it("una contribución anónima (sin login) cuenta en el total pero no se le puede asignar a nadie", () => {
+  it("una contribución anónima (sin login) nunca se le puede asignar a nadie", () => {
     const entrega = nuevaEntrega({
       contribuciones: [{ login: "ana", commits: 5 }, { commits: 5 }],
     });
 
     expect(entrega.participacionDe(["ana"])).toEqual([
-      { username: "ana", commits: 5, porcentaje: 50 },
+      { username: "ana", commits: 5, porcentaje: 100 },
     ]);
-    expect(entrega.totalDeCommits()).toBe(10);
+    expect(entrega.totalDeCommitsDe(["ana"])).toBe(5);
   });
 
   it("una contribución anónima nunca matchea, ni con un username vacío o literal 'undefined'", () => {
