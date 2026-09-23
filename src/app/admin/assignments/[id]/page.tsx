@@ -51,42 +51,60 @@ export default async function AssignmentDetailPage(
       ? { cerradas: grupal.inscripcionesCerradas }
       : undefined;
 
-  const entregaRows = entregas.map((entrega) => ({
-    id: entrega.id,
-    githubUsernames: entrega.githubUsernames,
-    repoName: entrega.repoName,
-    repoUrl: entrega.repoUrl,
-    repoDeleted: entrega.repoDeleted,
-    provisionEstado: entrega.provisionEstado,
-    provisionUltimoError: entrega.provisionUltimoError,
-    provisionIntentos: entrega.provisionIntentos,
-    estadoRepo: entrega.estadoRepo(),
-    createdAt: new Date(entrega.createdAt).toLocaleDateString("es-AR"),
-    grupoNombre: entrega.grupo?.nombre,
-    nombreCompleto: entrega.githubUsernames
-      .map((username) => {
+  const entregaRows = entregas.map((entrega) => {
+    // Issue #122: matching canónico entre `githubUsername` y el login que
+    // devolvió GitHub, mismo criterio que `resumirGrupoParaAdmin` — el `Map`
+    // evita recorrer el array de participación por cada integrante.
+    const participacionPorUsername = entrega.tieneContribucionesSincronizadas()
+      ? new Map(
+          entrega
+            .participacionDeColaboradores()
+            .map((participacion) => [
+              Alumno.normalizarUsername(participacion.username),
+              participacion,
+            ])
+        )
+      : undefined;
+
+    return {
+      id: entrega.id,
+      githubUsernames: entrega.githubUsernames,
+      repoName: entrega.repoName,
+      repoUrl: entrega.repoUrl,
+      repoDeleted: entrega.repoDeleted,
+      provisionEstado: entrega.provisionEstado,
+      provisionUltimoError: entrega.provisionUltimoError,
+      provisionIntentos: entrega.provisionIntentos,
+      estadoRepo: entrega.estadoRepo(),
+      createdAt: new Date(entrega.createdAt).toLocaleDateString("es-AR"),
+      grupoNombre: entrega.grupo?.nombre,
+      integrantes: entrega.githubUsernames.map((username) => {
         const alumno = alumnosPorUsername.get(Alumno.normalizarUsername(username));
-        return alumno ? alumno.nombreCompleto : "—";
-      })
-      .join(" / "),
-    ci: {
-      resultadoNombre: entrega.ciResultadoNombre,
-      detalleUrl: entrega.ciDetalleUrl,
-      permiteReejecucion: entrega.resultadoCI.permiteReejecucion(),
-    },
-    ultimoPush: entrega.ultimoPushEn
-      ? {
-          fecha: new Date(entrega.ultimoPushEn).toLocaleDateString("es-AR"),
-          por: entrega.ultimoPushPor ?? "—",
-        }
-      : undefined,
-    participacion: entrega.tieneContribucionesSincronizadas()
-      ? {
-          totalCommits: entrega.totalDeCommits(),
-          integrantes: entrega.participacionDeColaboradores(),
-        }
-      : undefined,
-  }));
+        const participacion = participacionPorUsername?.get(Alumno.normalizarUsername(username));
+        return {
+          username,
+          nombreCompleto: alumno ? alumno.nombreCompleto : "—",
+          ...(participacion && {
+            participacion: { commits: participacion.commits, porcentaje: participacion.porcentaje },
+          }),
+        };
+      }),
+      ci: {
+        resultadoNombre: entrega.ciResultadoNombre,
+        detalleUrl: entrega.ciDetalleUrl,
+        permiteReejecucion: entrega.resultadoCI.permiteReejecucion(),
+      },
+      ultimoPush: entrega.ultimoPushEn
+        ? {
+            fecha: new Date(entrega.ultimoPushEn).toLocaleDateString("es-AR"),
+            por: entrega.ultimoPushPor ?? "—",
+          }
+        : undefined,
+      participacion: entrega.tieneContribucionesSincronizadas()
+        ? { totalCommits: entrega.totalDeCommits() }
+        : undefined,
+    };
+  });
 
   return (
     <div>
