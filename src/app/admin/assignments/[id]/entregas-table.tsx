@@ -169,8 +169,8 @@ export function EntregasTable({
                   {entrega.participacion && (
                     <span className="text-gray-400 text-[11px] block">
                       {entrega.participacion.totalCommits === 0
-                        ? "El repo todavía no tiene commits"
-                        : `${etiquetaDeCommits(entrega.participacion.totalCommits)} en el repo`}
+                        ? "Los integrantes todavía no tienen commits"
+                        : `${etiquetaDeCommits(entrega.participacion.totalCommits)} de los integrantes`}
                     </span>
                   )}
                   <span className="block mt-1">

@@ -253,7 +253,7 @@ describe("EntregasTable", () => {
         ]}
       />
     );
-    expect(html).toContain("10 commits en el repo");
+    expect(html).toContain("10 commits de los integrantes");
     expect(html).toContain("60% · 6 commits");
     expect(html).toContain("40% · 4 commits");
   });
@@ -292,7 +292,7 @@ describe("EntregasTable", () => {
         ]}
       />
     );
-    expect(html).toContain("1 commit en el repo");
+    expect(html).toContain("1 commit de los integrantes");
   });
 
   it("muestra el aviso de repo sin commits cuando el total es 0", () => {
@@ -302,15 +302,15 @@ describe("EntregasTable", () => {
         entregas={[makeRow({ participacion: { totalCommits: 0 } })]}
       />
     );
-    expect(html).toContain("El repo todavía no tiene commits");
+    expect(html).toContain("Los integrantes todavía no tienen commits");
   });
 
   it("no muestra nada de participación cuando la entrega no la trae", () => {
     const html = renderToStaticMarkup(
       <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow({ participacion: undefined })]} />
     );
-    expect(html).not.toContain("commits en el repo");
-    expect(html).not.toContain("El repo todavía no tiene commits");
+    expect(html).not.toContain("commits de los integrantes");
+    expect(html).not.toContain("Los integrantes todavía no tienen commits");
   });
 
   it("muestra el campo de búsqueda", () => {
