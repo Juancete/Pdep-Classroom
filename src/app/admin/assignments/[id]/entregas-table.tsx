@@ -29,7 +29,13 @@ export type EntregaRow = {
   provisionIntentos?: number;
   estadoRepo: "borrado" | "activo" | "sin-repo";
   createdAt: string;
-  nombreCompleto: string;
+  // Un ítem por colaborador del repo, en el orden de `githubUsernames`;
+  // `participacion` sólo si ya se sincronizó contra GitHub (issue #122).
+  integrantes: {
+    username: string;
+    nombreCompleto: string;
+    participacion?: { commits: number; porcentaje: number };
+  }[];
   grupoNombre?: string;
   ci: {
     resultadoNombre: NombreResultadoCI;
@@ -45,7 +51,6 @@ export type EntregaRow = {
   // Issue #122: sólo presente si ya se sincronizó contra GitHub.
   participacion?: {
     totalCommits: number;
-    integrantes: { username: string; commits: number; porcentaje: number }[];
   };
 };
 
@@ -110,12 +115,24 @@ export function EntregasTable({
                   <DataCell label="Grupo">{entrega.grupoNombre ?? "—"}</DataCell>
                 )}
                 <DataCell label="Nombre completo" heading>
-                  {entrega.nombreCompleto}
+                  {entrega.integrantes.map((integrante) => (
+                    <span key={integrante.username} className="block">
+                      {integrante.nombreCompleto}
+                    </span>
+                  ))}
                 </DataCell>
                 <DataCell label="Usuario(s)">
-                  <span className="font-mono text-xs break-all">
-                    {entrega.githubUsernames.join(", ")}
-                  </span>
+                  {entrega.integrantes.map((integrante) => (
+                    <span key={integrante.username} className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-mono text-xs break-all">{integrante.username}</span>
+                      {integrante.participacion && (
+                        <ParticipacionBadge
+                          commits={integrante.participacion.commits}
+                          porcentaje={integrante.participacion.porcentaje}
+                        />
+                      )}
+                    </span>
+                  ))}
                 </DataCell>
                 <DataCell label="Repositorio">
                   {entrega.provisionEstado && entrega.provisionEstado !== "activa" && (
@@ -150,23 +167,11 @@ export function EntregasTable({
                     </span>
                   )}
                   {entrega.participacion && (
-                    <>
-                      <span className="text-gray-400 text-[11px] block">
-                        {entrega.participacion.totalCommits === 0
-                          ? "El repo todavía no tiene commits"
-                          : `${etiquetaDeCommits(entrega.participacion.totalCommits)} en el repo`}
-                      </span>
-                      <span className="flex flex-wrap gap-1 mt-0.5">
-                        {entrega.participacion.integrantes.map((integrante) => (
-                          <ParticipacionBadge
-                            key={integrante.username}
-                            username={integrante.username}
-                            commits={integrante.commits}
-                            porcentaje={integrante.porcentaje}
-                          />
-                        ))}
-                      </span>
-                    </>
+                    <span className="text-gray-400 text-[11px] block">
+                      {entrega.participacion.totalCommits === 0
+                        ? "El repo todavía no tiene commits"
+                        : `${etiquetaDeCommits(entrega.participacion.totalCommits)} en el repo`}
+                    </span>
                   )}
                   <span className="block mt-1">
                     <BorrarEntregaButton

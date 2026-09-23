@@ -32,7 +32,7 @@ function makeRow(overrides?: Partial<EntregaRow>): EntregaRow {
     repoDeleted: false,
     estadoRepo: "activo",
     createdAt: "2/1/2026",
-    nombreCompleto: "García, Juan",
+    integrantes: [{ username: "usuario1", nombreCompleto: "García, Juan" }],
     ci: {
       resultadoNombre: "sin_consultar",
       detalleUrl: undefined,
@@ -127,7 +127,18 @@ describe("EntregasTable", () => {
 
   it("muestra los githubUsernames", () => {
     const html = renderToStaticMarkup(
-      <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow({ githubUsernames: ["juancito", "mariela"] })]} />
+      <EntregasTable
+        assignmentId={ASSIGNMENT_ID} mostrarGrupo={false}
+        entregas={[
+          makeRow({
+            githubUsernames: ["juancito", "mariela"],
+            integrantes: [
+              { username: "juancito", nombreCompleto: "García, Juan" },
+              { username: "mariela", nombreCompleto: "López, Mariela" },
+            ],
+          }),
+        ]}
+      />
     );
     expect(html).toContain("juancito");
     expect(html).toContain("mariela");
@@ -135,9 +146,39 @@ describe("EntregasTable", () => {
 
   it("muestra el nombre completo del alumno", () => {
     const html = renderToStaticMarkup(
-      <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow({ nombreCompleto: "Pérez, Ana" })]} />
+      <EntregasTable
+        assignmentId={ASSIGNMENT_ID} mostrarGrupo={false}
+        entregas={[makeRow({ integrantes: [{ username: "usuario1", nombreCompleto: "Pérez, Ana" }] })]}
+      />
     );
     expect(html).toContain("Pérez, Ana");
+  });
+
+  it("muestra un nombre y un usuario por línea, en el mismo orden", () => {
+    const html = renderToStaticMarkup(
+      <EntregasTable
+        assignmentId={ASSIGNMENT_ID} mostrarGrupo={false}
+        entregas={[
+          makeRow({
+            githubUsernames: ["ana", "bob"],
+            integrantes: [
+              { username: "ana", nombreCompleto: "García, Ana" },
+              { username: "bob", nombreCompleto: "Pérez, Bob" },
+            ],
+          }),
+        ]}
+      />
+    );
+    const posicionNombreAna = html.indexOf("García, Ana");
+    const posicionNombreBob = html.indexOf("Pérez, Bob");
+    const posicionUsuarioAna = html.indexOf(">ana<");
+    const posicionUsuarioBob = html.indexOf(">bob<");
+    expect(posicionNombreAna).toBeGreaterThan(-1);
+    expect(posicionNombreBob).toBeGreaterThan(-1);
+    expect(posicionUsuarioAna).toBeGreaterThan(-1);
+    expect(posicionUsuarioBob).toBeGreaterThan(-1);
+    expect(posicionNombreAna).toBeLessThan(posicionNombreBob);
+    expect(posicionUsuarioAna).toBeLessThan(posicionUsuarioBob);
   });
 
   it("muestra el botón 'Ir al repo' cuando hay repoUrl", () => {
@@ -194,30 +235,47 @@ describe("EntregasTable", () => {
     expect(html).not.toContain("Último push");
   });
 
-  // Issue #122: participación por integrante en la celda "Actividad".
-  it("muestra un badge de participación por integrante y el total de commits del repo", () => {
+  // Issue #122: pastilla de participación junto al username en "Usuario(s)",
+  // total de commits en "Actividad".
+  it("muestra un badge de participación junto a cada username y el total de commits del repo", () => {
     const html = renderToStaticMarkup(
       <EntregasTable
         assignmentId={ASSIGNMENT_ID} mostrarGrupo={false}
         entregas={[
           makeRow({
             githubUsernames: ["ana", "bob"],
-            participacion: {
-              totalCommits: 10,
-              integrantes: [
-                { username: "ana", commits: 6, porcentaje: 60 },
-                { username: "bob", commits: 4, porcentaje: 40 },
-              ],
-            },
+            integrantes: [
+              { username: "ana", nombreCompleto: "García, Ana", participacion: { commits: 6, porcentaje: 60 } },
+              { username: "bob", nombreCompleto: "Pérez, Bob", participacion: { commits: 4, porcentaje: 40 } },
+            ],
+            participacion: { totalCommits: 10 },
           }),
         ]}
       />
     );
     expect(html).toContain("10 commits en el repo");
-    expect(html).toContain("@ana");
     expect(html).toContain("60% · 6 commits");
-    expect(html).toContain("@bob");
     expect(html).toContain("40% · 4 commits");
+  });
+
+  // La pastilla ya no recibe `username` (issue #122: va al lado del username
+  // en la celda, no lo repite adentro) — no debe aparecer "@ana" en ningún lado.
+  it("la pastilla de participación no repite el @username", () => {
+    const html = renderToStaticMarkup(
+      <EntregasTable
+        assignmentId={ASSIGNMENT_ID} mostrarGrupo={false}
+        entregas={[
+          makeRow({
+            githubUsernames: ["ana"],
+            integrantes: [
+              { username: "ana", nombreCompleto: "García, Ana", participacion: { commits: 6, porcentaje: 60 } },
+            ],
+            participacion: { totalCommits: 6 },
+          }),
+        ]}
+      />
+    );
+    expect(html).not.toContain("@ana");
   });
 
   it("usa el singular cuando el repo tiene un solo commit", () => {
@@ -226,7 +284,10 @@ describe("EntregasTable", () => {
         assignmentId={ASSIGNMENT_ID} mostrarGrupo={false}
         entregas={[
           makeRow({
-            participacion: { totalCommits: 1, integrantes: [{ username: "ana", commits: 1, porcentaje: 100 }] },
+            integrantes: [
+              { username: "ana", nombreCompleto: "García, Ana", participacion: { commits: 1, porcentaje: 100 } },
+            ],
+            participacion: { totalCommits: 1 },
           }),
         ]}
       />
@@ -238,7 +299,7 @@ describe("EntregasTable", () => {
     const html = renderToStaticMarkup(
       <EntregasTable
         assignmentId={ASSIGNMENT_ID} mostrarGrupo={false}
-        entregas={[makeRow({ participacion: { totalCommits: 0, integrantes: [] } })]}
+        entregas={[makeRow({ participacion: { totalCommits: 0 } })]}
       />
     );
     expect(html).toContain("El repo todavía no tiene commits");
@@ -260,9 +321,21 @@ describe("EntregasTable", () => {
   it("muestra todas las entregas en el render inicial (sin filtro activo)", () => {
     const html = renderToStaticMarkup(
       <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[
-          makeRow({ id: "e1", githubUsernames: ["alumno1"] }),
-          makeRow({ id: "e2", githubUsernames: ["alumno2"] }),
-          makeRow({ id: "e3", githubUsernames: ["alumno3"] }),
+          makeRow({
+            id: "e1",
+            githubUsernames: ["alumno1"],
+            integrantes: [{ username: "alumno1", nombreCompleto: "García, Juan" }],
+          }),
+          makeRow({
+            id: "e2",
+            githubUsernames: ["alumno2"],
+            integrantes: [{ username: "alumno2", nombreCompleto: "García, Juan" }],
+          }),
+          makeRow({
+            id: "e3",
+            githubUsernames: ["alumno3"],
+            integrantes: [{ username: "alumno3", nombreCompleto: "García, Juan" }],
+          }),
         ]}
       />
     );
@@ -292,7 +365,7 @@ describe("columna Grupo", () => {
       <EntregasTable
         assignmentId={ASSIGNMENT_ID}
         mostrarGrupo
-        entregas={[makeRow({ grupoNombre: "Los Pibes", nombreCompleto: "García, Juan" })]}
+        entregas={[makeRow({ grupoNombre: "Los Pibes" })]}
       />
     );
     expect(html.indexOf(">Grupo<")).toBeLessThan(html.indexOf(">Nombre completo<"));

@@ -58,10 +58,12 @@ vi.mock("./entregas-table", () => ({
     entregas: {
       id: string;
       grupoNombre?: string;
-      participacion?: {
-        totalCommits: number;
-        integrantes: { username: string; commits: number; porcentaje: number }[];
-      };
+      integrantes: {
+        username: string;
+        nombreCompleto: string;
+        participacion?: { commits: number; porcentaje: number };
+      }[];
+      participacion?: { totalCommits: number };
     }[];
     mostrarGrupo: boolean;
   }) => (
@@ -70,6 +72,7 @@ vi.mock("./entregas-table", () => ({
       data-count={entregas.length}
       data-mostrar-grupo={String(mostrarGrupo)}
       data-grupos-nombres={entregas.map((entrega) => entrega.grupoNombre ?? "").join(",")}
+      data-integrantes={JSON.stringify(entregas.map((entrega) => entrega.integrantes))}
       data-participacion={JSON.stringify(entregas.map((entrega) => entrega.participacion ?? null))}
     />
   ),
@@ -460,15 +463,30 @@ describe("Admin Assignment Detail Page", () => {
       expect(renderToStaticMarkup(element)).toContain('data-count="3"');
     });
 
-    it("construye el nombreCompleto con apellido, nombre del alumno registrado", async () => {
+    it("resuelve el nombreCompleto de cada integrante por username", async () => {
       mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
       mockGetEntregas.mockResolvedValue([makeEntrega({ githubUsernames: ["usuario1"] })]);
       mockGetAlumnos.mockResolvedValue([
         makeAlumno({ githubUsername: "usuario1", apellido: "García", nombre: "Juan" }),
       ]);
-      await expect(
-        AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) })
-      ).resolves.toBeDefined();
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      const markup = renderToStaticMarkup(element);
+      const integrantesEsperados = JSON.stringify([
+        [{ username: "usuario1", nombreCompleto: "García, Juan" }],
+      ]).replace(/"/g, "&quot;");
+      expect(markup).toContain(`data-integrantes="${integrantesEsperados}"`);
+    });
+
+    it("usa '—' como nombreCompleto cuando el username no tiene alumno registrado", async () => {
+      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
+      mockGetEntregas.mockResolvedValue([makeEntrega({ githubUsernames: ["usuarioDesconocido"] })]);
+      mockGetAlumnos.mockResolvedValue([]);
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      const markup = renderToStaticMarkup(element);
+      const integrantesEsperados = JSON.stringify([
+        [{ username: "usuarioDesconocido", nombreCompleto: "—" }],
+      ]).replace(/"/g, "&quot;");
+      expect(markup).toContain(`data-integrantes="${integrantesEsperados}"`);
     });
 
     // Issue #122: participación por integrante, sólo si ya se sincronizó.
@@ -484,28 +502,50 @@ describe("Admin Assignment Detail Page", () => {
           contribucionesActualizadoEn: new Date("2026-09-22T10:00:00Z"),
         }),
       ]);
+      mockGetAlumnos.mockResolvedValue([
+        makeAlumno({ githubUsername: "ana", apellido: "García", nombre: "Ana" }),
+        makeAlumno({ githubUsername: "bob", apellido: "Pérez", nombre: "Bob" }),
+      ]);
       const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       const markup = renderToStaticMarkup(element);
-      const participacionEsperada = JSON.stringify([
-        {
-          totalCommits: 10,
-          integrantes: [
-            { username: "ana", commits: 6, porcentaje: 60 },
-            { username: "bob", commits: 4, porcentaje: 40 },
-          ],
-        },
-      ]).replace(/"/g, "&quot;");
+      const participacionEsperada = JSON.stringify([{ totalCommits: 10 }]).replace(/"/g, "&quot;");
       expect(markup).toContain(`data-participacion="${participacionEsperada}"`);
+      const integrantesEsperados = JSON.stringify([
+        [
+          {
+            username: "ana",
+            nombreCompleto: "García, Ana",
+            participacion: { commits: 6, porcentaje: 60 },
+          },
+          {
+            username: "bob",
+            nombreCompleto: "Pérez, Bob",
+            participacion: { commits: 4, porcentaje: 40 },
+          },
+        ],
+      ]).replace(/"/g, "&quot;");
+      expect(markup).toContain(`data-integrantes="${integrantesEsperados}"`);
     });
 
     it("una entrega sin sincronizar no trae participación", async () => {
       mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
       mockGetEntregas.mockResolvedValue([
-        makeEntrega({ contribuciones: undefined, contribucionesActualizadoEn: undefined }),
+        makeEntrega({
+          githubUsernames: ["usuario1"],
+          contribuciones: undefined,
+          contribucionesActualizadoEn: undefined,
+        }),
+      ]);
+      mockGetAlumnos.mockResolvedValue([
+        makeAlumno({ githubUsername: "usuario1", apellido: "García", nombre: "Juan" }),
       ]);
       const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       const markup = renderToStaticMarkup(element);
       expect(markup).toContain(`data-participacion="${JSON.stringify([null]).replace(/"/g, "&quot;")}"`);
+      const integrantesEsperados = JSON.stringify([
+        [{ username: "usuario1", nombreCompleto: "García, Juan" }],
+      ]).replace(/"/g, "&quot;");
+      expect(markup).toContain(`data-integrantes="${integrantesEsperados}"`);
     });
   });
 
