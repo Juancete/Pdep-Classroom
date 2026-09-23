@@ -25,15 +25,15 @@ export function GruposPanel({
   const { loading, error, call } = useApiCall();
   const [destinoPorAlumno, setDestinoPorAlumno] = useState<Record<string, string>>({});
 
-  async function handleAgregar(username: string) {
-    const grupoDestinoId = destinoPorAlumno[username];
+  async function handleAgregar(alumno: AlumnoSinGrupoResumen) {
+    const grupoDestinoId = destinoPorAlumno[alumno.username];
     if (!grupoDestinoId) return;
     const grupoDestino = grupos.find((grupo) => grupo.id === grupoDestinoId);
-    if (!grupoDestino || !confirm(confirmacionPara("agregar", grupoDestino))) return;
+    if (!grupoDestino || !confirm(confirmacionPara("agregar", grupoDestino, alumno))) return;
 
     await call(async () => {
       const response = await fetch(
-        `/api/assignments/${assignmentId}/grupos/${grupoDestinoId}/miembros/${username}`,
+        `/api/assignments/${assignmentId}/grupos/${grupoDestinoId}/miembros/${alumno.username}`,
         { method: "PUT" }
       );
       if (!response.ok) {
@@ -111,7 +111,7 @@ export function GruposPanel({
                         ))}
                       </select>
                       <button
-                        onClick={() => handleAgregar(alumno.username)}
+                        onClick={() => handleAgregar(alumno)}
                         disabled={loading || !destinoPorAlumno[alumno.username]}
                         className={`font-medium disabled:opacity-40 disabled:cursor-not-allowed ${ACCIONES.agregar.className}`}
                       >

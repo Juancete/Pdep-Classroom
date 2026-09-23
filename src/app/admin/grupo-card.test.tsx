@@ -167,6 +167,18 @@ describe("GrupoCard", () => {
       expect(fetch).not.toHaveBeenCalled();
     });
 
+    it("la confirmación nombra al alumno sobre el que se tocó Quitar y su grupo", async () => {
+      const user = userEvent.setup();
+      const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+      render(<GrupoCard conAcciones assignmentId="a1" grupo={makeGrupo()} />);
+
+      await user.click(screen.getAllByRole("button", { name: /^quitar$/i })[1]);
+
+      expect(confirmSpy).toHaveBeenCalledWith(
+        expect.stringContaining('quitar a Smith, Bob (@bob) del grupo "Los Lambdas"')
+      );
+    });
+
     it("advierte que quitar al alumno le revoca el acceso al repositorio", async () => {
       const user = userEvent.setup();
       const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
@@ -244,6 +256,21 @@ describe("GrupoCard", () => {
       await user.click(screen.getAllByRole("button", { name: /^mover$/i })[0]);
 
       expect(await screen.findByText("El grupo está lleno")).toBeInTheDocument();
+    });
+
+    it("la confirmación nombra al alumno, el grupo de origen y el destino", async () => {
+      const user = userEvent.setup();
+      const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+      render(<GrupoCard conAcciones assignmentId="a1" grupo={makeGrupo({ destinos: [DESTINO] })} />);
+
+      await user.selectOptions(screen.getAllByRole("combobox")[1], "g2");
+      await user.click(screen.getAllByRole("button", { name: /^mover$/i })[1]);
+
+      expect(confirmSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'mover a Smith, Bob (@bob) del grupo "Los Lambdas" al grupo "Los Monoides"'
+        )
+      );
     });
 
     it("la confirmación advierte cuando el grupo destino ya aceptó el TP", async () => {

@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import { useApiCall } from "@/hooks/useApiCall";
 import { CIBadge } from "@/components/CIBadge";
 import { RepoDeEntrega } from "@/components/RepoDeEntrega";
-import { ACCIONES, advertenciaEntregaDestino, confirmacionPara } from "./grupo-acciones";
+import {
+  ACCIONES,
+  advertenciaEntregaDestino,
+  confirmacionPara,
+  type AlumnoAfectado,
+} from "./grupo-acciones";
 import type { GrupoAdminResumen } from "./grupo-resumen";
 
 export function GrupoCard({
@@ -21,12 +26,12 @@ export function GrupoCard({
   const { loading, error, call } = useApiCall();
   const [destinoPorMiembro, setDestinoPorMiembro] = useState<Record<string, string>>({});
 
-  async function handleQuitar(username: string) {
-    if (!confirm(confirmacionPara("quitar", grupo))) return;
+  async function handleQuitar(miembro: AlumnoAfectado) {
+    if (!confirm(confirmacionPara("quitar", grupo, miembro))) return;
 
     await call(async () => {
       const response = await fetch(
-        `/api/assignments/${assignmentId}/grupos/${grupo.id}/miembros/${username}`,
+        `/api/assignments/${assignmentId}/grupos/${grupo.id}/miembros/${miembro.username}`,
         { method: "DELETE" }
       );
       if (!response.ok) {
@@ -37,19 +42,22 @@ export function GrupoCard({
     });
   }
 
-  async function handleMover(username: string) {
-    const grupoDestinoId = destinoPorMiembro[username];
+  async function handleMover(miembro: AlumnoAfectado) {
+    const grupoDestinoId = destinoPorMiembro[miembro.username];
     if (!grupoDestinoId) return;
     const grupoDestino = grupo.destinos.find((destino) => destino.id === grupoDestinoId);
-    const advertenciaDestino = grupoDestino ? advertenciaEntregaDestino(grupoDestino) : null;
-    const confirmacion = [confirmacionPara("mover", grupo), advertenciaDestino]
+    if (!grupoDestino) return;
+    const confirmacion = [
+      confirmacionPara("mover", grupo, miembro, grupoDestino),
+      advertenciaEntregaDestino(grupoDestino),
+    ]
       .filter(Boolean)
       .join(" ");
     if (!confirm(confirmacion)) return;
 
     await call(async () => {
       const response = await fetch(
-        `/api/assignments/${assignmentId}/grupos/${grupoDestinoId}/miembros/${username}`,
+        `/api/assignments/${assignmentId}/grupos/${grupoDestinoId}/miembros/${miembro.username}`,
         { method: "PUT" }
       );
       if (!response.ok) {
@@ -142,7 +150,7 @@ export function GrupoCard({
                     ))}
                   </select>
                   <button
-                    onClick={() => handleMover(miembro.username)}
+                    onClick={() => handleMover(miembro)}
                     disabled={loading || !destinoPorMiembro[miembro.username]}
                     className={`font-medium disabled:opacity-40 disabled:cursor-not-allowed ${ACCIONES.mover.className}`}
                   >
@@ -151,7 +159,7 @@ export function GrupoCard({
                 </>
               )}
               <button
-                onClick={() => handleQuitar(miembro.username)}
+                onClick={() => handleQuitar(miembro)}
                 disabled={loading}
                 className={`font-medium disabled:opacity-40 disabled:cursor-not-allowed ${ACCIONES.quitar.className}`}
               >

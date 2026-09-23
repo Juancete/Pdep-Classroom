@@ -212,6 +212,25 @@ describe("GruposPanel", () => {
       expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     });
 
+    it("la confirmación nombra al alumno y al grupo al que se lo agrega", async () => {
+      const user = userEvent.setup();
+      const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+      render(
+        <GruposPanel
+          assignmentId="a1"
+          grupos={[makeGrupo({ id: "g2", nombre: "Los Monoides" })]}
+          alumnosSinGrupo={[makeAlumnoSinGrupo({ username: "carlos", nombreCompleto: "López, Carlos" })]}
+        />
+      );
+
+      await user.selectOptions(screen.getByRole("combobox"), "g2");
+      await user.click(screen.getByRole("button", { name: /^agregar$/i }));
+
+      expect(confirmSpy).toHaveBeenCalledWith(
+        expect.stringContaining('agregar a López, Carlos (@carlos) al grupo "Los Monoides"')
+      );
+    });
+
     it("llama al PUT del grupo elegido y refresca", async () => {
       const user = userEvent.setup();
       vi.spyOn(window, "confirm").mockReturnValue(true);
