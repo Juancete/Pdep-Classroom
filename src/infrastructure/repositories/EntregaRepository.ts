@@ -10,6 +10,7 @@ import {
   Entrega,
   EntregaConProvisionEnCursoError,
   type NombreResultadoCI,
+  type Contribucion,
 } from "@/domain/entities";
 import type { Paradigma } from "@/types";
 
@@ -264,6 +265,20 @@ export async function actualizarCIDeEntrega(
   const entityManager = em ?? (await getEM());
   const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
   entrega.registrarResultadoCI(data);
+  await entityManager.flush();
+}
+
+// Issue #122: persiste las contribuciones consultadas a GitHub — misma forma
+// que `actualizarCIDeEntrega`, pero en una función hermana (no comparte
+// transacción con el CI).
+export async function actualizarContribucionesDeEntrega(
+  entregaId: string,
+  contribuciones: Contribucion[],
+  em?: EntityManager
+): Promise<void> {
+  const entityManager = em ?? (await getEM());
+  const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
+  entrega.registrarContribuciones(contribuciones);
   await entityManager.flush();
 }
 

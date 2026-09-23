@@ -125,6 +125,81 @@ describe("GrupoCard", () => {
       );
       expect(screen.getByText("Último push: 15/3/2026 (ana)")).toBeInTheDocument();
     });
+
+    // Issue #122: total de commits del repo, junto a "Último push".
+    it("muestra el total de commits del repo cuando viene", () => {
+      render(
+        <GrupoCard
+          conAcciones
+          assignmentId="a1"
+          grupo={makeGrupo({
+            entrega: { estadoRepo: "activo", repoUrl: "https://github.com/org/repo", totalCommits: 7 },
+          })}
+        />
+      );
+      expect(screen.getByText("7 commits")).toBeInTheDocument();
+    });
+
+    it("usa el singular cuando el repo tiene un solo commit", () => {
+      render(
+        <GrupoCard
+          conAcciones
+          assignmentId="a1"
+          grupo={makeGrupo({
+            entrega: { estadoRepo: "activo", repoUrl: "https://github.com/org/repo", totalCommits: 1 },
+          })}
+        />
+      );
+      expect(screen.getByText("1 commit")).toBeInTheDocument();
+    });
+
+    it("muestra 'Sin commits' cuando el total es 0", () => {
+      render(
+        <GrupoCard
+          conAcciones
+          assignmentId="a1"
+          grupo={makeGrupo({
+            entrega: { estadoRepo: "activo", repoUrl: "https://github.com/org/repo", totalCommits: 0 },
+          })}
+        />
+      );
+      expect(screen.getByText("Sin commits")).toBeInTheDocument();
+    });
+
+    it("no muestra nada de commits cuando totalCommits no viene", () => {
+      render(
+        <GrupoCard
+          conAcciones
+          assignmentId="a1"
+          grupo={makeGrupo({ entrega: { estadoRepo: "activo", repoUrl: "https://github.com/org/repo" } })}
+        />
+      );
+      expect(screen.queryByText(/commit/)).not.toBeInTheDocument();
+    });
+  });
+
+  // Issue #122: badge de participación junto a cada miembro.
+  describe("participación de cada miembro", () => {
+    it("muestra el badge de participación cuando el miembro lo trae", () => {
+      render(
+        <GrupoCard
+          conAcciones
+          assignmentId="a1"
+          grupo={makeGrupo({
+            miembros: [
+              { username: "ana", nombreCompleto: "García, Ana", participacion: { commits: 6, porcentaje: 60 } },
+              { username: "bob", nombreCompleto: "Smith, Bob" },
+            ],
+          })}
+        />
+      );
+      expect(screen.getByText("60% · 6 commits")).toBeInTheDocument();
+    });
+
+    it("no muestra badge de participación cuando el miembro no lo trae", () => {
+      render(<GrupoCard conAcciones assignmentId="a1" grupo={makeGrupo()} />);
+      expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+    });
   });
 
   describe("quitar integrante", () => {

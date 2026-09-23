@@ -337,6 +337,24 @@ describe("migrations", () => {
     );
   });
 
+  it("agrega la caché de contribuciones por integrante a entrega", () => {
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        "migrations",
+        "Migration20260922120000_entrega_contribuciones.ts"
+      ),
+      "utf8"
+    );
+
+    expect(migration).toContain('add column "contribuciones" jsonb null');
+    expect(migration).toContain(
+      'add column "contribuciones_actualizado_en" timestamptz null'
+    );
+    expect(migration).toContain('drop column "contribuciones"');
+    expect(migration).toContain('drop column "contribuciones_actualizado_en"');
+  });
+
   it("mantiene el snapshot alineado con Google Groups y las cascadas", () => {
     const snapshot = JSON.parse(
       readFileSync(
@@ -483,6 +501,16 @@ describe("migrations", () => {
       })
     );
     expect(entrega?.columns).toHaveProperty("repo_evento_actualizado_en");
+    // Contribuciones por integrante (issue #122): nullable en ambas
+    // columnas para distinguir "nunca sincronizado" de "repo sin commits".
+    expect(entrega?.columns.contribuciones).toMatchObject({
+      nullable: true,
+      default: null,
+    });
+    expect(entrega?.columns.contribuciones_actualizado_en).toMatchObject({
+      nullable: true,
+      default: null,
+    });
     expect(githubWebhookDelivery?.columns.delivery_id).toMatchObject({
       nullable: false,
       unique: true,

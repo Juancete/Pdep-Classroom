@@ -196,4 +196,72 @@ describe("resumirGrupoParaAdmin", () => {
     expect(sin.assignmentTitulo).toBeUndefined();
     expect(sin.paradigma).toBeUndefined();
   });
+
+  // Issue #122: participación por integrante, sólo con detalle de entrega y
+  // ya sincronizada.
+  describe("participación por integrante", () => {
+    it("con detalle y sincronizada suma participación por miembro (matching canónico) y totalCommits", () => {
+      const grupo = makeGrupo("g1", ["Ana-Garcia", "bob"]);
+      const resumen = resumirGrupoParaAdmin(grupo, {
+        grupos: [grupo],
+        alumnosPorUsername: SIN_ALUMNOS,
+        entregasPorGrupo: new Map([
+          [
+            "g1",
+            makeEntrega({
+              contribuciones: [
+                { login: "@ana-garcia", commits: 6 },
+                { login: "bob", commits: 4 },
+              ],
+              contribucionesActualizadoEn: new Date("2026-09-22T10:00:00Z"),
+            }),
+          ],
+        ]),
+        conDetalleDeEntrega: true,
+      });
+
+      expect(resumen.entrega?.totalCommits).toBe(10);
+      expect(resumen.miembros).toEqual([
+        { username: "Ana-Garcia", nombreCompleto: "Ana-Garcia", participacion: { commits: 6, porcentaje: 60 } },
+        { username: "bob", nombreCompleto: "bob", participacion: { commits: 4, porcentaje: 40 } },
+      ]);
+    });
+
+    it("con detalle pero sin sincronizar no suma participacion ni totalCommits", () => {
+      const grupo = makeGrupo("g1", ["ana"]);
+      const resumen = resumirGrupoParaAdmin(grupo, {
+        grupos: [grupo],
+        alumnosPorUsername: SIN_ALUMNOS,
+        entregasPorGrupo: new Map([["g1", makeEntrega()]]),
+        conDetalleDeEntrega: true,
+      });
+
+      expect(resumen.entrega?.totalCommits).toBeUndefined();
+      expect(resumen.miembros).toEqual([{ username: "ana", nombreCompleto: "ana" }]);
+    });
+
+    it("sin detalle nunca suma participacion ni totalCommits, aunque esté sincronizada", () => {
+      const grupo = makeGrupo("g1", ["ana"]);
+      const resumen = resumirGrupoParaAdmin(grupo, {
+        grupos: [grupo],
+        alumnosPorUsername: SIN_ALUMNOS,
+        entregasPorGrupo: new Map([
+          [
+            "g1",
+            makeEntrega({
+              contribuciones: [{ login: "ana", commits: 5 }],
+              contribucionesActualizadoEn: new Date("2026-09-22T10:00:00Z"),
+            }),
+          ],
+        ]),
+        conDetalleDeEntrega: false,
+      });
+
+      expect(resumen.entrega).toEqual({
+        estadoRepo: "activo",
+        repoUrl: "https://github.com/org/repo",
+      });
+      expect(resumen.miembros).toEqual([{ username: "ana", nombreCompleto: "ana" }]);
+    });
+  });
 });

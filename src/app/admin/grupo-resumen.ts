@@ -9,7 +9,12 @@ export type GrupoAdminResumen = {
   estaLleno: boolean;
   etiquetaCupo: string;
   tipoDeIntegrantes: TipoDeIntegrantes;
-  miembros: { username: string; nombreCompleto: string }[];
+  miembros: {
+    username: string;
+    nombreCompleto: string;
+    // Issue #122: sólo con detalle de entrega y ya sincronizada.
+    participacion?: { commits: number; porcentaje: number };
+  }[];
   assignmentTitulo?: string;
   paradigma?: Paradigma;
   destinos: { id: string; nombre: string; conEntrega: boolean }[];
@@ -18,6 +23,8 @@ export type GrupoAdminResumen = {
     repoUrl?: string;
     ci?: { resultadoNombre: NombreResultadoCI; detalleUrl?: string };
     ultimoPush?: { fecha: string; por: string };
+    // Issue #122: sólo con detalle de entrega y ya sincronizada.
+    totalCommits?: number;
   };
 };
 
@@ -34,6 +41,22 @@ export function resumirGrupoParaAdmin(
   const { grupos, alumnosPorUsername, entregasPorGrupo, conDetalleDeEntrega, conContextoDeAssignment } =
     contexto;
   const entrega = entregasPorGrupo.get(grupo.id);
+
+  // Issue #122: matching canónico entre `MiembroDeGrupo.githubUsername` y el
+  // login que devolvió GitHub, mismo criterio que `Entrega.perteneceA` — el
+  // `Map` evita recorrer el array de participación por cada miembro.
+  const participacionPorUsername =
+    conDetalleDeEntrega && entrega?.tieneContribucionesSincronizadas()
+      ? new Map(
+          entrega
+            .participacionDe(grupo.usernamesDeMiembros())
+            .map((participacion) => [
+              Alumno.normalizarUsername(participacion.username),
+              participacion,
+            ])
+        )
+      : undefined;
+
   return {
     id: grupo.id,
     nombre: grupo.nombre,
@@ -41,11 +64,17 @@ export function resumirGrupoParaAdmin(
     estaLleno: grupo.estaLleno(),
     etiquetaCupo: grupo.etiquetaCupo(),
     tipoDeIntegrantes: grupo.tipoDeIntegrantes,
-    miembros: grupo.usernamesDeMiembros().map((username) => ({
-      username,
-      nombreCompleto:
-        alumnosPorUsername.get(Alumno.normalizarUsername(username))?.nombreCompleto ?? username,
-    })),
+    miembros: grupo.usernamesDeMiembros().map((username) => {
+      const participacion = participacionPorUsername?.get(Alumno.normalizarUsername(username));
+      return {
+        username,
+        nombreCompleto:
+          alumnosPorUsername.get(Alumno.normalizarUsername(username))?.nombreCompleto ?? username,
+        ...(participacion && {
+          participacion: { commits: participacion.commits, porcentaje: participacion.porcentaje },
+        }),
+      };
+    }),
     destinos: grupos
       .filter((otro) => otro.esDestinoValidoDeMovimientoDesde(grupo))
       .map((otro) => ({
@@ -68,6 +97,9 @@ export function resumirGrupoParaAdmin(
               fecha: new Date(entrega.ultimoPushEn).toLocaleDateString("es-AR"),
               por: entrega.ultimoPushPor ?? "—",
             },
+          }),
+          ...(entrega.tieneContribucionesSincronizadas() && {
+            totalCommits: entrega.totalDeCommits(),
           }),
         }),
       },

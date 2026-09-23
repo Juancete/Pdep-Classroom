@@ -12,6 +12,7 @@ const mockPaginate = vi.fn();
 const mockListForRef = vi.fn();
 const mockRerequestSuite = vi.fn();
 const mockCheckCollaborator = vi.fn();
+const mockListContributors = vi.fn();
 const mockSearchRepos = vi.fn();
 const mockAuth = vi.fn();
 const mockRequest = vi.fn();
@@ -26,6 +27,7 @@ vi.mock("@octokit/rest", () => ({
       get: mockReposGet,
       listForOrg: mockListForOrg,
       checkCollaborator: mockCheckCollaborator,
+      listContributors: mockListContributors,
     };
     checks = {
       listForRef: mockListForRef,
@@ -53,10 +55,12 @@ import {
   getEstadoCI,
   reejecutarCI,
   esColaborador,
+  getContribuciones,
   getRepoInfo,
   getRepoInfoPorId,
   listarTemplates,
 } from "./github";
+import type { ClienteAcotadoDeGithub } from "./github";
 import { NombreRepositorioDemasiadoLargoError } from "@/lib/naming";
 
 function requestError(status: number, message: string) {
@@ -399,6 +403,78 @@ describe("esColaborador", () => {
     mockCheckCollaborator.mockRejectedValue(requestError(403, "Forbidden"));
 
     await expect(esColaborador("tp-ana", "juancito")).rejects.toThrow();
+  });
+});
+
+describe("getContribuciones", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("pagina contribuidores y mapea login/contributions a login/commits", async () => {
+    mockPaginate.mockResolvedValue([
+      { login: "ana-garcia", contributions: 10 },
+      { login: "juancito", contributions: 3 },
+    ]);
+
+    await expect(getContribuciones("tp-ana")).resolves.toEqual([
+      { login: "ana-garcia", commits: 10 },
+      { login: "juancito", commits: 3 },
+    ]);
+    expect(mockPaginate).toHaveBeenCalledWith(
+      mockListContributors,
+      expect.objectContaining({ repo: "tp-ana", per_page: 100, anon: "1" })
+    );
+  });
+
+  it("devuelve [] para un repo sin commits (204 ya normalizado por paginate)", async () => {
+    mockPaginate.mockResolvedValue([]);
+
+    await expect(getContribuciones("tp-sin-commits")).resolves.toEqual([]);
+  });
+
+  it("una fila anónima (type: Anonymous) se mapea sin login y se conserva junto a las de login", async () => {
+    mockPaginate.mockResolvedValue([
+      { login: "ana-garcia", contributions: 10 },
+      { type: "Anonymous", contributions: 3, email: "x@y", name: "X" },
+    ]);
+
+    await expect(getContribuciones("tp-con-anon")).resolves.toEqual([
+      { login: "ana-garcia", commits: 10 },
+      { commits: 3 },
+    ]);
+  });
+
+  it("una fila sin login y sin type: Anonymous hace fallar la consulta con un error de validación", async () => {
+    mockPaginate.mockResolvedValue([{ type: "User", contributions: 3 }]);
+
+    await expect(getContribuciones("tp-con-anon")).rejects.toThrow();
+  });
+
+  it("propaga errores traducidos de paginate (403)", async () => {
+    mockPaginate.mockRejectedValue(requestError(403, "Forbidden"));
+
+    await expect(getContribuciones("tp-prohibido")).rejects.toThrow("permisos suficientes");
+  });
+
+  it("usa cliente.octokit cuando viene, en vez del cliente global", async () => {
+    const paginateDelCliente = vi.fn().mockResolvedValue([{ login: "ana", contributions: 1 }]);
+    const listContributorsDelCliente = vi.fn();
+    const cliente = {
+      octokit: {
+        repos: { listContributors: listContributorsDelCliente },
+        paginate: paginateDelCliente,
+      },
+    } as unknown as ClienteAcotadoDeGithub;
+
+    await expect(getContribuciones("tp-ana", cliente)).resolves.toEqual([
+      { login: "ana", commits: 1 },
+    ]);
+    expect(paginateDelCliente).toHaveBeenCalledWith(
+      listContributorsDelCliente,
+      expect.objectContaining({ repo: "tp-ana" })
+    );
+    expect(mockPaginate).not.toHaveBeenCalled();
   });
 });
 

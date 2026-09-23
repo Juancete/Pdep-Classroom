@@ -74,6 +74,7 @@ export {
   completarProvisionEntrega,
   fallarProvisionEntrega,
   actualizarCIDeEntrega,
+  actualizarContribucionesDeEntrega,
   conLockDeEntrega,
   actualizarActividadDeEntrega,
   marcarRepoBorrado,

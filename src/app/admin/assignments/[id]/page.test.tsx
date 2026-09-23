@@ -55,7 +55,14 @@ vi.mock("./entregas-table", () => ({
     entregas,
     mostrarGrupo,
   }: {
-    entregas: { id: string; grupoNombre?: string }[];
+    entregas: {
+      id: string;
+      grupoNombre?: string;
+      participacion?: {
+        totalCommits: number;
+        integrantes: { username: string; commits: number; porcentaje: number }[];
+      };
+    }[];
     mostrarGrupo: boolean;
   }) => (
     <div
@@ -63,6 +70,7 @@ vi.mock("./entregas-table", () => ({
       data-count={entregas.length}
       data-mostrar-grupo={String(mostrarGrupo)}
       data-grupos-nombres={entregas.map((entrega) => entrega.grupoNombre ?? "").join(",")}
+      data-participacion={JSON.stringify(entregas.map((entrega) => entrega.participacion ?? null))}
     />
   ),
 }));
@@ -461,6 +469,43 @@ describe("Admin Assignment Detail Page", () => {
       await expect(
         AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) })
       ).resolves.toBeDefined();
+    });
+
+    // Issue #122: participación por integrante, sólo si ya se sincronizó.
+    it("una entrega sincronizada produce porcentajes de participación por githubUsernames", async () => {
+      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
+      mockGetEntregas.mockResolvedValue([
+        makeEntrega({
+          githubUsernames: ["ana", "bob"],
+          contribuciones: [
+            { login: "ana", commits: 6 },
+            { login: "bob", commits: 4 },
+          ],
+          contribucionesActualizadoEn: new Date("2026-09-22T10:00:00Z"),
+        }),
+      ]);
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      const markup = renderToStaticMarkup(element);
+      const participacionEsperada = JSON.stringify([
+        {
+          totalCommits: 10,
+          integrantes: [
+            { username: "ana", commits: 6, porcentaje: 60 },
+            { username: "bob", commits: 4, porcentaje: 40 },
+          ],
+        },
+      ]).replace(/"/g, "&quot;");
+      expect(markup).toContain(`data-participacion="${participacionEsperada}"`);
+    });
+
+    it("una entrega sin sincronizar no trae participación", async () => {
+      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
+      mockGetEntregas.mockResolvedValue([
+        makeEntrega({ contribuciones: undefined, contribucionesActualizadoEn: undefined }),
+      ]);
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      const markup = renderToStaticMarkup(element);
+      expect(markup).toContain(`data-participacion="${JSON.stringify([null]).replace(/"/g, "&quot;")}"`);
     });
   });
 

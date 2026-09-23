@@ -4,7 +4,6 @@ import {
   type ClienteAcotadoDeGithub,
 } from "@/infrastructure/github";
 import { logger } from "@/lib/logger";
-import { mapConConcurrenciaLimitada } from "@/lib/concurrencia";
 import { mensajeOperativo } from "@/lib/mensaje-operativo";
 import { actualizarCIDeEntrega } from "@/infrastructure/repositories";
 import {
@@ -13,14 +12,9 @@ import {
   type Entrega,
 } from "@/domain/entities";
 import type { EntityManager } from "@mikro-orm/postgresql";
+import { sincronizarLoteDeEntregas, type SincronizarLoteResult } from "./sincronizarLote";
 
-const MAX_CONCURRENT_CI_CHECKS = 5;
-
-export type SincronizarCIResult = {
-  actualizadas: number;
-  omitidas: number;
-  fallidas: { repoName: string; error: string }[];
-};
+export type SincronizarCIResult = SincronizarLoteResult;
 
 async function sincronizarUnaEntrega(
   entrega: Entrega,
@@ -86,30 +80,11 @@ export async function sincronizarCIDeEntregas(
   entregas: Entrega[],
   opts?: { forzar?: boolean; em?: EntityManager; github?: ClienteAcotadoDeGithub }
 ): Promise<SincronizarCIResult> {
-  const forzar = opts?.forzar ?? false;
-  const ahora = new Date();
-  const pendientes = entregas.filter(
-    (entrega) => entrega.hasRepo() && (forzar || !entrega.tieneCIFresco(ahora))
-  );
-  const omitidas = entregas.length - pendientes.length;
-
-  const resultados = await mapConConcurrenciaLimitada(
-    pendientes,
-    MAX_CONCURRENT_CI_CHECKS,
-    (entrega) => sincronizarUnaEntrega(entrega, opts?.em, opts?.github)
-  );
-
-  const fallidas: { repoName: string; error: string }[] = [];
-  let actualizadas = 0;
-  resultados.forEach((resultado, index) => {
-    if (resultado === "actualizada") {
-      actualizadas++;
-    } else {
-      fallidas.push({ repoName: pendientes[index]!.repoName!, error: resultado.error });
-    }
+  return sincronizarLoteDeEntregas(entregas, {
+    forzar: opts?.forzar ?? false,
+    estaFresca: (entrega, ahora) => entrega.tieneCIFresco(ahora),
+    sincronizarUna: (entrega) => sincronizarUnaEntrega(entrega, opts?.em, opts?.github),
   });
-
-  return { actualizadas, omitidas, fallidas };
 }
 
 /**
