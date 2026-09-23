@@ -21,6 +21,9 @@ export function GrupoSelector({
 
   async function handleCrear(event: React.FormEvent) {
     event.preventDefault();
+    const nombre = nombreNuevoGrupo.trim();
+    if (!confirm(`¿Seguro que querés crear el grupo "${nombre}"?`)) return;
+
     await call(async () => {
       const response = await fetch(`/api/assignments/${assignmentId}/grupos`, {
         method: "POST",
@@ -36,11 +39,13 @@ export function GrupoSelector({
     });
   }
 
-  async function handleUnirse(grupoId: string) {
-    setGrupoJoiningId(grupoId);
+  async function handleUnirse(grupo: GrupoResumen) {
+    if (!confirm(`¿Seguro que querés unirte al grupo "${grupo.nombre}"?`)) return;
+
+    setGrupoJoiningId(grupo.id);
     await call(async () => {
       const response = await fetch(
-        `/api/assignments/${assignmentId}/grupos/${grupoId}/join`,
+        `/api/assignments/${assignmentId}/grupos/${grupo.id}/join`,
         { method: "POST" }
       );
       if (!response.ok) {
@@ -127,7 +132,7 @@ export function GrupoSelector({
                   )}
                 </div>
                 <button
-                  onClick={() => handleUnirse(grupo.id)}
+                  onClick={() => handleUnirse(grupo)}
                   disabled={loading}
                   className="text-sm bg-white border border-pdep-600 text-pdep-600 px-4 py-1.5 rounded-lg font-medium hover:bg-pdep-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                 >
