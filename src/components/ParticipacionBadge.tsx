@@ -4,7 +4,7 @@
 // — mismo motivo que `CIBadge`/`ci-ui.tsx`. No hace falta: los tres datos
 // que necesita ya vienen resueltos por el caller (`Entrega.participacionDe`).
 export const PARTICIPACION_AYUDA =
-  "Porcentaje de commits del integrante sobre el total del repositorio, según GitHub (puede tener unas horas de atraso). Es un indicador orientativo para saber por dónde empezar a preguntar, no una nota: el pair programming en una sola máquina concentra los commits en un solo usuario.";
+  "Porcentaje de commits del integrante sobre los commits de los integrantes, según GitHub (puede tener unas horas de atraso). Es un indicador orientativo para saber por dónde empezar a preguntar, no una nota: el pair programming en una sola máquina concentra los commits en un solo usuario.";
 
 // Estilo por caso (tabla, no ternario anidado en el JSX): sin commits es
 // justamente el caso "por dónde empezar a preguntar" de la ayuda de arriba,

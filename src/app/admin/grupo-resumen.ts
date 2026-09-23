@@ -99,7 +99,7 @@ export function resumirGrupoParaAdmin(
             },
           }),
           ...(entrega.tieneContribucionesSincronizadas() && {
-            totalCommits: entrega.totalDeCommits(),
+            totalCommits: entrega.totalDeCommitsDe(grupo.usernamesDeMiembros()),
           }),
         }),
       },

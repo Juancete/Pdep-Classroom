@@ -30,7 +30,9 @@ export const FRESCURA_CONTRIBUCIONES_MS = FRESCURA_CI_MS;
 // Una fila de `octokit.repos.listContributors`, ya traducida a los nombres
 // del dominio (ver `src/infrastructure/github.ts`). `login` ausente en las
 // contribuciones anónimas (commits con email no vinculado a una cuenta de
-// GitHub): cuentan en `totalDeCommits` pero nunca matchean un integrante.
+// GitHub). El denominador de la participación son los commits de los
+// integrantes consultados (`totalDeCommitsDe`): el bot de la App, docentes,
+// ex integrantes y las contribuciones anónimas no cuentan ni se muestran.
 export type Contribucion = { login?: string; commits: number };
 
 // Salida de `Entrega.participacionDe`: `username` viaja tal como se pasó
@@ -289,40 +291,58 @@ export class Entrega {
   }
 
   /**
-   * Total de commits del repo, sumando todos los logins (issue #122,
-   * decisión de denominador: incluye bot, docentes y ex integrantes). 0 si
-   * nunca se sincronizó.
+   * Resuelve la contribución de un `username` contra `this.contribuciones`,
+   * con matching canónico (`Alumno.normalizarUsername` de ambos lados, mismo
+   * criterio que `perteneceA`). Una contribución anónima (sin `login`) nunca
+   * matchea. Única fuente del matching — la usan tanto `totalDeCommitsDe`
+   * como `participacionDe` para no duplicarlo.
    */
-  totalDeCommits(): number {
-    if (!this.contribuciones) return 0;
-    return this.contribuciones.reduce(
-      (acumulado, contribucion) => acumulado + contribucion.commits,
-      0
+  private contribucionDe(username: string): Contribucion | undefined {
+    const normalizado = Alumno.normalizarUsername(username);
+    return this.contribuciones?.find(
+      (candidata) =>
+        candidata.login !== undefined &&
+        Alumno.normalizarUsername(candidata.login) === normalizado
     );
   }
 
   /**
-   * Porcentaje de participación de cada `username` sobre el total de
-   * commits del repo (issue #122). El matching es canónico
-   * (`Alumno.normalizarUsername` de ambos lados, mismo criterio que
-   * `perteneceA`); un username sin contribución registrada entra con
-   * `commits: 0`. El denominador incluye logins que no son integrantes, así
-   * que la suma de los porcentajes devueltos puede no dar 100 — esos logins
-   * no se muestran (decisión del issue #122). Devuelve `[]` si nunca se
-   * sincronizó.
+   * Suma de commits de los `usernames` consultados que matchean una
+   * contribución (issue #122, decisión de denominador: sólo los integrantes
+   * consultados — el bot de la App, docentes, ex integrantes y las
+   * contribuciones anónimas quedan afuera). 0 si nunca se sincronizó.
+   */
+  totalDeCommitsDe(usernames: string[]): number {
+    if (!this.contribuciones) return 0;
+    return usernames.reduce(
+      (acumulado, username) => acumulado + (this.contribucionDe(username)?.commits ?? 0),
+      0
+    );
+  }
+
+  /** `totalDeCommitsDe` de los colaboradores actuales del repo (`githubUsernames`) — la usa la tarjeta de grupo. */
+  totalDeCommitsDeColaboradores(): number {
+    return this.totalDeCommitsDe(this.githubUsernames);
+  }
+
+  /**
+   * Porcentaje de participación de cada `username` sobre la suma de commits
+   * de los `usernames` consultados (issue #122): primero se resuelve la
+   * contribución de cada uno (matching canónico, ver `contribucionDe`; sin
+   * contribución entra con `commits: 0`) y recién después se calcula el
+   * total sobre esos commits resueltos, así que los porcentajes de los
+   * integrantes suman 100 (salvo redondeo). El bot de la App, docentes,
+   * ex integrantes y las contribuciones anónimas no entran en el
+   * denominador ni se muestran. Devuelve `[]` si nunca se sincronizó.
    */
   participacionDe(usernames: string[]): ParticipacionDeIntegrante[] {
-    const contribuciones = this.contribuciones;
-    if (!contribuciones) return [];
-    const total = this.totalDeCommits();
-    return usernames.map((username) => {
-      const normalizado = Alumno.normalizarUsername(username);
-      const contribucion = contribuciones.find(
-        (candidata) =>
-          candidata.login !== undefined &&
-          Alumno.normalizarUsername(candidata.login) === normalizado
-      );
-      const commits = contribucion?.commits ?? 0;
+    if (!this.contribuciones) return [];
+    const commitsPorUsername = usernames.map(
+      (username) => this.contribucionDe(username)?.commits ?? 0
+    );
+    const total = commitsPorUsername.reduce((acumulado, commits) => acumulado + commits, 0);
+    return usernames.map((username, indice) => {
+      const commits = commitsPorUsername[indice];
       const porcentaje = total === 0 ? 0 : Math.round((commits * 100) / total);
       return { username, commits, porcentaje };
     });

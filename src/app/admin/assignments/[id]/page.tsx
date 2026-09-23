@@ -101,7 +101,7 @@ export default async function AssignmentDetailPage(
           }
         : undefined,
       participacion: entrega.tieneContribucionesSincronizadas()
-        ? { totalCommits: entrega.totalDeCommits() }
+        ? { totalCommits: entrega.totalDeCommitsDeColaboradores() }
         : undefined,
     };
   });
