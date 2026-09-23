@@ -5,6 +5,7 @@ const mockGetCurrentUser = vi.fn();
 const mockGetEntregasConRepoActivo = vi.fn();
 const mockGetEntregaDeUsuario = vi.fn();
 const mockSincronizar = vi.fn();
+const mockSincronizarParticipacion = vi.fn();
 const mockRegistrarErrorOperativo = vi.fn();
 
 vi.mock("@/infrastructure/auth/session", () => ({
@@ -20,6 +21,11 @@ vi.mock("@/infrastructure/repositories", () => ({
 vi.mock("@/application/sincronizarCI", () => ({
   sincronizarCIDeEntregas: (entregas: unknown[], opts: unknown) =>
     mockSincronizar(entregas, opts),
+}));
+
+vi.mock("@/application/sincronizarParticipacion", () => ({
+  sincronizarParticipacionDeEntregas: (entregas: unknown[], opts: unknown) =>
+    mockSincronizarParticipacion(entregas, opts),
 }));
 
 vi.mock("@/lib/api-errors", async (importOriginal) => {
@@ -48,6 +54,7 @@ describe("POST /api/assignments/[id]/ci", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSincronizar.mockResolvedValue({ actualizadas: 1, omitidas: 0, fallidas: [] });
+    mockSincronizarParticipacion.mockResolvedValue({ actualizadas: 0, omitidas: 0, fallidas: [] });
   });
 
   it("devuelve 401 sin sesión", async () => {
@@ -55,6 +62,7 @@ describe("POST /api/assignments/[id]/ci", () => {
     const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
     expect(response.status).toBe(401);
     expect(mockSincronizar).not.toHaveBeenCalled();
+    expect(mockSincronizarParticipacion).not.toHaveBeenCalled();
   });
 
   it("un admin sincroniza todas las entregas con repo activo del assignment", async () => {
@@ -76,6 +84,34 @@ describe("POST /api/assignments/[id]/ci", () => {
       actualizadas: 1,
       omitidas: 0,
       fallidas: [],
+      participacion: { actualizadas: 0, omitidas: 0, fallidas: [] },
+    });
+  });
+
+  // Issue #122: la participación se sincroniza con las mismas entregas y el
+  // mismo `forzar` que el CI — un admin gasta la misma request en ambas.
+  it("un admin sincroniza también la participación, con las mismas entregas y forzar", async () => {
+    mockGetCurrentUser.mockResolvedValue({ githubUsername: "docente1", rol: DOCENTE });
+    mockGetEntregasConRepoActivo.mockResolvedValue([{ id: "e1" }, { id: "e2" }]);
+    mockSincronizarParticipacion.mockResolvedValue({
+      actualizadas: 2,
+      omitidas: 0,
+      fallidas: [],
+    });
+
+    const response = await POST(makeRequest({ forzar: true }), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+
+    expect(mockSincronizarParticipacion).toHaveBeenCalledWith(
+      [{ id: "e1" }, { id: "e2" }],
+      { forzar: true }
+    );
+    await expect(response.json()).resolves.toEqual({
+      actualizadas: 1,
+      omitidas: 0,
+      fallidas: [],
+      participacion: { actualizadas: 2, omitidas: 0, fallidas: [] },
     });
   });
 
@@ -93,6 +129,20 @@ describe("POST /api/assignments/[id]/ci", () => {
     expect(mockSincronizar).toHaveBeenCalledWith([{ id: "e-ana" }], { forzar: undefined });
   });
 
+  // Issue #122: el alumno no ve participación (decisión de alcance) — no
+  // tiene sentido gastar su request en `contributors`.
+  it("un alumno no sincroniza participación y la respuesta viene en ceros", async () => {
+    mockGetCurrentUser.mockResolvedValue({ githubUsername: "ana", rol: ESTUDIANTE });
+    mockGetEntregaDeUsuario.mockResolvedValue({ id: "e-ana" });
+
+    const response = await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
+
+    expect(mockSincronizarParticipacion).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toMatchObject({
+      participacion: { actualizadas: 0, omitidas: 0, fallidas: [] },
+    });
+  });
+
   it("un alumno sin entrega sincroniza una lista vacía", async () => {
     mockGetCurrentUser.mockResolvedValue({ githubUsername: "ana", rol: ESTUDIANTE });
     mockGetEntregaDeUsuario.mockResolvedValue(null);
@@ -100,6 +150,7 @@ describe("POST /api/assignments/[id]/ci", () => {
     await POST(makeRequest(), { params: Promise.resolve({ id: "a1" }) });
 
     expect(mockSincronizar).toHaveBeenCalledWith([], { forzar: undefined });
+    expect(mockSincronizarParticipacion).not.toHaveBeenCalled();
   });
 
   it("devuelve 400 si el body no matchea el schema", async () => {
@@ -154,5 +205,31 @@ describe("POST /api/assignments/[id]/ci", () => {
 
     expect(response.status).toBe(200);
     expect(mockRegistrarErrorOperativo).not.toHaveBeenCalled();
+  });
+
+  it("registra un error operativo aparte cuando sólo falla la participación, sin dejar de responder 200", async () => {
+    mockGetCurrentUser.mockResolvedValue({ githubUsername: "docente1", rol: DOCENTE });
+    mockGetEntregasConRepoActivo.mockResolvedValue([{ id: "e1" }]);
+    mockSincronizarParticipacion.mockResolvedValue({
+      actualizadas: 0,
+      omitidas: 0,
+      fallidas: [
+        { repoName: "tp-x", error: "La GitHub App no tiene permisos suficientes (403)" },
+      ],
+    });
+
+    const response = await POST(makeRequest({ forzar: true }), {
+      params: Promise.resolve({ id: "a1" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockRegistrarErrorOperativo).toHaveBeenCalledWith(
+      "POST /api/assignments/[id]/ci",
+      expect.objectContaining({
+        message:
+          "No se pudo actualizar la participación de tp-x: La GitHub App no tiene permisos suficientes (403)",
+      }),
+      { assignmentId: "a1", fallidas: 1, sincronizacion: "participacion" }
+    );
   });
 });

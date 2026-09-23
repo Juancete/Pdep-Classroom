@@ -101,10 +101,13 @@ export { MiembroDeGrupo } from "./MiembroDeGrupo";
 export {
   Entrega,
   FRESCURA_CI_MS,
+  FRESCURA_CONTRIBUCIONES_MS,
   EntregaNoEncontradaError,
   VENTANA_PROVISION_EN_VUELO_MS,
   EntregaConProvisionEnCursoError,
   ColaboradorNoInvitableError,
+  type Contribucion,
+  type ParticipacionDeIntegrante,
 } from "./Entrega";
 export {
   ResultadoCI,
@@ -116,6 +119,8 @@ export {
 } from "./ResultadoCI";
 export {
   RepoDeletionAttempt,
+  BorradoDeReposEnCursoError,
+  AssignmentNoArchivadoError,
   type RepoDeletionStatus,
 } from "./RepoDeletionAttempt";
 export {

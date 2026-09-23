@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Entrega } from "@/domain/entities";
+import {
+  AssignmentNoArchivadoError,
+  AssignmentNoEncontradoError,
+  Entrega,
+} from "@/domain/entities";
 
 const { mockLoggerError } = vi.hoisted(() => ({
   mockLoggerError: vi.fn(),
@@ -7,6 +11,7 @@ const { mockLoggerError } = vi.hoisted(() => ({
 
 const mockDeleteRepo = vi.fn();
 const mockGetActive = vi.fn();
+const mockGetAssignment = vi.fn();
 const mockStart = vi.fn();
 const mockComplete = vi.fn();
 const mockFail = vi.fn();
@@ -16,7 +21,9 @@ vi.mock("@/infrastructure/github", () => ({
 }));
 
 vi.mock("@/infrastructure/repositories", () => ({
-  getEntregasConRepoActivo: (assignmentId: string) => mockGetActive(assignmentId),
+  getAssignment: (assignmentId: string, em?: unknown) => mockGetAssignment(assignmentId, em),
+  getEntregasConRepoActivo: (assignmentId: string, em?: unknown) =>
+    mockGetActive(assignmentId, em),
   iniciarIntentoBorradoRepo: (data: unknown) => mockStart(data),
   completarIntentoBorradoRepo: (data: unknown) => mockComplete(data),
   fallarIntentoBorradoRepo: (attemptId: string, error: string) =>
@@ -41,6 +48,7 @@ describe("borrarRepositoriosDeAssignment", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetActive.mockResolvedValue([]);
+    mockGetAssignment.mockResolvedValue({ permiteBorrarRepos: () => true });
     mockStart.mockImplementation(async (data: { entregaId: string }) => ({
       id: `attempt-${data.entregaId}`,
     }));
@@ -109,6 +117,24 @@ describe("borrarRepositoriosDeAssignment", () => {
       "GitHub no disponible"
     );
     expect(mockComplete).not.toHaveBeenCalled();
+  });
+
+  it("conserva el error de GitHub si también falla guardar la auditoría del fallo", async () => {
+    mockGetActive.mockResolvedValue([entrega(1)]);
+    mockDeleteRepo.mockRejectedValue(new Error("GitHub no disponible"));
+    mockFail.mockRejectedValue(new Error("DB caída"));
+
+    const result = await borrarRepositoriosDeAssignment({
+      assignmentId: "a1", requestedBy: "docente",
+    });
+
+    expect(result).toMatchObject({ ok: false, failed: 1, deleted: 0 });
+    expect(result.results[0]).toMatchObject({ status: "failed", error: "GitHub no disponible" });
+    expect(mockComplete).not.toHaveBeenCalled();
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      expect.objectContaining({ err: "DB caída" }),
+      "No se pudo persistir el fallo del borrado"
+    );
   });
 
   it("redacta credenciales antes de persistirlas o devolverlas", async () => {
@@ -261,5 +287,47 @@ describe("borrarRepositoriosDeAssignment", () => {
 
     expect(result).toMatchObject({ ok: true, deleted: 12 });
     expect(maxActive).toBe(5);
+  });
+
+  describe("bajo el lock del assignment", () => {
+    const transaction = { esLaTransaccionDelLock: true };
+
+    it("lee el assignment y el listado con la transacción del lock, y no se la pasa al borrado por repo", async () => {
+      mockGetActive.mockResolvedValue([entrega(1)]);
+
+      await borrarRepositoriosDeAssignment({
+        assignmentId: "a1",
+        requestedBy: "docente",
+        em: transaction as never,
+      });
+
+      expect(mockGetAssignment).toHaveBeenCalledWith("a1", transaction);
+      expect(mockGetActive).toHaveBeenCalledWith("a1", transaction);
+      // El borrado y su auditoría corren con sus propios EntityManager: `em` no
+      // llega a la auditoría ni se filtra en el resto de los datos.
+      expect(mockStart).toHaveBeenCalledTimes(1);
+      expect(mockStart.mock.calls[0]![0]).not.toHaveProperty("em");
+    });
+
+    it("rechaza sin listar ni tocar GitHub si el assignment dejó de estar archivado", async () => {
+      mockGetAssignment.mockResolvedValue({ permiteBorrarRepos: () => false });
+
+      await expect(
+        borrarRepositoriosDeAssignment({ assignmentId: "a1", requestedBy: "docente" })
+      ).rejects.toBeInstanceOf(AssignmentNoArchivadoError);
+
+      expect(mockGetActive).not.toHaveBeenCalled();
+      expect(mockDeleteRepo).not.toHaveBeenCalled();
+    });
+
+    it("rechaza si el assignment ya no existe", async () => {
+      mockGetAssignment.mockResolvedValue(null);
+
+      await expect(
+        borrarRepositoriosDeAssignment({ assignmentId: "a1", requestedBy: "docente" })
+      ).rejects.toBeInstanceOf(AssignmentNoEncontradoError);
+
+      expect(mockGetActive).not.toHaveBeenCalled();
+    });
   });
 });

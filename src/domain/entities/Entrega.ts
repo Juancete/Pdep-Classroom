@@ -22,6 +22,25 @@ import {
 // vivía sólo en el servicio, como función `esReciente` aparte).
 export const FRESCURA_CI_MS = 60_000;
 
+// Issue #122: cachea la participación de cada integrante en el repo con la
+// misma ventana de frescura que el CI (mismo mecanismo que `FRESCURA_CI_MS`,
+// se sincroniza sólo con el botón "Actualizar" y nunca desde un webhook).
+export const FRESCURA_CONTRIBUCIONES_MS = FRESCURA_CI_MS;
+
+// Una fila de `octokit.repos.listContributors`, ya traducida a los nombres
+// del dominio (ver `src/infrastructure/github.ts`). `login` ausente en las
+// contribuciones anónimas (commits con email no vinculado a una cuenta de
+// GitHub): cuentan en `totalDeCommits` pero nunca matchean un integrante.
+export type Contribucion = { login?: string; commits: number };
+
+// Salida de `Entrega.participacionDe`: `username` viaja tal como se pasó
+// (sin normalizar) para que la UI lo muestre como lo conoce.
+export type ParticipacionDeIntegrante = {
+  username: string;
+  commits: number;
+  porcentaje: number;
+};
+
 // Subconjunto estructural mínimo de `RepoInfo` (lib/github.ts) que necesita
 // `reconoceComoPropio` — se declara acá en vez de importar ese tipo para
 // que la entidad no dependa de `lib/github.ts` (Fase 3 de la auditoría de
@@ -153,6 +172,16 @@ export class Entrega {
   @Property({ type: 'datetime', nullable: true })
   ciActualizadoEn?: Date; // cuándo los consultamos nosotros (frescura del caché)
 
+  // Contribuciones por login del repo (issue #122), cacheadas con la misma
+  // ventana de frescura que el CI. Nullable para distinguir "nunca se
+  // sincronizó" (`undefined`) de "se sincronizó y el repo no tiene commits"
+  // (`[]`) — mismo criterio que `ciActualizadoEn`.
+  @Property({ type: "json", nullable: true })
+  contribuciones?: Contribucion[];
+
+  @Property({ type: "datetime", nullable: true })
+  contribucionesActualizadoEn?: Date; // cuándo las consultamos nosotros (frescura del caché)
+
   // Actividad reciente del repo (issue #60) — la escribe el webhook de
   // `push` cuando llega un commit nuevo al branch por defecto.
   @Property({ type: 'datetime', nullable: true })
@@ -226,6 +255,82 @@ export class Entrega {
     if (data.detalleUrl !== undefined) this.ciDetalleUrl = data.detalleUrl ?? undefined;
     if (data.ejecutadoEn !== undefined) this.ciEjecutadoEn = data.ejecutadoEn ?? undefined;
     this.ciActualizadoEn = new Date();
+  }
+
+  /** `true` si las contribuciones se consultaron hace menos de `FRESCURA_CONTRIBUCIONES_MS`. */
+  tieneContribucionesFrescas(ahora: Date): boolean {
+    if (!this.contribucionesActualizadoEn) return false;
+    return (
+      ahora.getTime() - this.contribucionesActualizadoEn.getTime() <
+      FRESCURA_CONTRIBUCIONES_MS
+    );
+  }
+
+  /**
+   * `true` si ya se sincronizaron contribuciones alguna vez, aunque el repo
+   * no tenga commits — distingue "nunca sincronizado" (no mostrar nada en
+   * la UI) de "sincronizado, repo sin commits" (mostrar en 0). `!= null`
+   * (no `!== undefined`): MikroORM hidrata una columna nullable como `null`,
+   * no como `undefined` (no hay `forceUndefined` en la config), y una
+   * entrega recién cargada de la base con la comparación estricta se leería
+   * como "sincronizada".
+   */
+  tieneContribucionesSincronizadas(): boolean {
+    return this.contribucionesActualizadoEn != null;
+  }
+
+  /**
+   * Persiste las contribuciones consultadas a GitHub (issue #122) y sella
+   * la fecha de sincronización — mismo patrón que `registrarResultadoCI`.
+   */
+  registrarContribuciones(contribuciones: Contribucion[]): void {
+    this.contribuciones = [...contribuciones];
+    this.contribucionesActualizadoEn = new Date();
+  }
+
+  /**
+   * Total de commits del repo, sumando todos los logins (issue #122,
+   * decisión de denominador: incluye bot, docentes y ex integrantes). 0 si
+   * nunca se sincronizó.
+   */
+  totalDeCommits(): number {
+    if (!this.contribuciones) return 0;
+    return this.contribuciones.reduce(
+      (acumulado, contribucion) => acumulado + contribucion.commits,
+      0
+    );
+  }
+
+  /**
+   * Porcentaje de participación de cada `username` sobre el total de
+   * commits del repo (issue #122). El matching es canónico
+   * (`Alumno.normalizarUsername` de ambos lados, mismo criterio que
+   * `perteneceA`); un username sin contribución registrada entra con
+   * `commits: 0`. El denominador incluye logins que no son integrantes, así
+   * que la suma de los porcentajes devueltos puede no dar 100 — esos logins
+   * no se muestran (decisión del issue #122). Devuelve `[]` si nunca se
+   * sincronizó.
+   */
+  participacionDe(usernames: string[]): ParticipacionDeIntegrante[] {
+    const contribuciones = this.contribuciones;
+    if (!contribuciones) return [];
+    const total = this.totalDeCommits();
+    return usernames.map((username) => {
+      const normalizado = Alumno.normalizarUsername(username);
+      const contribucion = contribuciones.find(
+        (candidata) =>
+          candidata.login !== undefined &&
+          Alumno.normalizarUsername(candidata.login) === normalizado
+      );
+      const commits = contribucion?.commits ?? 0;
+      const porcentaje = total === 0 ? 0 : Math.round((commits * 100) / total);
+      return { username, commits, porcentaje };
+    });
+  }
+
+  /** Participación de los colaboradores actuales del repo (`githubUsernames`) — la usa la tabla de entregas. */
+  participacionDeColaboradores(): ParticipacionDeIntegrante[] {
+    return this.participacionDe(this.githubUsernames);
   }
 
   /**

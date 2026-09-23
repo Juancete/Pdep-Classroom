@@ -213,6 +213,20 @@ export class Grupo {
     return this.tipoDeIntegrantes === tipoDeIntegrantes;
   }
 
+  /**
+   * `true` si un integrante de `origen` puede moverse a este grupo: es otro
+   * grupo del mismo assignment, tiene cupo y admite el mismo tipo de
+   * integrantes.
+   */
+  esDestinoValidoDeMovimientoDesde(origen: Grupo): boolean {
+    return (
+      this.id !== origen.id &&
+      this.assignment.id === origen.assignment.id &&
+      !this.estaLleno() &&
+      this.admiteIntegrantesDe(origen.tipoDeIntegrantes)
+    );
+  }
+
   /** Un grupo de alumnos sólo integra alumnos registrados; uno de docentes admite miembros sin fila. */
   exigeVinculoConAlumno(): boolean {
     return this.tipoDeIntegrantes === "alumnos";

@@ -9,7 +9,10 @@ import { redirect } from "next/navigation";
 import { Alumno } from "@/domain/entities";
 import { AssignmentHeader } from "../assignment-header";
 import { GruposPanel } from "../grupos-panel";
-import type { GrupoAdminResumen, AlumnoSinGrupoResumen } from "../grupos-panel";
+import type { AlumnoSinGrupoResumen } from "../grupos-panel";
+import { resumirGrupoParaAdmin } from "../../../grupo-resumen";
+import type { GrupoAdminResumen } from "../../../grupo-resumen";
+import type { Entrega } from "@/domain/entities";
 import { VolcarGruposButton } from "../volcar-grupos-button";
 
 export default async function GruposAssignmentPage(props: {
@@ -35,11 +38,11 @@ export default async function GruposAssignmentPage(props: {
   );
 
   // Reusa las entregas ya cargadas (con `grupo` populado) en vez de una
-  // query nueva: qué grupos ya tienen entrega es la razón que justifica
-  // bloquear o advertir sobre un cambio de integrantes.
-  const gruposConEntrega = new Set(
-    entregas.map((entrega) => entrega.grupo?.id).filter((id): id is string => Boolean(id))
-  );
+  // query nueva.
+  const entregasPorGrupo = new Map<string, Entrega>();
+  for (const entrega of entregas) {
+    if (entrega.grupo) entregasPorGrupo.set(entrega.grupo.id, entrega);
+  }
 
   // Sin `instanceof`/ifs de tipo: `puedeVolcarseAPlanilla()` es polimórfico
   // (default `false` en `Assignment`, `GrupalAssignment` lo pisa) y la
@@ -47,20 +50,14 @@ export default async function GruposAssignmentPage(props: {
   // edición — ninguno de los dos necesita el narrowing a `GrupalAssignment`.
   const columnaGrupoEnPlanilla = assignment.extraFormDefaults().columnaGrupoEnPlanilla;
 
-  const gruposSerializados: GrupoAdminResumen[] = grupos.map((grupo) => ({
-    id: grupo.id,
-    nombre: grupo.nombre,
-    maxIntegrantes: grupo.maxIntegrantes,
-    estaLleno: grupo.estaLleno(),
-    etiquetaCupo: grupo.etiquetaCupo(),
-    tieneEntrega: gruposConEntrega.has(grupo.id),
-    tipoDeIntegrantes: grupo.tipoDeIntegrantes,
-    miembros: grupo.usernamesDeMiembros().map((username) => ({
-      username,
-      nombreCompleto:
-        alumnosPorUsername.get(Alumno.normalizarUsername(username))?.nombreCompleto ?? username,
-    })),
-  }));
+  const gruposSerializados: GrupoAdminResumen[] = grupos.map((grupo) =>
+    resumirGrupoParaAdmin(grupo, {
+      grupos,
+      alumnosPorUsername,
+      entregasPorGrupo,
+      conDetalleDeEntrega: true,
+    })
+  );
 
   const alumnosSinGrupoSerializados: AlumnoSinGrupoResumen[] = grupal
     .alumnosSinGrupo(alumnos, grupos)

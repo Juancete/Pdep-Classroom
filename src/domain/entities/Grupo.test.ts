@@ -249,6 +249,43 @@ describe("Grupo", () => {
     });
   });
 
+  describe("esDestinoValidoDeMovimientoDesde", () => {
+    function grupoEn(assignmentId: string, id: string, maxIntegrantes = 3): Grupo {
+      const grupo = nuevoGrupo(maxIntegrantes, [fakeMiembro(`miembro-${id}`)]);
+      grupo.id = id;
+      grupo.assignment = Object.assign(new GrupalAssignment(), { id: assignmentId });
+      return grupo;
+    }
+
+    it("es válido para otro grupo del mismo TP con cupo", () => {
+      expect(grupoEn("a1", "g2").esDestinoValidoDeMovimientoDesde(grupoEn("a1", "g1"))).toBe(true);
+    });
+
+    it("no es válido para el propio grupo", () => {
+      const origen = grupoEn("a1", "g1");
+      expect(origen.esDestinoValidoDeMovimientoDesde(origen)).toBe(false);
+    });
+
+    it("no es válido para un grupo lleno", () => {
+      expect(
+        grupoEn("a1", "g2", 1).esDestinoValidoDeMovimientoDesde(grupoEn("a1", "g1"))
+      ).toBe(false);
+    });
+
+    it("no es válido para un grupo de otro TP aunque compartan paradigma", () => {
+      const origen = grupoEn("a1", "g1");
+      const otroTp = grupoEn("a2", "g2");
+      expect(otroTp.paradigma).toBe(origen.paradigma);
+      expect(otroTp.esDestinoValidoDeMovimientoDesde(origen)).toBe(false);
+    });
+
+    it("no es válido para un grupo de otro tipo de integrantes", () => {
+      const docentes = grupoEn("a1", "g2");
+      docentes.tipoDeIntegrantes = "docentes";
+      expect(docentes.esDestinoValidoDeMovimientoDesde(grupoEn("a1", "g1"))).toBe(false);
+    });
+  });
+
   describe("exigeVinculoConAlumno", () => {
     it("es true para grupos de alumnos y false para grupos de docentes", () => {
       const grupoDeAlumnos = nuevoGrupo(3);

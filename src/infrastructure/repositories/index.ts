@@ -52,6 +52,7 @@ export {
 
 export {
   getEntregas,
+  getEntregasDeGrupos,
   getEntregasDeUsuario,
   getEntregaDeUsuario,
   getEntregaPorId,
@@ -73,6 +74,7 @@ export {
   completarProvisionEntrega,
   fallarProvisionEntrega,
   actualizarCIDeEntrega,
+  actualizarContribucionesDeEntrega,
   conLockDeEntrega,
   actualizarActividadDeEntrega,
   marcarRepoBorrado,

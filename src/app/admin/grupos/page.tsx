@@ -1,8 +1,14 @@
 import { requireAdmin } from "@/infrastructure/auth/session";
-import { getGrupos } from "@/infrastructure/repositories";
+import {
+  getGrupos,
+  getAlumnosByComision,
+  getEntregasDeGrupos,
+} from "@/infrastructure/repositories";
 import { obtenerContextoDeComision } from "@/application/comisionConsultada";
 import { AvisoSinComision } from "../aviso-sin-comision";
 import { BarraDeComision } from "../barra-de-comision";
+import { GrupoCard } from "../grupo-card";
+import { resumirGrupoParaAdmin } from "../grupo-resumen";
 import { PARADIGMAS } from "@/types";
 import type { Paradigma } from "@/types";
 
@@ -34,7 +40,12 @@ export default async function AdminGruposPage(
     ? (searchParams.paradigma as Paradigma)
     : undefined;
 
-  const grupos = await getGrupos({ comisionId: comision.id, paradigma: paradigmaFilter });
+  const [grupos, alumnos, entregasPorGrupo] = await Promise.all([
+    getGrupos({ comisionId: comision.id, paradigma: paradigmaFilter }),
+    getAlumnosByComision(comision.id),
+    getEntregasDeGrupos({ comisionId: comision.id, paradigma: paradigmaFilter }),
+  ]);
+  const alumnosPorUsername = new Map(alumnos.map((alumno) => [alumno.usernameCanonico, alumno]));
 
   return (
     <div>
@@ -79,36 +90,20 @@ export default async function AdminGruposPage(
             : "No hay grupos ingresados."}
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 grid-cols-1 xl:grid-cols-2">
           {grupos.map((grupo) => (
-            <div
-              key={grupo.id}
-              className="bg-white border border-gray-200 rounded-lg p-4"
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-semibold">{grupo.nombre}</h3>
-                <span className="text-xs bg-pdep-100 text-pdep-700 px-2 py-0.5 rounded-full">
-                  {grupo.paradigma}
-                </span>
-                {grupo.tipoDeIntegrantes === "docentes" && (
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                    Docentes
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-gray-400 mb-2">
-                {grupo.assignment.titulo}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {grupo.usernamesDeMiembros().map((username) => (
-                  <span
-                    key={username}
-                    className="text-xs font-mono bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                  >
-                    {username}
-                  </span>
-                ))}
-              </div>
+            <div key={grupo.id} className="bg-white border border-gray-200 rounded-lg p-4">
+              <GrupoCard
+                assignmentId={grupo.assignment.id}
+                conAcciones={false}
+                grupo={resumirGrupoParaAdmin(grupo, {
+                  grupos,
+                  alumnosPorUsername,
+                  entregasPorGrupo,
+                  conDetalleDeEntrega: false,
+                  conContextoDeAssignment: true,
+                })}
+              />
             </div>
           ))}
         </div>

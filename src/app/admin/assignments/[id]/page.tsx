@@ -80,6 +80,12 @@ export default async function AssignmentDetailPage(
           por: entrega.ultimoPushPor ?? "—",
         }
       : undefined,
+    participacion: entrega.tieneContribucionesSincronizadas()
+      ? {
+          totalCommits: entrega.totalDeCommits(),
+          integrantes: entrega.participacionDeColaboradores(),
+        }
+      : undefined,
   }));
 
   return (

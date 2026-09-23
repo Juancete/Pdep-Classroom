@@ -10,12 +10,40 @@ import {
   Entrega,
   EntregaConProvisionEnCursoError,
   type NombreResultadoCI,
+  type Contribucion,
 } from "@/domain/entities";
+import type { Paradigma } from "@/types";
 
 export async function getEntregas(assignmentId?: string): Promise<Entrega[]> {
   const entityManager = await getEM();
   const where = assignmentId ? { assignment: { id: assignmentId } } : {};
   return entityManager.find(Entrega, where, { populate: ["assignment", "grupo"] });
+}
+
+// Entrega de cada grupo (grupoId → Entrega) de una comisión en una sola query,
+// con el mismo filtro que `getGrupos`. El paradigma vive en el assignment.
+export async function getEntregasDeGrupos(filtro: {
+  comisionId: string;
+  paradigma?: Paradigma;
+}): Promise<Map<string, Entrega>> {
+  const entityManager = await getEM();
+  const { comisionId, paradigma } = filtro;
+  const entregas = await entityManager.find(
+    Entrega,
+    {
+      grupo: { $ne: null },
+      assignment: {
+        comision: { id: comisionId },
+        ...(paradigma && { paradigma }),
+      },
+    },
+    { populate: ["grupo"] }
+  );
+  const entregasPorGrupo = new Map<string, Entrega>();
+  for (const entrega of entregas) {
+    if (entrega.grupo) entregasPorGrupo.set(entrega.grupo.id, entrega);
+  }
+  return entregasPorGrupo;
 }
 
 // Conteo puntual vía agregación SQL — a diferencia de getEntregaCountsByAssignment()
@@ -196,9 +224,10 @@ export async function getActiveRepoCountsByAssignment(): Promise<Map<string, num
 // Mismo criterio que `Entrega.hasRepo()` — ver comentario de
 // `getActiveRepoCountsByAssignment`.
 export async function getEntregasConRepoActivo(
-  assignmentId: string
+  assignmentId: string,
+  em?: EntityManager
 ): Promise<Entrega[]> {
-  const entityManager = await getEM();
+  const entityManager = em ?? (await getEM());
   return entityManager.find(Entrega, {
     assignment: { id: assignmentId },
     repoDeleted: false,
@@ -239,22 +268,71 @@ export async function actualizarCIDeEntrega(
   await entityManager.flush();
 }
 
+// Issue #122: persiste las contribuciones consultadas a GitHub — misma forma
+// que `actualizarCIDeEntrega`, pero en una función hermana (no comparte
+// transacción con el CI).
+export async function actualizarContribucionesDeEntrega(
+  entregaId: string,
+  contribuciones: Contribucion[],
+  em?: EntityManager
+): Promise<void> {
+  const entityManager = em ?? (await getEM());
+  const entrega = await entityManager.findOneOrFail(Entrega, { id: entregaId });
+  entrega.registrarContribuciones(contribuciones);
+  await entityManager.flush();
+}
+
+// Espera máxima para adquirir el lock de una entrega. Es una cota de la ESPERA,
+// no una garantía de que quien lo sostiene termine antes: un tercer webhook
+// espera detrás de dos, y dos tramos de menos de este tiempo pueden sumar más.
+// Bajo contención legítima puede vencer; en ese caso la transacción aborta
+// (Postgres 55P03), no se ejecuta la operación y el delivery queda `fallido`,
+// o sea recuperable con `/api/webhooks/github/reprocesar`.
+export const ESPERA_MAXIMA_LOCK_DE_ENTREGA_MS = 10_000;
+
+// Tope de cada sentencia SQL una vez adquirido el lock. Se fija DESPUÉS del
+// acquire: antes cortaría la propia espera del lock a los 5 s e inutilizaría
+// `ESPERA_MAXIMA_LOCK_DE_ENTREGA_MS`. No cubre las llamadas a GitHub (esas
+// tienen su propia cota), sólo el SQL.
+const TOPE_DE_SENTENCIA_BAJO_LOCK_MS = 5_000;
+
 /**
  * Serializa el trabajo protegido del webhook sobre una misma entrega bajo un
- * advisory lock transaccional — mismo mecanismo que
- * `conLockBorradoReposAssignment`. La operación recibe el `EntityManager` de
- * ESA transacción y debe usarlo para las lecturas/escrituras protegidas; así
- * el lock y el read-modify-write comparten conexión y frontera atómica.
+ * advisory lock transaccional (clave `ci:<entregaId>`). La operación recibe el
+ * `EntityManager` de ESA transacción y debe usarlo para las lecturas/escrituras
+ * protegidas; así el lock y el read-modify-write comparten conexión y frontera
+ * atómica.
+ *
+ * Alcance: serializa contra otros que toman ESTA MISMA clave (otro webhook
+ * sobre la misma entrega). No serializa contra quienes escriben la entrega sin
+ * tomarla, como el alta/baja de miembros de un grupo o el self-heal de
+ * `aceptarAssignment`: no da consistencia global de `githubUsernames`.
+ *
+ * Espera el lock hasta `ESPERA_MAXIMA_LOCK_DE_ENTREGA_MS`; si vence, tira y no
+ * ejecuta la operación (nunca sigue sin el lock).
  */
 export async function conLockDeEntrega<T>(
   entregaId: string,
-  operation: (transaction: EntityManager) => Promise<T>
+  operation: (transaction: EntityManager) => Promise<T>,
+  opciones: { esperaMaximaMs?: number } = {}
 ): Promise<T> {
+  const esperaMaximaMs = opciones.esperaMaximaMs ?? ESPERA_MAXIMA_LOCK_DE_ENTREGA_MS;
   const entityManager = await getEM();
   return entityManager.transactional(async (transaction) => {
-    await transaction
-      .getConnection()
-      .execute("select pg_advisory_xact_lock(hashtextextended(?, 0))", [`ci:${entregaId}`]);
+    // `SET` no acepta parámetros: los valores son enteros de este módulo, no
+    // entrada externa.
+    await transaction.execute(`set local lock_timeout = '${Math.trunc(esperaMaximaMs)}ms'`);
+    // `transaction.execute(...)` — no `transaction.getConnection().execute(...)`:
+    // este último no hereda el contexto de transacción activo y corre en una
+    // conexión aparte del pool, así que el advisory lock (transaccional, se
+    // libera solo) queda tomado y liberado al instante sin serializar nada
+    // (ver `lockearMembresia` en GrupoRepository).
+    await transaction.execute("select pg_advisory_xact_lock(hashtextextended(?, 0))", [
+      `ci:${entregaId}`,
+    ]);
+    await transaction.execute(
+      `set local statement_timeout = '${TOPE_DE_SENTENCIA_BAJO_LOCK_MS}ms'`
+    );
     return operation(transaction);
   });
 }
