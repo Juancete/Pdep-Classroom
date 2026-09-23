@@ -382,6 +382,184 @@ describe("Entrega.registrarResultadoCI", () => {
   });
 });
 
+describe("Entrega.tieneContribucionesFrescas", () => {
+  it("son frescas cuando se sincronizaron hace menos de FRESCURA_CONTRIBUCIONES_MS", () => {
+    const ahora = new Date("2026-09-22T10:01:00Z");
+    const entrega = nuevaEntrega({
+      contribucionesActualizadoEn: new Date("2026-09-22T10:00:30Z"),
+    });
+    expect(entrega.tieneContribucionesFrescas(ahora)).toBe(true);
+  });
+
+  it("no son frescas cuando pasó más de FRESCURA_CONTRIBUCIONES_MS", () => {
+    const ahora = new Date("2026-09-22T10:05:00Z");
+    const entrega = nuevaEntrega({
+      contribucionesActualizadoEn: new Date("2026-09-22T10:00:00Z"),
+    });
+    expect(entrega.tieneContribucionesFrescas(ahora)).toBe(false);
+  });
+
+  it("no son frescas cuando nunca se sincronizaron", () => {
+    const entrega = nuevaEntrega({ contribucionesActualizadoEn: undefined });
+    expect(entrega.tieneContribucionesFrescas(new Date())).toBe(false);
+  });
+});
+
+describe("Entrega.tieneContribucionesSincronizadas", () => {
+  it("es false cuando nunca se sincronizaron", () => {
+    const entrega = nuevaEntrega({ contribucionesActualizadoEn: undefined });
+    expect(entrega.tieneContribucionesSincronizadas()).toBe(false);
+  });
+
+  it("es true una vez sincronizadas, aunque el repo no tenga commits", () => {
+    const entrega = nuevaEntrega({
+      contribuciones: [],
+      contribucionesActualizadoEn: new Date("2026-09-22T10:00:00Z"),
+    });
+    expect(entrega.tieneContribucionesSincronizadas()).toBe(true);
+  });
+
+  // Regresión: el proyecto no configura `forceUndefined` en MikroORM, así
+  // que una entrega hidratada desde la DB sin sincronizar trae
+  // `contribucionesActualizadoEn === null` (y `contribuciones === null`),
+  // no `undefined` — se simula asignando `null` directo (cast, igual que
+  // haría el hydrator del ORM), mismo patrón que en `Assignment.test.ts`.
+  // Con `!== undefined` esto daba `true` para cualquier entrega existente.
+  it("null (hidratado desde la DB) se trata igual que 'nunca sincronizado'", () => {
+    const entrega = nuevaEntrega({
+      contribuciones: null as unknown as undefined,
+      contribucionesActualizadoEn: null as unknown as undefined,
+    });
+
+    expect(entrega.tieneContribucionesSincronizadas()).toBe(false);
+    expect(entrega.tieneContribucionesFrescas(new Date())).toBe(false);
+    expect(entrega.participacionDe(["ana"])).toEqual([]);
+    expect(entrega.totalDeCommits()).toBe(0);
+  });
+});
+
+describe("Entrega.registrarContribuciones", () => {
+  it("copia la lista recibida y sella la fecha de sincronización", () => {
+    const entrega = nuevaEntrega();
+    const contribuciones = [{ login: "ana", commits: 10 }];
+
+    entrega.registrarContribuciones(contribuciones);
+
+    expect(entrega.contribuciones).toEqual(contribuciones);
+    expect(entrega.contribuciones).not.toBe(contribuciones);
+    expect(entrega.contribucionesActualizadoEn).toBeInstanceOf(Date);
+  });
+});
+
+describe("Entrega.totalDeCommits", () => {
+  it("suma los commits de todos los logins, incluyendo no integrantes", () => {
+    const entrega = nuevaEntrega({
+      contribuciones: [
+        { login: "ana-garcia", commits: 5 },
+        { login: "dependabot[bot]", commits: 3 },
+      ],
+    });
+    expect(entrega.totalDeCommits()).toBe(8);
+  });
+
+  it("es 0 cuando nunca se sincronizó", () => {
+    const entrega = nuevaEntrega({ contribuciones: undefined });
+    expect(entrega.totalDeCommits()).toBe(0);
+  });
+});
+
+describe("Entrega.participacionDe", () => {
+  it("redondea el porcentaje sobre el total del repo", () => {
+    const entrega = nuevaEntrega({
+      contribuciones: [
+        { login: "ana", commits: 1 },
+        { login: "bob", commits: 2 },
+      ],
+    });
+
+    expect(entrega.participacionDe(["ana", "bob"])).toEqual([
+      { username: "ana", commits: 1, porcentaje: 33 },
+      { username: "bob", commits: 2, porcentaje: 67 },
+    ]);
+  });
+
+  it("matchea logins en forma canónica (case-insensitive, con o sin '@')", () => {
+    const entrega = nuevaEntrega({
+      contribuciones: [{ login: "Ana-Garcia", commits: 4 }],
+    });
+
+    expect(entrega.participacionDe(["@ana-garcia"])).toEqual([
+      { username: "@ana-garcia", commits: 4, porcentaje: 100 },
+    ]);
+  });
+
+  it("un integrante sin commits en el repo entra en 0/0", () => {
+    const entrega = nuevaEntrega({
+      contribuciones: [{ login: "ana", commits: 4 }],
+    });
+
+    expect(entrega.participacionDe(["bob"])).toEqual([
+      { username: "bob", commits: 0, porcentaje: 0 },
+    ]);
+  });
+
+  it("los logins que no son integrantes bajan el porcentaje pero no aparecen", () => {
+    const entrega = nuevaEntrega({
+      contribuciones: [
+        { login: "ana", commits: 5 },
+        { login: "dependabot[bot]", commits: 5 },
+      ],
+    });
+
+    expect(entrega.participacionDe(["ana"])).toEqual([
+      { username: "ana", commits: 5, porcentaje: 50 },
+    ]);
+  });
+
+  it("con total 0 devuelve 0% sin NaN", () => {
+    const entrega = nuevaEntrega({ contribuciones: [] });
+    expect(entrega.participacionDe(["ana"])).toEqual([
+      { username: "ana", commits: 0, porcentaje: 0 },
+    ]);
+  });
+
+  it("respeta el orden de la lista recibida", () => {
+    const entrega = nuevaEntrega({
+      contribuciones: [
+        { login: "ana", commits: 1 },
+        { login: "bob", commits: 1 },
+      ],
+    });
+
+    expect(entrega.participacionDe(["bob", "ana"]).map((integrante) => integrante.username)).toEqual([
+      "bob",
+      "ana",
+    ]);
+  });
+
+  it("devuelve [] cuando nunca se sincronizó", () => {
+    const entrega = nuevaEntrega({ contribuciones: undefined });
+    expect(entrega.participacionDe(["ana"])).toEqual([]);
+  });
+});
+
+describe("Entrega.participacionDeColaboradores", () => {
+  it("usa githubUsernames como lista de integrantes", () => {
+    const entrega = nuevaEntrega({
+      githubUsernames: ["ana", "bob"],
+      contribuciones: [
+        { login: "ana", commits: 3 },
+        { login: "bob", commits: 1 },
+      ],
+    });
+
+    expect(entrega.participacionDeColaboradores()).toEqual([
+      { username: "ana", commits: 3, porcentaje: 75 },
+      { username: "bob", commits: 1, porcentaje: 25 },
+    ]);
+  });
+});
+
 describe("Entrega.registrarPush", () => {
   it("registra la actividad cuando no había ningún push previo", () => {
     const entrega = nuevaEntrega();

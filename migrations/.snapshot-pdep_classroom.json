@@ -1532,6 +1532,38 @@
           "enumItems": [],
           "mappedType": "datetime"
         },
+        "contribuciones": {
+          "name": "contribuciones",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "json"
+        },
+        "contribuciones_actualizado_en": {
+          "name": "contribuciones_actualizado_en",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
         "ultimo_push_en": {
           "name": "ultimo_push_en",
           "type": "timestamptz(6)",
