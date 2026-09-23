@@ -508,10 +508,22 @@ export async function getEstadoCI(
 // Contribuidores del repo (issue #122): una fila por login con su total de
 // commits en el branch por defecto, no una lista de commits — un TP entero
 // entra en una sola página. Un repo sin commits responde 204, que `paginate`
-// ya normaliza a `[]` (no hace falta caso especial).
-const ContribuidorSchema = z.object({ login: z.string(), contributions: z.number() });
+// ya normaliza a `[]` (no hace falta caso especial). Se pide `anon: "1"`
+// para que los commits con un email de autor no vinculado a ninguna cuenta
+// de GitHub cuenten en el total del repo en vez de desaparecer (issue #122)
+// — GitHub los devuelve como filas separadas con `type: "Anonymous"` y sin
+// `login`, así que nunca matchean a un integrante.
+const FilaDeUsuarioSchema = z
+  .object({ login: z.string(), contributions: z.number() })
+  .transform((fila): ContribuidorDeRepo => ({ login: fila.login, commits: fila.contributions }));
 
-export type ContribuidorDeRepo = { login: string; commits: number };
+const FilaAnonimaSchema = z
+  .object({ type: z.literal("Anonymous"), contributions: z.number() })
+  .transform((fila): ContribuidorDeRepo => ({ commits: fila.contributions }));
+
+const ContribuidorSchema = z.union([FilaDeUsuarioSchema, FilaAnonimaSchema]);
+
+export type ContribuidorDeRepo = { login?: string; commits: number };
 
 export async function getContribuciones(
   repoName: string,
@@ -525,15 +537,13 @@ export async function getContribuciones(
       owner: ORG,
       repo: repoName,
       per_page: 100,
+      anon: "1",
     });
   } catch (error) {
     handleOctokitError(error);
   }
 
-  return z
-    .array(ContribuidorSchema)
-    .parse(contribuidores)
-    .map((contribuidor) => ({ login: contribuidor.login, commits: contribuidor.contributions }));
+  return z.array(ContribuidorSchema).parse(contribuidores);
 }
 
 export async function reejecutarCI(

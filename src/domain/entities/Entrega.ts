@@ -28,8 +28,10 @@ export const FRESCURA_CI_MS = 60_000;
 export const FRESCURA_CONTRIBUCIONES_MS = FRESCURA_CI_MS;
 
 // Una fila de `octokit.repos.listContributors`, ya traducida a los nombres
-// del dominio (ver `src/infrastructure/github.ts`).
-export type Contribucion = { login: string; commits: number };
+// del dominio (ver `src/infrastructure/github.ts`). `login` ausente en las
+// contribuciones anónimas (commits con email no vinculado a una cuenta de
+// GitHub): cuentan en `totalDeCommits` pero nunca matchean un integrante.
+export type Contribucion = { login?: string; commits: number };
 
 // Salida de `Entrega.participacionDe`: `username` viaja tal como se pasó
 // (sin normalizar) para que la UI lo muestre como lo conoce.
@@ -316,7 +318,9 @@ export class Entrega {
     return usernames.map((username) => {
       const normalizado = Alumno.normalizarUsername(username);
       const contribucion = contribuciones.find(
-        (candidata) => Alumno.normalizarUsername(candidata.login) === normalizado
+        (candidata) =>
+          candidata.login !== undefined &&
+          Alumno.normalizarUsername(candidata.login) === normalizado
       );
       const commits = contribucion?.commits ?? 0;
       const porcentaje = total === 0 ? 0 : Math.round((commits * 100) / total);

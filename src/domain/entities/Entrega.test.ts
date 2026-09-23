@@ -541,6 +541,30 @@ describe("Entrega.participacionDe", () => {
     const entrega = nuevaEntrega({ contribuciones: undefined });
     expect(entrega.participacionDe(["ana"])).toEqual([]);
   });
+
+  it("una contribución anónima (sin login) cuenta en el total pero no se le puede asignar a nadie", () => {
+    const entrega = nuevaEntrega({
+      contribuciones: [{ login: "ana", commits: 5 }, { commits: 5 }],
+    });
+
+    expect(entrega.participacionDe(["ana"])).toEqual([
+      { username: "ana", commits: 5, porcentaje: 50 },
+    ]);
+    expect(entrega.totalDeCommits()).toBe(10);
+  });
+
+  it("una contribución anónima nunca matchea, ni con un username vacío o literal 'undefined'", () => {
+    const entrega = nuevaEntrega({
+      contribuciones: [{ commits: 7 }],
+    });
+
+    expect(entrega.participacionDe([""])).toEqual([
+      { username: "", commits: 0, porcentaje: 0 },
+    ]);
+    expect(entrega.participacionDe(["undefined"])).toEqual([
+      { username: "undefined", commits: 0, porcentaje: 0 },
+    ]);
+  });
 });
 
 describe("Entrega.participacionDeColaboradores", () => {

@@ -423,7 +423,7 @@ describe("getContribuciones", () => {
     ]);
     expect(mockPaginate).toHaveBeenCalledWith(
       mockListContributors,
-      expect.objectContaining({ repo: "tp-ana", per_page: 100 })
+      expect.objectContaining({ repo: "tp-ana", per_page: 100, anon: "1" })
     );
   });
 
@@ -433,8 +433,20 @@ describe("getContribuciones", () => {
     await expect(getContribuciones("tp-sin-commits")).resolves.toEqual([]);
   });
 
-  it("una fila sin login hace fallar la consulta con un error de validación", async () => {
-    mockPaginate.mockResolvedValue([{ contributions: 5 }]);
+  it("una fila anónima (type: Anonymous) se mapea sin login y se conserva junto a las de login", async () => {
+    mockPaginate.mockResolvedValue([
+      { login: "ana-garcia", contributions: 10 },
+      { type: "Anonymous", contributions: 3, email: "x@y", name: "X" },
+    ]);
+
+    await expect(getContribuciones("tp-con-anon")).resolves.toEqual([
+      { login: "ana-garcia", commits: 10 },
+      { commits: 3 },
+    ]);
+  });
+
+  it("una fila sin login y sin type: Anonymous hace fallar la consulta con un error de validación", async () => {
+    mockPaginate.mockResolvedValue([{ type: "User", contributions: 3 }]);
 
     await expect(getContribuciones("tp-con-anon")).rejects.toThrow();
   });
