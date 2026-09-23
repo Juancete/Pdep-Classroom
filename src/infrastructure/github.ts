@@ -1,5 +1,6 @@
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
+import { z } from "zod";
 import { validarRepoName } from "@/lib/naming";
 import { handleOctokitError, isRequestError } from "./github-errors";
 
@@ -504,6 +505,37 @@ export async function getEstadoCI(
   };
 }
 
+// Contribuidores del repo (issue #122): una fila por login con su total de
+// commits en el branch por defecto, no una lista de commits — un TP entero
+// entra en una sola página. Un repo sin commits responde 204, que `paginate`
+// ya normaliza a `[]` (no hace falta caso especial).
+const ContribuidorSchema = z.object({ login: z.string(), contributions: z.number() });
+
+export type ContribuidorDeRepo = { login: string; commits: number };
+
+export async function getContribuciones(
+  repoName: string,
+  cliente?: ClienteAcotadoDeGithub
+): Promise<ContribuidorDeRepo[]> {
+  const octokit = cliente?.octokit ?? getOctokit();
+
+  let contribuidores;
+  try {
+    contribuidores = await octokit.paginate(octokit.repos.listContributors, {
+      owner: ORG,
+      repo: repoName,
+      per_page: 100,
+    });
+  } catch (error) {
+    handleOctokitError(error);
+  }
+
+  return z
+    .array(ContribuidorSchema)
+    .parse(contribuidores)
+    .map((contribuidor) => ({ login: contribuidor.login, commits: contribuidor.contributions }));
+}
+
 export async function reejecutarCI(
   repoName: string,
   checkSuiteIds: string[]
@@ -550,7 +582,7 @@ export async function esColaborador(
 // ── Diagnóstico de la GitHub App (issue #98) ────────────────
 // La App de producción puede tener permisos, eventos suscriptos o webhook
 // incompletos sin que ningún deploy lo detecte — el síntoma aparece recién
-// cuando alguien aprieta "Actualizar CI" y GitHub responde 403. Esta consulta
+// cuando alguien aprieta "Actualizar" y GitHub responde 403. Esta consulta
 // alimenta el check de `/admin/operaciones` que lista qué le falta a la App
 // contra lo que Classroom necesita (ver `evaluarConfiguracionDeApp`).
 //

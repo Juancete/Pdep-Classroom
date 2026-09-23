@@ -57,6 +57,7 @@ import {
   completarProvisionEntrega,
   fallarProvisionEntrega,
   actualizarCIDeEntrega,
+  actualizarContribucionesDeEntrega,
   conLockDeEntrega,
   actualizarActividadDeEntrega,
   marcarRepoBorrado,
@@ -445,6 +446,41 @@ describe("EntregaRepository", () => {
       expect(entrega.ciCommitSha).toBeUndefined();
       expect(entrega.ciDetalleUrl).toBeUndefined();
       expect(entrega.ciEjecutadoEn).toBeUndefined();
+    });
+  });
+
+  // Issue #122: mismo molde que `actualizarCIDeEntrega`, en una función
+  // hermana.
+  describe("actualizarContribucionesDeEntrega", () => {
+    it("delega en registrarContribuciones y flushea", async () => {
+      const entrega = new Entrega();
+      mockEm.findOneOrFail.mockResolvedValueOnce(entrega);
+      const contribuciones = [{ login: "ana", commits: 5 }];
+
+      await actualizarContribucionesDeEntrega("e1", contribuciones);
+
+      expect(mockEm.findOneOrFail).toHaveBeenCalledWith(Entrega, { id: "e1" });
+      expect(entrega.contribuciones).toEqual(contribuciones);
+      expect(entrega.contribucionesActualizadoEn).toBeInstanceOf(Date);
+      expect(mockEm.flush).toHaveBeenCalledOnce();
+    });
+
+    it("usa el em recibido en vez de abrir otro", async () => {
+      const entrega = new Entrega();
+      const transaction = {
+        findOneOrFail: vi.fn().mockResolvedValue(entrega),
+        flush: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await actualizarContribucionesDeEntrega(
+        "e1",
+        [{ login: "ana", commits: 5 }],
+        transaction as unknown as EntityManager
+      );
+
+      expect(getEM).not.toHaveBeenCalled();
+      expect(transaction.findOneOrFail).toHaveBeenCalledWith(Entrega, { id: "e1" });
+      expect(transaction.flush).toHaveBeenCalledOnce();
     });
   });
 
