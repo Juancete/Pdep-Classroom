@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { MiGrupo } from "./mi-grupo";
 import type { GrupoResumen } from "./mi-grupo";
 import type { GrupoDisponible } from "./acciones-de-membresia";
+import type { IntegranteResumen } from "@/domain/entities";
 
 vi.mock("@/app/dashboard/accept-button", () => ({
   AcceptButton: ({
@@ -54,12 +55,24 @@ function makeGrupo(overrides: Partial<GrupoResumen> = {}): GrupoResumen {
   return base;
 }
 
+// Issue #138: dos integrantes, uno con nombre completo y otro sin (docente
+// de demo o alumno sin fila en `Alumno`) — mismo par que usan los tests de
+// `ListaDeIntegrantes`.
+function makeIntegrantes(overrides: Partial<IntegranteResumen>[] = []): IntegranteResumen[] {
+  const base: IntegranteResumen[] = [
+    { username: "ana", nombreCompleto: "García, Ana", tieneAccesoAlRepo: false },
+    { username: "bob", nombreCompleto: null, tieneAccesoAlRepo: false },
+  ];
+  return base.map((integrante, indice) => ({ ...integrante, ...overrides[indice] }));
+}
+
 function makeProps(overrides: Partial<React.ComponentProps<typeof MiGrupo>> = {}) {
   return {
     grupo: makeGrupo(),
     assignmentId: "a1",
     tieneRepo: false,
     tieneAccesoAlRepo: false,
+    integrantes: makeIntegrantes(),
     githubUsername: "ana",
     motivoBloqueo: null,
     esUltimoMiembro: false,
@@ -78,6 +91,36 @@ describe("MiGrupo", () => {
     render(<MiGrupo {...makeProps()} />);
     expect(screen.getByText("@ana")).toBeInTheDocument();
     expect(screen.getByText("@bob")).toBeInTheDocument();
+  });
+
+  // Issue #138: la lista de integrantes viene de la prop `integrantes`
+  // (resuelta por `Grupo.resumenDeIntegrantes` en el server component), no
+  // de `grupo.miembros` — este test cubre nombre completo + chips.
+  it("muestra el nombre completo de los integrantes que lo tienen", () => {
+    render(<MiGrupo {...makeProps()} />);
+    expect(screen.getByText("García, Ana")).toBeInTheDocument();
+  });
+
+  it("no muestra chips de acceso cuando tieneRepo es false", () => {
+    render(<MiGrupo {...makeProps({ tieneRepo: false })} />);
+    expect(screen.queryByText("Con acceso al repo")).not.toBeInTheDocument();
+    expect(screen.queryByText("Sin acceso al repo")).not.toBeInTheDocument();
+  });
+
+  it("muestra chips de acceso por integrante cuando tieneRepo es true", () => {
+    render(
+      <MiGrupo
+        {...makeProps({
+          tieneRepo: true,
+          integrantes: makeIntegrantes([
+            { tieneAccesoAlRepo: true },
+            { tieneAccesoAlRepo: false },
+          ]),
+        })}
+      />
+    );
+    expect(screen.getByText("Con acceso al repo")).toBeInTheDocument();
+    expect(screen.getByText("Sin acceso al repo")).toBeInTheDocument();
   });
 
   it("muestra el contador de integrantes cuando el grupo no está lleno", () => {

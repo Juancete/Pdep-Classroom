@@ -57,6 +57,8 @@ import {
   salirDeGrupo,
   moverAlumnoDeGrupo,
   getGrupos,
+  getGruposDeAlumno,
+  getGruposDeAssignment,
 } from "./GrupoRepository";
 import { getEM } from "@/infrastructure/db";
 import {
@@ -264,6 +266,61 @@ describe("getGrupos", () => {
       { assignment: { comision: { id: "c1" } }, paradigma: "funcional" },
       { populate: ["assignment", "miembros"] }
     );
+  });
+});
+
+// ── getGruposDeAlumno ───────────────────────────────────────
+// Issue #138: puebla `miembros.alumno` (populate anidado) para que
+// `MiembroDeGrupo.nombreCompleto()` tenga el `Alumno` cargado.
+
+describe("getGruposDeAlumno", () => {
+  it("busca por username (case-insensitive) y puebla assignment y miembros.alumno", async () => {
+    mockEm.find.mockResolvedValue([]);
+
+    await getGruposDeAlumno("Ana");
+
+    expect(mockEm.find).toHaveBeenCalledWith(
+      Grupo,
+      { miembros: { githubUsername: { $ilike: "Ana" } } },
+      { populate: ["assignment", "miembros.alumno"] }
+    );
+  });
+
+  it("devuelve un Map indexado por assignment.id", async () => {
+    const assignment = fakeGrupal({ id: "a1" });
+    const grupo = fakeGrupo("g1", assignment, []);
+    mockEm.find.mockResolvedValue([grupo]);
+
+    const grupos = await getGruposDeAlumno("ana");
+
+    expect(grupos.get("a1")).toBe(grupo);
+  });
+});
+
+// ── getGruposDeAssignment ───────────────────────────────────
+// Issue #138: mismo populate anidado que `getGruposDeAlumno`.
+
+describe("getGruposDeAssignment", () => {
+  it("busca por assignmentId y puebla miembros.alumno", async () => {
+    mockEm.find.mockResolvedValue([]);
+
+    await getGruposDeAssignment("a1");
+
+    expect(mockEm.find).toHaveBeenCalledWith(
+      Grupo,
+      { assignment: { id: "a1" } },
+      { populate: ["miembros.alumno"] }
+    );
+  });
+
+  it("devuelve los grupos del assignment", async () => {
+    const assignment = fakeGrupal({ id: "a1" });
+    const grupo = fakeGrupo("g1", assignment, []);
+    mockEm.find.mockResolvedValue([grupo]);
+
+    const grupos = await getGruposDeAssignment("a1");
+
+    expect(grupos).toEqual([grupo]);
   });
 });
 

@@ -1,7 +1,24 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { MikroORM } from "@mikro-orm/postgresql";
 import ormConfig from "../../mikro-orm.config";
+
+// Issue #138: el caso de más abajo ejercita `getGruposDeAlumno` real (no
+// SQL crudo) contra la base migrada por este archivo, para validar el
+// populate anidado `miembros.alumno` contra Postgres. Mockeamos `getEM`
+// para que el repositorio use el mismo `orm`/schema de este archivo en vez
+// del singleton global de `@/infrastructure/db` — mismo mecanismo que
+// `group-membership-invariants.integration.test.ts`.
+const ormHolder = vi.hoisted(() => ({ orm: undefined as MikroORM | undefined }));
+
+vi.mock("@/infrastructure/db", () => ({
+  getEM: async () => {
+    if (!ormHolder.orm) throw new Error("ORM de integración no inicializado");
+    return ormHolder.orm.em.fork();
+  },
+}));
+
+import { getGruposDeAlumno } from "../../src/infrastructure/repositories/GrupoRepository";
 
 const PREVIOUS_MIGRATION = "Migration20260917120000_docente";
 const GRUPO_MIEMBRO_MIGRATION = "Migration20260918120000_grupo_miembro";
@@ -48,10 +65,12 @@ describe("Migration20260918120000_grupo_miembro", () => {
       },
     });
     await resetPublicSchema(orm);
+    ormHolder.orm = orm;
   });
 
   afterAll(async () => {
     if (!orm) return;
+    ormHolder.orm = undefined;
     await resetPublicSchema(orm);
     await orm.close(true);
   });
@@ -170,5 +189,64 @@ describe("Migration20260918120000_grupo_miembro", () => {
        where table_schema = 'public' and table_name = 'grupo_miembro'`
     );
     expect(tablaGrupoMiembro).toEqual([]);
+  });
+
+  // Issue #138: único lugar que valida el populate anidado `miembros.alumno`
+  // (`GrupoRepository.getGruposDeAlumno`) contra Postgres — los tests
+  // unitarios de `GrupoRepository.test.ts` sólo assertan los argumentos de
+  // `populate` contra un EM mockeado, no que MikroORM resuelva el path
+  // anidado de verdad. El test anterior deja el schema en
+  // `PREVIOUS_MIGRATION` (hizo `migrator.down`), así que este vuelve a
+  // migrar hasta la última migración disponible antes de sembrar sus datos.
+  it("getGruposDeAlumno puebla miembros.alumno: nombreCompleto() no es null para un alumno registrado", async () => {
+    const connection = orm.em.getConnection();
+    await orm.getMigrator().up();
+
+    const comisionId = randomUUID();
+    await connection.execute(
+      `insert into "comision" ("id", "anio", "spreadsheet_id", "activa", "column_config")
+       values (?, 2026, 'sheet-grupo-miembro-nombre-completo', false, '{}'::jsonb)`,
+      [comisionId]
+    );
+
+    const assignmentId = randomUUID();
+    await connection.execute(
+      `insert into "assignment"
+        ("id", "titulo", "slug", "template_repo", "paradigma", "tipo",
+         "created_at", "comision_id", "max_integrantes", "inscripciones_cerradas",
+         "estado_nombre")
+       values (?, 'TP grupal', 'tp-grupo-miembro-nombre', 'org/template', 'funcional', 'grupal',
+         now(), ?, 3, false, 'publicado')`,
+      [assignmentId, comisionId]
+    );
+
+    const alumnoId = randomUUID();
+    await connection.execute(
+      `insert into "alumno"
+        ("id", "legajo", "nombre", "apellido", "github_username", "email", "comision_id")
+       values (?, '30002', 'Grace', 'Hopper', 'GraceHopper', 'grace@example.com', ?)`,
+      [alumnoId, comisionId]
+    );
+
+    const grupoId = randomUUID();
+    await connection.execute(
+      `insert into "grupo"
+        ("id", "nombre", "nombre_normalizado", "paradigma", "max_integrantes",
+         "creado_por", "assignment_id")
+       values (?, 'Los Turing', 'los-turing', 'funcional', 3, 'GraceHopper', ?)`,
+      [grupoId, assignmentId]
+    );
+
+    await connection.execute(
+      `insert into "grupo_miembro" ("id", "grupo_id", "assignment_id", "github_username", "alumno_id")
+       values (?, ?, ?, 'gracehopper', ?)`,
+      [randomUUID(), grupoId, assignmentId, alumnoId]
+    );
+
+    const grupos = await getGruposDeAlumno("gracehopper");
+    const grupo = grupos.get(assignmentId);
+    expect(grupo).toBeDefined();
+    const miembro = grupo!.miembros.getItems()[0];
+    expect(miembro.nombreCompleto()).toBe("Hopper, Grace");
   });
 });

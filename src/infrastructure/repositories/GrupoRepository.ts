@@ -88,6 +88,12 @@ async function traducirConflictoDeNombreGrupo<T>(
   }
 }
 
+// `miembros.alumno` (issue #138): populate anidado — el primero de este
+// repositorio; la sintaxis con punto es válida en MikroORM 6 (`Populate<T>`
+// es un `AutoPath` que admite paths de relaciones anidadas) y el path
+// implica al padre, así que no hace falta listar "miembros" por separado.
+// Lo necesita `MiembroDeGrupo.nombreCompleto()`: sin este populate, `alumno`
+// queda sin cargar y el getter no tiene nombre/apellido para leer.
 export async function getGruposDeAlumno(
   githubUsername: string
 ): Promise<Map<string, Grupo>> {
@@ -95,7 +101,7 @@ export async function getGruposDeAlumno(
   const grupos = await entityManager.find(
     Grupo,
     { miembros: { githubUsername: { $ilike: githubUsername } } },
-    { populate: ["assignment", "miembros"] }
+    { populate: ["assignment", "miembros.alumno"] }
   );
   return new Map(grupos.map((grupo) => [grupo.assignment.id, grupo]));
 }
@@ -120,12 +126,16 @@ export async function getGrupos(filtro: {
   );
 }
 
+// `miembros.alumno` (issue #138), mismo criterio que `getGruposDeAlumno`.
+// Los demás llamadores de esta función (panel admin, la API route, volcar a
+// planilla) sólo pagan un `IN` extra por lote de miembros: no justifica un
+// loader aparte.
 export async function getGruposDeAssignment(assignmentId: string): Promise<Grupo[]> {
   const entityManager = await getEM();
   return entityManager.find(
     Grupo,
     { assignment: { id: assignmentId } },
-    { populate: ["miembros"] }
+    { populate: ["miembros.alumno"] }
   );
 }
 
