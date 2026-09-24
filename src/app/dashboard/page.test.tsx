@@ -586,6 +586,25 @@ describe("Dashboard page", () => {
       expect(html).not.toContain("Elegir grupo");
     });
 
+    // Revisión del PR #139: la página de grupo exige `permiteAccionesDeAlumno()` y
+    // responde 404 en un TP archivado — el link de la tarjeta no debe llevar
+    // a ese 404, así que el nombre del grupo va sin link.
+    it("muestra el nombre del grupo sin link cuando el TP grupal está archivado", async () => {
+      const archivado = makeGrupalAssignment({ id: "tp-archivado" });
+      archivado.transicionarA("archivado", { tieneEntregas: true }, "docente1");
+      const entrega = makeEntrega({ repoUrl: "https://github.com/pdep/tp-archivado" });
+      mockGetAssignmentsDeComision.mockResolvedValue([archivado]);
+      mockGetEntregaDeUsuario.mockResolvedValue(new Map([["tp-archivado", entrega]]));
+      mockGetGruposDeAlumno.mockResolvedValue(
+        new Map([["tp-archivado", makeGrupo({ nombre: "Los Lambdas" })]])
+      );
+
+      const element = await DashboardPage();
+      const html = renderToStaticMarkup(element);
+      expect(html).toContain("Los Lambdas");
+      expect(html).not.toContain('href="/assignments/tp-archivado/grupo"');
+    });
+
     it("informa una provisión fallida archivada sin ofrecer reintento", async () => {
       const archivado = makeAssignment({ id: "a-archivado" });
       archivado.transicionarA("archivado", { tieneEntregas: true }, "docente1");

@@ -110,14 +110,22 @@ export default async function DashboardPage() {
                   )}
                   {grupo && (
                     <>
+                      {/* La página de grupo exige `permiteAccionesDeAlumno()`
+                          (`autorizarAccionSobreAssignment`) y responde 404 en
+                          un TP archivado, así que en ese caso el nombre va
+                          sin link. */}
                       <p className="text-xs text-gray-500 mt-1">
                         Grupo:{" "}
-                        <Link
-                          href={`/assignments/${assignment.id}/grupo`}
-                          className="font-medium text-blue-600 hover:underline"
-                        >
-                          {grupo.nombre}
-                        </Link>
+                        {puedeActuar ? (
+                          <Link
+                            href={`/assignments/${assignment.id}/grupo`}
+                            className="font-medium text-blue-600 hover:underline"
+                          >
+                            {grupo.nombre}
+                          </Link>
+                        ) : (
+                          <span className="font-medium">{grupo.nombre}</span>
+                        )}
                       </p>
                       <div className="mt-1.5">
                         <ListaDeIntegrantes
