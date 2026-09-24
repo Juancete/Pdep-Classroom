@@ -1,5 +1,7 @@
 import { AcceptButton } from "@/app/dashboard/accept-button";
 import { AccionesDeMembresia, type GrupoDisponible } from "./acciones-de-membresia";
+import { ListaDeIntegrantes } from "@/components/ListaDeIntegrantes";
+import type { IntegranteResumen } from "@/domain/entities";
 
 export type GrupoResumen = {
   id: string;
@@ -19,6 +21,7 @@ export function MiGrupo({
   assignmentId,
   tieneRepo,
   tieneAccesoAlRepo,
+  integrantes,
   githubUsername,
   motivoBloqueo,
   esUltimoMiembro,
@@ -28,6 +31,10 @@ export function MiGrupo({
   assignmentId: string;
   tieneRepo: boolean;
   tieneAccesoAlRepo: boolean;
+  // Issue #138: nombre + acceso al repo de cada integrante — reemplaza el
+  // `<ul>` de sólo usernames que había acá. Lo resuelve
+  // `Grupo.resumenDeIntegrantes` en el server component (`page.tsx`).
+  integrantes: IntegranteResumen[];
   githubUsername: string;
   motivoBloqueo: string | null;
   esUltimoMiembro: boolean;
@@ -50,13 +57,7 @@ export function MiGrupo({
 
       <div>
         <p className="text-sm text-gray-500 mb-1">Integrantes:</p>
-        <ul className="space-y-1">
-          {grupo.miembros.map((username) => (
-            <li key={username} className="text-sm font-mono text-gray-700">
-              @{username}
-            </li>
-          ))}
-        </ul>
+        <ListaDeIntegrantes integrantes={integrantes} tieneRepo={tieneRepo} />
       </div>
 
       {!tieneRepo && (

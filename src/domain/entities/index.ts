@@ -96,6 +96,7 @@ export {
   AlumnoNoEsMiembroDelGrupoError,
   GrupoConEntregaError,
   GrupoNoAdmiteParticipanteError,
+  type IntegranteResumen,
 } from "./Grupo";
 export { MiembroDeGrupo } from "./MiembroDeGrupo";
 export {

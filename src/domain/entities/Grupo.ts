@@ -12,6 +12,11 @@ import { randomUUID } from "crypto";
 import { Alumno } from "./Alumno";
 import { MiembroDeGrupo } from "./MiembroDeGrupo";
 import type { GrupalAssignment } from "./GrupalAssignment";
+// `import type`: `Entrega.ts` importa `Grupo` en runtime (relación
+// `Entrega.grupo`), así que un import de valor acá cerraría un ciclo de
+// módulos. Mismo criterio que el `import type { GrupalAssignment }` de
+// arriba.
+import type { Entrega } from "./Entrega";
 import type { Paradigma, TipoDeIntegrantes } from "@/types";
 import { PARADIGMAS } from "./domain-constants";
 
@@ -112,6 +117,16 @@ export class GrupoNoAdmiteParticipanteError extends Error {
     this.name = "GrupoNoAdmiteParticipanteError";
   }
 }
+
+// Salida de `Grupo.resumenDeIntegrantes` (issue #138): molde
+// `ParticipacionDeIntegrante` en `Entrega.ts`. La usan la tarjeta de
+// Mis TPs y la página de grupo (`MiGrupo`) para mostrar nombre y acceso al
+// repo de cada integrante.
+export type IntegranteResumen = {
+  username: string;
+  nombreCompleto: string | null;
+  tieneAccesoAlRepo: boolean;
+};
 
 @Entity()
 @Unique({
@@ -311,5 +326,24 @@ export class Grupo {
       throw new AlumnoNoEsMiembroDelGrupoError(this.id, githubUsername);
     }
     this.miembros.remove(miembro);
+  }
+
+  /**
+   * Resumen de cada integrante del grupo para la tarjeta de Mis TPs y la
+   * página de grupo (issue #138): nombre completo (si tiene `Alumno`
+   * vinculado, ver `MiembroDeGrupo.nombreCompleto`) y si tiene acceso al
+   * repo de `entrega`. El acceso se lee de `Entrega.githubUsernames` — los
+   * colaboradores reales del repo — que puede diferir de los miembros del
+   * grupo: quien se suma después de que el grupo ya aceptó el TP no tiene
+   * acceso hasta pedirlo (issue #123). Sin `entrega` o sin repo activo
+   * (`hasRepo()`), nadie tiene acceso.
+   */
+  resumenDeIntegrantes(entrega: Entrega | null): IntegranteResumen[] {
+    return this.miembros.getItems().map((miembro) => ({
+      username: miembro.githubUsername,
+      nombreCompleto: miembro.nombreCompleto(),
+      tieneAccesoAlRepo:
+        entrega !== null && entrega.hasRepo() && entrega.perteneceA(miembro.githubUsername),
+    }));
   }
 }
