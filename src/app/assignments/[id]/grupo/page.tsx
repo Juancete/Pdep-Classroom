@@ -100,6 +100,10 @@ export default async function GrupoPage(
           assignmentId={params.id}
           tieneRepo={entrega?.hasRepo() ?? false}
           tieneAccesoAlRepo={!!entrega && entrega.perteneceA(participante.githubUsername)}
+          // Issue #138: nombre + acceso al repo de cada integrante. `entrega`
+          // acá ya es la del grupo (vía `getEntregaLogica`), no la del
+          // usuario actual.
+          integrantes={miGrupo.resumenDeIntegrantes(entrega)}
           githubUsername={participante.githubUsername}
           motivoBloqueo={motivoBloqueo}
           esUltimoMiembro={miGrupo.quedaraVacioSiSale(participante.githubUsername)}

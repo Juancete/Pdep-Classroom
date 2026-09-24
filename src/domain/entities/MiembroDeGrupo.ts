@@ -44,4 +44,17 @@ export class MiembroDeGrupo {
 
   @ManyToOne(() => Alumno, { nullable: true, deleteRule: "cascade" })
   alumno?: Alumno;
+
+  /**
+   * `null` cuando este integrante no tiene `Alumno` vinculado — el caso del
+   * docente que arma un grupo de demo para mostrar el flujo de aceptación
+   * (issue #107/#112), que no tiene fila en `Alumno`. Requiere que el
+   * repositorio haya poblado `miembros.alumno`: igual que `Grupo.usernamesDeMiembros`
+   * depende implícitamente de que `miembros` esté populado, una referencia
+   * a `alumno` sin populate no tiene nombre/apellido cargados y el getter de
+   * `Alumno.nombreCompleto` devolvería basura (`"undefined, undefined"`).
+   */
+  nombreCompleto(): string | null {
+    return this.alumno?.nombreCompleto ?? null;
+  }
 }

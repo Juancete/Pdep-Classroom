@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PdepUser } from "@/types";
-import { Grupo, Alumno, GrupalAssignment, IndividualAssignment, DOCENTE, ESTUDIANTE } from "@/domain/entities";
+import {
+  Grupo,
+  MiembroDeGrupo,
+  GrupalAssignment,
+  IndividualAssignment,
+  DOCENTE,
+  ESTUDIANTE,
+} from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -48,6 +55,7 @@ vi.mock("./mi-grupo", () => ({
     grupo: { nombre: string };
     tieneRepo: boolean;
     tieneAccesoAlRepo: boolean;
+    integrantes: { username: string; nombreCompleto: string | null; tieneAccesoAlRepo: boolean }[];
     githubUsername: string;
     motivoBloqueo: string | null;
     esUltimoMiembro: boolean;
@@ -58,6 +66,12 @@ vi.mock("./mi-grupo", () => ({
       data-nombre={props.grupo.nombre}
       data-tiene-repo={String(props.tieneRepo)}
       data-tiene-acceso={String(props.tieneAccesoAlRepo)}
+      // Issue #138: username + acceso al repo de cada integrante, en el
+      // mismo orden que llegan — sin el nombre completo (no hace falta para
+      // estos tests de esta página).
+      data-integrantes={props.integrantes
+        .map((integrante) => `${integrante.username}:${integrante.tieneAccesoAlRepo}`)
+        .join(",")}
       data-username={props.githubUsername}
       data-motivo={props.motivoBloqueo ?? ""}
       data-ultimo={String(props.esUltimoMiembro)}
@@ -110,9 +124,12 @@ function makeAlumno(comisionId = "c1") {
   };
 }
 
+// Issue #138: miembros como `MiembroDeGrupo` (no `Alumno`) — `nombreCompleto()`
+// necesita esa clase, y `alumno` queda sin completar (mismo caso que un
+// docente en un grupo de demo, issue #107/#112).
 function makeGrupo(
   id: string,
-  miembros: string[],
+  usernames: string[],
   maxIntegrantes = 3,
   nombre = `grupo-${id}`
 ): Grupo {
@@ -122,8 +139,10 @@ function makeGrupo(
   grupo.nombreNormalizado = nombre;
   grupo.paradigma = "objetos";
   grupo.maxIntegrantes = maxIntegrantes;
-  grupo.creadoPor = miembros[0] ?? "alguien";
-  const items = miembros.map((username) => Object.assign(new Alumno(), { githubUsername: username }));
+  grupo.creadoPor = usernames[0] ?? "alguien";
+  const items = usernames.map((username) =>
+    Object.assign(new MiembroDeGrupo(), { githubUsername: username })
+  );
   Object.assign(grupo, {
     miembros: { getItems: () => items, length: items.length },
   });
@@ -245,6 +264,21 @@ describe("GrupoPage", () => {
     const html = renderToStaticMarkup(element);
     expect(html).toContain("data-tiene-repo=\"true\"");
     expect(html).toContain("data-tiene-acceso=\"true\"");
+  });
+
+  // Issue #138: `integrantes` es `Grupo.resumenDeIntegrantes(entrega)` — un
+  // integrante puede tener acceso y otro no, según figure o no en
+  // `githubUsernames` de la entrega (issue #123).
+  it("pasa integrantes con el acceso al repo de cada uno", async () => {
+    mockGetGruposDeAssignment.mockResolvedValue([
+      makeGrupo("g1", ["ana", "bob"], 3, "Los Lambdas"),
+    ]);
+    mockGetEntregaLogica.mockResolvedValue(
+      makeEntregaFake({ tieneRepo: true, colaboradores: ["ana"] })
+    );
+    const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });
+    const html = renderToStaticMarkup(element);
+    expect(html).toContain('data-integrantes="ana:true,bob:false"');
   });
 
   it("pasa tieneAccesoAlRepo=false cuando el repo está activo pero el usuario no figura como colaborador", async () => {

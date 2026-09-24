@@ -12,11 +12,14 @@ import {
 import { MiembroDeGrupo } from "./MiembroDeGrupo";
 import { GrupalAssignment } from "./GrupalAssignment";
 import { Alumno } from "./Alumno";
+import { Entrega } from "./Entrega";
 
-function fakeAlumno(github: string): Alumno {
+function fakeAlumno(github: string, nombre?: string, apellido?: string): Alumno {
   return Object.assign(new Alumno(), {
     id: `id-${github}`,
     githubUsername: github,
+    nombre,
+    apellido,
   });
 }
 
@@ -306,6 +309,71 @@ describe("Grupo", () => {
       expect(grupo.estaLleno()).toBe(true);
       expect(grupo.usernamesDeMiembros()).toContain("profe-docente");
       expect(grupo.contieneA("profe-docente")).toBe(true);
+    });
+  });
+
+  // Issue #138: usan este resumen la tarjeta de Mis TPs y la página de grupo.
+  describe("resumenDeIntegrantes", () => {
+    function entregaConRepo(overrides: Partial<Entrega> = {}): Entrega {
+      return Object.assign(new Entrega(), {
+        provisionEstado: "activa",
+        repoUrl: "https://github.com/org/repo",
+        repoDeleted: false,
+        githubUsernames: [],
+        ...overrides,
+      });
+    }
+
+    it("sin entrega, ningún integrante tiene acceso al repo", () => {
+      const grupo = nuevoGrupo(3, [fakeMiembro("ana"), fakeMiembro("bob")]);
+      const resumen = grupo.resumenDeIntegrantes(null);
+      expect(resumen.map((integrante) => integrante.tieneAccesoAlRepo)).toEqual([false, false]);
+    });
+
+    it("con entrega y repo activo, marca acceso sólo a quienes figuran en githubUsernames (mismo orden que los miembros)", () => {
+      const grupo = nuevoGrupo(3, [fakeMiembro("ana"), fakeMiembro("bob")]);
+      const entrega = entregaConRepo({ githubUsernames: ["ana"] });
+      const resumen = grupo.resumenDeIntegrantes(entrega);
+      expect(resumen.map((integrante) => integrante.username)).toEqual(["ana", "bob"]);
+      expect(resumen.map((integrante) => integrante.tieneAccesoAlRepo)).toEqual([true, false]);
+    });
+
+    it("entrega fallida (sin repo activo) deja a todos sin acceso aunque figuren en githubUsernames", () => {
+      const grupo = nuevoGrupo(3, [fakeMiembro("ana"), fakeMiembro("bob")]);
+      const entrega = entregaConRepo({
+        provisionEstado: "fallida",
+        repoUrl: undefined,
+        githubUsernames: ["ana", "bob"],
+      });
+      const resumen = grupo.resumenDeIntegrantes(entrega);
+      expect(resumen.map((integrante) => integrante.tieneAccesoAlRepo)).toEqual([false, false]);
+    });
+
+    it("entrega con repo borrado deja a todos sin acceso aunque figuren en githubUsernames", () => {
+      const grupo = nuevoGrupo(3, [fakeMiembro("ana"), fakeMiembro("bob")]);
+      const entrega = entregaConRepo({ repoDeleted: true, githubUsernames: ["ana", "bob"] });
+      const resumen = grupo.resumenDeIntegrantes(entrega);
+      expect(resumen.map((integrante) => integrante.tieneAccesoAlRepo)).toEqual([false, false]);
+    });
+
+    it("matchea el acceso con normalización (espacios, @ y mayúsculas)", () => {
+      const grupo = nuevoGrupo(3, [fakeMiembro("ana")]);
+      const entrega = entregaConRepo({ githubUsernames: ["@Ana "] });
+      const resumen = grupo.resumenDeIntegrantes(entrega);
+      expect(resumen[0].tieneAccesoAlRepo).toBe(true);
+    });
+
+    it("nombreCompleto es null para un miembro sin alumno vinculado", () => {
+      const grupo = nuevoGrupo(3, [fakeMiembro("profe-docente")]);
+      const resumen = grupo.resumenDeIntegrantes(null);
+      expect(resumen[0].nombreCompleto).toBeNull();
+    });
+
+    it("nombreCompleto viene del alumno vinculado", () => {
+      const ana = fakeAlumno("ana", "Ana", "García");
+      const grupo = nuevoGrupo(3, [fakeMiembro("ana", ana)]);
+      const resumen = grupo.resumenDeIntegrantes(null);
+      expect(resumen[0].nombreCompleto).toBe("García, Ana");
     });
   });
 });

@@ -2,6 +2,7 @@ import { requireUser } from "@/infrastructure/auth/session";
 import {
   getAssignmentsDeComision,
   getEntregasDeUsuario,
+  getEntregasDeGrupos,
   getComisionActiva,
   getGruposDeAlumno,
 } from "@/infrastructure/repositories";
@@ -11,7 +12,9 @@ import Link from "next/link";
 import { EstadoAssignmentBadge } from "@/components/EstadoAssignmentBadge";
 import { CIBadge } from "@/components/CIBadge";
 import { CIRefreshButton } from "./ci-refresh-button";
+import { ListaDeIntegrantes } from "@/components/ListaDeIntegrantes";
 import { resolverParticipante } from "@/application/participante";
+import type { Entrega } from "@/domain/entities";
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -25,19 +28,33 @@ export default async function DashboardPage() {
   // alumno, y sólo si hay comisión activa y todavía no confirmó en ella.
   if (participante.necesitaRegistro(comisionActiva)) redirect("/registro");
 
-  const [assignments, entregasMap, gruposMap] = await Promise.all([
+  const [assignments, entregasMap, gruposMap, entregasPorGrupo] = await Promise.all([
     comisionActiva ? getAssignmentsDeComision(comisionActiva.id) : Promise.resolve([]),
     getEntregasDeUsuario(participante.githubUsername),
     getGruposDeAlumno(participante.githubUsername),
+    comisionActiva
+      ? getEntregasDeGrupos({ comisionId: comisionActiva.id })
+      : Promise.resolve(new Map<string, Entrega>()),
   ]);
 
   const assignmentsConEntrega = assignments
     .sort((prev, next) => new Date(next.createdAt).getTime() - new Date(prev.createdAt).getTime())
-    .map((assignment) => ({
-      assignment,
-      entrega: entregasMap.get(assignment.id) ?? null,
-      grupo: gruposMap.get(assignment.id) ?? null,
-    }))
+    .map((assignment) => {
+      const grupo = gruposMap.get(assignment.id) ?? null;
+      return {
+        assignment,
+        entrega: entregasMap.get(assignment.id) ?? null,
+        grupo,
+        // `getEntregasDeUsuario` filtra por `perteneceA(username)`, así que
+        // un integrante que se sumó al grupo después de creado el repo
+        // (issue #123) no tiene `entrega` propia aunque el grupo sí — la
+        // tarjeta necesita la entrega DEL GRUPO para poder mostrarle a
+        // todos quién tiene acceso (issue #138). La `entrega` del usuario,
+        // arriba, sigue gobernando la columna de acciones ("Ir al
+        // repo"/`AcceptButton`) sin cambios.
+        entregaDelGrupo: grupo ? entregasPorGrupo.get(grupo.id) ?? null : null,
+      };
+    })
     // Mis TPs es la vista del alumno para todos (issue #107/#112): publicado
     // siempre, archivado sólo si ya tenés entrega — sin ningún `if` de rol.
     .filter(({ assignment, entrega }) => assignment.esVisibleParaAlumno(entrega !== null));
@@ -56,7 +73,7 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {assignmentsConEntrega.map(({ assignment, entrega, grupo }) => {
+          {assignmentsConEntrega.map(({ assignment, entrega, grupo, entregaDelGrupo }) => {
             const puedeActuar = assignment.permiteAccionesDeAlumno();
             return (
               <div
@@ -91,16 +108,24 @@ export default async function DashboardPage() {
                       })}
                     </p>
                   )}
-                  {grupo && !entrega && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Grupo:{" "}
-                      <Link
-                        href={`/assignments/${assignment.id}/grupo`}
-                        className="font-medium text-blue-600 hover:underline"
-                      >
-                        {grupo.nombre}
-                      </Link>
-                    </p>
+                  {grupo && (
+                    <>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Grupo:{" "}
+                        <Link
+                          href={`/assignments/${assignment.id}/grupo`}
+                          className="font-medium text-blue-600 hover:underline"
+                        >
+                          {grupo.nombre}
+                        </Link>
+                      </p>
+                      <div className="mt-1.5">
+                        <ListaDeIntegrantes
+                          integrantes={grupo.resumenDeIntegrantes(entregaDelGrupo)}
+                          tieneRepo={entregaDelGrupo?.hasRepo() ?? false}
+                        />
+                      </div>
+                    </>
                   )}
                 </div>
 
