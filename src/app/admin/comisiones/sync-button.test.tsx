@@ -21,15 +21,14 @@ vi.mock("react-dom", async () => {
   };
 });
 
-vi.mock("./actions", () => ({
-  sincronizarAlumnos: vi.fn(),
-}));
-
 import { SyncButton } from "./sync-button";
 
 // ── Helpers ───────────────────────────────────────────────────
 
 const noop = vi.fn();
+// La action llega por prop desde el server component (`edit/page.tsx`,
+// issue #90) — el componente no la importa, así que alcanza con un stub.
+const actionStub = vi.fn();
 
 function idleState() {
   mockUseActionState.mockReturnValue([{ status: "idle" }, noop]);
@@ -46,18 +45,18 @@ describe("SyncButton", () => {
 
   describe("estado idle", () => {
     it("renderiza el botón Sincronizar", () => {
-      render(<SyncButton comisionId="c1" />);
+      render(<SyncButton comisionId="c1" action={actionStub} />);
       expect(screen.getByRole("button", { name: "Sincronizar" })).toBeInTheDocument();
     });
 
     it("incluye el comisionId como campo oculto", () => {
-      const { container } = render(<SyncButton comisionId="abc123" />);
+      const { container } = render(<SyncButton comisionId="abc123" action={actionStub} />);
       const hidden = container.querySelector<HTMLInputElement>('[name="comisionId"]');
       expect(hidden?.value).toBe("abc123");
     });
 
     it("no muestra mensajes de estado", () => {
-      render(<SyncButton comisionId="c1" />);
+      render(<SyncButton comisionId="c1" action={actionStub} />);
       expect(screen.queryByText(/sincronizados/i)).not.toBeInTheDocument();
     });
   });
@@ -65,13 +64,13 @@ describe("SyncButton", () => {
   describe("estado ok", () => {
     it("muestra el conteo de alumnos sincronizados", () => {
       mockUseActionState.mockReturnValue([{ status: "ok", sincronizados: 7 }, noop]);
-      render(<SyncButton comisionId="c1" />);
+      render(<SyncButton comisionId="c1" action={actionStub} />);
       expect(screen.getByText("7 sincronizados")).toBeInTheDocument();
     });
 
     it("no muestra mensaje de error", () => {
       mockUseActionState.mockReturnValue([{ status: "ok", sincronizados: 3 }, noop]);
-      render(<SyncButton comisionId="c1" />);
+      render(<SyncButton comisionId="c1" action={actionStub} />);
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
   });
@@ -82,7 +81,7 @@ describe("SyncButton", () => {
         { status: "error", message: "No se pudo leer la planilla" },
         noop,
       ]);
-      render(<SyncButton comisionId="c1" />);
+      render(<SyncButton comisionId="c1" action={actionStub} />);
       expect(screen.getByText("No se pudo leer la planilla")).toBeInTheDocument();
     });
 
@@ -91,7 +90,7 @@ describe("SyncButton", () => {
         { status: "error", message: "Error" },
         noop,
       ]);
-      render(<SyncButton comisionId="c1" />);
+      render(<SyncButton comisionId="c1" action={actionStub} />);
       expect(screen.queryByText(/sincronizados/i)).not.toBeInTheDocument();
     });
   });
@@ -99,18 +98,18 @@ describe("SyncButton", () => {
   describe("estado pending", () => {
     it("muestra 'Sincronizando…' mientras está pendiente", () => {
       mockUseFormStatus.mockReturnValue({ pending: true });
-      render(<SyncButton comisionId="c1" />);
+      render(<SyncButton comisionId="c1" action={actionStub} />);
       expect(screen.getByRole("button", { name: "Sincronizando…" })).toBeInTheDocument();
     });
 
     it("el botón está deshabilitado mientras está pendiente", () => {
       mockUseFormStatus.mockReturnValue({ pending: true });
-      render(<SyncButton comisionId="c1" />);
+      render(<SyncButton comisionId="c1" action={actionStub} />);
       expect(screen.getByRole("button")).toBeDisabled();
     });
 
     it("el botón no está deshabilitado en idle", () => {
-      render(<SyncButton comisionId="c1" />);
+      render(<SyncButton comisionId="c1" action={actionStub} />);
       expect(screen.getByRole("button")).toBeEnabled();
     });
   });

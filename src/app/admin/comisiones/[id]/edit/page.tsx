@@ -9,7 +9,12 @@ import type { Alumno } from "@/domain/entities";
 import { getAlumnos, getSheetNames } from "@/infrastructure/sheets";
 import { redirect } from "next/navigation";
 import { ComisionForm } from "../../comision-form";
-import { actualizarComision } from "../../actions";
+import {
+  actualizarComision,
+  sincronizarAlumnos,
+  sincronizarGruposDeLaComision,
+  sincronizarCanalesDeLaComision,
+} from "../../actions";
 import { SyncButton } from "../../sync-button";
 import { SyncGruposButton } from "../../sync-grupos-button";
 import { SyncCanalesButton } from "../../sync-canales-button";
@@ -57,6 +62,13 @@ export default async function EditComisionPage(
     <div className="max-w-xl">
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold">Editar Comisión {comision.anio}</h1>
+        {/* Las tres actions se importan acá (server component) y se pasan por
+            prop — igual que `ComisionForm`/`DocenteForm`. Si `sync-button.tsx`,
+            `sync-grupos-button.tsx` o `sync-canales-button.tsx` volvieran a
+            importarlas directamente, Next las compilaría en la layer
+            `action-browser` (porque sólo las importaría un client component)
+            en vez de `rsc`, duplicando `src/infrastructure/db.ts` y las
+            entidades en el bundle (issue #90). */}
         {desynced && (
           <>
             <span
@@ -66,7 +78,7 @@ export default async function EditComisionPage(
               <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
               Desincronizado · {countSheet} en planilla / {countDB} en DB
             </span>
-            <SyncButton comisionId={comision.id} />
+            <SyncButton comisionId={comision.id} action={sincronizarAlumnos} />
           </>
         )}
         {!comision.gruposYaImportados() && (comision.columnConfig?.grupos || cantPendientesGrupos > 0) && (
@@ -80,7 +92,7 @@ export default async function EditComisionPage(
                 ? `Grupos pendientes · ${cantPendientesGrupos}`
                 : "Bootstrap de grupos pendiente"}
             </span>
-            <SyncGruposButton comisionId={comision.id} />
+            <SyncGruposButton comisionId={comision.id} action={sincronizarGruposDeLaComision} />
           </>
         )}
         {comision.gruposImportadosEn && (
@@ -97,7 +109,7 @@ export default async function EditComisionPage(
               <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
               Suscripciones pendientes · {cantSuscripcionesPendientes}
             </span>
-            <SyncCanalesButton comisionId={comision.id} />
+            <SyncCanalesButton comisionId={comision.id} action={sincronizarCanalesDeLaComision} />
           </>
         )}
       </div>
