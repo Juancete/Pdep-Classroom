@@ -14,6 +14,7 @@ import { resumirGrupoParaAdmin } from "../../../grupo-resumen";
 import type { GrupoAdminResumen } from "../../../grupo-resumen";
 import type { Entrega } from "@/domain/entities";
 import { VolcarGruposButton } from "../volcar-grupos-button";
+import { volcarGruposALaPlanilla } from "../../actions";
 
 export default async function GruposAssignmentPage(props: {
   params: Promise<{ id: string }>;
@@ -72,9 +73,17 @@ export default async function GruposAssignmentPage(props: {
 
       {assignment.puedeVolcarseAPlanilla() && columnaGrupoEnPlanilla !== undefined && (
         <div className="mb-4">
+          {/* `volcarGruposALaPlanilla` se importa acá (server component) y se
+              pasa por prop — igual que `DocenteForm`/`docente-acciones.tsx`.
+              Si `volcar-grupos-button.tsx` volviera a importar la action
+              directamente, Next la compilaría en la layer `action-browser`
+              (porque sólo la importaría un client component) en vez de
+              `rsc`, duplicando `src/infrastructure/db.ts` y las entidades en
+              el bundle (issue #90). */}
           <VolcarGruposButton
             assignmentId={assignment.id}
             columna={columnaGrupoEnPlanilla}
+            action={volcarGruposALaPlanilla}
           />
         </div>
       )}

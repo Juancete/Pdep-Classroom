@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { colLetter } from "@/lib/sheets-columns";
-import { volcarGruposALaPlanilla, type VolcarGruposState } from "../actions";
+import type { VolcarGruposState } from "../actions";
 
 function VolcarSubmitButton({ columna }: { columna: number }) {
   const { pending } = useFormStatus();
@@ -21,9 +21,17 @@ function VolcarSubmitButton({ columna }: { columna: number }) {
 export function VolcarGruposButton({
   assignmentId,
   columna,
+  action: volcarGruposALaPlanilla,
 }: {
   assignmentId: string;
   columna: number;
+  // Recibida por prop desde el server component (`grupos/page.tsx`): ver el
+  // comentario ahí sobre por qué este client component no importa la action
+  // directamente (issue #90).
+  action: (
+    prevState: VolcarGruposState,
+    formData: FormData
+  ) => Promise<VolcarGruposState>;
 }) {
   const [state, action] = useActionState<VolcarGruposState, FormData>(
     volcarGruposALaPlanilla,

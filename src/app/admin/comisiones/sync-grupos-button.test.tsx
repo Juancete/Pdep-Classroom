@@ -21,15 +21,14 @@ vi.mock("react-dom", async () => {
   };
 });
 
-vi.mock("./actions", () => ({
-  sincronizarGruposDeLaComision: vi.fn(),
-}));
-
 import { SyncGruposButton } from "./sync-grupos-button";
 
 // ── Helpers ───────────────────────────────────────────────────
 
 const noop = vi.fn();
+// La action llega por prop desde el server component (`edit/page.tsx`,
+// issue #90) — el componente no la importa, así que alcanza con un stub.
+const actionStub = vi.fn();
 
 function idleState() {
   mockUseActionState.mockReturnValue([{ status: "idle" }, noop]);
@@ -46,20 +45,20 @@ describe("SyncGruposButton", () => {
 
   describe("estado idle", () => {
     it("renderiza el botón de importación", () => {
-      render(<SyncGruposButton comisionId="c1" />);
+      render(<SyncGruposButton comisionId="c1" action={actionStub} />);
       expect(
         screen.getByRole("button", { name: "Importar grupos desde Sheets" })
       ).toBeInTheDocument();
     });
 
     it("incluye el comisionId como campo oculto", () => {
-      const { container } = render(<SyncGruposButton comisionId="abc123" />);
+      const { container } = render(<SyncGruposButton comisionId="abc123" action={actionStub} />);
       const hidden = container.querySelector<HTMLInputElement>('[name="comisionId"]');
       expect(hidden?.value).toBe("abc123");
     });
 
     it("no muestra mensajes de estado", () => {
-      render(<SyncGruposButton comisionId="c1" />);
+      render(<SyncGruposButton comisionId="c1" action={actionStub} />);
       expect(screen.queryByText(/resueltos/i)).not.toBeInTheDocument();
     });
   });
@@ -70,7 +69,7 @@ describe("SyncGruposButton", () => {
         { status: "ok", sincronizados: 5, aunConError: 0 },
         noop,
       ]);
-      render(<SyncGruposButton comisionId="c1" />);
+      render(<SyncGruposButton comisionId="c1" action={actionStub} />);
       expect(screen.getByText(/5 resueltos/)).toBeInTheDocument();
       expect(screen.queryByText(/aún con error/)).not.toBeInTheDocument();
     });
@@ -80,7 +79,7 @@ describe("SyncGruposButton", () => {
         { status: "ok", sincronizados: 3, aunConError: 2 },
         noop,
       ]);
-      render(<SyncGruposButton comisionId="c1" />);
+      render(<SyncGruposButton comisionId="c1" action={actionStub} />);
       expect(screen.getByText(/3 resueltos/)).toBeInTheDocument();
       expect(screen.getByText(/2 aún con error/)).toBeInTheDocument();
     });
@@ -92,7 +91,7 @@ describe("SyncGruposButton", () => {
         { status: "error", message: "Comisión no encontrada" },
         noop,
       ]);
-      render(<SyncGruposButton comisionId="c1" />);
+      render(<SyncGruposButton comisionId="c1" action={actionStub} />);
       expect(screen.getByText("Comisión no encontrada")).toBeInTheDocument();
     });
   });
@@ -100,7 +99,7 @@ describe("SyncGruposButton", () => {
   describe("estado pending", () => {
     it("muestra 'Importando…' y desactiva el botón", () => {
       mockUseFormStatus.mockReturnValue({ pending: true });
-      render(<SyncGruposButton comisionId="c1" />);
+      render(<SyncGruposButton comisionId="c1" action={actionStub} />);
       const btn = screen.getByRole("button", { name: "Importando…" });
       expect(btn).toBeInTheDocument();
       expect(btn).toBeDisabled();

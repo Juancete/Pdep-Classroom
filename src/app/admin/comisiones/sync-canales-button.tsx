@@ -2,10 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import {
-  sincronizarCanalesDeLaComision,
-  type SyncCanalesState,
-} from "./actions";
+import type { SyncCanalesState } from "./actions";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -22,8 +19,16 @@ function SubmitButton() {
 
 export function SyncCanalesButton({
   comisionId,
+  action: sincronizarCanalesDeLaComision,
 }: {
   comisionId: string;
+  // Recibida por prop desde el server component (`edit/page.tsx`): ver el
+  // comentario ahí sobre por qué este client component no importa la action
+  // directamente (issue #90).
+  action: (
+    prevState: SyncCanalesState,
+    formData: FormData
+  ) => Promise<SyncCanalesState>;
 }) {
   const [state, action] = useActionState<SyncCanalesState, FormData>(
     sincronizarCanalesDeLaComision,
