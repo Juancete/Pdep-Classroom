@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { sincronizarAlumnos, type SyncState } from "./actions";
+import type { SyncState } from "./actions";
 
 function SyncSubmitButton() {
   const { pending } = useFormStatus();
@@ -17,7 +17,16 @@ function SyncSubmitButton() {
   );
 }
 
-export function SyncButton({ comisionId }: { comisionId: string }) {
+export function SyncButton({
+  comisionId,
+  action: sincronizarAlumnos,
+}: {
+  comisionId: string;
+  // Recibida por prop desde el server component (`edit/page.tsx`): ver el
+  // comentario ahí sobre por qué este client component no importa la action
+  // directamente (issue #90).
+  action: (prevState: SyncState, formData: FormData) => Promise<SyncState>;
+}) {
   const [state, action] = useActionState<SyncState, FormData>(
     sincronizarAlumnos,
     { status: "idle" }

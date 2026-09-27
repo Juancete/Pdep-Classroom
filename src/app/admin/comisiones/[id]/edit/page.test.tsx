@@ -51,6 +51,7 @@ vi.mock("../../actions", () => ({
   actualizarComision: vi.fn(),
   sincronizarAlumnos: vi.fn().mockResolvedValue({ status: "idle" }),
   sincronizarGruposDeLaComision: vi.fn().mockResolvedValue({ status: "idle" }),
+  sincronizarCanalesDeLaComision: vi.fn().mockResolvedValue({ status: "idle" }),
 }));
 
 vi.mock("../../sync-button", () => ({
