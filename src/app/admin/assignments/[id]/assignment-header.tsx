@@ -15,7 +15,7 @@ export function AssignmentHeader({
   acciones?: React.ReactNode;
 }) {
   const base = `/admin/assignments/${assignment.id}`;
-  const esGrupal = assignment.comoGrupal() !== null;
+  const esGrupal = assignment.tieneGestionDeGrupos();
   const pestanas: { clave: PestanaDeAssignment; etiqueta: string; href: string; visible: boolean }[] = [
     { clave: "detalle", etiqueta: "Detalle", href: base, visible: true },
     { clave: "grupos", etiqueta: "Grupos", href: `${base}/grupos`, visible: esGrupal },

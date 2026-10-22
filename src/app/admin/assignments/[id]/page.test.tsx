@@ -64,6 +64,7 @@ vi.mock("./entregas-table", () => ({
         participacion?: { commits: number; porcentaje: number };
       }[];
       participacion?: { totalCommits: number };
+      avisoDeProvision?: { etiqueta: string } | null;
     }[];
     mostrarGrupo: boolean;
   }) => (
@@ -74,6 +75,7 @@ vi.mock("./entregas-table", () => ({
       data-grupos-nombres={entregas.map((entrega) => entrega.grupoNombre ?? "").join(",")}
       data-integrantes={JSON.stringify(entregas.map((entrega) => entrega.integrantes))}
       data-participacion={JSON.stringify(entregas.map((entrega) => entrega.participacion ?? null))}
+      data-avisos-provision={JSON.stringify(entregas.map((entrega) => entrega.avisoDeProvision?.etiqueta ?? null))}
     />
   ),
 }));
@@ -461,6 +463,22 @@ describe("Admin Assignment Detail Page", () => {
       ]);
       const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
       expect(renderToStaticMarkup(element)).toContain('data-count="3"');
+    });
+
+    it("una entrega con provisión fallida llega con su aviso de provisión", async () => {
+      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
+      mockGetEntregas.mockResolvedValue([makeEntrega({ provisionEstado: "fallida" })]);
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      const avisosEsperados = JSON.stringify(["Aprovisionamiento fallido"]).replace(/"/g, "&quot;");
+      expect(renderToStaticMarkup(element)).toContain(`data-avisos-provision="${avisosEsperados}"`);
+    });
+
+    it("una entrega con provisión activa llega con aviso nulo", async () => {
+      mockGetAssignment.mockResolvedValue(makeIndividualAssignment());
+      mockGetEntregas.mockResolvedValue([makeEntrega({ provisionEstado: "activa" })]);
+      const element = await AssignmentDetailPage({ params: Promise.resolve({ id: "a1" }) });
+      const avisosEsperados = JSON.stringify([null]).replace(/"/g, "&quot;");
+      expect(renderToStaticMarkup(element)).toContain(`data-avisos-provision="${avisosEsperados}"`);
     });
 
     it("resuelve el nombreCompleto de cada integrante por username", async () => {

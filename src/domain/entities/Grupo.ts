@@ -17,7 +17,8 @@ import type { GrupalAssignment } from "./GrupalAssignment";
 // módulos. Mismo criterio que el `import type { GrupalAssignment }` de
 // arriba.
 import type { Entrega } from "./Entrega";
-import type { Paradigma, TipoDeIntegrantes } from "@/types";
+import type { Paradigma } from "@/types";
+import { TipoDeIntegrantes, type NombreTipoDeIntegrantes } from "./TipoDeIntegrantes";
 import { PARADIGMAS } from "./domain-constants";
 
 // Reexportado para no romper imports existentes: el error es sobre
@@ -168,9 +169,15 @@ export class Grupo {
   // "docentes" (grupo armado para la demo de Mis TPs). Lo fija el creador
   // (`GrupalAssignment.crearGrupo`) y no cambia después. `fieldName`
   // explícito: la convención de nombres derivaría `tipo_de_integrantes`
-  // (una palabra más que la columna real `tipo_integrantes`).
+  // (una palabra más que la columna real `tipo_integrantes`). Se guarda el
+  // nombre (string, sin check constraint) y `tipoDeIntegrantes` lo hidrata
+  // al objeto de dominio, igual que `Entrega.ciResultadoNombre`.
   @Property({ type: "string", fieldName: "tipo_integrantes" })
-  tipoDeIntegrantes: TipoDeIntegrantes = "alumnos";
+  tipoDeIntegrantesNombre: NombreTipoDeIntegrantes = "alumnos";
+
+  get tipoDeIntegrantes(): TipoDeIntegrantes {
+    return TipoDeIntegrantes.desdeNombre(this.tipoDeIntegrantesNombre);
+  }
 
   @ManyToOne("GrupalAssignment", { deleteRule: "cascade" })
   assignment!: GrupalAssignment;
@@ -225,7 +232,13 @@ export class Grupo {
    * son cupos y selectores completamente separados.
    */
   admiteIntegrantesDe(tipoDeIntegrantes: TipoDeIntegrantes): boolean {
+    // Identidad: cada tipo es una instancia única (`TipoDeIntegrantes.desdeNombre`).
     return this.tipoDeIntegrantes === tipoDeIntegrantes;
+  }
+
+  /** `true` si este grupo puede recibir un integrante nuevo del tipo indicado: tiene cupo y admite ese tipo. */
+  admiteNuevoIntegrante(tipoDeIntegrantes: TipoDeIntegrantes): boolean {
+    return !this.estaLleno() && this.admiteIntegrantesDe(tipoDeIntegrantes);
   }
 
   /**
@@ -237,14 +250,13 @@ export class Grupo {
     return (
       this.id !== origen.id &&
       this.assignment.id === origen.assignment.id &&
-      !this.estaLleno() &&
-      this.admiteIntegrantesDe(origen.tipoDeIntegrantes)
+      this.admiteNuevoIntegrante(origen.tipoDeIntegrantes)
     );
   }
 
   /** Un grupo de alumnos sólo integra alumnos registrados; uno de docentes admite miembros sin fila. */
   exigeVinculoConAlumno(): boolean {
-    return this.tipoDeIntegrantes === "alumnos";
+    return this.tipoDeIntegrantes.exigeVinculoConAlumno();
   }
 
   /**
@@ -284,7 +296,7 @@ export class Grupo {
     maxIntegrantes: number;
     estaLleno: boolean;
     miembros: string[];
-    tipoDeIntegrantes: TipoDeIntegrantes;
+    tipoDeIntegrantes: NombreTipoDeIntegrantes;
   } {
     return {
       id: this.id,
@@ -293,7 +305,7 @@ export class Grupo {
       maxIntegrantes: this.maxIntegrantes,
       estaLleno: this.estaLleno(),
       miembros: this.usernamesDeMiembros(),
-      tipoDeIntegrantes: this.tipoDeIntegrantes,
+      tipoDeIntegrantes: this.tipoDeIntegrantesNombre,
     };
   }
 

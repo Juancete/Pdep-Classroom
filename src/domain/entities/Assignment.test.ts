@@ -7,6 +7,8 @@ import {
 } from "./GrupalAssignment";
 import type { Assignment } from "./Assignment";
 import { Alumno } from "./Alumno";
+import { Entrega } from "./Entrega";
+import type { PresentacionDeSituacion } from "./SituacionDeAlumno";
 import type { Grupo } from "./Grupo";
 import type { Participante } from "./Participante";
 import { TransicionDeEstadoInvalidaError } from "./EstadoAssignment";
@@ -361,6 +363,101 @@ describe("Assignment.comoGrupal / exigirGrupal", () => {
       expect(error).toBeInstanceOf(AssignmentNoGrupalError);
       expect((error as AssignmentNoGrupalError).assignmentId).toBe("a1");
     }
+  });
+});
+
+describe("Assignment.tieneGestionDeGrupos / estadoDeInscripciones", () => {
+  const sinRestricciones = { tieneEntregas: false };
+
+  it("tieneGestionDeGrupos: false en individual, true en grupal", () => {
+    expect(new IndividualAssignment().tieneGestionDeGrupos()).toBe(false);
+    expect(new GrupalAssignment().tieneGestionDeGrupos()).toBe(true);
+  });
+
+  it("estadoDeInscripciones: individual devuelve null", () => {
+    const individual = new IndividualAssignment();
+    individual.transicionarA("publicado", sinRestricciones, "docente1");
+    expect(individual.estadoDeInscripciones()).toBeNull();
+  });
+
+  it("estadoDeInscripciones: grupal publicado con inscripciones abiertas", () => {
+    const grupal = new GrupalAssignment();
+    grupal.transicionarA("publicado", sinRestricciones, "docente1");
+    expect(grupal.estadoDeInscripciones()).toEqual({ cerradas: false });
+  });
+
+  it("estadoDeInscripciones: grupal publicado con inscripciones cerradas", () => {
+    const grupal = new GrupalAssignment();
+    grupal.transicionarA("publicado", sinRestricciones, "docente1");
+    grupal.inscripcionesCerradas = true;
+    expect(grupal.estadoDeInscripciones()).toEqual({ cerradas: true });
+  });
+
+  it("estadoDeInscripciones: grupal en borrador devuelve null", () => {
+    expect(new GrupalAssignment().estadoDeInscripciones()).toBeNull();
+  });
+
+  it("estadoDeInscripciones: grupal archivado devuelve null", () => {
+    const grupal = new GrupalAssignment();
+    grupal.transicionarA("archivado", sinRestricciones, "docente1");
+    expect(grupal.estadoDeInscripciones()).toBeNull();
+  });
+});
+
+describe("Assignment.situacionDeAlumno", () => {
+  const sinRestricciones = { tieneEntregas: false };
+  const presentacion: PresentacionDeSituacion<string> = {
+    conRepo: (repo) => `conRepo|${repo.repoUrl}`,
+    sinRepo: (aviso) => `sinRepo|${aviso.mensaje}`,
+    elegirGrupo: () => "elegirGrupo",
+    aceptar: () => "aceptar",
+    sinAccion: () => "sinAccion",
+  };
+
+  function entregaConRepo(): Entrega {
+    const entrega = new Entrega();
+    entrega.repoUrl = "https://github.com/org/repo";
+    return entrega;
+  }
+
+  it("individual publicado sin entrega: aceptar", () => {
+    const individual = new IndividualAssignment();
+    individual.transicionarA("publicado", sinRestricciones, "docente1");
+    expect(individual.situacionDeAlumno(null, null).presentar(presentacion)).toBe("aceptar");
+  });
+
+  it("grupal publicado sin grupo: elegirGrupo", () => {
+    const grupal = new GrupalAssignment();
+    grupal.transicionarA("publicado", sinRestricciones, "docente1");
+    expect(grupal.situacionDeAlumno(null, null).presentar(presentacion)).toBe("elegirGrupo");
+  });
+
+  it("grupal publicado con grupo: aceptar", () => {
+    const grupal = new GrupalAssignment();
+    grupal.transicionarA("publicado", sinRestricciones, "docente1");
+    expect(grupal.situacionDeAlumno(null, fakeGrupo("g1", ["ana"])).presentar(presentacion)).toBe("aceptar");
+  });
+
+  it("archivado sin entrega: sinAccion", () => {
+    const individual = new IndividualAssignment();
+    individual.transicionarA("archivado", sinRestricciones, "docente1");
+    expect(individual.situacionDeAlumno(null, null).presentar(presentacion)).toBe("sinAccion");
+  });
+
+  it("con entrega: la situación la decide la entrega", () => {
+    const individual = new IndividualAssignment();
+    individual.transicionarA("publicado", sinRestricciones, "docente1");
+    expect(individual.situacionDeAlumno(entregaConRepo(), null).presentar(presentacion)).toBe(
+      "conRepo|https://github.com/org/repo"
+    );
+  });
+
+  it("archivado con entrega sin repo: la entrega presenta el mensaje de archivado", () => {
+    const individual = new IndividualAssignment();
+    individual.transicionarA("archivado", sinRestricciones, "docente1");
+    expect(individual.situacionDeAlumno(new Entrega(), null).presentar(presentacion)).toBe(
+      "sinRepo|La creación del repo quedó pendiente antes de archivar el TP."
+    );
   });
 });
 

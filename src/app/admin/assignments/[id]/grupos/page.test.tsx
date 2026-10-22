@@ -64,7 +64,7 @@ vi.mock("../grupos-panel", () => ({
     assignmentId: string;
     grupos: {
       id: string;
-      tipoDeIntegrantes: string;
+      distintivo: string | null;
       destinos: { id: string; conEntrega: boolean }[];
       entrega?: { estadoRepo: string; ci?: { resultadoNombre: string }; ultimoPush?: { por: string } };
     }[];
@@ -79,7 +79,7 @@ vi.mock("../grupos-panel", () => ({
       data-ci={grupos.map((grupo) => grupo.entrega?.ci?.resultadoNombre ?? "-").join(",")}
       data-ultimo-push={grupos.map((grupo) => grupo.entrega?.ultimoPush?.por ?? "-").join(",")}
       data-destinos={grupos.map((grupo) => `${grupo.id}:${grupo.destinos.map((destino) => `${destino.id}${destino.conEntrega ? "*" : ""}`).join("+")}`).join(",")}
-      data-grupos-docentes={grupos.filter((grupo) => grupo.tipoDeIntegrantes === "docentes").map((grupo) => grupo.id).join(",")}
+      data-grupos-docentes={grupos.filter((grupo) => grupo.distintivo === "Docentes").map((grupo) => grupo.id).join(",")}
     />
   ),
 }));
@@ -307,14 +307,14 @@ describe("Admin Assignment Grupos Page", () => {
       expect(markup).toContain('data-destinos="g1:g2*,g2:g1"');
     });
 
-    // issue #107: la serialización a GrupoAdminResumen propaga
-    // `tipoDeIntegrantes` — sin esto el panel no puede distinguir un grupo
+    // issue #107: la serialización a GrupoAdminResumen propaga el
+    // `distintivo` del tipo de integrantes — sin esto el panel no puede distinguir un grupo
     // de docentes al filtrar destinos de "Mover a…"/"Agregar a…".
-    it("propaga tipoDeIntegrantes en la serialización de cada grupo", async () => {
+    it("propaga el distintivo del tipo de integrantes en la serialización de cada grupo", async () => {
       mockGetAssignment.mockResolvedValue(makeGrupalAssignment({ id: "a2" }));
       mockGetGruposDeAssignment.mockResolvedValue([
-        makeGrupo({ id: "g1", tipoDeIntegrantes: "alumnos" }),
-        makeGrupo({ id: "g2", tipoDeIntegrantes: "docentes" }),
+        makeGrupo({ id: "g1", tipoDeIntegrantesNombre: "alumnos" }),
+        makeGrupo({ id: "g2", tipoDeIntegrantesNombre: "docentes" }),
       ]);
 
       const element = await GruposAssignmentPage({ params: Promise.resolve({ id: "a2" }) });

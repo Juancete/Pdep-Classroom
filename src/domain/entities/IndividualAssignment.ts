@@ -61,4 +61,12 @@ export class IndividualAssignment extends Assignment {
   comoGrupal(): null {
     return null;
   }
+
+  tieneGestionDeGrupos(): boolean {
+    return false;
+  }
+
+  estadoDeInscripciones(): null {
+    return null;
+  }
 }

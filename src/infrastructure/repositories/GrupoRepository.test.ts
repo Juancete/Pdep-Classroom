@@ -346,7 +346,7 @@ describe("crearGrupo", () => {
     expect(grupo.maxIntegrantes).toBe(3);
     expect(grupo.assignment).toBe(assignment);
     expect(grupo.creadoPor).toBe("ana");
-    expect(grupo.tipoDeIntegrantes).toBe("alumnos");
+    expect(grupo.tipoDeIntegrantesNombre).toBe("alumnos");
     expect(grupo.contieneA("ana")).toBe(true);
     expect(mockTx.persist).toHaveBeenCalledWith(grupo);
     expect(mockTx.persist).toHaveBeenCalledWith(
@@ -514,7 +514,7 @@ describe("crearGrupo", () => {
       participante: participanteDocente("profe-docente", fakeComision("c1")),
     });
 
-    expect(grupo.tipoDeIntegrantes).toBe("docentes");
+    expect(grupo.tipoDeIntegrantesNombre).toBe("docentes");
     expect(grupo.contieneA("profe-docente")).toBe(true);
     expect(mockTx.flush).toHaveBeenCalled();
   });
@@ -650,7 +650,7 @@ describe("unirseAGrupo", () => {
   it("un docente en Mis TPs tampoco se une a un grupo con inscripciones cerradas", async () => {
     const assignment = fakeGrupal({ inscripcionesCerradas: true });
     const grupo = fakeGrupo("g1", assignment, []);
-    grupo.tipoDeIntegrantes = "docentes";
+    grupo.tipoDeIntegrantesNombre = "docentes";
     mockTx.findOne.mockResolvedValueOnce(grupo);
 
     await expect(
@@ -748,7 +748,7 @@ describe("unirseAGrupo", () => {
   it("el docente se une a un grupo de docentes cuando la comisión activa coincide", async () => {
     const assignment = fakeGrupal();
     const grupo = fakeGrupo("g1", assignment, []);
-    grupo.tipoDeIntegrantes = "docentes";
+    grupo.tipoDeIntegrantesNombre = "docentes";
     mockTx.findOne
       .mockResolvedValueOnce(grupo)
       .mockResolvedValueOnce(null);
@@ -1041,7 +1041,7 @@ describe("upsertGrupoConMiembro", () => {
     const assignment = fakeGrupal();
     const ana = fakeAlumno("alumno-ana", "ana");
     const grupoDeDocentes = fakeGrupo("g1", assignment, []);
-    grupoDeDocentes.tipoDeIntegrantes = "docentes";
+    grupoDeDocentes.tipoDeIntegrantesNombre = "docentes";
     mockTx.findOne.mockResolvedValueOnce(grupoDeDocentes);
 
     await expect(
@@ -1869,9 +1869,9 @@ describe("moverAlumnoDeGrupo", () => {
     assignment.estadoNombre = "borrador";
     const profeUno = fakeAlumno("alumno-profe1", "profe1");
     const grupoOrigen = fakeGrupo("g1", assignment, [profeUno]);
-    grupoOrigen.tipoDeIntegrantes = "docentes";
+    grupoOrigen.tipoDeIntegrantesNombre = "docentes";
     const grupoDestino = fakeGrupo("g2", assignment, []);
-    grupoDestino.tipoDeIntegrantes = "docentes";
+    grupoDestino.tipoDeIntegrantesNombre = "docentes";
 
     mockTx.findOne
       .mockResolvedValueOnce(grupoOrigen) // grupoOrigenPrevio
@@ -1919,11 +1919,11 @@ describe("moverAlumnoDeGrupo", () => {
   it("el docente sí puede dar de alta en un grupo de docentes a un username sin fila en Alumno", async () => {
     const assignment = fakeGrupal();
     const grupoOrigen = fakeGrupo("g1", assignment, []);
-    grupoOrigen.tipoDeIntegrantes = "docentes";
+    grupoOrigen.tipoDeIntegrantesNombre = "docentes";
     // Miembro sin vínculo con `Alumno` (docente en un grupo de demo).
     grupoOrigen.agregarMiembro("profe-sin-alumno", null);
     const grupoDestino = fakeGrupo("g2", assignment, []);
-    grupoDestino.tipoDeIntegrantes = "docentes";
+    grupoDestino.tipoDeIntegrantesNombre = "docentes";
 
     mockTx.findOne
       .mockResolvedValueOnce(grupoOrigen) // grupoOrigenPrevio

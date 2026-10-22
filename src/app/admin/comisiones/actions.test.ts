@@ -296,6 +296,45 @@ describe("crearComision – configuración de columnas", () => {
     expect(mockCreateComision).not.toHaveBeenCalled();
   });
 
+  it("modo 'completo' sin col_nombreCompleto también reporta las colisiones entre los datos comunes", async () => {
+    const result = await crearComision(
+      null,
+      makeFormData({ ...BASE, modoNombre: "completo", col_legajo: "4", col_email: "4" })
+    );
+    expect(result).toMatchObject({ ok: false });
+    expect(result?.errors?.col_nombreCompleto).toBeDefined();
+    expect(result?.errors?.col_legajo).toBeDefined();
+    expect(result?.errors?.col_email).toBeDefined();
+    expect(mockCreateComision).not.toHaveBeenCalled();
+  });
+
+  it("modo 'separado' descarta un col_nombreCompleto enviado: la config no lo persiste", async () => {
+    await crearComision(
+      null,
+      makeFormData({ ...BASE, modoNombre: "separado", col_nombreCompleto: "7" })
+    );
+    const { columnConfig } = mockCreateComision.mock.calls[0][0];
+    expect(columnConfig).not.toHaveProperty("nombreCompleto");
+    expect(columnConfig).toMatchObject({ modoNombre: "separado" });
+  });
+
+  it("modo 'completo' persiste también apellido y nombre con sus defaults", async () => {
+    await crearComision(
+      null,
+      makeFormData({ ...BASE, modoNombre: "completo", col_nombreCompleto: "7" })
+    );
+    expect(mockCreateComision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        columnConfig: expect.objectContaining({
+          apellido: 1,
+          nombre: 2,
+          modoNombre: "completo",
+          nombreCompleto: 7,
+        }),
+      })
+    );
+  });
+
   it("modo 'completo' con columna configurada guarda nombreCompleto", async () => {
     await crearComision(
       null,

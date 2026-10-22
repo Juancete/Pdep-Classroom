@@ -355,7 +355,7 @@ describe("GrupoPage", () => {
     mockRequireUser.mockResolvedValue(makeUser({ rol: DOCENTE, githubUsername: "ana" }));
     mockGetComisionActiva.mockResolvedValue({ id: "c1" });
     const grupoDeDocentes = makeGrupo("g1", ["ana"], 3, "Los Lambdas");
-    grupoDeDocentes.tipoDeIntegrantes = "docentes";
+    grupoDeDocentes.tipoDeIntegrantesNombre = "docentes";
     mockGetGruposDeAssignment.mockResolvedValue([grupoDeDocentes]);
     mockGetEntregaLogica.mockResolvedValue(makeEntregaFake({ tieneRepo: true, colaboradores: ["ana"] }));
     const element = await GrupoPage({ params: Promise.resolve({ id: "a1" }) });

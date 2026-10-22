@@ -211,6 +211,29 @@ describe("EntregasTable", () => {
     expect(html).toContain("Repositorio borrado");
   });
 
+  it("muestra el aprovisionamiento pendiente con la cantidad de intentos", () => {
+    const html = renderToStaticMarkup(
+      <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow({ avisoDeProvision: { etiqueta: "Aprovisionamiento pendiente", tono: "advertencia", intentos: 2 } })]} />
+    );
+    expect(html).toContain("Aprovisionamiento pendiente");
+    expect(html).toContain("2 intento(s)");
+  });
+
+  it("muestra el aprovisionamiento fallido con el último error", () => {
+    const html = renderToStaticMarkup(
+      <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow({ avisoDeProvision: { etiqueta: "Aprovisionamiento fallido", tono: "error", intentos: 0, ultimoError: "boom" } })]} />
+    );
+    expect(html).toContain("Aprovisionamiento fallido");
+    expect(html).toContain("boom");
+  });
+
+  it("no muestra aviso de aprovisionamiento cuando está activa", () => {
+    const html = renderToStaticMarkup(
+      <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow({ avisoDeProvision: null })]} />
+    );
+    expect(html).not.toContain("Aprovisionamiento");
+  });
+
   it("muestra la fecha de la entrega", () => {
     const html = renderToStaticMarkup(
       <EntregasTable assignmentId={ASSIGNMENT_ID} mostrarGrupo={false} entregas={[makeRow({ createdAt: "15/3/2026" })]} />

@@ -17,7 +17,8 @@ function makeGrupo(overrides: Partial<GrupoAdminResumen> = {}): GrupoAdminResume
     maxIntegrantes: 3,
     estaLleno: false,
     etiquetaCupo: "2/3 integrantes",
-    tipoDeIntegrantes: "alumnos",
+    distintivo: null,
+    admiteAlumnosSinGrupo: true,
     miembros: [
       { username: "ana", nombreCompleto: "García, Ana" },
       { username: "bob", nombreCompleto: "Smith, Bob" },
@@ -57,7 +58,7 @@ describe("GrupoCard", () => {
       const { rerender } = render(<GrupoCard conAcciones assignmentId="a1" grupo={makeGrupo()} />);
       expect(screen.queryByText("Docentes")).not.toBeInTheDocument();
 
-      rerender(<GrupoCard conAcciones assignmentId="a1" grupo={makeGrupo({ tipoDeIntegrantes: "docentes" })} />);
+      rerender(<GrupoCard conAcciones assignmentId="a1" grupo={makeGrupo({ distintivo: "Docentes", admiteAlumnosSinGrupo: false })} />);
       expect(screen.getByText("Docentes")).toBeInTheDocument();
     });
 

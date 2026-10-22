@@ -43,6 +43,15 @@ function makeEntrega(overrides: Partial<Entrega> = {}): Entrega {
 
 const SIN_ALUMNOS = new Map<string, Alumno>();
 
+function resumir(grupo: Grupo) {
+  return resumirGrupoParaAdmin(grupo, {
+    grupos: [grupo],
+    alumnosPorUsername: SIN_ALUMNOS,
+    entregasPorGrupo: new Map(),
+    conDetalleDeEntrega: false,
+  });
+}
+
 describe("resumirGrupoParaAdmin", () => {
   it("copia los datos básicos del grupo", () => {
     const grupo = makeGrupo("g1", ["ana"]);
@@ -59,8 +68,27 @@ describe("resumirGrupoParaAdmin", () => {
       maxIntegrantes: 3,
       estaLleno: false,
       etiquetaCupo: "1/3 integrantes",
-      tipoDeIntegrantes: "alumnos",
+      distintivo: null,
+      admiteAlumnosSinGrupo: true,
     });
+  });
+
+  it("distintivo: 'Docentes' para un grupo de docentes, null para uno de alumnos", () => {
+    const docentes = makeGrupo("g1", ["profe"]);
+    docentes.tipoDeIntegrantesNombre = "docentes";
+    expect(resumir(docentes).distintivo).toBe("Docentes");
+    expect(resumir(makeGrupo("g2", ["ana"])).distintivo).toBeNull();
+  });
+
+  it("admiteAlumnosSinGrupo: true con cupo y alumnos; false si está lleno o es de docentes", () => {
+    expect(resumir(makeGrupo("g1", ["ana"])).admiteAlumnosSinGrupo).toBe(true);
+
+    const lleno = makeGrupo("g2", ["ana"], { maxIntegrantes: 1 });
+    expect(resumir(lleno).admiteAlumnosSinGrupo).toBe(false);
+
+    const docentes = makeGrupo("g3", ["profe"]);
+    docentes.tipoDeIntegrantesNombre = "docentes";
+    expect(resumir(docentes).admiteAlumnosSinGrupo).toBe(false);
   });
 
   it("calcula los destinos: mismo TP, con cupo, sin incluirse ni otros TPs", () => {

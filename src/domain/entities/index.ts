@@ -18,7 +18,17 @@ export {
   MapeoDeNombreCompleto,
   ModoNombreCompletoSinColumnaError,
   mapeoDeNombreDe,
+  datosPersonalesMapeados,
+  problemasDeDatosPersonales,
+  MENSAJE_NOMBRE_COMPLETO_OBLIGATORIO,
+  MENSAJE_COLUMNA_REPETIDA,
   type MapeoDeNombre,
+  type DatoDeNombre,
+  type DatoPersonal,
+  type DatoPersonalMapeado,
+  type ConfigDeNombre,
+  type ConfigDeDatosPersonales,
+  type ProblemaDeDatoPersonal,
   type DatosDeNombre,
   type CeldaDeNombre,
 } from "./MapeoDeNombre";
@@ -109,6 +119,7 @@ export {
   ColaboradorNoInvitableError,
   type Contribucion,
   type ParticipacionDeIntegrante,
+  type AvisoDeProvisionDeEntrega,
 } from "./Entrega";
 export {
   ResultadoCI,
@@ -118,6 +129,31 @@ export {
   type NombreResultadoCI,
   type CheckRunResumen,
 } from "./ResultadoCI";
+export {
+  TipoDeIntegrantes,
+  INTEGRANTES_ALUMNOS,
+  INTEGRANTES_DOCENTES,
+  NOMBRES_TIPO_DE_INTEGRANTES,
+  type NombreTipoDeIntegrantes,
+} from "./TipoDeIntegrantes";
+export {
+  EstadoDeProvision,
+  NOMBRES_ESTADO_DE_PROVISION,
+  type NombreEstadoDeProvision,
+  type TonoDeAviso,
+  type AvisoDeProvision,
+} from "./EstadoDeProvision";
+export {
+  ConRepo,
+  SinRepo,
+  ELEGIR_GRUPO,
+  ACEPTAR,
+  SIN_ACCION,
+  type SituacionDeAlumno,
+  type PresentacionDeSituacion,
+  type DatosDeRepo,
+  type AvisoDeRepoPendiente,
+} from "./SituacionDeAlumno";
 export {
   RepoDeletionAttempt,
   BorradoDeReposEnCursoError,
@@ -147,6 +183,8 @@ export {
   type ItemDeNavegacion,
   type ItemDeCuenta,
   type FuentesDeParticipante,
+  type FuentesDeEntregas,
+  type FuentesDeAssignments,
 } from "./RolDeUsuario";
 export {
   Participante,

@@ -1,3 +1,22 @@
+// Ventana para tratar un `procesando` como huérfano y volver a ofrecerlo
+// para reclamo: sólo pasa si la lambda que lo reclamó murió a mitad de
+// camino sin llegar a cerrar la fila (crash, timeout de la plataforma). El
+// procesamiento normal termina en milisegundos/segundos, así que 2 minutos
+// da margen de sobra sin dejar una fila realmente en vuelo disponible para
+// un segundo reclamo. Única fuente: la usan tanto `Procesando` como el SQL de
+// `GithubWebhookDeliveryRepository.reclamar`.
+//
+// Ojo, diferencia preexistente (queda para otro issue): el repositorio repite
+// la regla en SQL con `reclamadoEn < staleCutoff` (estricto) mientras el
+// dominio usa `>=`. A los 120 000 ms exactos el dominio ya lo considera
+// huérfano y la query todavía no.
+export const VENTANA_PROCESANDO_HUERFANO_MS = 120_000;
+
+/** Lo que `EstadoDelivery` necesita saber del delivery para decidir el reproceso. */
+export interface ReclamoDeDelivery {
+  reclamadoEn?: Date;
+}
+
 // Única fuente de verdad para los valores del enum: el tipo se deriva de acá
 // en vez de listarse aparte, igual que `NOMBRES_RESULTADO_CI` en
 // `ResultadoCI.ts` — evita que el tipo TS y el check constraint de la
@@ -35,7 +54,7 @@ export abstract class EstadoDelivery {
    * "viejo" (la lambda que lo reclamó murió a mitad de camino sin cerrar la
    * fila, dejándola huérfana en ese estado).
    */
-  abstract puedeReprocesarse(): boolean;
+  abstract puedeReprocesarse(delivery: ReclamoDeDelivery, ahora: Date): boolean;
 
   static desdeNombre(nombre: NombreEstadoDelivery): EstadoDelivery {
     return ESTADOS_POR_NOMBRE[nombre];
@@ -49,7 +68,7 @@ class Recibido extends EstadoDelivery {
   etiqueta(): string {
     return "Recibido";
   }
-  puedeReprocesarse(): boolean {
+  puedeReprocesarse(_delivery: ReclamoDeDelivery, _ahora: Date): boolean {
     return true;
   }
 }
@@ -61,8 +80,10 @@ class Procesando extends EstadoDelivery {
   etiqueta(): string {
     return "Procesando";
   }
-  puedeReprocesarse(): boolean {
-    return false;
+  puedeReprocesarse(delivery: ReclamoDeDelivery, ahora: Date): boolean {
+    // Huérfano: el worker que lo reclamó no lo cerró dentro de la ventana.
+    return delivery.reclamadoEn !== undefined
+      && ahora.getTime() - delivery.reclamadoEn.getTime() >= VENTANA_PROCESANDO_HUERFANO_MS;
   }
 }
 
@@ -73,7 +94,7 @@ class Procesado extends EstadoDelivery {
   etiqueta(): string {
     return "Procesado";
   }
-  puedeReprocesarse(): boolean {
+  puedeReprocesarse(_delivery: ReclamoDeDelivery, _ahora: Date): boolean {
     return false;
   }
 }
@@ -85,7 +106,7 @@ class Ignorado extends EstadoDelivery {
   etiqueta(): string {
     return "Ignorado";
   }
-  puedeReprocesarse(): boolean {
+  puedeReprocesarse(_delivery: ReclamoDeDelivery, _ahora: Date): boolean {
     return false;
   }
 }
@@ -97,7 +118,7 @@ class Fallido extends EstadoDelivery {
   etiqueta(): string {
     return "Fallido";
   }
-  puedeReprocesarse(): boolean {
+  puedeReprocesarse(_delivery: ReclamoDeDelivery, _ahora: Date): boolean {
     return true;
   }
 }

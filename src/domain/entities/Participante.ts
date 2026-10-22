@@ -5,7 +5,14 @@ import type { Comision } from "./Comision";
 import type { GrupalAssignment } from "./GrupalAssignment";
 import type { Grupo } from "./Grupo";
 import { InscripcionesCerradasError, GrupoConEntregaError } from "./Grupo";
-import type { TipoDeIntegrantes } from "@/types";
+import {
+  INTEGRANTES_ALUMNOS,
+  INTEGRANTES_DOCENTES,
+  type OrigenCambioMembresia,
+  type TipoDeIntegrantes,
+} from "./TipoDeIntegrantes";
+
+export type { OrigenCambioMembresia } from "./TipoDeIntegrantes";
 
 // Lanzado cuando un participante intenta acceder a un assignment fuera de su
 // comisión (o sin poder participar en absoluto). El handler HTTP lo traduce
@@ -17,8 +24,6 @@ export class AccesoAssignmentProhibidoError extends Error {
     this.name = "AccesoAssignmentProhibidoError";
   }
 }
-
-export type OrigenCambioMembresia = "alumno" | "docente";
 
 /** Contexto que necesita evaluar una autorización de alta en un grupo. */
 export interface ContextoDeAlta {
@@ -93,7 +98,9 @@ export abstract class Participante implements ActorDeMembresia {
   abstract tipoDeGrupo(): TipoDeIntegrantes;
 
   /** Valor a persistir en la auditoría de membresías: quién originó el cambio. */
-  abstract origenDeAuditoria(): OrigenCambioMembresia;
+  origenDeAuditoria(): OrigenCambioMembresia {
+    return this.tipoDeGrupo().origenDeAuditoria();
+  }
 
   /** `true` si Mis TPs debe redirigir a `/registro` antes de dejarlo continuar. */
   abstract necesitaRegistro(comisionActiva: Comision | null): boolean;
@@ -219,11 +226,7 @@ export class ParticipanteAlumno extends Participante {
   }
 
   tipoDeGrupo(): TipoDeIntegrantes {
-    return "alumnos";
-  }
-
-  origenDeAuditoria(): OrigenCambioMembresia {
-    return "alumno";
+    return INTEGRANTES_ALUMNOS;
   }
 
   necesitaRegistro(comisionActiva: Comision | null): boolean {
@@ -269,11 +272,7 @@ export class ParticipanteDocente extends Participante {
   }
 
   tipoDeGrupo(): TipoDeIntegrantes {
-    return "docentes";
-  }
-
-  origenDeAuditoria(): OrigenCambioMembresia {
-    return "docente";
+    return INTEGRANTES_DOCENTES;
   }
 
   necesitaRegistro(_comisionActiva: Comision | null): boolean {

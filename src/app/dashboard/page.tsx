@@ -9,6 +9,7 @@ import {
 import { AcceptButton } from "./accept-button";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { LinkAlRepo } from "@/components/RepoDeEntrega";
 import { EstadoAssignmentBadge } from "@/components/EstadoAssignmentBadge";
 import { CIBadge } from "@/components/CIBadge";
 import { CIRefreshButton } from "./ci-refresh-button";
@@ -138,43 +139,34 @@ export default async function DashboardPage() {
                 </div>
 
                 <div className="flex-shrink-0 w-full sm:w-auto flex flex-col items-end gap-1.5">
-                  {entrega?.hasRepo() ? (
-                    <a
-                      href={entrega.repoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-1.5 text-sm bg-green-50 text-green-700 border border-green-200 px-3 py-2 rounded-lg font-medium hover:bg-green-100 transition-colors w-full sm:w-auto"
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                  {assignment.situacionDeAlumno(entrega, grupo).presentar({
+                    conRepo: ({ repoUrl, ciResultadoNombre, ciDetalleUrl, tieneResultadoAutomatico }) => (
+                      <>
+                        <LinkAlRepo
+                          repoUrl={repoUrl}
+                          className="py-2 justify-center w-full sm:w-auto"
                         />
-                      </svg>
-                      Ir al repo
-                    </a>
-                  ) : entrega ? (
-                    <div className="flex flex-col items-end gap-1">
-                      <span className="text-xs text-amber-700">
-                        {puedeActuar
-                          ? entrega.provisionEstado === "fallida"
-                            ? "No se pudo crear el repo. Podés reintentar."
-                            : "Estamos creando el repositorio."
-                          : entrega.provisionEstado === "fallida"
-                            ? "No se pudo crear el repo antes de archivar el TP. Consultá al equipo docente."
-                            : "La creación del repo quedó pendiente antes de archivar el TP."}
-                      </span>
-                      {puedeActuar && <AcceptButton assignmentId={assignment.id} />}
-                    </div>
-                  ) : puedeActuar ? (
-                    assignment.requiereSeleccionDeGrupo(grupo) ? (
+                        <div className="flex items-center gap-1">
+                          <CIBadge
+                            resultadoNombre={ciResultadoNombre}
+                            detalleUrl={ciDetalleUrl}
+                          />
+                          <CIRefreshButton assignmentId={assignment.id} />
+                        </div>
+                        {tieneResultadoAutomatico && (
+                          <p className="text-[11px] text-gray-400">
+                            Resultado automático — no es la nota final.
+                          </p>
+                        )}
+                      </>
+                    ),
+                    sinRepo: ({ mensaje, puedeReintentar }) => (
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-xs text-amber-700">{mensaje}</span>
+                        {puedeReintentar && <AcceptButton assignmentId={assignment.id} />}
+                      </div>
+                    ),
+                    elegirGrupo: () => (
                       <a
                         href={`/assignments/${assignment.id}/grupo`}
                         className="inline-flex items-center justify-center gap-1.5 text-sm bg-pdep-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-pdep-700 transition-colors w-full sm:w-auto"
@@ -182,24 +174,10 @@ export default async function DashboardPage() {
                       >
                         Elegir grupo
                       </a>
-                    ) : (
-                      <AcceptButton assignmentId={assignment.id} />
-                    )
-                  ) : null}
-                  {entrega?.hasRepo() && (
-                    <div className="flex items-center gap-1">
-                      <CIBadge
-                        resultadoNombre={entrega.ciResultadoNombre}
-                        detalleUrl={entrega.ciDetalleUrl}
-                      />
-                      <CIRefreshButton assignmentId={assignment.id} />
-                    </div>
-                  )}
-                  {entrega?.hasRepo() && entrega.ciResultadoNombre !== "sin_ci" && (
-                    <p className="text-[11px] text-gray-400">
-                      Resultado automático — no es la nota final.
-                    </p>
-                  )}
+                    ),
+                    aceptar: () => <AcceptButton assignmentId={assignment.id} />,
+                    sinAccion: () => null,
+                  })}
                 </div>
               </div>
             );

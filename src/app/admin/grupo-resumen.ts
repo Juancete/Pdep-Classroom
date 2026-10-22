@@ -1,6 +1,6 @@
-import { Alumno } from "@/domain/entities";
+import { Alumno, INTEGRANTES_ALUMNOS } from "@/domain/entities";
 import type { Entrega, Grupo, NombreResultadoCI } from "@/domain/entities";
-import type { Paradigma, TipoDeIntegrantes } from "@/types";
+import type { Paradigma } from "@/types";
 
 export type GrupoAdminResumen = {
   id: string;
@@ -8,7 +8,8 @@ export type GrupoAdminResumen = {
   maxIntegrantes: number;
   estaLleno: boolean;
   etiquetaCupo: string;
-  tipoDeIntegrantes: TipoDeIntegrantes;
+  distintivo: string | null;
+  admiteAlumnosSinGrupo: boolean;
   miembros: {
     username: string;
     nombreCompleto: string;
@@ -63,7 +64,8 @@ export function resumirGrupoParaAdmin(
     maxIntegrantes: grupo.maxIntegrantes,
     estaLleno: grupo.estaLleno(),
     etiquetaCupo: grupo.etiquetaCupo(),
-    tipoDeIntegrantes: grupo.tipoDeIntegrantes,
+    distintivo: grupo.tipoDeIntegrantes.distintivo(),
+    admiteAlumnosSinGrupo: grupo.admiteNuevoIntegrante(INTEGRANTES_ALUMNOS),
     miembros: grupo.usernamesDeMiembros().map((username) => {
       const participacion = participacionPorUsername?.get(Alumno.normalizarUsername(username));
       return {

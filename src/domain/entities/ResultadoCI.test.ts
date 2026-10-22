@@ -40,6 +40,25 @@ describe("ResultadoCI.permiteReejecucion", () => {
   });
 });
 
+describe("ResultadoCI.tieneResultadoAutomatico", () => {
+  const conResultado: NombreResultadoCI[] = [
+    "sin_consultar",
+    "pendiente",
+    "passing",
+    "failing",
+    "cancelado",
+    "error_infra",
+  ];
+
+  it.each(conResultado)("'%s' tiene resultado automático para mostrar", (nombre) => {
+    expect(ResultadoCI.desdeNombre(nombre).tieneResultadoAutomatico()).toBe(true);
+  });
+
+  it("'sin_ci' no tiene resultado automático", () => {
+    expect(ResultadoCI.desdeNombre("sin_ci").tieneResultadoAutomatico()).toBe(false);
+  });
+});
+
 describe("resultadoDesdeCheckRuns", () => {
   it("sin check runs es sin_ci", () => {
     expect(resultadoDesdeCheckRuns([]).nombre).toBe("sin_ci");

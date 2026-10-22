@@ -60,6 +60,9 @@ export abstract class ResultadoCI {
    */
   abstract permiteReejecucion(): boolean;
 
+  /** `true` si hay un resultado de CI que mostrar como "automático, no es la nota final". Sólo `sin_ci` no lo tiene. */
+  abstract tieneResultadoAutomatico(): boolean;
+
   static desdeNombre(nombre: NombreResultadoCI): ResultadoCI {
     return RESULTADOS_POR_NOMBRE[nombre];
   }
@@ -81,6 +84,9 @@ class SinConsultar extends ResultadoCI {
   permiteReejecucion(): boolean {
     return false;
   }
+  tieneResultadoAutomatico(): boolean {
+    return true;
+  }
 }
 
 class SinCI extends ResultadoCI {
@@ -97,6 +103,9 @@ class SinCI extends ResultadoCI {
     return false;
   }
   permiteReejecucion(): boolean {
+    return false;
+  }
+  tieneResultadoAutomatico(): boolean {
     return false;
   }
 }
@@ -117,6 +126,9 @@ class Pendiente extends ResultadoCI {
   permiteReejecucion(): boolean {
     return false;
   }
+  tieneResultadoAutomatico(): boolean {
+    return true;
+  }
 }
 
 class Passing extends ResultadoCI {
@@ -133,6 +145,9 @@ class Passing extends ResultadoCI {
     return true;
   }
   permiteReejecucion(): boolean {
+    return true;
+  }
+  tieneResultadoAutomatico(): boolean {
     return true;
   }
 }
@@ -153,6 +168,9 @@ class Failing extends ResultadoCI {
   permiteReejecucion(): boolean {
     return true;
   }
+  tieneResultadoAutomatico(): boolean {
+    return true;
+  }
 }
 
 class Cancelado extends ResultadoCI {
@@ -171,6 +189,9 @@ class Cancelado extends ResultadoCI {
   permiteReejecucion(): boolean {
     return true;
   }
+  tieneResultadoAutomatico(): boolean {
+    return true;
+  }
 }
 
 class ErrorInfra extends ResultadoCI {
@@ -187,6 +208,9 @@ class ErrorInfra extends ResultadoCI {
     return true;
   }
   permiteReejecucion(): boolean {
+    return true;
+  }
+  tieneResultadoAutomatico(): boolean {
     return true;
   }
 }

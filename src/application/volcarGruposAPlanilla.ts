@@ -1,4 +1,4 @@
-import { AssignmentNoEncontradoError } from "@/domain/entities";
+import { AssignmentNoEncontradoError, INTEGRANTES_ALUMNOS } from "@/domain/entities";
 import {
   getAssignment,
   getAlumnosByComision,
@@ -81,7 +81,7 @@ export async function volcarGruposAPlanilla(
 
   const nombreGrupoPorUsername = new Map<string, string>();
   for (const grupo of grupos) {
-    if (!grupo.admiteIntegrantesDe("alumnos")) continue;
+    if (!grupo.admiteIntegrantesDe(INTEGRANTES_ALUMNOS)) continue;
     for (const username of grupo.usernamesDeMiembros()) {
       nombreGrupoPorUsername.set(username, grupo.nombre);
     }

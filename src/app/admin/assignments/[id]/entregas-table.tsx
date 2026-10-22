@@ -16,7 +16,12 @@ import { RepoDeEntrega } from "@/components/RepoDeEntrega";
 import { CISyncButton } from "./ci-sync-button";
 import { CIRerunButton } from "./ci-rerun-button";
 import { BorrarEntregaButton } from "./borrar-entrega-button";
-import type { NombreResultadoCI } from "@/domain/entities";
+import type { AvisoDeProvisionDeEntrega, NombreResultadoCI, TonoDeAviso } from "@/domain/entities";
+
+const CLASE_POR_TONO: Record<TonoDeAviso, string> = {
+  advertencia: "text-amber-700",
+  error: "text-red-600",
+};
 
 export type EntregaRow = {
   id: string;
@@ -24,9 +29,7 @@ export type EntregaRow = {
   repoName?: string;
   repoUrl?: string;
   repoDeleted: boolean;
-  provisionEstado?: "pendiente" | "activa" | "fallida";
-  provisionUltimoError?: string;
-  provisionIntentos?: number;
+  avisoDeProvision?: AvisoDeProvisionDeEntrega | null;
   estadoRepo: "borrado" | "activo" | "sin-repo";
   createdAt: string;
   // Un ítem por colaborador del repo, en el orden de `githubUsernames`;
@@ -135,12 +138,12 @@ export function EntregasTable({
                   ))}
                 </DataCell>
                 <DataCell label="Repositorio">
-                  {entrega.provisionEstado && entrega.provisionEstado !== "activa" && (
-                    <div className={`mb-1 text-xs ${entrega.provisionEstado === "fallida" ? "text-red-600" : "text-amber-700"}`}>
-                      {entrega.provisionEstado === "fallida" ? "Aprovisionamiento fallido" : "Aprovisionamiento pendiente"}
-                      {(entrega.provisionIntentos ?? 0) > 0 ? ` · ${entrega.provisionIntentos} intento(s)` : ""}
-                      {entrega.provisionUltimoError && (
-                        <span className="block break-words text-[11px] text-gray-500">{entrega.provisionUltimoError}</span>
+                  {entrega.avisoDeProvision && (
+                    <div className={`mb-1 text-xs ${CLASE_POR_TONO[entrega.avisoDeProvision.tono]}`}>
+                      {entrega.avisoDeProvision.etiqueta}
+                      {entrega.avisoDeProvision.intentos > 0 ? ` · ${entrega.avisoDeProvision.intentos} intento(s)` : ""}
+                      {entrega.avisoDeProvision.ultimoError && (
+                        <span className="block break-words text-[11px] text-gray-500">{entrega.avisoDeProvision.ultimoError}</span>
                       )}
                     </div>
                   )}
