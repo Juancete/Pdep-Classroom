@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   buildRepoName,
+  capitalizar,
   enumerar,
+  pluralizar,
+  separarNombreYApellido,
   GITHUB_REPO_NAME_MAX_LENGTH,
   NombreRepositorioDemasiadoLargoError,
   slugify,
@@ -115,5 +118,64 @@ describe("enumerar", () => {
 
   it("separa con coma y usa 'ni' antes del último", () => {
     expect(enumerar(["a", "b", "c"])).toBe("a, b ni c");
+  });
+});
+
+// ── pluralizar ───────────────────────────────────────────────
+
+describe("pluralizar", () => {
+  it("usa el singular sólo con 1", () => {
+    expect(pluralizar(1, "repo")).toBe("repo");
+  });
+
+  it("agrega 's' por defecto con 0 y con más de uno", () => {
+    expect(pluralizar(0, "repo")).toBe("repos");
+    expect(pluralizar(2, "repo")).toBe("repos");
+  });
+
+  it("acepta un plural explícito", () => {
+    expect(pluralizar(1, "cambio registrado", "cambios registrados")).toBe("cambio registrado");
+    expect(pluralizar(3, "cambio registrado", "cambios registrados")).toBe("cambios registrados");
+  });
+});
+
+// ── capitalizar ──────────────────────────────────────────────
+
+describe("capitalizar", () => {
+  it("pone la primera letra en mayúscula y deja el resto", () => {
+    expect(capitalizar("funcional")).toBe("Funcional");
+    expect(capitalizar("orientado a objetos")).toBe("Orientado a objetos");
+  });
+
+  it("devuelve vacío para vacío", () => {
+    expect(capitalizar("")).toBe("");
+  });
+});
+
+// ── separarNombreYApellido ───────────────────────────────────
+
+describe("separarNombreYApellido", () => {
+  it("con vacío devuelve ambos vacíos", () => {
+    expect(separarNombreYApellido("")).toEqual({ nombre: "", apellido: "" });
+    expect(separarNombreYApellido("   ")).toEqual({ nombre: "", apellido: "" });
+  });
+
+  it("con una palabra es el nombre y el apellido queda vacío", () => {
+    expect(separarNombreYApellido("Juan")).toEqual({ nombre: "Juan", apellido: "" });
+  });
+
+  it("con dos palabras separa nombre y apellido", () => {
+    expect(separarNombreYApellido("Juan García")).toEqual({ nombre: "Juan", apellido: "García" });
+  });
+
+  it("con tres o más, la última es el apellido y el resto el nombre", () => {
+    expect(separarNombreYApellido("Juan Pablo García")).toEqual({
+      nombre: "Juan Pablo",
+      apellido: "García",
+    });
+  });
+
+  it("ignora espacios repetidos", () => {
+    expect(separarNombreYApellido("  Juan   García ")).toEqual({ nombre: "Juan", apellido: "García" });
   });
 });

@@ -19,6 +19,16 @@ vi.mock("@/infrastructure/auth/auth", () => ({
   auth: () => mockAuth(),
 }));
 
+// `requireUser` real redirige a /login sin sesión; acá se arma sobre el
+// mismo `mockAuth` para no duplicar el setup de cada test.
+vi.mock("@/infrastructure/auth/session", () => ({
+  requireUser: async () => {
+    const session = await mockAuth();
+    if (!session) mockRedirect("/login");
+    return session.pdepUser;
+  },
+}));
+
 vi.mock("@/infrastructure/repositories", () => ({
   getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
   getComisionActiva: () => mockGetComisionActiva(),

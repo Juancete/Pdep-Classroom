@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ERROR_LOGS_CHANGED_EVENT } from "@/components/layout/use-error-log-count";
+import { contadorDeErroresSinLeer } from "@/components/layout/contador-de-errores-sin-leer";
 
 const mockRefresh = vi.fn();
 
@@ -28,8 +28,7 @@ describe("acciones de ErrorLog", () => {
   it("reconoce un error, refresca la página y notifica al badge", async () => {
     const fetchMock = vi.fn().mockResolvedValue(successfulResponse({ acknowledged: true }));
     vi.stubGlobal("fetch", fetchMock);
-    const changed = vi.fn();
-    window.addEventListener(ERROR_LOGS_CHANGED_EVENT, changed, { once: true });
+    const refrescar = vi.spyOn(contadorDeErroresSinLeer, "refrescar").mockResolvedValue();
     render(<AcknowledgeErrorButton id="e1" />);
 
     await userEvent.setup().click(screen.getByRole("button", { name: "Marcar como leído" }));
@@ -39,7 +38,7 @@ describe("acciones de ErrorLog", () => {
       { method: "PATCH" }
     ));
     expect(await screen.findByRole("status")).toHaveTextContent("Error marcado como leído");
-    expect(changed).toHaveBeenCalledOnce();
+    expect(refrescar).toHaveBeenCalledOnce();
     expect(mockRefresh).toHaveBeenCalledOnce();
   });
 

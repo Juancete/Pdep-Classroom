@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pluralizar } from "@/lib/naming";
 import type { HistorialDeMembresiasPage } from "@/infrastructure/repositories";
 import type { AccionCambioMembresia, OrigenCambioMembresia } from "@/domain/entities";
 
@@ -44,7 +45,7 @@ export function HistorialDeMembresias({
         <h2 className="text-lg font-semibold">Historial de cambios de integrantes</h2>
         <p className="mt-1 text-sm text-gray-500">
           {historial.total}{" "}
-          {historial.total === 1 ? "cambio registrado" : "cambios registrados"}
+          {pluralizar(historial.total, "cambio registrado", "cambios registrados")}
         </p>
       </div>
 

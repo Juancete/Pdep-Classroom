@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApiCall } from "@/hooks/useApiCall";
+import { pedirJson } from "@/lib/pedir-json";
 import { CIBadge } from "@/components/CIBadge";
 import { ParticipacionBadge, etiquetaDeCommits } from "@/components/ParticipacionBadge";
 import { RepoDeEntrega } from "@/components/RepoDeEntrega";
+import { SelectorDeDestino } from "@/components/SelectorDeDestino";
 import {
   ACCIONES,
   advertenciaEntregaDestino,
@@ -31,14 +33,10 @@ export function GrupoCard({
     if (!confirm(confirmacionPara("quitar", grupo, miembro))) return;
 
     await call(async () => {
-      const response = await fetch(
+      await pedirJson(
         `/api/assignments/${assignmentId}/grupos/${grupo.id}/miembros/${miembro.username}`,
         { method: "DELETE" }
       );
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error ?? "Error al quitar al alumno del grupo");
-      }
       router.refresh();
     });
   }
@@ -57,14 +55,10 @@ export function GrupoCard({
     if (!confirm(confirmacion)) return;
 
     await call(async () => {
-      const response = await fetch(
+      await pedirJson(
         `/api/assignments/${assignmentId}/grupos/${grupoDestinoId}/miembros/${miembro.username}`,
         { method: "PUT" }
       );
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error ?? "Error al mover al alumno de grupo");
-      }
       router.refresh();
     });
   }
@@ -143,34 +137,25 @@ export function GrupoCard({
             {conAcciones && (
             <div className="flex items-center gap-1.5">
               {grupo.destinos.length > 0 && (
-                <>
-                  <select
-                    value={destinoPorMiembro[miembro.username] ?? ""}
-                    onChange={(event) =>
-                      setDestinoPorMiembro((current) => ({
-                        ...current,
-                        [miembro.username]: event.target.value,
-                      }))
-                    }
-                    disabled={loading}
-                    aria-label={`Mover a @${miembro.username} a…`}
-                    className="text-xs border border-gray-300 rounded px-1.5 py-1 disabled:opacity-50"
-                  >
-                    <option value="">Mover a…</option>
-                    {grupo.destinos.map((destino) => (
-                      <option key={destino.id} value={destino.id}>
-                        {destino.nombre}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => handleMover(miembro)}
-                    disabled={loading || !destinoPorMiembro[miembro.username]}
-                    className={`font-medium disabled:opacity-40 disabled:cursor-not-allowed ${ACCIONES.mover.className}`}
-                  >
-                    {ACCIONES.mover.etiquetaBoton}
-                  </button>
-                </>
+                <SelectorDeDestino
+                  destinos={grupo.destinos}
+                  valor={destinoPorMiembro[miembro.username] ?? ""}
+                  onCambio={(destinoId) =>
+                    setDestinoPorMiembro((current) => ({
+                      ...current,
+                      [miembro.username]: destinoId,
+                    }))
+                  }
+                  disabled={loading}
+                  textoVacio="Mover a…"
+                  ariaLabel={`Mover a @${miembro.username} a…`}
+                  claseDelSelect="text-xs border border-gray-300 rounded px-1.5 py-1 disabled:opacity-50"
+                  accion={{
+                    etiquetaBoton: ACCIONES.mover.etiquetaBoton,
+                    className: `font-medium disabled:opacity-40 disabled:cursor-not-allowed ${ACCIONES.mover.className}`,
+                    onConfirmar: () => handleMover(miembro),
+                  }}
+                />
               )}
               <button
                 onClick={() => handleQuitar(miembro)}

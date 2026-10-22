@@ -148,7 +148,7 @@ describe("Edit Assignment page", () => {
     const html = renderToStaticMarkup(element as React.ReactElement);
 
     expect(html).toContain("Comisión:");
-    expect(html).toContain("2027 (Activa)");
+    expect(html).toMatch(/2027<span[^>]*>Activa<\/span>/);
     expect(html).not.toContain("name=\"comisionId\"");
   });
 
@@ -160,7 +160,7 @@ describe("Edit Assignment page", () => {
     const element = await EditAssignmentPage({ params: Promise.resolve({ id: "a1" }) });
     const html = renderToStaticMarkup(element as React.ReactElement);
 
-    expect(html).toContain("2027 (Histórica)");
+    expect(html).toMatch(/2027<span[^>]*>Histórica<\/span>/);
   });
 
   it("muestra Sin comisión para assignments huérfanos", async () => {

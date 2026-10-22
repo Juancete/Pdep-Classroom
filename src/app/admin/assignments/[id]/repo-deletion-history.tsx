@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pluralizar } from "@/lib/naming";
 import type { RepoDeletionHistoryPage } from "@/infrastructure/repositories";
 import type { RepoDeletionStatus } from "@/domain/entities";
 
@@ -34,7 +35,7 @@ export function RepoDeletionHistory({
       <div className="border-b border-gray-200 px-6 py-4">
         <h2 className="text-lg font-semibold">Historial de borrado de repositorios</h2>
         <p className="mt-1 text-sm text-gray-500">
-          {history.total} {history.total === 1 ? "intento registrado" : "intentos registrados"}
+          {history.total} {pluralizar(history.total, "intento registrado", "intentos registrados")}
         </p>
       </div>
 

@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/infrastructure/auth/session";
 import { getErrorLogsPage, getUnreadErrorLogCount } from "@/infrastructure/repositories";
 import { parsePage, single } from "@/lib/search-params";
+import { pluralizar } from "@/lib/naming";
 import { Paginador } from "@/components/Paginador";
 import {
   DataBody,
@@ -42,7 +43,7 @@ export default async function AdminErroresPage(props: {
         <div>
           <h1 className="text-2xl font-bold">Errores</h1>
           <p className="mt-1 text-sm text-gray-500">
-            {result.total} {result.total === 1 ? "fingerprint" : "fingerprints"} en esta vista · {unread} sin leer
+            {result.total} {pluralizar(result.total, "fingerprint")} en esta vista · {unread} sin leer
           </p>
         </div>
         <ErrorLogBulkActions unread={unread} />

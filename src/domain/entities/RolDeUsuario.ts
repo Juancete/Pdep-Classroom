@@ -10,6 +10,12 @@ import {
 
 export type ItemDeNavegacion = { href: string; label: string };
 
+// Ítem del menú de cuenta (avatar / drawer). `aviso` nombra qué indicador
+// puede mostrar el ítem; quién lo dibuja y cuándo está activo lo decide la UI.
+export type ItemDeCuenta = ItemDeNavegacion & {
+  aviso?: "sincronizacion" | "errores";
+};
+
 // Dependencias de lectura que `comoParticipante` puede usar según el rol —
 // mismo criterio que `FuentesDeConteo` en `Assignment.ts`: se inyectan para
 // que el dominio no importe `@/infrastructure/repositories` directamente.
@@ -68,6 +74,9 @@ export abstract class RolDeUsuario {
   /** Navegación principal en orden; el primer ítem es `rutaDeInicio()`. */
   abstract itemsDeNavegacion(): ItemDeNavegacion[];
 
+  /** Ítems del menú de cuenta, antes de "Salir"; cada rol tiene los suyos. */
+  abstract itemsDeCuenta(): ItemDeCuenta[];
+
   /** `true` si este rol debe ver el banner de sincronización pendiente. */
   abstract veBannerDeSincronizacion(): boolean;
 
@@ -123,6 +132,10 @@ class RolDocente extends RolDeUsuario {
   itemsDeNavegacion(): ItemDeNavegacion[] {
     // Mis TPs al final: el primer ítem de la navegación es `rutaDeInicio()`.
     return [...this.seccionesDeAdmin(), MIS_TPS];
+  }
+
+  itemsDeCuenta(): ItemDeCuenta[] {
+    return [{ href: "/admin/errores", label: "Errores", aviso: "errores" }];
   }
 
   veBannerDeSincronizacion(): boolean {
@@ -188,6 +201,10 @@ class RolEstudiante extends RolDeUsuario {
 
   itemsDeNavegacion(): ItemDeNavegacion[] {
     return [MIS_TPS];
+  }
+
+  itemsDeCuenta(): ItemDeCuenta[] {
+    return [{ href: "/perfil", label: "Editar perfil", aviso: "sincronizacion" }];
   }
 
   veBannerDeSincronizacion(): boolean {

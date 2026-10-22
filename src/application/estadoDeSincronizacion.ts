@@ -1,6 +1,8 @@
+import { cache } from "react";
 import type { Alumno } from "@/domain/entities";
+import { getCurrentUser } from "@/infrastructure/auth/session";
 import { canalesActivos, type CanalDeComunicacion } from "@/infrastructure/canales";
-import { getSuscripcionesDeAlumno } from "@/infrastructure/repositories";
+import { getAlumnoByGithub, getSuscripcionesDeAlumno } from "@/infrastructure/repositories";
 import { enumerar } from "@/lib/naming";
 
 export type EstadoDeSincronizacion = {
@@ -42,3 +44,21 @@ export async function resolverEstadoDeSincronizacion(
     canalesPendientes,
   };
 }
+
+/**
+ * Estado de sincronización del usuario logueado, o `null` si no aplica (sin
+ * sesión, rol que no ve el banner, alumno todavía sin registrar o fallo al
+ * leerlo — el layout no debe romperse por esto). `cache()` lo comparte entre
+ * el nav y el banner dentro de una misma request: una sola consulta.
+ */
+export const estadoDeSincronizacionDelUsuarioActual = cache(
+  async (): Promise<EstadoDeSincronizacion | null> => {
+    const user = await getCurrentUser();
+    if (!user || !user.rol.veBannerDeSincronizacion()) return null;
+
+    const alumno = await getAlumnoByGithub(user.githubUsername).catch(() => null);
+    if (!alumno) return null;
+
+    return resolverEstadoDeSincronizacion(alumno);
+  }
+);

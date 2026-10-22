@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pluralizar } from "@/lib/naming";
 import { requireAdmin } from "@/infrastructure/auth/session";
 import { getAlumnosPage } from "@/infrastructure/repositories";
 import { obtenerContextoDeComision } from "@/application/comisionConsultada";
@@ -59,8 +60,8 @@ export default async function AdminAlumnosPage(props: {
         Alumnos sincronizados de la comisión {comision.anio}.{" "}
         <span className="font-mono text-xs">
           {busqueda
-            ? `${result.total} ${result.total === 1 ? "resultado" : "resultados"} para "${busqueda}"`
-            : `${result.total} ${result.total === 1 ? "alumno" : "alumnos"}`}
+            ? `${result.total} ${pluralizar(result.total, "resultado")} para "${busqueda}"`
+            : `${result.total} ${pluralizar(result.total, "alumno")}`}
         </span>
       </p>
 

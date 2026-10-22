@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApiCall } from "@/hooks/useApiCall";
+import { pedirJson } from "@/lib/pedir-json";
 import type { GrupoResumen } from "./mi-grupo";
 
 export function GrupoSelector({
@@ -25,15 +26,10 @@ export function GrupoSelector({
     if (!confirm(`¿Seguro que querés crear el grupo "${nombre}"?`)) return;
 
     await call(async () => {
-      const response = await fetch(`/api/assignments/${assignmentId}/grupos`, {
+      await pedirJson(`/api/assignments/${assignmentId}/grupos`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombre: nombreNuevoGrupo }),
+        json: { nombre: nombreNuevoGrupo },
       });
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error ?? "Error al crear el grupo");
-      }
       setNombreNuevoGrupo("");
       router.refresh();
     });
@@ -44,14 +40,9 @@ export function GrupoSelector({
 
     setGrupoJoiningId(grupo.id);
     await call(async () => {
-      const response = await fetch(
-        `/api/assignments/${assignmentId}/grupos/${grupo.id}/join`,
-        { method: "POST" }
-      );
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error ?? "Error al unirse al grupo");
-      }
+      await pedirJson(`/api/assignments/${assignmentId}/grupos/${grupo.id}/join`, {
+        method: "POST",
+      });
       router.refresh();
     });
     setGrupoJoiningId(null);

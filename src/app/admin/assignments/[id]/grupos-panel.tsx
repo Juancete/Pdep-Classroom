@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApiCall } from "@/hooks/useApiCall";
+import { pedirJson } from "@/lib/pedir-json";
 import { ACCIONES, confirmacionPara } from "../../grupo-acciones";
+import { SelectorDeDestino } from "@/components/SelectorDeDestino";
 import { GrupoCard } from "../../grupo-card";
 import type { GrupoAdminResumen } from "../../grupo-resumen";
 
@@ -32,14 +34,10 @@ export function GruposPanel({
     if (!grupoDestino || !confirm(confirmacionPara("agregar", grupoDestino, alumno))) return;
 
     await call(async () => {
-      const response = await fetch(
+      await pedirJson(
         `/api/assignments/${assignmentId}/grupos/${grupoDestinoId}/miembros/${alumno.username}`,
         { method: "PUT" }
       );
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error ?? "Error al agregar al alumno al grupo");
-      }
       router.refresh();
     });
   }
@@ -91,32 +89,25 @@ export function GruposPanel({
                   </span>
                   {gruposConCupo.length > 0 && (
                     <div className="flex items-center gap-1.5">
-                      <select
-                        value={destinoPorAlumno[alumno.username] ?? ""}
-                        onChange={(event) =>
+                      <SelectorDeDestino
+                        destinos={gruposConCupo}
+                        valor={destinoPorAlumno[alumno.username] ?? ""}
+                        onCambio={(destinoId) =>
                           setDestinoPorAlumno((current) => ({
                             ...current,
-                            [alumno.username]: event.target.value,
+                            [alumno.username]: destinoId,
                           }))
                         }
                         disabled={loading}
-                        aria-label={`Agregar a @${alumno.username} a…`}
-                        className="text-xs border border-amber-300 rounded px-1.5 py-1 disabled:opacity-50"
-                      >
-                        <option value="">Agregar a…</option>
-                        {gruposConCupo.map((grupo) => (
-                          <option key={grupo.id} value={grupo.id}>
-                            {grupo.nombre}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => handleAgregar(alumno)}
-                        disabled={loading || !destinoPorAlumno[alumno.username]}
-                        className={`font-medium disabled:opacity-40 disabled:cursor-not-allowed ${ACCIONES.agregar.className}`}
-                      >
-                        {ACCIONES.agregar.etiquetaBoton}
-                      </button>
+                        textoVacio="Agregar a…"
+                        ariaLabel={`Agregar a @${alumno.username} a…`}
+                        claseDelSelect="text-xs border border-amber-300 rounded px-1.5 py-1 disabled:opacity-50"
+                        accion={{
+                          etiquetaBoton: ACCIONES.agregar.etiquetaBoton,
+                          className: `font-medium disabled:opacity-40 disabled:cursor-not-allowed ${ACCIONES.agregar.className}`,
+                          onConfirmar: () => handleAgregar(alumno),
+                        }}
+                      />
                     </div>
                   )}
                 </li>

@@ -1,30 +1,21 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useApiCall } from "@/hooks/useApiCall";
+import { pedirJson } from "@/lib/pedir-json";
 
 export function ReprocessWebhookButton({ deliveryId }: { deliveryId?: string }) {
   const router = useRouter();
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { loading: pending, error, call } = useApiCall();
 
   async function reprocess() {
-    setPending(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/webhooks/github/reprocesar", {
+    await call(async () => {
+      await pedirJson("/api/webhooks/github/reprocesar", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(deliveryId ? { deliveryId } : {}),
+        json: deliveryId ? { deliveryId } : {},
       });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error ?? `Error ${response.status}`);
       router.refresh();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "No se pudo reprocesar");
-    } finally {
-      setPending(false);
-    }
+    });
   }
 
   return (

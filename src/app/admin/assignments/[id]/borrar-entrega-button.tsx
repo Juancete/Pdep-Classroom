@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useApiCall } from "@/hooks/useApiCall";
+import { pedirJson } from "@/lib/pedir-json";
 
 // Botón para borrar una entrega puntual desde admin (issue #107) — mismo
 // idioma que `CIRerunButton`: `useApiCall`, confirm() previo con el nombre
@@ -26,14 +27,9 @@ export function BorrarEntregaButton({
     }
 
     const ok = await call(async () => {
-      const response = await fetch(
-        `/api/assignments/${assignmentId}/entregas/${entregaId}`,
-        { method: "DELETE" }
-      );
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.error ?? `Error ${response.status}`);
-      }
+      await pedirJson(`/api/assignments/${assignmentId}/entregas/${entregaId}`, {
+        method: "DELETE",
+      });
       return true;
     });
     if (ok) router.refresh();

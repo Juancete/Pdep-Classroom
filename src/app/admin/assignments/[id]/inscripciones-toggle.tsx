@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApiCall } from "@/hooks/useApiCall";
+import { pedirJson } from "@/lib/pedir-json";
 
 export function InscripcionesToggle({
   assignmentId,
@@ -17,15 +18,10 @@ export function InscripcionesToggle({
 
   async function handleToggle() {
     await call(async () => {
-      const response = await fetch(`/api/assignments/${assignmentId}/inscripciones`, {
+      await pedirJson(`/api/assignments/${assignmentId}/inscripciones`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cerrada: !cerradas }),
+        json: { cerrada: !cerradas },
       });
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error ?? "Error al cambiar el estado");
-      }
       setCerradas((current) => !current);
       router.refresh();
     });

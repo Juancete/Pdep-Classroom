@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useApiCall } from "@/hooks/useApiCall";
+import { pedirJson } from "@/lib/pedir-json";
 import { TrashIcon, SpinnerIcon } from "@/components/icons";
 
 export function DeleteButton({
@@ -15,25 +16,14 @@ export function DeleteButton({
   compact?: boolean;
 }) {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { loading, error, call } = useApiCall();
 
   async function handleDelete() {
     if (!confirm(confirmMessage)) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(endpoint, { method: "DELETE" });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.error ?? `Error ${response.status}`);
-      }
+    await call(async () => {
+      await pedirJson(endpoint, { method: "DELETE" });
       router.refresh();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Error desconocido");
-    } finally {
-      setLoading(false);
-    }
+    });
   }
 
   if (compact) {

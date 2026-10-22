@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApiCall } from "@/hooks/useApiCall";
+import { pedirJson } from "@/lib/pedir-json";
+import { pluralizar } from "@/lib/naming";
 import { FolderMinusIcon, SpinnerIcon } from "@/components/icons";
 import type { DeleteAssignmentReposResult } from "@/application/borrarRepositoriosDeAssignment";
 
@@ -26,16 +28,13 @@ export function DeleteReposButton({
 
   async function handleDelete() {
     if (!confirm(
-      `Vas a revisar ${activeRepoCount} ${activeRepoCount === 1 ? "repo" : "repos"} de GitHub antes de eliminarlos.`
+      `Vas a revisar ${activeRepoCount} ${pluralizar(activeRepoCount, "repo")} de GitHub antes de eliminarlos.`
     )) return;
     setResult(null);
     const responseResult = await call(async () => {
-      const previewResponse = await fetch(`/api/assignments/${assignmentId}/repos`);
-      if (!previewResponse.ok) {
-        const body = await previewResponse.json().catch(() => ({}));
-        throw new Error(body.error ?? `Error ${previewResponse.status}`);
-      }
-      const preview = (await previewResponse.json()) as { repos?: string[]; slug?: string };
+      const preview = await pedirJson<{ repos?: string[]; slug?: string }>(
+        `/api/assignments/${assignmentId}/repos`
+      );
       const repos = Array.isArray(preview.repos)
         ? preview.repos
         : Array.from({ length: activeRepoCount }, (_, index) => `repositorio ${index + 1}`);
@@ -48,16 +47,10 @@ export function DeleteReposButton({
       }
       const confirmation = prompt(`Escribí ${assignmentSlug} para confirmar:`);
       if (confirmation === null) return null;
-      const response = await fetch(`/api/assignments/${assignmentId}/repos`, {
+      return pedirJson<DeleteAssignmentReposResult>(`/api/assignments/${assignmentId}/repos`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmation }),
+        json: { confirmation },
       });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.error ?? `Error ${response.status}`);
-      }
-      return (await response.json()) as DeleteAssignmentReposResult;
     });
     if (responseResult) {
       setResult(responseResult);

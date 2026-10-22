@@ -1,6 +1,7 @@
 "use client";
 
 import { useApiCall } from "@/hooks/useApiCall";
+import { pedirJson } from "@/lib/pedir-json";
 
 export function AcceptButton({
   assignmentId,
@@ -15,13 +16,7 @@ export function AcceptButton({
 
   async function handleAccept() {
     await call(async () => {
-      const response = await fetch(`/api/assignments/${assignmentId}/accept`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error ?? "No pudimos completar la operación sobre el repositorio");
-      }
+      await pedirJson(`/api/assignments/${assignmentId}/accept`, { method: "POST" });
       window.location.reload();
     });
   }

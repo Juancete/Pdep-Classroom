@@ -109,6 +109,24 @@ describe("rutaDeInicio", () => {
   });
 });
 
+describe("menú de cuenta por rol", () => {
+  it("Estudiante edita su perfil y ese ítem avisa la sincronización pendiente", () => {
+    expect(ESTUDIANTE.itemsDeCuenta()).toEqual([
+      { href: "/perfil", label: "Editar perfil", aviso: "sincronizacion" },
+    ]);
+  });
+
+  it("Docente ve los errores y ese ítem avisa los errores sin leer", () => {
+    expect(DOCENTE.itemsDeCuenta()).toEqual([
+      { href: "/admin/errores", label: "Errores", aviso: "errores" },
+    ]);
+  });
+
+  it("Responsable hereda el menú de cuenta del Docente", () => {
+    expect(RESPONSABLE.itemsDeCuenta()).toEqual(DOCENTE.itemsDeCuenta());
+  });
+});
+
 describe("comoParticipante", () => {
   it("Estudiante construye un ParticipanteAlumno consultando sólo fuentes.alumno", async () => {
     const alumno = fakeAlumno();
