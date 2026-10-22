@@ -1,0 +1,90 @@
+name: Audit de dependencias
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  TITULO_ISSUE: "Audit de dependencias: vulnerabilidades en producción"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Audit de dependencias de producción
+        id: audit
+        run: |
+          set +e
+          pnpm audit:prod > audit-reporte.txt 2>&1
+          codigo_salida=$?
+          set -e
+          if [ "$codigo_salida" -eq 0 ]; then
+            echo "fallo=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "fallo=true" >> "$GITHUB_OUTPUT"
+          fi
+          {
+            echo "## Audit de dependencias de producción"
+            echo
+            echo '```'
+            cat audit-reporte.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Abrir o actualizar el issue de vulnerabilidades
+        if: steps.audit.outputs.fallo == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          fecha=$(date -u +%Y-%m-%d)
+          head -n 200 audit-reporte.txt > audit-reporte-truncado.txt
+          if [ "$(wc -l < audit-reporte.txt)" -gt 200 ]; then
+            echo "(reporte truncado a las primeras 200 líneas; ver el resumen del workflow)" >> audit-reporte-truncado.txt
+          fi
+          numero=$(gh issue list --state open --search "$TITULO_ISSUE in:title" --json number --jq '.[0].number // empty')
+          {
+            echo "El audit de dependencias de producción del $fecha encontró vulnerabilidades de nivel high o superior."
+            echo
+            echo "Corrida: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo
+            echo '```'
+            cat audit-reporte-truncado.txt
+            echo '```'
+          } > cuerpo.md
+          if [ -n "$numero" ]; then
+            gh issue comment "$numero" --body-file cuerpo.md
+          else
+            gh issue create --title "$TITULO_ISSUE" --label bug --body-file cuerpo.md
+          fi
+
+      - name: Avisar en el issue abierto que el audit pasó
+        if: steps.audit.outputs.fallo == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          fecha=$(date -u +%Y-%m-%d)
+          numero=$(gh issue list --state open --search "$TITULO_ISSUE in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$numero" ]; then
+            gh issue comment "$numero" --body "El audit del $fecha pasó sin vulnerabilidades de nivel high o superior."
+          fi
