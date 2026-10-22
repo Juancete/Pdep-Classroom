@@ -143,6 +143,20 @@ describe("NavMenu", () => {
     expect(dialog).not.toHaveAttribute("open");
   });
 
+  it("click en el espacio vacío del drawer (el wrapper) no lo cierra", async () => {
+    const { container } = renderizarEstudiante();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Abrir menú" }));
+    const dialog = container.querySelector("dialog") as HTMLDialogElement;
+
+    fireEvent.click(screen.getByTestId("contenido-del-drawer"));
+
+    expect(screen.getByRole("button", { name: "Abrir menú" })).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    );
+    expect(dialog).toHaveAttribute("open");
+  });
+
   it("click dentro del contenido del drawer no lo cierra", async () => {
     const { container } = renderizarEstudiante();
     const user = userEvent.setup();

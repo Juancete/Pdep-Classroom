@@ -38,7 +38,13 @@ export function UserMenu({
           hasPendingSync ? "hay una acción pendiente en tu perfil" : null,
           unreadErrors > 0 ? `${unreadErrors} errores sin leer` : null,
         ].filter(Boolean).join(", ")}
-        onClick={() => setOpen((previous) => !previous)}
+        onClick={(event) => {
+          // Safari y Firefox en macOS no enfocan un botón al clickearlo, y el
+          // Escape se escucha en el contenedor, que sólo recibe la tecla si el
+          // foco está adentro.
+          event.currentTarget.focus();
+          setOpen((previous) => !previous);
+        }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={image} alt="" className="w-7 h-7 rounded-full" />

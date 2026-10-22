@@ -1,7 +1,9 @@
 // Cliente fetch para los endpoints JSON de la app. Centraliza lo que antes
-// se repetía en cada componente: armar headers/body, tolerar respuestas que
-// no son JSON (un 502 con HTML) y traducir `!ok` en un error con mensaje
-// legible. Función pura, sin "use client": sólo usa `fetch`.
+// se repetía en cada componente: armar headers/body, tolerar respuestas de
+// error que no son JSON (un 502 con HTML) y traducir `!ok` en un error con
+// mensaje legible. En respuestas exitosas, un 204 devuelve `null` sin parsear
+// y un cuerpo que no es JSON lanza `ErrorDeApi` (el literal `null` es válido).
+// Función pura, sin "use client": sólo usa `fetch`.
 
 export class ErrorDeApi extends Error {
   constructor(
@@ -34,13 +36,18 @@ export async function pedirJson<Respuesta = unknown>(
   }
 
   const response = await fetch(url, init);
-  const cuerpo: unknown = await response.json().catch(() => null);
   if (!response.ok) {
+    const cuerpo: unknown = await response.json().catch(() => null);
     throw new ErrorDeApi(
       mensajeDelCuerpo(cuerpo) ?? `Error ${response.status}`,
       response.status,
       cuerpo
     );
   }
-  return cuerpo as Respuesta;
+  if (response.status === 204) return null as Respuesta;
+  try {
+    return (await response.json()) as Respuesta;
+  } catch {
+    throw new ErrorDeApi("Respuesta inválida del servidor", response.status, null);
+  }
 }

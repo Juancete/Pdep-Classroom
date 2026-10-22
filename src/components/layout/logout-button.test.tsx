@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const mockSignOut = vi.fn();
@@ -60,6 +60,18 @@ describe("UserMenu", () => {
 
     await user.keyboard("{Escape}");
 
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("al abrir con click el trigger queda enfocado y Escape cierra el menú (Safari/Firefox no enfocan al clickear)", () => {
+    render(<UserMenu username="juangarcia" image="" itemsDeCuenta={ESTUDIANTE.itemsDeCuenta()} />);
+    const trigger = screen.getByRole("button", { name: /juangarcia/ });
+
+    fireEvent.click(trigger);
+
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    fireEvent.keyDown(trigger, { key: "Escape" });
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 

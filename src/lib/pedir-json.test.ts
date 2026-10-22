@@ -31,6 +31,34 @@ describe("pedirJson", () => {
     await expect(pedirJson("/api/algo")).resolves.toEqual({ estado: "abierto" });
   });
 
+  it("200 con cuerpo que no es JSON lanza ErrorDeApi con status 200", async () => {
+    mockearFetch(
+      respuesta(true, 200, async () => {
+        throw new SyntaxError("Unexpected end of JSON input");
+      })
+    );
+
+    const fallo = await capturarError();
+
+    expect(fallo.message).toBe("Respuesta inválida del servidor");
+    expect(fallo.status).toBe(200);
+    expect(fallo.cuerpo).toBeNull();
+  });
+
+  it("204 devuelve null sin intentar parsear el cuerpo", async () => {
+    const json = vi.fn();
+    mockearFetch(respuesta(true, 204, json));
+
+    await expect(pedirJson("/api/algo")).resolves.toBeNull();
+    expect(json).not.toHaveBeenCalled();
+  });
+
+  it("200 con el literal JSON `null` devuelve null", async () => {
+    mockearFetch(respuesta(true, 200, async () => null));
+
+    await expect(pedirJson("/api/algo")).resolves.toBeNull();
+  });
+
   it("lanza ErrorDeApi con el mensaje del servidor cuando trae `error`", async () => {
     mockearFetch(respuesta(false, 409, async () => ({ error: "Ya existe" })));
 

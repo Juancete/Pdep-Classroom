@@ -104,7 +104,9 @@ export function NavMenu({
       {/* El <dialog> modal da foco inicial, trampa de foco, Escape, inert del
           resto de la página y restauración del foco. Los márgenes y límites
           por defecto del modal se pisan para pegarlo a la derecha, a toda
-          altura. El click en el backdrop llega con target === el dialog. */}
+          altura. Todo el contenido va en un wrapper a toda altura: los clicks en el
+          espacio vacío del drawer tienen al wrapper como target, y sólo los del
+          backdrop llegan con target === el dialog. */}
       <dialog
         ref={dialogRef}
         onClose={() => setOpen(false)}
@@ -114,58 +116,60 @@ export function NavMenu({
         aria-label="Menú de navegación"
         className="md:hidden fixed right-0 top-0 bottom-0 m-0 p-0 w-72 max-w-[85vw] h-full max-h-none bg-pdep-900 text-white shadow-xl backdrop:bg-black/50"
       >
-        <div className="flex items-center justify-between h-14 px-4 border-b border-pdep-800">
-          <span className="font-bold text-white">Menú</span>
-          <button
-            type="button"
-            className="p-2 -mr-2 text-pdep-200 hover:text-white transition-colors"
-            aria-label="Cerrar menú"
-            onClick={cerrarDrawer}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-              className="w-6 h-6"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6 6l12 12M6 18L18 6"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <div className="flex items-center gap-3 px-4 py-4 border-b border-pdep-800">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image} alt="" className="w-10 h-10 rounded-full" />
-          <span className="font-mono text-sm text-pdep-200 truncate">
-            {username}
-          </span>
-        </div>
-
-        <nav className="flex flex-col py-2">
-          {links.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
+        <div data-testid="contenido-del-drawer" className="flex h-full flex-col">
+          <div className="flex items-center justify-between h-14 px-4 border-b border-pdep-800">
+            <span className="font-bold text-white">Menú</span>
+            <button
+              type="button"
+              className="p-2 -mr-2 text-pdep-200 hover:text-white transition-colors"
+              aria-label="Cerrar menú"
               onClick={cerrarDrawer}
-              className="px-4 py-3 text-white hover:bg-pdep-800 transition-colors"
             >
-              {link.label}
-            </Link>
-          ))}
-          <ItemsDeCuenta
-            items={itemsDeCuenta}
-            hasPendingSync={hasPendingSync}
-            unreadErrors={unreadErrors}
-            onNavegar={cerrarDrawer}
-            variante="drawer"
-          />
-        </nav>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={2}
+                stroke="currentColor"
+                className="w-6 h-6"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M6 6l12 12M6 18L18 6"
+                />
+              </svg>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3 px-4 py-4 border-b border-pdep-800">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={image} alt="" className="w-10 h-10 rounded-full" />
+            <span className="font-mono text-sm text-pdep-200 truncate">
+              {username}
+            </span>
+          </div>
+
+          <nav className="flex flex-col py-2">
+            {links.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={cerrarDrawer}
+                className="px-4 py-3 text-white hover:bg-pdep-800 transition-colors"
+              >
+                {link.label}
+              </Link>
+            ))}
+            <ItemsDeCuenta
+              items={itemsDeCuenta}
+              hasPendingSync={hasPendingSync}
+              unreadErrors={unreadErrors}
+              onNavegar={cerrarDrawer}
+              variante="drawer"
+            />
+          </nav>
+        </div>
       </dialog>
     </>
   );

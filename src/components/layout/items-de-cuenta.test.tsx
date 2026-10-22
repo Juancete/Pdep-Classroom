@@ -97,13 +97,17 @@ describe("ItemsDeCuenta", () => {
     it("sin errores sin leer no muestra badge", () => {
       renderizar({ items: DOCENTE.itemsDeCuenta(), unreadErrors: 0 });
 
-      expect(screen.getByRole("menuitem", { name: "Errores" })).toBeInTheDocument();
+      const item = screen.getByRole("menuitem", { name: "Errores" });
+      expect(item).toBeInTheDocument();
+      expect(item).not.toHaveTextContent("0");
     });
 
     it("el aviso de un rol no aparece en los ítems del otro", () => {
       renderizar({ items: DOCENTE.itemsDeCuenta(), hasPendingSync: true });
 
-      expect(screen.getByRole("menuitem", { name: "Errores" })).toBeInTheDocument();
+      const item = screen.getByRole("menuitem", { name: "Errores" });
+      expect(item).toBeInTheDocument();
+      expect(item).not.toHaveTextContent("!");
     });
   });
 
