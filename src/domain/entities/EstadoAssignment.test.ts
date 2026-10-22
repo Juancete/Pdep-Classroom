@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { IndividualAssignment } from "./IndividualAssignment";
 import {
   EstadoAssignment,
   TransicionDeEstadoInvalidaError,
@@ -268,5 +269,44 @@ describe("EstadoAssignment.transicionarA — matriz de transiciones", () => {
       expect(transicionInvalida.desde).toBe("publicado");
       expect(transicionInvalida.hacia).toBe("borrador");
     }
+  });
+});
+
+describe("alEntrar", () => {
+  const ahora = new Date("2026-03-10T15:30:00Z");
+
+  function auditoriaDe(assignment: IndividualAssignment) {
+    return [
+      assignment.publicadoEn,
+      assignment.publicadoPor,
+      assignment.archivadoEn,
+      assignment.archivadoPor,
+    ];
+  }
+
+  it("Publicado sella publicadoEn con la fecha recibida y publicadoPor", () => {
+    const assignment = new IndividualAssignment();
+    EstadoAssignment.desdeNombre("publicado").alEntrar(assignment, "docente1", ahora);
+    expect(assignment.publicadoEn).toBe(ahora);
+    expect(assignment.publicadoPor).toBe("docente1");
+    expect(assignment.archivadoEn).toBeUndefined();
+    expect(assignment.archivadoPor).toBeUndefined();
+  });
+
+  it("Archivado sella archivadoEn con la fecha recibida y archivadoPor", () => {
+    const assignment = new IndividualAssignment();
+    EstadoAssignment.desdeNombre("archivado").alEntrar(assignment, "docente2", ahora);
+    expect(assignment.archivadoEn).toBe(ahora);
+    expect(assignment.archivadoPor).toBe("docente2");
+    expect(assignment.publicadoEn).toBeUndefined();
+    expect(assignment.publicadoPor).toBeUndefined();
+  });
+
+  it("Borrador no toca la auditoría", () => {
+    const assignment = new IndividualAssignment();
+    const antes = auditoriaDe(assignment);
+    EstadoAssignment.desdeNombre("borrador").alEntrar(assignment, "docente3", ahora);
+    expect(auditoriaDe(assignment)).toEqual(antes);
+    expect(auditoriaDe(assignment).every((valor) => valor === undefined)).toBe(true);
   });
 });

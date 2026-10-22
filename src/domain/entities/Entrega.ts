@@ -14,6 +14,19 @@ import {
   NOMBRES_RESULTADO_CI,
   type NombreResultadoCI,
 } from "./ResultadoCI";
+import {
+  EstadoDeProvision,
+  NOMBRES_ESTADO_DE_PROVISION,
+  type AvisoDeProvision,
+  type NombreEstadoDeProvision,
+} from "./EstadoDeProvision";
+import { ConRepo, SinRepo, type SituacionDeAlumno } from "./SituacionDeAlumno";
+
+/** Aviso de provisión de una entrega para el panel de admin (DTO serializable). */
+export type AvisoDeProvisionDeEntrega = AvisoDeProvision & {
+  intentos: number;
+  ultimoError?: string;
+};
 
 // Evita martillar la API de GitHub cuando varias personas abren la misma
 // vista casi al mismo tiempo: si ya consultamos hace menos de este umbral,
@@ -130,8 +143,8 @@ export class Entrega {
   // Saga de aprovisionamiento GitHub. La fila se crea antes de llamar a
   // GitHub para que un timeout o una carrera nunca deje un repo sin dueño
   // lógico recuperable en Classroom.
-  @Enum({ items: ["pendiente", "activa", "fallida"], default: "activa" })
-  provisionEstado: "pendiente" | "activa" | "fallida" = "activa";
+  @Enum({ items: [...NOMBRES_ESTADO_DE_PROVISION], default: "activa" })
+  provisionEstado: NombreEstadoDeProvision = "activa";
 
   @Property({ type: "text", nullable: true })
   provisionUltimoError?: string;
@@ -214,6 +227,10 @@ export class Entrega {
 
   get resultadoCI(): ResultadoCI {
     return ResultadoCI.desdeNombre(this.ciResultadoNombre);
+  }
+
+  get estadoDeProvision(): EstadoDeProvision {
+    return EstadoDeProvision.desdeNombre(this.provisionEstado);
   }
 
   /**
@@ -522,8 +539,8 @@ export class Entrega {
   // dos variantes en repositorio/UI que sólo miraban `repoDeleted`/`repoName`
   // sin el filtro de `provisionEstado` (ver `EntregaRepository.ts` y
   // `admin/assignments/[id]/page.tsx` — B2 de la auditoría de dominio).
-  hasRepo(): boolean {
-    return this.provisionEstado === "activa" && !!this.repoUrl && !this.repoDeleted;
+  hasRepo(): this is Entrega & { repoUrl: string } {
+    return this.estadoDeProvision.tieneRepoActivo() && !!this.repoUrl && !this.repoDeleted;
   }
 
   /**
@@ -557,7 +574,7 @@ export class Entrega {
    */
   provisionEnCurso(ahora: Date = new Date()): boolean {
     return (
-      this.provisionEstado === "pendiente" &&
+      this.estadoDeProvision.puedeEstarEnCurso() &&
       this.provisionIntentos > 0 &&
       this.provisionActualizadoEn !== undefined &&
       this.provisionActualizadoEn.getTime() > ahora.getTime() - VENTANA_PROVISION_EN_VUELO_MS
@@ -598,6 +615,32 @@ export class Entrega {
 
   noTieneRepo(): boolean {
     return !this.repoName;
+  }
+
+  /** Aviso de provisión para el panel de admin, o `null` si no hay nada que avisar. */
+  avisoDeProvision(): AvisoDeProvisionDeEntrega | null {
+    const aviso = this.estadoDeProvision.aviso();
+    return aviso && {
+      ...aviso,
+      intentos: this.provisionIntentos,
+      ultimoError: this.provisionUltimoError,
+    };
+  }
+
+  /** Situación de esta entrega para el alumno en Mis TPs. `puedeActuar` viene del estado del assignment. */
+  situacionParaAlumno(puedeActuar: boolean): SituacionDeAlumno {
+    if (this.hasRepo()) {
+      return new ConRepo({
+        repoUrl: this.repoUrl,
+        ciResultadoNombre: this.ciResultadoNombre,
+        ciDetalleUrl: this.ciDetalleUrl,
+        tieneResultadoAutomatico: this.resultadoCI.tieneResultadoAutomatico(),
+      });
+    }
+    return new SinRepo({
+      mensaje: this.estadoDeProvision.mensajeParaAlumno(puedeActuar),
+      puedeReintentar: puedeActuar,
+    });
   }
 
   estadoRepo(): "borrado" | "activo" | "sin-repo" {

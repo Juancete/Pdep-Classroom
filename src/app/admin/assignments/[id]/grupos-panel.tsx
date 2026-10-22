@@ -75,9 +75,7 @@ export function GruposPanel({
           </h2>
           <ul className="space-y-1.5">
             {alumnosSinGrupo.map((alumno) => {
-              const gruposConCupo = grupos.filter(
-                (grupo) => !grupo.estaLleno && grupo.tipoDeIntegrantes === "alumnos"
-              );
+              const gruposConCupo = grupos.filter((grupo) => grupo.admiteAlumnosSinGrupo);
               return (
                 <li
                   key={alumno.username}

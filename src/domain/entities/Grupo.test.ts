@@ -10,6 +10,7 @@ import {
   GrupoConEntregaError,
 } from "./Grupo";
 import { MiembroDeGrupo } from "./MiembroDeGrupo";
+import { INTEGRANTES_ALUMNOS, INTEGRANTES_DOCENTES } from "./TipoDeIntegrantes";
 import { GrupalAssignment } from "./GrupalAssignment";
 import { Alumno } from "./Alumno";
 import { Entrega } from "./Entrega";
@@ -215,7 +216,7 @@ describe("Grupo", () => {
 
     it("informa tipoDeIntegrantes cuando es un grupo de docentes", () => {
       const grupo = nuevoGrupo(3, [fakeMiembro("profe-docente")]);
-      grupo.tipoDeIntegrantes = "docentes";
+      grupo.tipoDeIntegrantesNombre = "docentes";
       expect(grupo.toResumen().tipoDeIntegrantes).toBe("docentes");
     });
   });
@@ -242,13 +243,28 @@ describe("Grupo", () => {
   describe("admiteIntegrantesDe", () => {
     it("distingue grupos de alumnos y de docentes", () => {
       const grupoDeAlumnos = nuevoGrupo(3);
-      expect(grupoDeAlumnos.admiteIntegrantesDe("alumnos")).toBe(true);
-      expect(grupoDeAlumnos.admiteIntegrantesDe("docentes")).toBe(false);
+      expect(grupoDeAlumnos.admiteIntegrantesDe(INTEGRANTES_ALUMNOS)).toBe(true);
+      expect(grupoDeAlumnos.admiteIntegrantesDe(INTEGRANTES_DOCENTES)).toBe(false);
 
       const grupoDeDocentes = nuevoGrupo(3);
-      grupoDeDocentes.tipoDeIntegrantes = "docentes";
-      expect(grupoDeDocentes.admiteIntegrantesDe("docentes")).toBe(true);
-      expect(grupoDeDocentes.admiteIntegrantesDe("alumnos")).toBe(false);
+      grupoDeDocentes.tipoDeIntegrantesNombre = "docentes";
+      expect(grupoDeDocentes.admiteIntegrantesDe(INTEGRANTES_DOCENTES)).toBe(true);
+      expect(grupoDeDocentes.admiteIntegrantesDe(INTEGRANTES_ALUMNOS)).toBe(false);
+    });
+  });
+
+  describe("admiteNuevoIntegrante", () => {
+    it("es true con cupo y tipo correcto", () => {
+      expect(nuevoGrupo(3, [fakeMiembro("ana")]).admiteNuevoIntegrante(INTEGRANTES_ALUMNOS)).toBe(true);
+    });
+
+    it("es false si el grupo está lleno", () => {
+      const grupo = nuevoGrupo(1, [fakeMiembro("ana")]);
+      expect(grupo.admiteNuevoIntegrante(INTEGRANTES_ALUMNOS)).toBe(false);
+    });
+
+    it("es false si el tipo es distinto", () => {
+      expect(nuevoGrupo(3).admiteNuevoIntegrante(INTEGRANTES_DOCENTES)).toBe(false);
     });
   });
 
@@ -284,7 +300,7 @@ describe("Grupo", () => {
 
     it("no es válido para un grupo de otro tipo de integrantes", () => {
       const docentes = grupoEn("a1", "g2");
-      docentes.tipoDeIntegrantes = "docentes";
+      docentes.tipoDeIntegrantesNombre = "docentes";
       expect(docentes.esDestinoValidoDeMovimientoDesde(grupoEn("a1", "g1"))).toBe(false);
     });
   });
@@ -295,7 +311,7 @@ describe("Grupo", () => {
       expect(grupoDeAlumnos.exigeVinculoConAlumno()).toBe(true);
 
       const grupoDeDocentes = nuevoGrupo(3);
-      grupoDeDocentes.tipoDeIntegrantes = "docentes";
+      grupoDeDocentes.tipoDeIntegrantesNombre = "docentes";
       expect(grupoDeDocentes.exigeVinculoConAlumno()).toBe(false);
     });
   });
@@ -482,12 +498,14 @@ describe("GrupalAssignment.crearGrupo", () => {
 
   it("fija el tipo de integrantes (alumnos por defecto)", () => {
     const grupo = nuevoGrupal().crearGrupo("Los Lambdas", "ana");
-    expect(grupo.tipoDeIntegrantes).toBe("alumnos");
+    expect(grupo.tipoDeIntegrantesNombre).toBe("alumnos");
+    expect(grupo.tipoDeIntegrantes).toBe(INTEGRANTES_ALUMNOS);
   });
 
   it("permite fijar explícitamente el tipo de integrantes", () => {
-    const grupo = nuevoGrupal().crearGrupo("Profes FP", "profe1", "docentes");
-    expect(grupo.tipoDeIntegrantes).toBe("docentes");
+    const grupo = nuevoGrupal().crearGrupo("Profes FP", "profe1", INTEGRANTES_DOCENTES);
+    expect(grupo.tipoDeIntegrantesNombre).toBe("docentes");
+    expect(grupo.tipoDeIntegrantes).toBe(INTEGRANTES_DOCENTES);
   });
 });
 

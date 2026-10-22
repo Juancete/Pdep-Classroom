@@ -9,7 +9,7 @@ import { randomUUID } from "crypto";
 import type { Assignment } from "./Assignment";
 import { type ColumnConfig, type GruposColumnConfig, DEFAULT_COLUMN_CONFIG } from "@/types";
 import { COMISION_ANIO_MIN, COMISION_ANIO_MAX } from "./domain-constants";
-import { mapeoDeNombreDe } from "./MapeoDeNombre";
+import { datosPersonalesMapeados } from "./MapeoDeNombre";
 
 // Ventana del lease de importación de grupos: pasado este tiempo sin un
 // heartbeat (`renovarImportacion`), un reclamo se considera abandonado y
@@ -74,13 +74,7 @@ export class Comision {
    * volcado DB → Sheets).
    */
   columnaOcupadaPorDatosPersonales(indice: number): boolean {
-    const columnasDeDatosPersonales = [
-      this.columnConfig.legajo,
-      this.columnConfig.githubUsername,
-      this.columnConfig.email,
-      ...mapeoDeNombreDe(this.columnConfig).columnasUsadas(),
-    ];
-    return columnasDeDatosPersonales.includes(indice);
+    return datosPersonalesMapeados(this.columnConfig).some(({ columna }) => columna === indice);
   }
 
   activar(): void {

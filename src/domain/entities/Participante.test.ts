@@ -11,6 +11,7 @@ import { Grupo, InscripcionesCerradasError, GrupoConEntregaError } from "./Grupo
 import { IndividualAssignment } from "./IndividualAssignment";
 import { Alumno } from "./Alumno";
 import { Comision } from "./Comision";
+import { INTEGRANTES_ALUMNOS, INTEGRANTES_DOCENTES } from "./TipoDeIntegrantes";
 
 function fakeComision(id = "c1"): Comision {
   const comision = new Comision(2026, "sheet-test");
@@ -343,11 +344,11 @@ describe("origenDeAuditoria", () => {
 
 describe("tipoDeGrupo", () => {
   it("ParticipanteAlumno integra grupos de alumnos", () => {
-    expect(participanteAlumno().tipoDeGrupo()).toBe("alumnos");
+    expect(participanteAlumno().tipoDeGrupo()).toBe(INTEGRANTES_ALUMNOS);
   });
 
   it("ParticipanteDocente integra grupos de docentes", () => {
-    expect(participanteDocente().tipoDeGrupo()).toBe("docentes");
+    expect(participanteDocente().tipoDeGrupo()).toBe(INTEGRANTES_DOCENTES);
   });
 });
 

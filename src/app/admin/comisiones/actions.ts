@@ -24,6 +24,11 @@ import {
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import {
+  mapeoDeNombreDe,
+  problemasDeDatosPersonales,
+  type ConfigDeDatosPersonales,
+} from "@/domain/entities";
 import { DEFAULT_COLUMN_CONFIG, type ColumnConfig, type GruposColumnConfig } from "@/types";
 import { canalesActivos, canalPorNombre } from "@/infrastructure/canales";
 import { ColumnIndexSchema, OptionalColumnIndexSchema } from "@/lib/column-index-schema";
@@ -73,10 +78,7 @@ const ComisionSchemaBase = z.object({
   grupos_col_objetos: OptionalColumnIndexSchema,
 });
 
-// Un dato personal mapeado a la misma columna que otro pisaría esa celda al
-// escribir. En modo completo, apellido/nombre separados no se escriben —
-// no cuentan como activos, sólo nombreCompleto.
-function datosPersonalesActivos(
+function configDeDatosPersonales(
   data: Pick<
     z.infer<typeof ComisionSchemaBase>,
     | "col_legajo"
@@ -87,48 +89,21 @@ function datosPersonalesActivos(
     | "modoNombre"
     | "col_nombreCompleto"
   >
-): Array<{ campo: string; columna: number }> {
-  const comunes = [
-    { campo: "col_legajo", columna: data.col_legajo },
-    { campo: "col_githubUsername", columna: data.col_githubUsername },
-    { campo: "col_email", columna: data.col_email },
-  ];
-  if (data.modoNombre === "completo") {
-    return data.col_nombreCompleto === undefined
-      ? comunes
-      : [...comunes, { campo: "col_nombreCompleto", columna: data.col_nombreCompleto }];
-  }
-  return [
-    ...comunes,
-    { campo: "col_apellido", columna: data.col_apellido },
-    { campo: "col_nombre", columna: data.col_nombre },
-  ];
+): ConfigDeDatosPersonales {
+  return {
+    legajo: data.col_legajo,
+    apellido: data.col_apellido,
+    nombre: data.col_nombre,
+    githubUsername: data.col_githubUsername,
+    email: data.col_email,
+    modoNombre: data.modoNombre,
+    nombreCompleto: data.col_nombreCompleto,
+  };
 }
 
 const ComisionSchema = ComisionSchemaBase.superRefine((data, ctx) => {
-  if (data.modoNombre === "completo" && data.col_nombreCompleto === undefined) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "La columna de nombre completo es obligatoria en modo 'completo'",
-      path: ["col_nombreCompleto"],
-    });
-  }
-
-  const camposPorColumna = new Map<number, string[]>();
-  for (const { campo, columna } of datosPersonalesActivos(data)) {
-    const camposConEstaColumna = camposPorColumna.get(columna) ?? [];
-    camposConEstaColumna.push(campo);
-    camposPorColumna.set(columna, camposConEstaColumna);
-  }
-  for (const campos of camposPorColumna.values()) {
-    if (campos.length < 2) continue;
-    for (const campo of campos) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Esta columna ya está usada por otro dato personal",
-        path: [campo],
-      });
-    }
+  for (const { dato, mensaje } of problemasDeDatosPersonales(configDeDatosPersonales(data))) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: mensaje, path: [`col_${dato}`] });
   }
 });
 
@@ -166,11 +141,9 @@ function toColumnConfig(data: z.infer<typeof ComisionSchema>) {
     nombre: data.col_nombre,
     githubUsername: data.col_githubUsername,
     email: data.col_email,
-    modoNombre: data.modoNombre,
     permitirPrecargaSinLegajo: data.permitir_precarga_sin_legajo,
-    ...(data.modoNombre === "completo" && data.col_nombreCompleto !== undefined
-      ? { nombreCompleto: data.col_nombreCompleto }
-      : {}),
+    // Sólo corre con datos ya validados por `ComisionSchema`: la factory no lanza.
+    ...mapeoDeNombreDe(configDeDatosPersonales(data)).configDeNombre(),
   };
 
   if (!data.grupos_enabled) return base;

@@ -10,6 +10,7 @@ import {
   Entrega,
   EntregaConProvisionEnCursoError,
   type NombreResultadoCI,
+  type NombreEstadoDeProvision,
   type Contribucion,
 } from "@/domain/entities";
 import type { Paradigma } from "@/types";
@@ -417,7 +418,7 @@ export async function createEntrega(
     // real: dos renames del mismo repo entregados fuera de orden ANTES de
     // que cualquier webhook haya podido guardar el id se pierden.
     repoGithubId?: string;
-    provisionEstado?: "pendiente" | "activa" | "fallida";
+    provisionEstado?: NombreEstadoDeProvision;
   },
   em?: EntityManager
 ): Promise<Entrega> {
@@ -541,7 +542,7 @@ export async function createOrGetEntrega(
     alumnoId?: string;
     grupoId?: string;
     repoGithubId?: string;
-    provisionEstado?: "pendiente" | "activa" | "fallida";
+    provisionEstado?: NombreEstadoDeProvision;
   },
   em?: EntityManager
 ): Promise<Entrega> {
@@ -581,7 +582,7 @@ export async function crearEntregaSiAssignmentDisponible(
     alumnoId?: string;
     grupoId?: string;
     repoGithubId?: string;
-    provisionEstado?: "pendiente" | "activa" | "fallida";
+    provisionEstado?: NombreEstadoDeProvision;
   }
 ): Promise<Entrega> {
   const entityManager = await getEM();

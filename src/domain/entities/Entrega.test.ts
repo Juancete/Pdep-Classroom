@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Entrega } from "./Entrega";
+import type { PresentacionDeSituacion } from "./SituacionDeAlumno";
 
 function nuevaEntrega(overrides: Partial<Entrega> = {}): Entrega {
   const entrega = new Entrega();
@@ -926,5 +927,80 @@ describe("Entrega.reconoceComoPropio", () => {
     expect(
       entrega.reconoceComoPropio({ repoGithubId: "555", createdAt: null })
     ).toBe(false);
+  });
+});
+
+describe("Entrega.avisoDeProvision", () => {
+  it("una provisión activa no tiene aviso", () => {
+    expect(nuevaEntrega({ provisionEstado: "activa" }).avisoDeProvision()).toBeNull();
+  });
+
+  it("una provisión pendiente avisa con tono de advertencia y la cantidad de intentos", () => {
+    const aviso = nuevaEntrega({ provisionEstado: "pendiente", provisionIntentos: 2 }).avisoDeProvision();
+    expect(aviso).toMatchObject({
+      etiqueta: "Aprovisionamiento pendiente",
+      tono: "advertencia",
+      intentos: 2,
+    });
+  });
+
+  it("una provisión fallida avisa con tono de error y el último error", () => {
+    const aviso = nuevaEntrega({
+      provisionEstado: "fallida",
+      provisionIntentos: 1,
+      provisionUltimoError: "boom",
+    }).avisoDeProvision();
+    expect(aviso).toEqual({
+      etiqueta: "Aprovisionamiento fallido",
+      tono: "error",
+      intentos: 1,
+      ultimoError: "boom",
+    });
+  });
+});
+
+describe("Entrega.situacionParaAlumno", () => {
+  const presentacion: PresentacionDeSituacion<string> = {
+    conRepo: (repo) =>
+      `conRepo|${repo.repoUrl}|${repo.ciResultadoNombre}|${repo.ciDetalleUrl}|${repo.tieneResultadoAutomatico}`,
+    sinRepo: (aviso) => `sinRepo|${aviso.mensaje}|${aviso.puedeReintentar}`,
+    elegirGrupo: () => "elegirGrupo",
+    aceptar: () => "aceptar",
+    sinAccion: () => "sinAccion",
+  };
+
+  it("con repo activo presenta conRepo con los cuatro datos", () => {
+    const entrega = nuevaEntrega({
+      repoUrl: "https://github.com/org/repo",
+      ciResultadoNombre: "passing",
+      ciDetalleUrl: "https://ci/1",
+    });
+    expect(entrega.situacionParaAlumno(true).presentar(presentacion)).toBe(
+      "conRepo|https://github.com/org/repo|passing|https://ci/1|true"
+    );
+  });
+
+  it("con repo y sin CI marca que no hay resultado automático", () => {
+    const entrega = nuevaEntrega({ repoUrl: "https://github.com/org/repo", ciResultadoNombre: "sin_ci" });
+    expect(entrega.situacionParaAlumno(false).presentar(presentacion)).toBe(
+      "conRepo|https://github.com/org/repo|sin_ci|undefined|false"
+    );
+  });
+
+  const sinRepo: [string, Partial<Entrega>, boolean, string][] = [
+    ["pendiente", { provisionEstado: "pendiente" }, true, "Estamos creando el repositorio."],
+    ["pendiente", { provisionEstado: "pendiente" }, false, "La creación del repo quedó pendiente antes de archivar el TP."],
+    ["fallida", { provisionEstado: "fallida" }, true, "No se pudo crear el repo. Podés reintentar."],
+    ["fallida", { provisionEstado: "fallida" }, false, "No se pudo crear el repo antes de archivar el TP. Consultá al equipo docente."],
+    ["activa sin url", { provisionEstado: "activa", repoUrl: undefined }, true, "Estamos creando el repositorio."],
+    ["activa sin url", { provisionEstado: "activa", repoUrl: undefined }, false, "La creación del repo quedó pendiente antes de archivar el TP."],
+    ["activa con repo borrado", { provisionEstado: "activa", repoUrl: "https://github.com/org/repo", repoDeleted: true }, true, "Estamos creando el repositorio."],
+    ["activa con repo borrado", { provisionEstado: "activa", repoUrl: "https://github.com/org/repo", repoDeleted: true }, false, "La creación del repo quedó pendiente antes de archivar el TP."],
+  ];
+
+  it.each(sinRepo)("sin repo (%s) con puedeActuar=%s.. presenta sinRepo", (_caso, datos, puedeActuar, mensaje) => {
+    expect(nuevaEntrega(datos).situacionParaAlumno(puedeActuar).presentar(presentacion)).toBe(
+      `sinRepo|${mensaje}|${puedeActuar}`
+    );
   });
 });

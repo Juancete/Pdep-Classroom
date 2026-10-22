@@ -38,6 +38,7 @@ vi.mock("@/infrastructure/repositories", () => ({
 }));
 
 import { GET, POST } from "./route";
+import { INTEGRANTES_DOCENTES } from "@/domain/entities";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -131,7 +132,7 @@ describe("GET /api/assignments/[id]/grupos", () => {
   it("filtra los grupos por el tipo que integra el participante", async () => {
     const grupoDeAlumnos = makeGrupoEntity({ id: "g1" });
     const grupoDeDocentes = makeGrupoEntity({ id: "g2" });
-    grupoDeDocentes.tipoDeIntegrantes = "docentes";
+    grupoDeDocentes.tipoDeIntegrantesNombre = "docentes";
     mockGetGruposDeAssignment.mockResolvedValue([grupoDeAlumnos, grupoDeDocentes]);
 
     const response = await GET(makeRequest(undefined, "GET"), { params: Promise.resolve({ id: "a1" }) });
@@ -228,7 +229,7 @@ describe("POST /api/assignments/[id]/grupos", () => {
     const [{ participante }] = mockCrearGrupo.mock.calls[0];
     expect(participante).toBeInstanceOf(ParticipanteDocente);
     expect(participante.githubUsername).toBe("profe-docente");
-    expect(participante.tipoDeGrupo()).toBe("docentes");
+    expect(participante.tipoDeGrupo()).toBe(INTEGRANTES_DOCENTES);
   });
 
   it("devuelve 400 si el body no tiene nombre", async () => {

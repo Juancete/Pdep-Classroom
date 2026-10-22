@@ -27,9 +27,9 @@ const SIN_PARTICIPACION: SincronizarParticipacionResult = {
   fallidas: [],
 };
 
-// Sincroniza el resultado cacheado de CI y, para un admin, la participación
-// por integrante (issue #122) contra GitHub. Un admin sincroniza todas las
-// entregas con repo activo del assignment; un alumno sólo puede refrescar
+// Sincroniza el resultado cacheado de CI y, según el rol, la participación
+// por integrante (issue #122) contra GitHub. El alcance administrativo sincroniza
+// todas las entregas con repo activo del assignment; un alumno sólo puede refrescar
 // la suya (y sólo su CI: la participación queda en ceros). Las dos
 // sincronizaciones corren secuenciales, no en paralelo, para mantener el
 // tope de `MAX_CONCURRENT_GITHUB_SYNC` solicitudes concurrentes a GitHub.
@@ -50,12 +50,10 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       );
     }
 
-    const esAdmin = user.rol.puedeAdministrar();
-    const entregas = esAdmin
-      ? await getEntregasConRepoActivo(params.id)
-      : await getEntregaDeUsuario(params.id, user.githubUsername).then((entrega) =>
-          entrega ? [entrega] : []
-        );
+    const entregas = await user.rol.entregasAlcanzables({
+      todasConRepoActivo: () => getEntregasConRepoActivo(params.id),
+      laDelUsuario: () => getEntregaDeUsuario(params.id, user.githubUsername),
+    });
 
     const resultado = await sincronizarCIDeEntregas(entregas, {
       forzar: parsed.data.forzar,
@@ -68,7 +66,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       );
     }
 
-    const participacion = esAdmin
+    const participacion = user.rol.sincronizaParticipacion()
       ? await sincronizarParticipacionDeEntregas(entregas, { forzar: parsed.data.forzar })
       : SIN_PARTICIPACION;
     if (participacion.fallidas.length > 0) {

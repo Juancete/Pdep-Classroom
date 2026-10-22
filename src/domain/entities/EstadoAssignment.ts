@@ -1,3 +1,5 @@
+import type { Assignment } from "./Assignment";
+
 export type NombreEstadoAssignment = "borrador" | "publicado" | "archivado";
 
 export const NOMBRES_ESTADO_ASSIGNMENT: readonly NombreEstadoAssignment[] = [
@@ -122,6 +124,9 @@ export abstract class EstadoAssignment {
     }
   }
 
+  /** Acción de entrada: qué sella el assignment al pasar a este estado. Por defecto nada. */
+  alEntrar(_assignment: Assignment, _porUsuario: string, _ahora: Date): void {}
+
   static desdeNombre(nombre: NombreEstadoAssignment): EstadoAssignment {
     return ESTADOS_POR_NOMBRE[nombre];
   }
@@ -187,6 +192,11 @@ class Publicado extends EstadoAssignment {
     return "Publicado";
   }
 
+  alEntrar(assignment: Assignment, porUsuario: string, ahora: Date): void {
+    assignment.publicadoEn = ahora;
+    assignment.publicadoPor = porUsuario;
+  }
+
   esVisibleParaAlumno(_tieneEntrega: boolean): boolean {
     return true;
   }
@@ -247,6 +257,11 @@ class Archivado extends EstadoAssignment {
 
   etiqueta(): string {
     return "Archivado";
+  }
+
+  alEntrar(assignment: Assignment, porUsuario: string, ahora: Date): void {
+    assignment.archivadoEn = ahora;
+    assignment.archivadoPor = porUsuario;
   }
 
   esVisibleParaAlumno(tieneEntrega: boolean): boolean {

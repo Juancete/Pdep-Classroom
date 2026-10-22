@@ -2,6 +2,7 @@ import { getEM } from "@/infrastructure/db";
 import { LockMode } from "@mikro-orm/core";
 import type { EntityManager } from "@mikro-orm/postgresql";
 import {
+  INTEGRANTES_ALUMNOS,
   Grupo,
   Alumno,
   GrupalAssignment,
@@ -751,7 +752,7 @@ async function ejecutarUpsertGrupoConMiembro(params: {
           }
           // La planilla sólo importa alumnos: un grupo de docentes homónimo
           // no se reutiliza, se informa como nombre ya tomado (issue #107).
-          if (!existente.admiteIntegrantesDe("alumnos")) {
+          if (!existente.admiteIntegrantesDe(INTEGRANTES_ALUMNOS)) {
             throw new NombreGrupoDuplicadoError(assignment.id, candidato.nombre);
           }
           grupo = existente;

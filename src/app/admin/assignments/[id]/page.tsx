@@ -45,12 +45,6 @@ export default async function AssignmentDetailPage(
     alumnos.map((alumno) => [alumno.usernameCanonico, alumno])
   );
 
-  const grupal = assignment.comoGrupal();
-  const inscripciones =
-    grupal && assignment.permiteAccionesDeAlumno()
-      ? { cerradas: grupal.inscripcionesCerradas }
-      : undefined;
-
   const entregaRows = entregas.map((entrega) => {
     // Issue #122: matching canónico entre `githubUsername` y el login que
     // devolvió GitHub, mismo criterio que `resumirGrupoParaAdmin` — el `Map`
@@ -72,9 +66,7 @@ export default async function AssignmentDetailPage(
       repoName: entrega.repoName,
       repoUrl: entrega.repoUrl,
       repoDeleted: entrega.repoDeleted,
-      provisionEstado: entrega.provisionEstado,
-      provisionUltimoError: entrega.provisionUltimoError,
-      provisionIntentos: entrega.provisionIntentos,
+      avisoDeProvision: entrega.avisoDeProvision(),
       estadoRepo: entrega.estadoRepo(),
       createdAt: new Date(entrega.createdAt).toLocaleDateString("es-AR"),
       grupoNombre: entrega.grupo?.nombre,
@@ -118,7 +110,7 @@ export default async function AssignmentDetailPage(
         assignmentId={assignment.id}
         estado={assignment.estadoNombre}
         acciones={acciones}
-        inscripciones={inscripciones}
+        inscripciones={assignment.estadoDeInscripciones() ?? undefined}
         publicadoEn={assignment.publicadoEn?.toISOString() ?? null}
         publicadoPor={assignment.publicadoPor ?? null}
         archivadoEn={assignment.archivadoEn?.toISOString() ?? null}
@@ -179,7 +171,7 @@ export default async function AssignmentDetailPage(
         <EntregasTable
           assignmentId={assignment.id}
           entregas={entregaRows}
-          mostrarGrupo={grupal !== null}
+          mostrarGrupo={assignment.tieneGestionDeGrupos()}
         />
       </div>
     </div>

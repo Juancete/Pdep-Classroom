@@ -1,4 +1,7 @@
 import type { Alumno } from "./Alumno";
+import type { Assignment } from "./Assignment";
+import type { Entrega } from "./Entrega";
+import { INTEGRANTES_ALUMNOS, INTEGRANTES_DOCENTES } from "./TipoDeIntegrantes";
 import type { Comision } from "./Comision";
 import {
   Participante,
@@ -24,6 +27,23 @@ export type ItemDeCuenta = ItemDeNavegacion & {
 export interface FuentesDeParticipante {
   alumno: () => Promise<Alumno | null>;
   comisionActiva: () => Promise<Comision | null>;
+}
+
+/**
+ * Entregas de un assignment que un rol puede alcanzar (sincronizar CI,
+ * etc.). Perezosas: cada rol pide sólo la que necesita.
+ */
+export interface FuentesDeEntregas {
+  todasConRepoActivo: () => Promise<Entrega[]>;
+  laDelUsuario: () => Promise<Entrega | null>;
+}
+
+/** Assignments que un rol puede listar. Perezosas, mismo criterio. */
+export interface FuentesDeAssignments {
+  todos: () => Promise<Assignment[]>;
+  alumno: () => Promise<Alumno | null>;
+  deComision: (comisionId: string) => Promise<Assignment[]>;
+  entregasDelUsuario: () => Promise<Map<string, Entrega>>;
 }
 
 // Ítem de navegación compartido por docente y estudiante: "Mis TPs" siempre
@@ -99,6 +119,27 @@ export abstract class RolDeUsuario {
    * alumno nunca administra a otros: lanza `AccesoAssignmentProhibidoError`.
    */
   abstract actorSobreMembresiaAjena(assignmentId: string): ActorDeMembresia;
+
+  /**
+   * Entregas de un assignment sobre las que este rol puede actuar: el
+   * alcance administrativo ve todas las que tienen repo activo; un
+   * estudiante sólo la propia.
+   */
+  abstract entregasAlcanzables(fuentes: FuentesDeEntregas): Promise<Entrega[]>;
+
+  /**
+   * `true` si al sincronizar CI también se sincroniza la participación por
+   * integrante (issue #122: sólo el panel docente la ve; no tiene sentido
+   * gastar la request de un alumno en `contributors`).
+   */
+  abstract sincronizaParticipacion(): boolean;
+
+  /**
+   * Assignments que este rol puede listar. `null` significa que el usuario
+   * no está registrado como alumno y no tiene acceso a ninguno (la route lo
+   * traduce a 403).
+   */
+  abstract assignmentsVisibles(fuentes: FuentesDeAssignments): Promise<Assignment[] | null>;
 }
 
 class RolDocente extends RolDeUsuario {
@@ -149,6 +190,18 @@ class RolDocente extends RolDeUsuario {
     return new ParticipanteDocente(githubUsername, await fuentes.comisionActiva());
   }
 
+  entregasAlcanzables(fuentes: FuentesDeEntregas): Promise<Entrega[]> {
+    return fuentes.todasConRepoActivo();
+  }
+
+  sincronizaParticipacion(): boolean {
+    return true;
+  }
+
+  assignmentsVisibles(fuentes: FuentesDeAssignments): Promise<Assignment[] | null> {
+    return fuentes.todos();
+  }
+
   actorSobreMembresiaAjena(): ActorDeMembresia {
     return {
       // El docente resuelve siempre; el acceso al repo se otorga/revoca en la
@@ -156,7 +209,7 @@ class RolDocente extends RolDeUsuario {
       // confirm() cuando el grupo ya aceptó el TP.
       autorizarAltaEnGrupo: () => {},
       autorizarBajaDeGrupo: () => {},
-      origenDeAuditoria: () => "docente",
+      origenDeAuditoria: () => INTEGRANTES_DOCENTES.origenDeAuditoria(),
       // Alcance administrativo global (issue #107/#112, revisión de code
       // review): a diferencia de `Participante.autorizarAccionSobreAssignment`,
       // acá no hay comisión propia que chequear — el docente administra
@@ -165,7 +218,7 @@ class RolDocente extends RolDeUsuario {
       // Mueve dentro del mismo tipo que tenía en el grupo origen; un alta
       // desde la lista "sin grupo" del panel admin siempre es de un alumno
       // (esa lista sólo tiene alumnos).
-      tipoDeGrupoAlIngresar: (grupoOrigen) => grupoOrigen?.tipoDeIntegrantes ?? "alumnos",
+      tipoDeGrupoAlIngresar: (grupoOrigen) => grupoOrigen?.tipoDeIntegrantes ?? INTEGRANTES_ALUMNOS,
     };
   }
 }
@@ -216,6 +269,30 @@ class RolEstudiante extends RolDeUsuario {
     fuentes: FuentesDeParticipante
   ): Promise<Participante> {
     return new ParticipanteAlumno(await fuentes.alumno(), githubUsername);
+  }
+
+  async entregasAlcanzables(fuentes: FuentesDeEntregas): Promise<Entrega[]> {
+    const entrega = await fuentes.laDelUsuario();
+    return entrega ? [entrega] : [];
+  }
+
+  sincronizaParticipacion(): boolean {
+    return false;
+  }
+
+  async assignmentsVisibles(fuentes: FuentesDeAssignments): Promise<Assignment[] | null> {
+    const alumno = await fuentes.alumno();
+    if (!alumno) return null;
+    // `deComision` ya excluye los borradores; acá va el filtro fino que
+    // depende del alumno: un archivado sólo se lista si ya tiene entrega
+    // (mismo criterio que el dashboard).
+    const [assignments, entregas] = await Promise.all([
+      fuentes.deComision(alumno.comision.id),
+      fuentes.entregasDelUsuario(),
+    ]);
+    return assignments.filter((assignment) =>
+      assignment.esVisibleParaAlumno(entregas.has(assignment.id))
+    );
   }
 
   actorSobreMembresiaAjena(assignmentId: string): ActorDeMembresia {

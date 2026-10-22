@@ -9,6 +9,7 @@ import {
 import { randomUUID } from "crypto";
 import { Comision } from "./Comision";
 import type { Alumno } from "./Alumno";
+import type { Entrega } from "./Entrega";
 import type { Grupo } from "./Grupo";
 import type { GrupalAssignment } from "./GrupalAssignment";
 import type { Participante } from "./Participante";
@@ -19,6 +20,7 @@ import {
   type ContextoTransicionEstado,
   type NombreEstadoAssignment,
 } from "./EstadoAssignment";
+import { ACEPTAR, ELEGIR_GRUPO, SIN_ACCION, type SituacionDeAlumno } from "./SituacionDeAlumno";
 import { slugify } from "@/lib/naming";
 
 // Dependencias de lectura que las subclases pueden usar desde sus métodos
@@ -261,23 +263,15 @@ export abstract class Assignment {
     contexto: ContextoTransicionEstado,
     porUsuario: string
   ): void {
-    const estadoAnterior = this.estadoNombre;
-    const nuevoEstado = this.estado.transicionarA(this.id, destino, contexto);
+    const estadoAnterior = this.estado;
+    const nuevoEstado = estadoAnterior.transicionarA(this.id, destino, contexto);
     this.estadoNombre = nuevoEstado.nombre;
 
-    // Pedir de nuevo el mismo estado (ej. "publicar" un TP ya publicado) es un
-    // no-op: no resella la auditoría, para no pisar quién y cuándo lo publicó
-    // o archivó realmente con el usuario que hizo el click redundante.
-    if (nuevoEstado.nombre === estadoAnterior) return;
-
-    if (nuevoEstado.nombre === "publicado") {
-      this.publicadoEn = new Date();
-      this.publicadoPor = porUsuario;
-    }
-    if (nuevoEstado.nombre === "archivado") {
-      this.archivadoEn = new Date();
-      this.archivadoPor = porUsuario;
-    }
+    // La comparación es identidad entre instancias únicas: "¿cambió el
+    // estado?". Pedir el mismo estado (ej. "publicar" un TP ya publicado) no
+    // resella la auditoría, para no pisar quién y cuándo lo publicó o
+    // archivó realmente con el usuario que hizo el click redundante.
+    if (nuevoEstado !== estadoAnterior) nuevoEstado.alEntrar(this, porUsuario, new Date());
   }
 
   /**
@@ -458,6 +452,27 @@ export abstract class Assignment {
    * polimórficos.
    */
   abstract comoGrupal(): GrupalAssignment | null;
+
+  /**
+   * `true` si el assignment admite gestión de grupos (pestaña de grupos,
+   * columna de grupo en la tabla de entregas). Evita `comoGrupal() !== null`
+   * en la UI cuando sólo se necesita la pregunta, no la instancia grupal.
+   */
+  abstract tieneGestionDeGrupos(): boolean;
+
+  /**
+   * Estado de las inscripciones a grupos, o `null` si no aplica (assignment
+   * individual, o grupal que hoy no admite acciones de alumno).
+   */
+  abstract estadoDeInscripciones(): { cerradas: boolean } | null;
+
+  /** Qué puede hacer el alumno con este assignment en Mis TPs, dada su entrega y su grupo (ambos pueden faltar). */
+  situacionDeAlumno(entrega: Entrega | null, grupo: Grupo | null): SituacionDeAlumno {
+    const puedeActuar = this.permiteAccionesDeAlumno();
+    if (entrega) return entrega.situacionParaAlumno(puedeActuar);
+    if (!puedeActuar) return SIN_ACCION;
+    return this.requiereSeleccionDeGrupo(grupo) ? ELEGIR_GRUPO : ACEPTAR;
+  }
 
   /**
    * Igual que `comoGrupal()`, pero para los bordes que ya asumen que el

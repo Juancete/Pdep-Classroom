@@ -619,6 +619,70 @@ describe("Dashboard page", () => {
       expect(html).not.toContain('data-testid="accept-button"');
     });
 
+    describe("provisión del repo", () => {
+      const TEXTO_CREANDO = "Estamos creando el repositorio.";
+      const TEXTO_QUEDO_PENDIENTE = "La creación del repo quedó pendiente antes de archivar el TP.";
+
+      async function renderConEntrega(entrega: Entrega, archivado: boolean): Promise<string> {
+        const assignment = makeAssignment({ id: "a-prov" });
+        if (archivado) assignment.transicionarA("archivado", { tieneEntregas: true }, "docente1");
+        mockGetAssignmentsDeComision.mockResolvedValue([assignment]);
+        mockGetEntregaDeUsuario.mockResolvedValue(new Map([["a-prov", entrega]]));
+        return renderToStaticMarkup(await DashboardPage());
+      }
+
+      it("pendiente + publicado informa que se está creando y ofrece aceptar", async () => {
+        const html = await renderConEntrega(
+          makeEntrega({ provisionEstado: "pendiente", repoUrl: undefined }),
+          false
+        );
+        expect(html).toContain(TEXTO_CREANDO);
+        expect(html).toContain('data-testid="accept-button"');
+      });
+
+      it("fallida + publicado informa el fallo y ofrece reintentar", async () => {
+        const html = await renderConEntrega(
+          makeEntrega({ provisionEstado: "fallida", repoUrl: undefined }),
+          false
+        );
+        expect(html).toContain("No se pudo crear el repo. Podés reintentar.");
+        expect(html).toContain('data-testid="accept-button"');
+      });
+
+      it("activa sin repoUrl + publicado muestra el texto de creando y ofrece aceptar", async () => {
+        const html = await renderConEntrega(makeEntrega({ repoUrl: undefined }), false);
+        expect(html).toContain(TEXTO_CREANDO);
+        expect(html).toContain('data-testid="accept-button"');
+      });
+
+      it("activa con repo borrado + publicado muestra el texto de creando y ofrece aceptar", async () => {
+        const html = await renderConEntrega(makeEntrega({ repoDeleted: true }), false);
+        expect(html).toContain(TEXTO_CREANDO);
+        expect(html).toContain('data-testid="accept-button"');
+      });
+
+      it("activa sin repoUrl + archivado informa que quedó pendiente, sin aceptar", async () => {
+        const html = await renderConEntrega(makeEntrega({ repoUrl: undefined }), true);
+        expect(html).toContain(TEXTO_QUEDO_PENDIENTE);
+        expect(html).not.toContain('data-testid="accept-button"');
+      });
+
+      it("activa con repo borrado + archivado informa que quedó pendiente, sin aceptar", async () => {
+        const html = await renderConEntrega(makeEntrega({ repoDeleted: true }), true);
+        expect(html).toContain(TEXTO_QUEDO_PENDIENTE);
+        expect(html).not.toContain('data-testid="accept-button"');
+      });
+
+      it("pendiente + archivado informa que quedó pendiente, sin aceptar", async () => {
+        const html = await renderConEntrega(
+          makeEntrega({ provisionEstado: "pendiente", repoUrl: undefined }),
+          true
+        );
+        expect(html).toContain(TEXTO_QUEDO_PENDIENTE);
+        expect(html).not.toContain('data-testid="accept-button"');
+      });
+    });
+
     it("no muestra un archivado sin entrega", async () => {
       const archivado = makeAssignment({ id: "a-archivado", titulo: "TP Archivado" });
       archivado.transicionarA("archivado", { tieneEntregas: false }, "docente1");

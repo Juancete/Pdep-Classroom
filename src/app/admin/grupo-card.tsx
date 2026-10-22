@@ -73,9 +73,9 @@ export function GrupoCard({
               {grupo.paradigma}
             </span>
           )}
-          {grupo.tipoDeIntegrantes === "docentes" && (
+          {grupo.distintivo && (
             <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-              Docentes
+              {grupo.distintivo}
             </span>
           )}
           {grupo.entrega && (

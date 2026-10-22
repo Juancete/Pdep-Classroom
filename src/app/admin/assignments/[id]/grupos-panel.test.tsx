@@ -22,7 +22,8 @@ function makeGrupo(overrides: Partial<GrupoAdminResumen> = {}): GrupoAdminResume
     maxIntegrantes: 3,
     estaLleno: false,
     etiquetaCupo: "2/3 integrantes",
-    tipoDeIntegrantes: "alumnos",
+    distintivo: null,
+    admiteAlumnosSinGrupo: true,
     miembros: [
       { username: "ana", nombreCompleto: "García, Ana" },
       { username: "bob", nombreCompleto: "Smith, Bob" },
@@ -205,7 +206,7 @@ describe("GruposPanel", () => {
       render(
         <GruposPanel
           assignmentId="a1"
-          grupos={[makeGrupo({ estaLleno: true })]}
+          grupos={[makeGrupo({ estaLleno: true, admiteAlumnosSinGrupo: false })]}
           alumnosSinGrupo={[makeAlumnoSinGrupo()]}
         />
       );
@@ -265,7 +266,8 @@ describe("GruposPanel", () => {
             makeGrupo({
               id: "g2",
               nombre: "Docentes Team",
-              tipoDeIntegrantes: "docentes",
+              distintivo: "Docentes",
+              admiteAlumnosSinGrupo: false,
             }),
           ]}
           alumnosSinGrupo={[makeAlumnoSinGrupo({ username: "carlos" })]}

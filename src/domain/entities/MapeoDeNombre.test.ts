@@ -5,6 +5,11 @@ import {
   MapeoDeNombreCompleto,
   ModoNombreCompletoSinColumnaError,
   mapeoDeNombreDe,
+  datosPersonalesMapeados,
+  problemasDeDatosPersonales,
+  MENSAJE_COLUMNA_REPETIDA,
+  MENSAJE_NOMBRE_COMPLETO_OBLIGATORIO,
+  type ConfigDeDatosPersonales,
 } from "./MapeoDeNombre";
 
 // ── MapeoDeNombreSeparado ────────────────────────────────────
@@ -121,5 +126,106 @@ describe("mapeoDeNombreDe", () => {
     expect(() => mapeoDeNombreDe({ ...baseConfig, modoNombre: "completo" })).toThrow(
       ModoNombreCompletoSinColumnaError
     );
+  });
+});
+
+// ── datosPersonales / configDeNombre ──────────────────────────
+
+describe("MapeoDeNombre.datosPersonales y configDeNombre", () => {
+  it("el separado expone apellido y nombre y persiste sólo el modo", () => {
+    const mapeo = new MapeoDeNombreSeparado(1, 2);
+    expect(mapeo.datosPersonales()).toEqual([
+      { dato: "apellido", columna: 1 },
+      { dato: "nombre", columna: 2 },
+    ]);
+    expect(mapeo.configDeNombre()).toEqual({ modoNombre: "separado" });
+  });
+
+  it("el completo expone nombreCompleto y persiste modo y columna", () => {
+    const mapeo = new MapeoDeNombreCompleto(7);
+    expect(mapeo.datosPersonales()).toEqual([{ dato: "nombreCompleto", columna: 7 }]);
+    expect(mapeo.configDeNombre()).toEqual({ modoNombre: "completo", nombreCompleto: 7 });
+  });
+});
+
+// ── datosPersonalesMapeados ───────────────────────────────────
+
+const CONFIG_BASE: ConfigDeDatosPersonales = {
+  legajo: 0,
+  apellido: 1,
+  nombre: 2,
+  githubUsername: 3,
+  email: 4,
+  modoNombre: "separado",
+};
+
+describe("datosPersonalesMapeados", () => {
+  it("en modo separado devuelve los cinco datos en orden", () => {
+    expect(datosPersonalesMapeados(CONFIG_BASE)).toEqual([
+      { dato: "legajo", columna: 0 },
+      { dato: "githubUsername", columna: 3 },
+      { dato: "email", columna: 4 },
+      { dato: "apellido", columna: 1 },
+      { dato: "nombre", columna: 2 },
+    ]);
+  });
+
+  it("en modo completo devuelve los comunes más nombreCompleto", () => {
+    expect(
+      datosPersonalesMapeados({ ...CONFIG_BASE, modoNombre: "completo", nombreCompleto: 7 })
+    ).toEqual([
+      { dato: "legajo", columna: 0 },
+      { dato: "githubUsername", columna: 3 },
+      { dato: "email", columna: 4 },
+      { dato: "nombreCompleto", columna: 7 },
+    ]);
+  });
+
+  it("en modo completo sin columna lanza ModoNombreCompletoSinColumnaError", () => {
+    expect(() => datosPersonalesMapeados({ ...CONFIG_BASE, modoNombre: "completo" })).toThrow(
+      ModoNombreCompletoSinColumnaError
+    );
+  });
+});
+
+// ── problemasDeDatosPersonales ────────────────────────────────
+
+describe("problemasDeDatosPersonales", () => {
+  it("sin problemas devuelve una lista vacía", () => {
+    expect(problemasDeDatosPersonales(CONFIG_BASE)).toEqual([]);
+  });
+
+  it("una colisión simple reporta los dos datos involucrados", () => {
+    expect(problemasDeDatosPersonales({ ...CONFIG_BASE, email: 0 })).toEqual([
+      { dato: "legajo", mensaje: MENSAJE_COLUMNA_REPETIDA },
+      { dato: "email", mensaje: MENSAJE_COLUMNA_REPETIDA },
+    ]);
+  });
+
+  it("modo completo sin columna reporta sólo nombreCompleto", () => {
+    expect(problemasDeDatosPersonales({ ...CONFIG_BASE, modoNombre: "completo" })).toEqual([
+      { dato: "nombreCompleto", mensaje: MENSAJE_NOMBRE_COMPLETO_OBLIGATORIO },
+    ]);
+  });
+
+  it("modo completo sin columna sigue revisando las colisiones entre los comunes", () => {
+    expect(
+      problemasDeDatosPersonales({ ...CONFIG_BASE, modoNombre: "completo", email: 0 })
+    ).toEqual([
+      { dato: "nombreCompleto", mensaje: MENSAJE_NOMBRE_COMPLETO_OBLIGATORIO },
+      { dato: "legajo", mensaje: MENSAJE_COLUMNA_REPETIDA },
+      { dato: "email", mensaje: MENSAJE_COLUMNA_REPETIDA },
+    ]);
+  });
+
+  it("en modo completo válido apellido y nombre no cuentan: apellido = nombreCompleto no colisiona", () => {
+    expect(
+      problemasDeDatosPersonales({
+        ...CONFIG_BASE,
+        modoNombre: "completo",
+        apellido: 7,
+        nombreCompleto: 7,
+      })
+    ).toEqual([]);
   });
 });

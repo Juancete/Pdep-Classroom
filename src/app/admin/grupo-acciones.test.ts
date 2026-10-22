@@ -9,7 +9,8 @@ function makeGrupo(overrides: Partial<GrupoAdminResumen> = {}): GrupoAdminResume
     maxIntegrantes: 3,
     estaLleno: false,
     etiquetaCupo: "2/3 integrantes",
-    tipoDeIntegrantes: "alumnos",
+    distintivo: null,
+    admiteAlumnosSinGrupo: true,
     miembros: [
       { username: "ana", nombreCompleto: "Ana García" },
       { username: "bob", nombreCompleto: "Bob Pérez" },

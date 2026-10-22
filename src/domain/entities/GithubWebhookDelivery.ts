@@ -2,16 +2,7 @@ import { Entity, Enum, Index, PrimaryKey, Property } from "@mikro-orm/core";
 import { randomUUID } from "node:crypto";
 import { EstadoDelivery, NOMBRES_ESTADO_DELIVERY, type NombreEstadoDelivery } from "./EstadoDelivery";
 
-// Ventana para tratar un `procesando` como huérfano y volver a ofrecerlo
-// para reclamo: sólo pasa si la lambda que lo reclamó murió a mitad de
-// camino sin llegar a cerrar la fila (crash, timeout de la plataforma). El
-// procesamiento normal termina en milisegundos/segundos, así que 2 minutos
-// da margen de sobra sin dejar una fila realmente en vuelo disponible para
-// un segundo reclamo. Única fuente: la usan tanto `puedeReprocesarse()` acá
-// como el SQL de `GithubWebhookDeliveryRepository.reclamar` — antes vivía
-// sólo en el repositorio y la UI del panel admin no la conocía (B5 de la
-// auditoría de dominio).
-export const VENTANA_PROCESANDO_HUERFANO_MS = 120_000;
+export { VENTANA_PROCESANDO_HUERFANO_MS } from "./EstadoDelivery";
 
 /**
  * Auditoría de deliveries de webhook de GitHub (issue #60) — molde:
@@ -99,9 +90,7 @@ export class GithubWebhookDelivery {
    * que un admin necesita reprocesar a mano (B5 de la auditoría de dominio).
    */
   puedeReprocesarse(ahora: Date): boolean {
-    if (this.estado.puedeReprocesarse()) return true;
-    if (this.estadoProcesamiento !== "procesando" || !this.reclamadoEn) return false;
-    return ahora.getTime() - this.reclamadoEn.getTime() >= VENTANA_PROCESANDO_HUERFANO_MS;
+    return this.estado.puedeReprocesarse(this, ahora);
   }
 
   /** Cierra el delivery en un estado terminal sin reproceso (`procesado`/`ignorado`). */

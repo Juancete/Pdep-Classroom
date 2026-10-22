@@ -6,6 +6,7 @@ import {
   AssignmentNoEncontradoError,
   AssignmentNoGrupalError,
   type Grupo,
+  type TipoDeIntegrantes,
 } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
@@ -66,7 +67,7 @@ function fakeGrupo(
 ): Grupo {
   return {
     nombre,
-    admiteIntegrantesDe: (tipo: string) => tipo === tipoDeIntegrantes,
+    admiteIntegrantesDe: (tipo: TipoDeIntegrantes) => tipo.nombre === tipoDeIntegrantes,
     usernamesDeMiembros: () => usernames,
   } as unknown as Grupo;
 }
