@@ -145,6 +145,7 @@ export {
   RESPONSABLE,
   resolverRol,
   type ItemDeNavegacion,
+  type ItemDeCuenta,
   type FuentesDeParticipante,
 } from "./RolDeUsuario";
 export {

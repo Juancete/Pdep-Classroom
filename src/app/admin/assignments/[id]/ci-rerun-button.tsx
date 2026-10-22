@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useApiCall } from "@/hooks/useApiCall";
+import { pedirJson } from "@/lib/pedir-json";
 import { PlayIcon, SpinnerIcon } from "@/components/icons";
 
 // Botón ícono-solo para pedir la reejecución de CI de una entrega — mismo
@@ -23,18 +24,10 @@ export function CIRerunButton({
     if (!confirm("¿Reejecutar el CI de esta entrega?")) return;
 
     const ok = await call(async () => {
-      const response = await fetch(
-        `/api/assignments/${assignmentId}/ci/rerun`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ entregaId }),
-        }
-      );
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.error ?? `Error ${response.status}`);
-      }
+      await pedirJson(`/api/assignments/${assignmentId}/ci/rerun`, {
+        method: "POST",
+        json: { entregaId },
+      });
       return true;
     });
     if (ok) router.refresh();

@@ -3,6 +3,8 @@
 // arrastrar `@/domain/entities` (y con ella MikroORM) al bundle del cliente
 // — mismo motivo que `CIBadge`/`ci-ui.tsx`. No hace falta: los tres datos
 // que necesita ya vienen resueltos por el caller (`Entrega.participacionDe`).
+import { pluralizar } from "@/lib/naming";
+
 export const PARTICIPACION_AYUDA =
   "Porcentaje de commits del integrante sobre los commits de los integrantes, según GitHub (puede tener unas horas de atraso). Es un indicador orientativo para saber por dónde empezar a preguntar, no una nota: el pair programming en una sola máquina concentra los commits en un solo usuario.";
 
@@ -20,7 +22,7 @@ const ESTILO_POR_CASO: Record<"conCommits" | "sinCommits", string> = {
 // `grupo-card.tsx`), antes duplicada como `commits === 1 ? "commit" : "commits"`
 // en los tres lugares.
 export function etiquetaDeCommits(cantidad: number): string {
-  return `${cantidad} commit${cantidad === 1 ? "" : "s"}`;
+  return `${cantidad} ${pluralizar(cantidad, "commit")}`;
 }
 
 export function ParticipacionBadge({

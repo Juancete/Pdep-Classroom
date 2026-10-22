@@ -6,6 +6,7 @@ import { AssignmentForm } from "../../assignment-form";
 import { actualizarAssignment } from "../../actions";
 import { accionesDeEstado } from "@/domain/entities";
 import { EstadoPanel } from "../../estado-panel";
+import { EtiquetaDeComision } from "@/components/EtiquetaDeComision";
 export default async function EditAssignmentPage(
   props: {
     params: Promise<{ id: string }>;
@@ -43,11 +44,7 @@ export default async function EditAssignmentPage(
 
       <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
         Comisión:{" "}
-        <span className="font-medium text-gray-800">
-          {assignment.comision
-            ? `${assignment.comision.anio} (${assignment.comision.activa ? "Activa" : "Histórica"})`
-            : "Sin comisión"}
-        </span>
+        <EtiquetaDeComision comision={assignment.comision} />
       </div>
       <AssignmentForm
         action={actualizarAssignment}

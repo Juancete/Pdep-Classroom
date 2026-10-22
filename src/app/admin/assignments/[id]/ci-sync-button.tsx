@@ -1,13 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useApiCall } from "@/hooks/useApiCall";
+import { useSincronizacionDeCI } from "@/hooks/useSincronizacionDeCI";
 import { RefreshIcon, SpinnerIcon } from "@/components/icons";
-import {
-  mensajeDeFallosDeSincronizacion,
-  type RespuestaDeSincronizacion,
-} from "@/lib/ci-sync-mensajes";
+import { mensajeDeFallosDeSincronizacion } from "@/lib/ci-sync-mensajes";
 
 // Encabezado de la tabla de entregas: fuerza la sincronización del estado de
 // CI y de la participación por integrante (issue #122) contra GitHub. Sin
@@ -19,24 +15,13 @@ import {
 // webhook la actualiza).
 export function CISyncButton({ assignmentId }: { assignmentId: string }) {
   const router = useRouter();
-  const { loading, error, call } = useApiCall();
-  const [advertencia, setAdvertencia] = useState<string | null>(null);
+  const { sincronizar: sincronizarCI, loading, mensaje } = useSincronizacionDeCI(
+    assignmentId,
+    { mensajeDeFallos: mensajeDeFallosDeSincronizacion }
+  );
 
   async function sincronizar() {
-    setAdvertencia(null);
-    const resultado = await call(async () => {
-      const response = await fetch(`/api/assignments/${assignmentId}/ci`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ forzar: true }),
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.error ?? `Error ${response.status}`);
-      }
-      return (await response.json()) as RespuestaDeSincronizacion;
-    });
-    if (resultado) setAdvertencia(mensajeDeFallosDeSincronizacion(resultado));
+    const resultado = await sincronizarCI();
     if (resultado && (resultado.actualizadas > 0 || resultado.participacion.actualizadas > 0)) {
       router.refresh();
     }
@@ -53,9 +38,7 @@ export function CISyncButton({ assignmentId }: { assignmentId: string }) {
         {loading ? <SpinnerIcon className="w-4 h-4" /> : <RefreshIcon className="w-4 h-4" />}
         Actualizar
       </button>
-      {(error ?? advertencia) && (
-        <span className="text-red-600 text-xs">{error ?? advertencia}</span>
-      )}
+      {mensaje && <span className="text-red-600 text-xs">{mensaje}</span>}
     </span>
   );
 }

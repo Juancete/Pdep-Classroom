@@ -20,6 +20,10 @@ const ESTILOS_POR_ESTADO: Record<
   },
 };
 
+export function etiquetaDeEstado(estado: NombreEstadoAssignment): string {
+  return ESTILOS_POR_ESTADO[estado].etiqueta;
+}
+
 export function EstadoAssignmentBadge({
   estado,
 }: {

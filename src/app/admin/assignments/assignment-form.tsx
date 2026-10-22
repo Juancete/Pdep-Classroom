@@ -5,7 +5,7 @@ import Link from "next/link";
 import { PARADIGMAS, TIPOS_ASSIGNMENT } from "@/types";
 import { GRUPAL_MIN_MAX_INTEGRANTES } from "@/domain/entities/domain-constants";
 import type { AssignmentFormState } from "@/lib/assignment-schema";
-import { slugify } from "@/lib/naming";
+import { capitalizar, slugify } from "@/lib/naming";
 import { INPUT_CLASS, INPUT_ERROR_CLASS, FieldError, SubmitButton, ColSelect } from "../ui";
 
 type Template = { name: string; fullName: string; description: string };
@@ -263,7 +263,7 @@ export function AssignmentForm({
             >
               {PARADIGMAS.map((paradigma) => (
                 <option key={paradigma} value={paradigma}>
-                  {paradigma.charAt(0).toUpperCase() + paradigma.slice(1)}
+                  {capitalizar(paradigma)}
                 </option>
               ))}
             </select>
@@ -292,7 +292,7 @@ export function AssignmentForm({
             >
               {TIPOS_ASSIGNMENT.map((tipoOpcion) => (
                 <option key={tipoOpcion} value={tipoOpcion}>
-                  {tipoOpcion.charAt(0).toUpperCase() + tipoOpcion.slice(1)}
+                  {capitalizar(tipoOpcion)}
                 </option>
               ))}
             </select>

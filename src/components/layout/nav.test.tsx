@@ -1,25 +1,19 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PdepUser } from "@/types";
 import { DOCENTE, ESTUDIANTE } from "@/domain/entities";
-
+import type { ItemDeCuenta } from "@/domain/entities";
 
 // ── Mocks ────────────────────────────────────────────────────
 
 const mockGetCurrentUser = vi.fn();
-const mockGetAlumnoByGithub = vi.fn();
-const mockResolverEstadoDeSincronizacion = vi.fn();
+const mockEstadoDelUsuarioActual = vi.fn();
 
 vi.mock("@/infrastructure/auth/session", () => ({
   getCurrentUser: () => mockGetCurrentUser(),
 }));
 
-vi.mock("@/infrastructure/repositories", () => ({
-  getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
-}));
-
 vi.mock("@/application/estadoDeSincronizacion", () => ({
-  resolverEstadoDeSincronizacion: (...args: unknown[]) =>
-    mockResolverEstadoDeSincronizacion(...args),
+  estadoDeSincronizacionDelUsuarioActual: () => mockEstadoDelUsuarioActual(),
 }));
 
 vi.mock("next/link", () => ({
@@ -32,16 +26,34 @@ vi.mock("next/link", () => ({
   }) => <a href={href}>{children}</a>,
 }));
 
-vi.mock("@/components/layout/logout-button", () => ({
-  UserMenu: ({
+// NavMenu real es un client component con hooks; acá sólo interesa qué le
+// pasa `Nav`, así que se reemplaza por un stub que expone sus props.
+vi.mock("@/components/layout/nav-menu", () => ({
+  NavMenu: ({
+    links,
     username,
+    isAdmin,
     hasPendingSync,
+    itemsDeCuenta,
   }: {
+    links: { href: string; label: string }[];
     username: string;
+    isAdmin: boolean;
     hasPendingSync?: boolean;
+    itemsDeCuenta: ItemDeCuenta[];
   }) => (
-    <div data-testid="user-menu" data-pending={String(hasPendingSync)}>
+    <div
+      data-testid="nav-menu"
+      data-pending={String(hasPendingSync)}
+      data-admin={String(isAdmin)}
+      data-cuenta={itemsDeCuenta.map((item) => item.href).join(",")}
+    >
       {username}
+      {links.map((link) => (
+        <a key={link.href} href={link.href}>
+          {link.label}
+        </a>
+      ))}
     </div>
   ),
 }));
@@ -65,12 +77,7 @@ function makeUser(overrides: Partial<PdepUser> = {}): PdepUser {
 describe("Nav", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetAlumnoByGithub.mockResolvedValue(null);
-    mockResolverEstadoDeSincronizacion.mockResolvedValue({
-      hayPendientes: false,
-      mensaje: "",
-      canalesPendientes: [],
-    });
+    mockEstadoDelUsuarioActual.mockResolvedValue(null);
   });
 
   it("muestra el nombre de la app", async () => {
@@ -80,6 +87,14 @@ describe("Nav", () => {
     expect(html).toContain("Classroom");
   });
 
+  it("sin sesión muestra sólo el logo: ni links ni menú", async () => {
+    mockGetCurrentUser.mockResolvedValue(null);
+    const html = renderToStaticMarkup(await Nav());
+    expect(html).not.toContain("nav-menu");
+    expect(html).not.toContain("Mis TPs");
+    expect(html).not.toContain("Assignments");
+  });
+
   it("muestra link a Mis TPs cuando hay sesión", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser());
     const html = renderToStaticMarkup(await Nav());
@@ -87,48 +102,47 @@ describe("Nav", () => {
     expect(html).toContain('href="/dashboard"');
   });
 
-  it("no muestra links de nav cuando no hay sesión", async () => {
-    mockGetCurrentUser.mockResolvedValue(null);
-    const html = renderToStaticMarkup(await Nav());
-    expect(html).not.toContain("Mis TPs");
-    expect(html).not.toContain("Assignments");
-  });
-
-  it("muestra links de admin cuando el usuario es admin", async () => {
+  it("el docente ve los links de admin, con Mis TPs al final", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
     const html = renderToStaticMarkup(await Nav());
-    expect(html).toContain('href="/admin/assignments"');
-    expect(html).toContain('href="/admin/grupos"');
-    expect(html).toContain('href="/admin/comisiones"');
-    expect(html).toContain('href="/admin/alumnos"');
+    for (const href of ["/admin/assignments", "/admin/grupos", "/admin/comisiones", "/admin/alumnos"]) {
+      expect(html).toContain(`href="${href}"`);
+    }
+    expect(html.indexOf('href="/admin/assignments"')).toBeLessThan(
+      html.indexOf('href="/dashboard"')
+    );
   });
 
-  it("el docente ve Mis TPs después de las secciones de admin", async () => {
-    mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
-    const html = renderToStaticMarkup(await Nav());
-    const indiceAssignments = html.indexOf('href="/admin/assignments"');
-    const indiceMisTps = html.indexOf('href="/dashboard"');
-    expect(indiceAssignments).toBeGreaterThanOrEqual(0);
-    expect(indiceMisTps).toBeGreaterThanOrEqual(0);
-    expect(indiceAssignments).toBeLessThan(indiceMisTps);
-  });
-
-  it("no muestra links de admin para usuario no admin", async () => {
+  it("el alumno no ve links de admin", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser({ rol: ESTUDIANTE }));
     const html = renderToStaticMarkup(await Nav());
     expect(html).not.toContain('href="/admin/assignments"');
   });
 
-  it("renderiza el UserMenu con el username del usuario", async () => {
+  it("pasa el username del usuario al menú", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser({ githubUsername: "pepelopez" }));
     const html = renderToStaticMarkup(await Nav());
     expect(html).toContain("pepelopez");
   });
 
-  it("pasa el estado pendiente al menú del alumno", async () => {
+  it("pasa al menú los ítems de cuenta del rol del usuario", async () => {
+    mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
+    expect(renderToStaticMarkup(await Nav())).toContain('data-cuenta="/admin/errores"');
+
+    mockGetCurrentUser.mockResolvedValue(makeUser({ rol: ESTUDIANTE }));
+    expect(renderToStaticMarkup(await Nav())).toContain('data-cuenta="/perfil"');
+  });
+
+  it("el docente no tiene sincronización pendiente", async () => {
+    mockGetCurrentUser.mockResolvedValue(makeUser({ rol: DOCENTE }));
+    const html = renderToStaticMarkup(await Nav());
+    expect(html).toContain('data-pending="false"');
+    expect(html).toContain('data-admin="true"');
+  });
+
+  it("pasa hasPendingSync al menú del alumno con pendientes", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser());
-    mockGetAlumnoByGithub.mockResolvedValue({ id: "alumno-1" });
-    mockResolverEstadoDeSincronizacion.mockResolvedValue({
+    mockEstadoDelUsuarioActual.mockResolvedValue({
       hayPendientes: true,
       mensaje: "No pudimos suscribirte al grupo de Google del curso.",
       canalesPendientes: [],
@@ -138,9 +152,3 @@ describe("Nav", () => {
     expect(html).toContain('data-pending="true"');
   });
 });
-
-// ── RootLayout ───────────────────────────────────────────────
-// RootLayout no se puede testear con renderToStaticMarkup porque
-// <Nav /> es async y renderToStaticMarkup es síncrono.
-// La estructura del layout (html lang, main wrapper) se verifica
-// en tests de integración (e2e).

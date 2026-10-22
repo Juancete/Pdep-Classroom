@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApiCall } from "@/hooks/useApiCall";
+import { pedirJson } from "@/lib/pedir-json";
+import { SelectorDeDestino } from "@/components/SelectorDeDestino";
 
 export type GrupoDisponible = { id: string; nombre: string };
 
@@ -60,14 +62,10 @@ export function AccionesDeMembresia({
     if (!confirm(confirmacion)) return;
 
     await call(async () => {
-      const response = await fetch(
+      await pedirJson(
         `/api/assignments/${assignmentId}/grupos/${grupoId}/miembros/${githubUsername}`,
         { method: "DELETE" }
       );
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error ?? "Error al salir del grupo");
-      }
       router.refresh();
     });
   }
@@ -77,14 +75,10 @@ export function AccionesDeMembresia({
     if (!confirm(ACCIONES.cambiar.confirmacion)) return;
 
     await call(async () => {
-      const response = await fetch(
+      await pedirJson(
         `/api/assignments/${assignmentId}/grupos/${grupoDestinoId}/miembros/${githubUsername}`,
         { method: "PUT" }
       );
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error ?? "Error al cambiar de grupo");
-      }
       router.refresh();
     });
   }
@@ -114,30 +108,20 @@ export function AccionesDeMembresia({
         </button>
 
         {gruposDisponibles.length > 0 && (
-          <>
-            <select
-              value={grupoDestinoId}
-              onChange={(event) => setGrupoDestinoId(event.target.value)}
-              disabled={loading || bloqueado}
-              aria-label="Elegir grupo destino"
-              className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 disabled:opacity-50"
-            >
-              <option value="">Elegir grupo…</option>
-              {gruposDisponibles.map((grupo) => (
-                <option key={grupo.id} value={grupo.id}>
-                  {grupo.nombre}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={handleCambiar}
-              disabled={loading || bloqueado || !grupoDestinoId}
-              className={`text-sm px-4 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${ACCIONES.cambiar.className}`}
-            >
-              {ACCIONES.cambiar.etiquetaBoton}
-            </button>
-          </>
+          <SelectorDeDestino
+            destinos={gruposDisponibles}
+            valor={grupoDestinoId}
+            onCambio={setGrupoDestinoId}
+            disabled={loading || bloqueado}
+            textoVacio="Elegir grupo…"
+            ariaLabel="Elegir grupo destino"
+            claseDelSelect="text-sm border border-gray-300 rounded-lg px-2 py-1.5 disabled:opacity-50"
+            accion={{
+              etiquetaBoton: ACCIONES.cambiar.etiquetaBoton,
+              className: `text-sm px-4 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${ACCIONES.cambiar.className}`,
+              onConfirmar: handleCambiar,
+            }}
+          />
         )}
       </div>
     </div>

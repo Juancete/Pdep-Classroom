@@ -1,7 +1,5 @@
 import Link from "next/link";
-import { getCurrentUser } from "@/infrastructure/auth/session";
-import { getAlumnoByGithub } from "@/infrastructure/repositories";
-import { resolverEstadoDeSincronizacion } from "@/application/estadoDeSincronizacion";
+import { estadoDeSincronizacionDelUsuarioActual } from "@/application/estadoDeSincronizacion";
 
 /**
  * Banner global que avisa al alumno que algo en la sincronización con la
@@ -12,14 +10,8 @@ import { resolverEstadoDeSincronizacion } from "@/application/estadoDeSincroniza
  * banner desaparece en el próximo render.
  */
 export async function SyncPendingBanner() {
-  const user = await getCurrentUser();
-  if (!user || !user.rol.veBannerDeSincronizacion()) return null;
-
-  const alumno = await getAlumnoByGithub(user.githubUsername);
-  if (!alumno) return null;
-
-  const estado = await resolverEstadoDeSincronizacion(alumno);
-  if (!estado.hayPendientes) return null;
+  const estado = await estadoDeSincronizacionDelUsuarioActual();
+  if (!estado?.hayPendientes) return null;
 
   const mensaje = estado.mensaje;
 

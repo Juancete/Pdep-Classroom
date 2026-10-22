@@ -1,18 +1,11 @@
 import { getCurrentUser } from "@/infrastructure/auth/session";
-import { getAlumnoByGithub } from "@/infrastructure/repositories";
-import { resolverEstadoDeSincronizacion } from "@/application/estadoDeSincronizacion";
+import { estadoDeSincronizacionDelUsuarioActual } from "@/application/estadoDeSincronizacion";
 import Link from "next/link";
 import { NavMenu, type NavLink } from "./nav-menu";
 
 export async function Nav() {
   const user = await getCurrentUser();
-  const alumno =
-    user && user.rol.veBannerDeSincronizacion()
-      ? await getAlumnoByGithub(user.githubUsername).catch(() => null)
-      : null;
-  const hasPendingSync = alumno
-    ? (await resolverEstadoDeSincronizacion(alumno)).hayPendientes
-    : false;
+  const estadoDeSync = await estadoDeSincronizacionDelUsuarioActual();
 
   const links: NavLink[] = user ? user.rol.itemsDeNavegacion() : [];
 
@@ -28,8 +21,9 @@ export async function Nav() {
             links={links}
             username={user.githubUsername}
             image={user.image}
+            itemsDeCuenta={user.rol.itemsDeCuenta()}
             isAdmin={user.rol.puedeAdministrar()}
-            hasPendingSync={hasPendingSync}
+            hasPendingSync={estadoDeSync?.hayPendientes ?? false}
           />
         )}
       </div>

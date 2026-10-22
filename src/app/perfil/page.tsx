@@ -1,18 +1,13 @@
-import { auth } from "@/infrastructure/auth/auth";
+import { requireUser } from "@/infrastructure/auth/session";
 import { getAlumnoByGithub, getComisionActiva } from "@/infrastructure/repositories";
 import { redirect } from "next/navigation";
 import { AlumnoForm } from "@/components/AlumnoForm";
 import { verificarConsistenciaAlumno } from "@/application/verificarConsistenciaAlumno";
 import { intentarSincronizarGrupos } from "@/application/intentarSincronizarGrupos";
 import { resolverEstadoDeSincronizacion } from "@/application/estadoDeSincronizacion";
-import type { SessionPdepUser } from "@/types";
 
 export default async function PerfilPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
-
-  const pdepUser = (session as unknown as { pdepUser: SessionPdepUser }).pdepUser;
-  const githubUsername = pdepUser.githubUsername;
+  const { githubUsername } = await requireUser();
 
   const alumno = await getAlumnoByGithub(githubUsername);
   if (!alumno) redirect("/registro");

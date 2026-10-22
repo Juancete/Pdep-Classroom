@@ -1,4 +1,5 @@
 import { auth } from "@/infrastructure/auth/auth";
+import { requireUser } from "@/infrastructure/auth/session";
 import { getDatosPrecargaByGithub } from "@/infrastructure/sheets";
 import {
   getAlumnoByGithub as getAlumnoDeDB,
@@ -6,14 +7,13 @@ import {
 } from "@/infrastructure/repositories";
 import { redirect } from "next/navigation";
 import { AlumnoForm } from "@/components/AlumnoForm";
-import type { SessionPdepUser } from "@/types";
+import { separarNombreYApellido } from "@/lib/naming";
 
 export default async function RegistroPage() {
+  const { githubUsername } = await requireUser();
+  // `requireUser` ya redirige sin sesión; acá sólo se leen nombre y email de
+  // GitHub para el prefill.
   const session = await auth();
-  if (!session) redirect("/login");
-
-  const pdepUser = (session as unknown as { pdepUser: SessionPdepUser }).pdepUser;
-  const githubUsername = pdepUser.githubUsername;
 
   const comisionActiva = await getComisionActiva();
   const alumnoDB = await getAlumnoDeDB(githubUsername);
@@ -35,16 +35,16 @@ export default async function RegistroPage() {
       )
     : undefined;
 
-  const nameParts = (session.user?.name ?? "").split(" ").filter(Boolean);
-  const defaultNombre = nameParts.slice(0, -1).join(" ") || nameParts[0] || "";
-  const defaultApellido = nameParts.length > 1 ? nameParts[nameParts.length - 1] : "";
+  const { nombre: defaultNombre, apellido: defaultApellido } = separarNombreYApellido(
+    session?.user?.name ?? ""
+  );
 
   const defaultValues = {
     githubUsername,
     legajo: alumnoDB?.legajo ?? datosPrecarga?.legajo ?? "",
     apellido: alumnoDB?.apellido ?? datosPrecarga?.apellido ?? defaultApellido,
     nombre: alumnoDB?.nombre ?? datosPrecarga?.nombre ?? defaultNombre,
-    email: alumnoDB?.email ?? datosPrecarga?.email ?? session.user?.email ?? "",
+    email: alumnoDB?.email ?? datosPrecarga?.email ?? session?.user?.email ?? "",
   };
 
   // Alumno registrado en la DB pero no en la comisión... Entonces le saco los datos 

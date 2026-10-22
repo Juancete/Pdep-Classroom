@@ -10,6 +10,7 @@ import { BarraDeComision } from "../barra-de-comision";
 import { GrupoCard } from "../grupo-card";
 import { resumirGrupoParaAdmin } from "../grupo-resumen";
 import { PARADIGMAS } from "@/types";
+import { capitalizar } from "@/lib/naming";
 import type { Paradigma } from "@/types";
 
 export default async function AdminGruposPage(
@@ -78,7 +79,7 @@ export default async function AdminGruposPage(
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
-            {paradigma.charAt(0).toUpperCase() + paradigma.slice(1)}
+            {capitalizar(paradigma)}
           </a>
         ))}
       </div>

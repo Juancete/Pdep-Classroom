@@ -14,7 +14,7 @@ import { DeleteReposButton } from "./delete-repos-button";
 import { EstadoQuickActions } from "./estado-quick-actions";
 import { NOMBRES_ESTADO_ASSIGNMENT, transicionesDisponibles } from "@/domain/entities";
 import type { NombreEstadoAssignment } from "@/types";
-import { EstadoAssignmentBadge } from "@/components/EstadoAssignmentBadge";
+import { EstadoAssignmentBadge, etiquetaDeEstado } from "@/components/EstadoAssignmentBadge";
 import { EtiquetaDeComision } from "@/components/EtiquetaDeComision";
 import { IconLink } from "@/components/IconLink";
 import { EyeIcon, PencilIcon } from "@/components/icons";
@@ -108,7 +108,7 @@ export default async function AdminAssignmentsPage(props: {
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
-            {estado.charAt(0).toUpperCase() + estado.slice(1)}
+            {etiquetaDeEstado(estado)}
           </Link>
         ))}
       </div>

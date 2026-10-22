@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Alumno, SuscripcionAlumno } from "@/domain/entities";
+import { Alumno, DOCENTE, ESTUDIANTE, SuscripcionAlumno } from "@/domain/entities";
 
 const mockCanalesActivos = vi.fn();
 const mockGetSuscripcionesDeAlumno = vi.fn();
+const mockGetAlumnoByGithub = vi.fn();
+const mockGetCurrentUser = vi.fn();
 
 vi.mock("@/infrastructure/canales", () => ({
   canalesActivos: (...args: unknown[]) => mockCanalesActivos(...args),
@@ -10,9 +12,17 @@ vi.mock("@/infrastructure/canales", () => ({
 
 vi.mock("@/infrastructure/repositories", () => ({
   getSuscripcionesDeAlumno: (...args: unknown[]) => mockGetSuscripcionesDeAlumno(...args),
+  getAlumnoByGithub: (...args: unknown[]) => mockGetAlumnoByGithub(...args),
 }));
 
-import { resolverEstadoDeSincronizacion } from "./estadoDeSincronizacion";
+vi.mock("@/infrastructure/auth/session", () => ({
+  getCurrentUser: () => mockGetCurrentUser(),
+}));
+
+import {
+  estadoDeSincronizacionDelUsuarioActual,
+  resolverEstadoDeSincronizacion,
+} from "./estadoDeSincronizacion";
 
 function makeAlumno(overrides: Partial<Alumno> = {}): Alumno {
   return Object.assign(new Alumno(), {
@@ -110,5 +120,63 @@ describe("resolverEstadoDeSincronizacion", () => {
     const estado = await resolverEstadoDeSincronizacion(makeAlumno());
 
     expect(estado.canalesPendientes).toEqual([canalPendiente]);
+  });
+});
+
+describe("estadoDeSincronizacionDelUsuarioActual", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCanalesActivos.mockReturnValue([]);
+    mockGetSuscripcionesDeAlumno.mockResolvedValue([]);
+  });
+
+  it("sin usuario devuelve null", async () => {
+    mockGetCurrentUser.mockResolvedValue(null);
+
+    expect(await estadoDeSincronizacionDelUsuarioActual()).toBeNull();
+    expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
+  });
+
+  it("si el rol no ve el banner devuelve null sin consultar al alumno", async () => {
+    mockGetCurrentUser.mockResolvedValue({ githubUsername: "docente", rol: DOCENTE });
+
+    expect(await estadoDeSincronizacionDelUsuarioActual()).toBeNull();
+    expect(mockGetAlumnoByGithub).not.toHaveBeenCalled();
+  });
+
+  it("si el alumno no existe devuelve null", async () => {
+    mockGetCurrentUser.mockResolvedValue({ githubUsername: "juangarcia", rol: ESTUDIANTE });
+    mockGetAlumnoByGithub.mockResolvedValue(null);
+
+    expect(await estadoDeSincronizacionDelUsuarioActual()).toBeNull();
+  });
+
+  it("si el repositorio falla devuelve null en vez de romper el layout", async () => {
+    mockGetCurrentUser.mockResolvedValue({ githubUsername: "juangarcia", rol: ESTUDIANTE });
+    mockGetAlumnoByGithub.mockRejectedValue(new Error("DB caída"));
+
+    expect(await estadoDeSincronizacionDelUsuarioActual()).toBeNull();
+  });
+
+  it("alumno sin pendientes devuelve hayPendientes false", async () => {
+    mockGetCurrentUser.mockResolvedValue({ githubUsername: "juangarcia", rol: ESTUDIANTE });
+    mockGetAlumnoByGithub.mockResolvedValue(makeAlumno());
+
+    const estado = await estadoDeSincronizacionDelUsuarioActual();
+
+    expect(estado?.hayPendientes).toBe(false);
+  });
+
+  it("alumno con pendientes devuelve el estado con el mensaje", async () => {
+    mockGetCurrentUser.mockResolvedValue({ githubUsername: "juangarcia", rol: ESTUDIANTE });
+    mockGetAlumnoByGithub.mockResolvedValue(
+      makeAlumno({ gruposSyncFallidoEn: new Date() })
+    );
+
+    const estado = await estadoDeSincronizacionDelUsuarioActual();
+
+    expect(mockGetAlumnoByGithub).toHaveBeenCalledWith("juangarcia");
+    expect(estado?.hayPendientes).toBe(true);
+    expect(estado?.mensaje).toMatch(/^No pudimos /);
   });
 });

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const mockSignOut = vi.fn();
@@ -6,6 +6,7 @@ vi.mock("next-auth/react", () => ({
   signOut: (...args: unknown[]) => mockSignOut(...args),
 }));
 
+import { DOCENTE, ESTUDIANTE } from "@/domain/entities";
 import { UserMenu } from "./logout-button";
 
 async function openMenu(username: string) {
@@ -20,31 +21,71 @@ describe("UserMenu", () => {
   });
 
   it("muestra el username", () => {
-    render(<UserMenu username="juangarcia" image="https://github.com/juangarcia.png" />);
+    render(<UserMenu username="juangarcia" image="https://github.com/juangarcia.png" itemsDeCuenta={ESTUDIANTE.itemsDeCuenta()} />);
     expect(screen.getByText("juangarcia")).toBeInTheDocument();
   });
 
   it("renderiza el avatar con el src correcto", () => {
     const { container } = render(
-      <UserMenu username="juangarcia" image="https://github.com/juangarcia.png" />
+      <UserMenu username="juangarcia" image="https://github.com/juangarcia.png" itemsDeCuenta={ESTUDIANTE.itemsDeCuenta()} />
     );
     const img = container.querySelector("img");
     expect(img).toHaveAttribute("src", "https://github.com/juangarcia.png");
   });
 
   it("no muestra el menú hasta hacer click en el trigger", () => {
-    render(<UserMenu username="juangarcia" image="" />);
+    render(<UserMenu username="juangarcia" image="" itemsDeCuenta={ESTUDIANTE.itemsDeCuenta()} />);
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
   it("abre el menú al hacer click en el trigger", async () => {
-    render(<UserMenu username="juangarcia" image="" />);
+    render(<UserMenu username="juangarcia" image="" itemsDeCuenta={ESTUDIANTE.itemsDeCuenta()} />);
     await openMenu("juangarcia");
     expect(screen.getByRole("menu")).toBeInTheDocument();
   });
 
+  it("click afuera (en el overlay) cierra el menú", async () => {
+    render(<UserMenu username="juangarcia" image="" itemsDeCuenta={ESTUDIANTE.itemsDeCuenta()} />);
+    const user = await openMenu("juangarcia");
+
+    await user.click(screen.getByTestId("cerrar-menu"));
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("Escape cierra el menú", async () => {
+    render(<UserMenu username="juangarcia" image="" itemsDeCuenta={ESTUDIANTE.itemsDeCuenta()} />);
+    const user = await openMenu("juangarcia");
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("al abrir con click el trigger queda enfocado y Escape cierra el menú (Safari/Firefox no enfocan al clickear)", () => {
+    render(<UserMenu username="juangarcia" image="" itemsDeCuenta={ESTUDIANTE.itemsDeCuenta()} />);
+    const trigger = screen.getByRole("button", { name: /juangarcia/ });
+
+    fireEvent.click(trigger);
+
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    fireEvent.keyDown(trigger, { key: "Escape" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("elegir un ítem cierra el menú", async () => {
+    render(<UserMenu username="juangarcia" image="" itemsDeCuenta={ESTUDIANTE.itemsDeCuenta()} />);
+    const user = await openMenu("juangarcia");
+
+    await user.click(screen.getByRole("menuitem", { name: "Editar perfil" }));
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
   it("llama a signOut con callbackUrl '/' al hacer click en Salir", async () => {
-    render(<UserMenu username="juangarcia" image="" />);
+    render(<UserMenu username="juangarcia" image="" itemsDeCuenta={ESTUDIANTE.itemsDeCuenta()} />);
     const user = await openMenu("juangarcia");
 
     await user.click(screen.getByRole("menuitem", { name: "Salir" }));
@@ -54,7 +95,7 @@ describe("UserMenu", () => {
   });
 
   it("muestra el link Editar perfil para alumnos", async () => {
-    render(<UserMenu username="juangarcia" image="" isAdmin={false} />);
+    render(<UserMenu username="juangarcia" image="" itemsDeCuenta={ESTUDIANTE.itemsDeCuenta()} />);
     await openMenu("juangarcia");
     expect(screen.getByRole("menuitem", { name: "Editar perfil" })).toHaveAttribute(
       "href",
@@ -63,7 +104,7 @@ describe("UserMenu", () => {
   });
 
   it("no muestra el link Editar perfil para admins", async () => {
-    render(<UserMenu username="admin" image="" isAdmin={true} />);
+    render(<UserMenu username="admin" image="" itemsDeCuenta={DOCENTE.itemsDeCuenta()} />);
     await openMenu("admin");
     expect(
       screen.queryByRole("menuitem", { name: "Editar perfil" })
@@ -71,7 +112,7 @@ describe("UserMenu", () => {
   });
 
   it("muestra errores pendientes para admins y limita el badge visual", async () => {
-    render(<UserMenu username="admin" image="" isAdmin unreadErrors={120} />);
+    render(<UserMenu username="admin" image="" itemsDeCuenta={DOCENTE.itemsDeCuenta()} unreadErrors={120} />);
     await openMenu("admin");
     expect(screen.getByRole("menuitem", { name: /Errores.*120 sin leer/i })).toHaveAttribute(
       "href",
@@ -80,17 +121,12 @@ describe("UserMenu", () => {
     expect(screen.getByText("99+")).toBeInTheDocument();
   });
 
-  it("muestra Editar perfil por defecto (sin isAdmin)", async () => {
-    render(<UserMenu username="juangarcia" image="" />);
-    await openMenu("juangarcia");
-    expect(screen.getByRole("menuitem", { name: "Editar perfil" })).toBeInTheDocument();
-  });
-
   it("señala en el avatar y en Editar perfil cuando hay una acción pendiente", async () => {
     render(
       <UserMenu
         username="juangarcia"
         image=""
+        itemsDeCuenta={ESTUDIANTE.itemsDeCuenta()}
         hasPendingSync
       />
     );

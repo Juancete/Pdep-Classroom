@@ -51,9 +51,9 @@ export function EstadoPanel({
 
     const nuevoEstado = await transicionar(destino);
     if (nuevoEstado) {
-      // Transición inmediata para feedback instantáneo; el efecto de arriba
-      // la reemplaza por los valores reales en cuanto router.refresh() trae
-      // las props actualizadas del servidor.
+      // Transición inmediata para feedback instantáneo; dura hasta que
+      // router.refresh() trae el estado real y el `key={estado}` del padre
+      // remonta el panel con las props frescas del servidor.
       setEstado(nuevoEstado);
       setAcciones([]);
       router.refresh();

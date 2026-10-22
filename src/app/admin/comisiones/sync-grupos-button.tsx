@@ -1,25 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
-import { useFormStatus } from "react-dom";
+import { FormularioDeAccion } from "@/components/FormularioDeAccion";
 import type { SyncGruposState } from "./actions";
-
-function SyncSubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="inline-flex items-center gap-1.5 text-xs font-medium bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1 rounded-full transition-colors disabled:opacity-60"
-    >
-      {pending ? "Importando…" : "Importar grupos desde Sheets"}
-    </button>
-  );
-}
 
 export function SyncGruposButton({
   comisionId,
-  action: sincronizarGruposDeLaComision,
+  action,
 }: {
   comisionId: string;
   // Recibida por prop desde el server component (`edit/page.tsx`): ver el
@@ -30,26 +16,20 @@ export function SyncGruposButton({
     formData: FormData
   ) => Promise<SyncGruposState>;
 }) {
-  const [state, action] = useActionState<SyncGruposState, FormData>(
-    sincronizarGruposDeLaComision,
-    { status: "idle" }
-  );
-
   return (
-    <form action={action} className="flex items-center gap-2">
-      <input type="hidden" name="comisionId" value={comisionId} />
-      <SyncSubmitButton />
-      {state.status === "ok" && (
+    <FormularioDeAccion
+      action={action}
+      campos={{ comisionId }}
+      etiqueta="Importar grupos desde Sheets"
+      etiquetaPendiente="Importando…"
+      resultado={(estado) => (
         <span className="text-xs font-medium text-green-700">
-          {state.sincronizados} resueltos
-          {state.aunConError > 0 && (
-            <span className="text-red-600"> · {state.aunConError} aún con error</span>
+          {estado.sincronizados} resueltos
+          {estado.aunConError > 0 && (
+            <span className="text-red-600"> · {estado.aunConError} aún con error</span>
           )}
         </span>
       )}
-      {state.status === "error" && (
-        <span className="text-xs text-red-600">{state.message}</span>
-      )}
-    </form>
+    />
   );
 }

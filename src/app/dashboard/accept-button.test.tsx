@@ -2,8 +2,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AcceptButton } from "./accept-button";
 
-function mockResponse(ok: boolean, data: object = {}) {
-  return { ok, json: async () => data };
+function mockResponse(ok: boolean, data: object = {}, status = ok ? 200 : 500) {
+  return { ok, status, json: async () => data };
 }
 
 describe("AcceptButton", () => {
@@ -90,14 +90,30 @@ describe("AcceptButton", () => {
     expect(await screen.findByText("Ya tiene repo")).toBeInTheDocument();
   });
 
-  it("muestra mensaje genérico si el servidor no devuelve error", async () => {
+  it("muestra `Error <status>` si el servidor no devuelve error", async () => {
     const user = userEvent.setup();
-    vi.mocked(fetch).mockResolvedValue(mockResponse(false, {}) as Response);
+    vi.mocked(fetch).mockResolvedValue(mockResponse(false, {}, 500) as Response);
 
     render(<AcceptButton assignmentId="a1" />);
     await user.click(screen.getByRole("button", { name: "Aceptar" }));
 
-    expect(await screen.findByText("No pudimos completar la operación sobre el repositorio")).toBeInTheDocument();
+    expect(await screen.findByText("Error 500")).toBeInTheDocument();
+  });
+
+  it("si el servidor responde algo que no es JSON (502 con HTML) muestra `Error 502`", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: async () => {
+        throw new SyntaxError("Unexpected token '<'");
+      },
+    } as unknown as Response);
+
+    render(<AcceptButton assignmentId="a1" />);
+    await user.click(screen.getByRole("button", { name: "Aceptar" }));
+
+    expect(await screen.findByText("Error 502")).toBeInTheDocument();
   });
 
   it("no llama reload cuando falla", async () => {

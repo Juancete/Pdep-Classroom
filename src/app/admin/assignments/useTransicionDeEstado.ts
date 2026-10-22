@@ -1,6 +1,7 @@
 "use client";
 
 import { useApiCall } from "@/hooks/useApiCall";
+import { pedirJson } from "@/lib/pedir-json";
 import type { NombreEstadoAssignment } from "@/types";
 
 // Llamada al PATCH de transición, compartida entre `EstadoPanel` y
@@ -13,16 +14,10 @@ export function useTransicionDeEstado(assignmentId: string) {
     destino: NombreEstadoAssignment
   ): Promise<NombreEstadoAssignment | undefined> {
     const resultado = await call(async () => {
-      const response = await fetch(`/api/assignments/${assignmentId}/estado`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estado: destino }),
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.error ?? `Error ${response.status}`);
-      }
-      return (await response.json()) as { estado: NombreEstadoAssignment };
+      return pedirJson<{ estado: NombreEstadoAssignment }>(
+        `/api/assignments/${assignmentId}/estado`,
+        { method: "PATCH", json: { estado: destino } }
+      );
     });
     return resultado?.estado;
   }

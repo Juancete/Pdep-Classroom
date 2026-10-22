@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useApiCall } from "@/hooks/useApiCall";
+import { ErrorDeApi, pedirJson } from "@/lib/pedir-json";
 import { ALUMNO_LEGAJO_PATTERN, ALUMNO_EMAIL_PATTERN } from "@/domain/entities/domain-constants";
 import { enumerar } from "@/lib/naming";
 
@@ -68,22 +69,22 @@ export function AlumnoForm({
         email: form.get("email") as string,
         ...extraBody,
       };
-      const response = await fetch(apiEndpoint, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const json = await response.json();
-      if (!response.ok) {
-        if (typeof json.field === "string") {
-          setFieldError({ message: json.error, field: json.field });
+      let json: { canalesConError?: unknown; gruposSync?: unknown } | null;
+      try {
+        json = await pedirJson(apiEndpoint, { method, json: body });
+      } catch (error) {
+        if (error instanceof ErrorDeApi) {
+          const { field } = (error.cuerpo ?? {}) as { field?: unknown };
+          if (typeof field === "string") {
+            setFieldError({ message: error.message, field });
+          }
         }
-        throw new Error(json.error ?? "Error al guardar");
+        throw error;
       }
-      const canalesFallidos: string[] = Array.isArray(json.canalesConError)
+      const canalesFallidos: string[] = Array.isArray(json?.canalesConError)
         ? json.canalesConError
         : [];
-      const hasGruposSyncWarning = json.gruposSync === "error";
+      const hasGruposSyncWarning = json?.gruposSync === "error";
       setCanalesConError(canalesFallidos);
       setGruposSyncWarning(hasGruposSyncWarning);
       setSuccess(true);
